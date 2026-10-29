@@ -11,9 +11,10 @@ import { PageScaffold } from '@obiter/app-shell'
 import {
   useRedactionOutput,
   useRedactionOutputFile,
-  useRedactionSchedule,
+  useRedactionScheduleExport,
   useReturnToDocument,
 } from './hooks'
+import { SaveToMatterDialog } from './save-to-matter-dialog'
 import {
   PdfDocumentPreview,
   type PdfPreviewStatus,
@@ -92,9 +93,9 @@ export function FinalizedOutput({
 }: {
   run: RedactionRun
   outputQuery: ReturnType<typeof useRedactionOutput>
-  /** Opens the source document's page after a return; absent where the host
-   * cannot route there. */
-  onOpenDocument?: (run: RedactionRun) => void
+  /** Opens the document this copy became; absent where the host cannot route
+   * there. */
+  onOpenDocument?: (target: { matterId: string; documentId: string }) => void
 }) {
   const output = outputQuery.data
   const mimeType =
@@ -150,10 +151,16 @@ export function FinalizedOutput({
     !run.replacementRunId
   const returned = run.returnedDocumentVersionId ?? null
   const returnToDocument = useReturnToDocument(run.id)
-  const schedule = useRedactionSchedule(run.id, run.status === 'finalized')
-  const scheduleName = scheduleFilename(run.sourceFilename)
-  const exportFailed =
-    outputQuery.error ?? (isFile ? fileQuery.error : null) ?? schedule.error
+  const schedule = useRedactionScheduleExport(run.id)
+  // A run with no document of its own has no version to return to, so the copy
+  // is filed by creating a document in the matter the reviewer picks.
+  const standalone = run.matterId === null && run.documentId === null
+  const exportSchedule = (format: 'pdf' | 'docx') =>
+    schedule.mutate(format, {
+      onSuccess: (blob) =>
+        downloadBlob(blob, scheduleFilename(run.sourceFilename, `.${format}`)),
+    })
+  const exportFailed = outputQuery.error ?? (isFile ? fileQuery.error : null)
 
   return (
     <PageScaffold
@@ -162,17 +169,26 @@ export function FinalizedOutput({
       actions={
         returned ? (
           <>
-            <Badge tone="success">Returned to document</Badge>
-            {onOpenDocument && run.documentId ? (
+            <Badge tone="success">Saved to the matter</Badge>
+            {onOpenDocument &&
+            run.returnedMatterId &&
+            run.returnedDocumentId ? (
               <Button
                 variant="secondary"
-                onClick={() => onOpenDocument(run)}
+                onClick={() =>
+                  onOpenDocument({
+                    matterId: run.returnedMatterId!,
+                    documentId: run.returnedDocumentId!,
+                  })
+                }
                 iconStart={<FolderOpen size={16} aria-hidden="true" />}
               >
                 Open document
               </Button>
             ) : null}
           </>
+        ) : standalone ? (
+          <SaveToMatterDialog run={run} onOpenDocument={onOpenDocument} />
         ) : returnable ? (
           <Button
             variant="secondary"
@@ -243,7 +259,10 @@ export function FinalizedOutput({
                 />
                 <Detail
                   label="Matter"
-                  value={run.matterName ?? 'Standalone run'}
+                  value={
+                    run.matterName ??
+                    (returned ? 'Saved to a matter' : 'Not filed in a matter')
+                  }
                 />
               </dl>
             </div>
@@ -287,10 +306,14 @@ export function FinalizedOutput({
                 : 'There is no in-app preview for this format. Open the downloaded file and check every page before you share it.'}
             </p>
 
-            {returned && returnToDocument.data ? (
+            {returned ? (
               <p className="text-meta text-muted" role="status">
-                Saved as version {returnToDocument.data.versionNumber} of the
-                source document; the original version is unchanged.
+                Saved as version{' '}
+                {returnToDocument.data?.versionNumber ??
+                  run.returnedDocumentVersionNumber ??
+                  '—'}{' '}
+                of the document in the matter; the original version is
+                unchanged.
               </p>
             ) : null}
             {returnToDocument.error ? (
@@ -380,16 +403,19 @@ export function FinalizedOutput({
               />
               <p>
                 <span className="text-item">
-                  The schedule contains the original redacted text.
+                  The schedule lists decisions, not the words removed.
                 </span>{' '}
-                It lists every decided span and the words that were removed.
-                Keep it inside the matter; it is never part of the disclosure
-                copy.
+                Each row names the category, the decision, the reviewer and the
+                time, without reproducing the text. Keep it inside the matter;
+                it is never part of the disclosure copy.
               </p>
             </div>
             <dl className="grid gap-x-8 gap-y-3 md:grid-cols-2">
               <div className="flex flex-col gap-3">
-                <Detail label="File" value={scheduleName} />
+                <Detail
+                  label="File"
+                  value={scheduleFilename(run.sourceFilename, '.pdf')}
+                />
                 <Detail
                   label="Decisions"
                   value={`${run.summary.reviewedCount} recorded`}
@@ -409,26 +435,39 @@ export function FinalizedOutput({
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="secondary"
-                disabled={!schedule.data}
-                loading={schedule.isPending}
-                onClick={() => {
-                  if (schedule.data) downloadBlob(schedule.data, scheduleName)
-                }}
+                loading={schedule.isPending && schedule.variables === 'pdf'}
+                disabled={schedule.isPending}
+                onClick={() => exportSchedule('pdf')}
                 iconStart={<DownloadSimple size={16} aria-hidden="true" />}
               >
-                Export schedule
+                Export PDF
+              </Button>
+              <Button
+                variant="secondary"
+                loading={schedule.isPending && schedule.variables === 'docx'}
+                disabled={schedule.isPending}
+                onClick={() => exportSchedule('docx')}
+                iconStart={<DownloadSimple size={16} aria-hidden="true" />}
+              >
+                Export Word
               </Button>
               <span className="text-caption text-subtle">
-                Markdown, generated from the audit record.
+                Generated from the audit record.
               </span>
             </div>
+            {schedule.error ? (
+              <p className="text-meta text-danger" role="alert">
+                The schedule was not exported. {schedule.error.message}
+              </p>
+            ) : null}
           </div>
         </Card>
       </section>
 
       <p className="text-caption text-subtle">
         The original document and the audit trail are unchanged. The redacted
-        copy is not a version of the original until you return it to the matter.
+        copy becomes a version of a matter document only when it is saved to the
+        matter.
       </p>
     </PageScaffold>
   )

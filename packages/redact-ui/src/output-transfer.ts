@@ -33,7 +33,10 @@ export async function shareOrDownload(blob: Blob, filename: string) {
   downloadBlob(blob, filename)
 }
 
-/** `witness-statement-shah.docx` → `witness-statement-shah-schedule.md`. */
-export function scheduleFilename(sourceFilename: string) {
-  return `${sourceFilename.replace(/\.[^.]+$/u, '')}-schedule.md`
+/** `witness-statement-shah.docx` → `witness-statement-shah-schedule.pdf`. */
+export function scheduleFilename(
+  sourceFilename: string,
+  extension: '.pdf' | '.docx',
+) {
+  return `${sourceFilename.replace(/\.[^.]+$/u, '')}-schedule${extension}`
 }

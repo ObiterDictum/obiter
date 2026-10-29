@@ -9,6 +9,7 @@ import {
   applyPseudonymised,
   applyRedacted,
   createTokenMap,
+  mixedTextGroups,
   RedactionSpanIntegrityError,
   type OutputDowngradeReason,
 } from '@obiter/redaction-policy'
@@ -373,6 +374,7 @@ export function createRedactReviewRoutes(
         spanId: c.req.param('spanId'),
         decision: decision.data,
         userId: user.id,
+        applyToSameText: body?.applyToSameText === true,
       })
       if (result.kind === 'not_found')
         return errorResponse(
@@ -417,6 +419,7 @@ export function createRedactReviewRoutes(
         action: 'redaction.span_decision',
         metadata: {
           spanId: result.span.id,
+          spanIds: result.spanIds,
           decision: decision.data,
           category: result.span.category,
         },
@@ -489,6 +492,20 @@ export function createRedactReviewRoutes(
         'validation_failed',
         'Acknowledge that the detection mode was not recorded before finalising.',
         400,
+      )
+    // Refuse before any output write: identical text decided both ways leaves
+    // one occurrence of the same words in the copy that leaves the firm. The
+    // client lists the groups; the server refuses regardless of what the UI
+    // claims, because a missing check here is a disclosure, not a missed style.
+    const mixedGroups = mixedTextGroups(run.spans, run.decisions)
+    if (mixedGroups.length > 0)
+      return errorResponse(
+        c,
+        'mixed_text_decisions',
+        mixedGroups.length === 1
+          ? 'One piece of repeated text has different decisions: it is redacted in one place and kept visible in another. Decide every occurrence the same way before finalising.'
+          : `${String(mixedGroups.length)} pieces of repeated text have different decisions: each is redacted in one place and kept visible in another. Decide every occurrence the same way before finalising.`,
+        409,
       )
     const textObjectKey = await getRunTextObjectKey(pool, run, user)
     if (!textObjectKey)

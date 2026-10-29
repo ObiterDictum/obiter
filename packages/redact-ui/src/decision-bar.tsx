@@ -3,6 +3,7 @@ import {
   CaretLeft,
   CaretRight,
   Check,
+  CopySimple,
   DotsThree,
   Warning,
   X,
@@ -28,7 +29,7 @@ import {
   decisionRecord,
   decisionStateLabel,
   decisionStateTone,
-  sourceExplanation,
+  sourceLabel,
   spanDecisionState,
 } from './span-copy'
 
@@ -48,6 +49,7 @@ export function DecisionBar({
   currentUserId,
   page,
   pageCount,
+  occurrences,
   pending,
   error,
   canPrevious,
@@ -55,6 +57,7 @@ export function DecisionBar({
   onPrevious,
   onNext,
   onDecide,
+  onApplyToAll,
 }: {
   span: RedactionSpan | undefined
   position: number
@@ -63,6 +66,8 @@ export function DecisionBar({
   currentUserId: string | undefined
   page: number | null
   pageCount: number | null
+  /** Occurrences of this span's text in the run, including this one. */
+  occurrences: number
   pending: boolean
   error: string | null
   canPrevious: boolean
@@ -70,6 +75,8 @@ export function DecisionBar({
   onPrevious: () => void
   onNext: () => void
   onDecide: (decision: SpanDecision) => void
+  /** Repeats this span's recorded decision on every other occurrence. */
+  onApplyToAll: (decision: SpanDecision) => void
 }) {
   // A confirmation is not needed: a decision is a recorded, repeatable review
   // action, and the panel shows the result immediately. The refusal is legal
@@ -126,8 +133,8 @@ export function DecisionBar({
             </p>
           ) : null}
           <p className="mt-0.5 max-w-[68ch] text-caption text-subtle">
-            {sourceExplanation[span.source]} · detection confidence:{' '}
-            {confidenceLabel[span.confidence].toLowerCase()} ·{' '}
+            {sourceLabel[span.source]} ·{' '}
+            {confidenceLabel[span.confidence].toLowerCase()} confidence —{' '}
             {confidenceExplanation[span.confidence]}. {CONFIDENCE_CAVEAT}
           </p>
           {where ? (
@@ -160,6 +167,17 @@ export function DecisionBar({
           />
         </div>
         <div className="flex items-center gap-2">
+          {record && occurrences > 1 ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pending}
+              onClick={() => onApplyToAll(record.decision)}
+              iconStart={<CopySimple size={12} aria-hidden="true" />}
+            >
+              Apply to all {occurrences} occurrences
+            </Button>
+          ) : null}
           <Menu open={menuOpen} onOpenChange={setMenuOpen}>
             <MenuTrigger
               render={

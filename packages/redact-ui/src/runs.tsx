@@ -1,5 +1,12 @@
 import { useRef, useState } from 'react'
-import { FileText, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
+import {
+  DotsThree,
+  FileText,
+  Plus,
+  Trash,
+  UploadSimple,
+  Warning,
+} from '@phosphor-icons/react'
 import {
   Button,
   Card,
@@ -9,9 +16,12 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  DialogTrigger,
   EmptyState,
   Input,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
   Skeleton,
   StatusDot,
   useToast,
@@ -23,7 +33,12 @@ import {
   useDeleteRedactionRun,
   useRedactionRuns,
 } from './hooks'
-import { categoryLabel, formatDate } from './span-copy'
+import { detectionFailureMessage } from './detection-failure'
+import {
+  DETECTION_COVERAGE_CAVEAT,
+  categoryLabel,
+  formatDate,
+} from './span-copy'
 import type { RedactionRun } from './types'
 
 const ACCEPTED_TYPES =
@@ -65,6 +80,7 @@ function RunRow({
 }) {
   const deleteRun = useDeleteRedactionRun()
   const { toast } = useToast()
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const status = runStatus[run.status]
   const action =
     run.status === 'finalized'
@@ -77,7 +93,8 @@ function RunRow({
       <div className="min-w-0">
         <p className="text-item truncate text-ink">{run.sourceFilename}</p>
         <p className="mt-0.5 text-caption text-subtle">
-          {run.matterName ?? 'Standalone run'} · {formatDate(run.createdAt)}
+          {run.matterName ?? 'Not filed in a matter'} ·{' '}
+          {formatDate(run.createdAt)}
         </p>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <StatusDot tone={status.tone}>{status.label}</StatusDot>
@@ -86,9 +103,8 @@ function RunRow({
           </span>
         </p>
         {run.status === 'failed' ? (
-          <p className="mt-1 text-caption text-danger" role="alert">
-            {run.summary.failureReason ??
-              'The detector stopped before it finished, so this run found nothing.'}
+          <p className="mt-1 text-caption text-danger">
+            {detectionFailureMessage(run)}
           </p>
         ) : null}
       </div>
@@ -101,42 +117,66 @@ function RunRow({
           {action}
         </Button>
         {canManage ? (
-          <Dialog>
-            <DialogTrigger
+          <Menu>
+            <MenuTrigger
               render={
                 <Button
                   size="sm"
                   variant="ghost"
-                  aria-label={`Delete run for ${run.sourceFilename}`}
+                  className="size-8 px-0"
+                  aria-label={`More actions for ${run.sourceFilename}`}
                 >
-                  <Trash aria-hidden />
+                  <DotsThree size={16} aria-hidden="true" />
                 </Button>
               }
             />
-            <DialogContent size="md">
-              <DialogTitle>Delete redaction run</DialogTitle>
-              <DialogDescription>
-                This removes the run and its review state. Removals are soft —
-                the rows persist for the audit.
-              </DialogDescription>
-              <div className="flex justify-end gap-2">
-                <DialogClose render={<Button variant="ghost">Cancel</Button>} />
-                <Button
-                  variant="danger"
-                  loading={deleteRun.isPending}
-                  onClick={async () => {
-                    await deleteRun.mutateAsync(run.id)
-                    toast({ title: 'Redaction run deleted' })
-                  }}
-                >
-                  Delete run
-                </Button>
-              </div>
-              <DialogCloseButton />
-            </DialogContent>
-          </Dialog>
+            <MenuContent>
+              <MenuItem onClick={() => setConfirmingDelete(true)}>
+                <Trash size={14} aria-hidden="true" />
+                Delete run…
+              </MenuItem>
+            </MenuContent>
+          </Menu>
         ) : null}
       </div>
+      {canManage ? (
+        <Dialog
+          open={confirmingDelete}
+          onOpenChange={(next) => setConfirmingDelete(next)}
+        >
+          <DialogContent size="md">
+            <DialogTitle>Delete redaction run</DialogTitle>
+            <DialogDescription>
+              {run.sourceFilename} and its review state will be removed.
+              Removals are soft — the rows persist for the audit.
+            </DialogDescription>
+            <p className="flex items-start gap-2 rounded-lg bg-warning-soft p-3 text-meta text-ink">
+              <Warning
+                size={16}
+                aria-hidden="true"
+                className="mt-0.5 shrink-0 text-warning"
+              />
+              The redacted copy and the schedule already produced from this run
+              stay in the audit record.
+            </p>
+            <div className="flex justify-end gap-2">
+              <DialogClose render={<Button variant="ghost">Cancel</Button>} />
+              <Button
+                variant="danger"
+                loading={deleteRun.isPending}
+                onClick={async () => {
+                  await deleteRun.mutateAsync(run.id)
+                  setConfirmingDelete(false)
+                  toast({ title: 'Redaction run deleted' })
+                }}
+              >
+                Delete run
+              </Button>
+            </div>
+            <DialogCloseButton />
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </li>
   )
 }
@@ -298,15 +338,15 @@ export function RedactionRunsView({
             ) : (
               <div className="flex flex-wrap items-center gap-3">
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   onClick={() => setPasting(true)}
+                  iconStart={<FileText size={14} aria-hidden="true" />}
                 >
                   Paste text instead
                 </Button>
                 <span className="text-caption text-subtle">
-                  For a short extract. Formatting and comments are not carried
-                  across, and the pages cannot be reviewed as they will print.
+                  For a short extract; formatting is not carried across.
                 </span>
               </div>
             )}
@@ -324,9 +364,9 @@ export function RedactionRunsView({
                 ))}
               </div>
               <p className="mt-3 text-caption text-subtle">
-                Detection finds candidates, not everything sensitive. Scanned
-                PDFs without a text layer cannot be redacted reliably, and
-                Obiter tells you before a run starts.
+                {DETECTION_COVERAGE_CAVEAT} Scanned PDFs without a text layer
+                cannot be redacted reliably, and Obiter tells you before a run
+                starts.
               </p>
             </div>
           </div>

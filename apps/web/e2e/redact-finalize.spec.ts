@@ -109,10 +109,13 @@ test('finalizes a DOCX into a previewable secure PDF download', async ({
       'Check every page of the preview before you download or share this copy.',
     ),
   ).toBeVisible()
-  // The schedule is a separate, access-controlled file and says so.
+  // The schedule is a separate, access-controlled file that names decisions,
+  // never the removed words, and offers PDF or Word rather than Markdown.
   await expect(
-    page.getByText('The schedule contains the original redacted text.'),
+    page.getByText('The schedule lists decisions, not the words removed.'),
   ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Export PDF' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Export Word' })).toBeEnabled()
   await expect(
     page.getByText('Word document unavailable — text file provided instead'),
   ).toBeHidden()
