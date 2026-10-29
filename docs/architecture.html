@@ -3527,14 +3527,19 @@
                     POST /api/redaction-runs/:runId/spans/:spanId/decision
                   </td>
                   <td class="id">redact-review.ts</td>
-                  <td>Accept, reject, override, pseudonymise</td>
+                  <td>
+                    Accept, reject, override, pseudonymise;
+                    <code>applyToSameText</code> repeats the decision on every
+                    span reading the same text, audited as one action
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/redaction-runs/:runId/finalize</td>
                   <td class="id">redact-review.ts</td>
                   <td>
                     Apply decisions; write text or rasterized redacted PDF
-                    output
+                    output. Refuses with <code>mixed_text_decisions</code> when
+                    identical text is redacted in one place and kept in another
                   </td>
                 </tr>
                 <tr>
@@ -3569,6 +3574,19 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    POST /api/redaction-runs/:runId/save-to-matter
+                  </td>
+                  <td class="id">redact-lifecycle.ts</td>
+                  <td>
+                    Files a finalized standalone run's copy as version 1 of a
+                    new document in a chosen matter (edit-gated on that matter,
+                    audited as <code>redaction.saved_to_matter</code> plus the
+                    document upload events). A document-linked run is refused
+                    here and returns through <code>return-to-document</code>.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET /api/redaction-runs/:runId/token-map</td>
                   <td class="id">redact-review.ts</td>
                   <td>Pseudonymisation token map</td>
@@ -3577,7 +3595,9 @@
                   <td class="id">GET /api/redaction-runs/:runId/audit</td>
                   <td class="id">redact-lifecycle.ts</td>
                   <td>
-                    Audit report as JSON, Markdown or HTML; deleted runs are
+                    Audit report as JSON and the redaction schedule as PDF or
+                    DOCX (<code>format=pdf|docx</code>); the schedule lists
+                    decisions, never the removed words. Deleted runs are
                     available by known id to owner/admin only
                   </td>
                 </tr>
@@ -7266,8 +7286,15 @@
                     it. The review UI (UI redesign stage 8) blocks the action
                     while any detected span has no decision, and requires a
                     page-review confirmation, because an undecided span is not a
-                    span somebody chose to keep. The confirmation is not
+                    span somebody chose to keep.
+                    <strong>Approved by the product owner on 2026-10-28</strong
+                    >, who decided to keep both gates. The confirmation is not
                     recorded: no field stores it. See
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/redact/implementation.md"
+                      >specs/redact/implementation.md</a
+                    >
+                    and
                     <a
                       href="https://github.com/ObiterDictum/obiter/blob/dev/docs/prds/archive/redact-2-review-output.md"
                       >Redact PRD 2</a

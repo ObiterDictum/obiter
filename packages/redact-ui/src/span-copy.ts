@@ -36,16 +36,9 @@ export const categoryLabel = {
 } satisfies Record<SpanCategory, string>
 
 export const sourceLabel = {
-  rampart_model: 'Rampart model',
-  rampart_deterministic: 'Pattern match',
-  uk_supplement: 'UK supplement',
-} satisfies Record<SpanSource, string>
-
-/** How each detector works, so a reviewer can calibrate what a hit means. */
-export const sourceExplanation = {
-  rampart_model: 'found by the Rampart model reading the text',
-  rampart_deterministic: 'matched a fixed pattern such as an email address',
-  uk_supplement: 'matched a UK-specific pattern',
+  rampart_model: 'Found automatically',
+  rampart_deterministic: 'Known pattern',
+  uk_supplement: 'UK pattern',
 } satisfies Record<SpanSource, string>
 
 export const confidenceLabel = {
@@ -55,8 +48,8 @@ export const confidenceLabel = {
 } satisfies Record<SpanConfidence, string>
 
 export const confidenceExplanation = {
-  high: 'the shape of the match is unambiguous',
-  medium: 'the match partly fits the pattern, so read the surrounding text',
+  high: 'the text matches what was looked for',
+  medium: 'it partly matches, so read the surrounding text',
   low: 'a weak match — check it before deciding',
 } satisfies Record<SpanConfidence, string>
 
@@ -98,6 +91,30 @@ export function spanDecisionState(
   if (decision === 'accept' || decision === 'override_redact') return 'accepted'
   if (decision === 'pseudonymise') return 'pseudonymised'
   return 'rejected'
+}
+
+/**
+ * What detection did, in plain words: how many spans were found automatically
+ * and how many matched a pattern. The detector split behind it (model, fixed
+ * patterns, UK supplement) is provenance, not something a reviewer can act on.
+ */
+export function detectionSummary(bySource: {
+  rampartModel: number
+  rampartDeterministic: number
+  ukSupplement: number
+}) {
+  const parts = [
+    bySource.rampartModel > 0
+      ? `${bySource.rampartModel} found automatically`
+      : null,
+    bySource.rampartDeterministic > 0
+      ? `${bySource.rampartDeterministic} matched a known pattern`
+      : null,
+    bySource.ukSupplement > 0
+      ? `${bySource.ukSupplement} matched a UK pattern`
+      : null,
+  ].filter((part): part is string => part !== null)
+  return parts.length ? `Detection: ${parts.join(' · ')}.` : null
 }
 
 export const decisionStateLabel = {
