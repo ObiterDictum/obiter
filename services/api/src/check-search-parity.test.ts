@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { diffParity, runParityCheck } from './check-search-parity'
 
@@ -64,7 +63,7 @@ describe('runParityCheck', () => {
 
 describe('search parity command', () => {
   it('exits non-zero when the index differs from Postgres', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'obiter-parity-'))
+    const directory = await mkdtemp(join(import.meta.dir, '.parity-preload-'))
     try {
       const preload = join(directory, 'preload.ts')
       await writeFile(
@@ -80,22 +79,19 @@ mock.module('@obiter/search-client', () => ({
 }))
 `,
       )
-      const child = Bun.spawn(
+      const child = Bun.spawnSync(
         [
           process.execPath,
           '--preload',
           preload,
           join(import.meta.dir, 'check-search-parity.ts'),
         ],
-        { stdout: 'pipe', stderr: 'pipe' },
+        { cwd: import.meta.dir, stdout: 'pipe', stderr: 'pipe' },
       )
 
-      const stdout = new Response(child.stdout).text()
-      const stderr = new Response(child.stderr).text()
-
-      expect(await child.exited).toBe(1)
-      expect(await stdout).toContain('"missing"')
-      expect(await stderr).toContain('Search parity drift')
+      expect(child.exitCode).toBe(1)
+      expect(child.stdout.toString()).toContain('"missing"')
+      expect(child.stderr.toString()).toContain('Search parity drift')
     } finally {
       await rm(directory, { recursive: true, force: true })
     }
