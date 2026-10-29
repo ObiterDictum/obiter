@@ -39,6 +39,19 @@ export interface DocumentVersionRecord {
   createdBy: string
   createdAt: string
   updatedAt: string
+  /** Set when Redact produced this version; null for ordinary versions. */
+  redaction?: VersionRedaction | null
+}
+
+/**
+ * Where a Redact-produced version came from. `canOpen` is the server's answer to
+ * whether this reader may open the run: a standalone run's copy can be filed
+ * into a matter whose other members cannot open the run itself.
+ */
+export interface VersionRedaction {
+  runId: string
+  producedBy: string | null
+  canOpen: boolean
 }
 
 export interface MatterDocumentRecord {

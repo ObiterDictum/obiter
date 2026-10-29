@@ -16,6 +16,7 @@ import {
 import type { StatusDotProps } from '@obiter/ui'
 import type { MatterDocumentRecord } from '../documents'
 import { formatDate } from '../format'
+import { RedactedMark } from '../redacted-mark'
 import {
   attentionRunLabel,
   useRedactionRunsList,
@@ -253,10 +254,18 @@ export function MatterDocumentsTable({
                         >
                           {filename}
                         </Link>
-                        <span className="mt-1 block text-meta text-subtle">
-                          {version
-                            ? `Version ${version.versionNumber} · ${version.fileType.toUpperCase()}`
-                            : 'No version'}
+                        <span className="mt-1 flex items-center gap-2 text-meta text-subtle">
+                          <span>
+                            {version
+                              ? `Version ${version.versionNumber} · ${version.fileType.toUpperCase()}`
+                              : 'No version'}
+                          </span>
+                          {version ? (
+                            <RedactedMark
+                              redaction={version.redaction}
+                              producedAt={version.createdAt}
+                            />
+                          ) : null}
                         </span>
                       </div>
                     </div>

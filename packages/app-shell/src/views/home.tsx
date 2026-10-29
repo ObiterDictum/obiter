@@ -107,6 +107,8 @@ function HomeDashboard({ me }: { me: MeResponse }) {
         matterName: matter.name,
         filename: version.filename,
         updatedAt: version.updatedAt,
+        redaction: version.redaction ?? null,
+        versionCreatedAt: version.createdAt,
       })
     }
   })

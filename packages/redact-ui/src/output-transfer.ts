@@ -33,10 +33,10 @@ export async function shareOrDownload(blob: Blob, filename: string) {
   downloadBlob(blob, filename)
 }
 
-/** `witness-statement-shah.docx` → `witness-statement-shah-schedule.pdf`. */
-export function scheduleFilename(
-  sourceFilename: string,
-  extension: '.pdf' | '.docx',
-) {
-  return `${sourceFilename.replace(/\.[^.]+$/u, '')}-schedule${extension}`
+/**
+ * The schedule's download name. It never carries the source filename, which can
+ * itself name somebody the copy redacts; the server sends the same name.
+ */
+export function scheduleFilename(extension: '.pdf' | '.docx') {
+  return `redaction-schedule${extension}`
 }
