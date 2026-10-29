@@ -112,8 +112,8 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
       .locator('svg'),
   ).toHaveCount(1)
   // Beside a docked Differences panel a 1024px window leaves the desk ~390px:
-  // the paper shrinks to fit it rather than running under the panel, so no
-  // part of the redline is clipped.
+  // the sheet narrows at a readable zoom rather than running under the panel,
+  // so no part of the redline is clipped.
   await page.setViewportSize({ width: 1024, height: 768 })
   const desk = await page.locator('[data-document-desk]').boundingBox()
   const sheet = await page.locator('[data-document-sheet]').boundingBox()

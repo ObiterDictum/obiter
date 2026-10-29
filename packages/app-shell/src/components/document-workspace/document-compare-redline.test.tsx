@@ -8,7 +8,7 @@ import type {
 } from '@obiter/contracts'
 import {
   DocumentComparisonView,
-  comparisonPageZoom,
+  comparisonPageLayout,
 } from './document-compare-redline'
 
 afterEach(cleanup)
@@ -104,22 +104,16 @@ describe('DocumentComparisonView', () => {
   })
 })
 
-describe('comparisonPageZoom', () => {
+describe('comparisonPageLayout', () => {
   it('keeps the reading size when the desk has room for the paper', () => {
     // 1440px window, sidebar and the docked Differences panel removed.
-    expect(comparisonPageZoom(808)).toBe(90)
+    expect(comparisonPageLayout(808)).toEqual({ zoom: 90, width: 794 })
   })
 
-  it('shrinks the paper to the desk a docked panel leaves at 1024px', () => {
+  it('narrows the sheet at a readable size beside a docked panel at 1024px', () => {
     // 1024px window: 252px sidebar and a 380px panel leave ~390px of desk.
-    // At 90% the A4 sheet is 715px and runs under the panel, so the whole
-    // sheet has to fit the desk instead.
-    const zoom = comparisonPageZoom(392)
-    expect(zoom).toBeLessThan(90)
-    expect(Math.round((794 * zoom) / 100)).toBeLessThanOrEqual(392 - 64)
-  })
-
-  it('never shrinks below a size the sheet can still be read at', () => {
-    expect(comparisonPageZoom(120)).toBe(40)
+    const { zoom, width } = comparisonPageLayout(392)
+    expect(zoom).toBe(80)
+    expect(Math.round((width * zoom) / 100)).toBeLessThanOrEqual(392 - 64)
   })
 })

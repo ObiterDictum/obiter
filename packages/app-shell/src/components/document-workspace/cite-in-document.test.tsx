@@ -37,7 +37,7 @@ function orderDocument() {
   })
 }
 
-it('inserts the pending citation at the caret as plain text when tracking is off', () => {
+it('inserts the pending citation at the caret, spaced from the word before, when tracking is off', () => {
   orderDocument()
   expect(citationBar()).toBeTruthy()
   clickParagraph('p1', TEXT.length)
@@ -45,7 +45,7 @@ it('inserts the pending citation at the caret as plain text when tracking is off
 
   expect(
     screen.getByLabelText<HTMLTextAreaElement>('Paragraph text').value,
-  ).toBe(`${TEXT}${CITATION}`)
+  ).toBe(`${TEXT} ${CITATION}`)
   expect(document.querySelector('[data-inline-change]')).toBeNull()
   expect(citationBar()).toBeNull()
   expect(readPendingCitation('doc_1')).toBeNull()
@@ -59,7 +59,7 @@ it('inserts the pending citation as a tracked insertion when tracking is on', ()
 
   const inserted = [
     ...document.querySelectorAll('[data-inline-change][role="insertion"]'),
-  ].map((node) => node.textContent)
+  ].map((node) => node.textContent?.trim())
   expect(inserted).toContain(CITATION)
   expect(readPendingCitation('doc_1')).toBeNull()
 })
