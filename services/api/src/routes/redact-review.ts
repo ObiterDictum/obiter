@@ -183,16 +183,15 @@ function outputMimeTypeOf(run: FinalizedRun) {
   return run.summary.outputMimeType ?? 'text/plain'
 }
 
-function outputFilenameOf(run: FinalizedRun, mimeType: string) {
-  return (
-    run.summary.outputFilename ??
-    (mimeType === 'application/pdf'
-      ? redactedPdfFilename(run.sourceFilename)
-      : mimeType ===
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        ? redactedDocxFilename(run.sourceFilename)
-        : redactedTextFilename(run.sourceFilename))
-  )
+function outputFilenameOf(mimeType: string) {
+  // The source name can itself identify somebody the copy redacts. Legacy
+  // summary filenames are equally private, so downloads never reuse them.
+  return mimeType === 'application/pdf'
+    ? redactedPdfFilename('document')
+    : mimeType ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ? redactedDocxFilename('document')
+      : redactedTextFilename('document')
 }
 
 /**
@@ -585,7 +584,7 @@ export function createRedactReviewRoutes(
       : `org/${run.organisationId}/outputs/${outputId}`
 
     let outputMimeType = 'text/plain'
-    let outputFilename = redactedTextFilename(run.sourceFilename)
+    let outputFilename = redactedTextFilename('document')
     let outputSha256: string
     let securePdf = false
     // Which container burn was started, so a refusal can name it. A downgrade
@@ -667,7 +666,7 @@ export function createRedactReviewRoutes(
           await storage.writeBinary!(objectKey, Buffer.from(redactedDocx))
           outputMimeType =
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          outputFilename = redactedDocxFilename(run.sourceFilename)
+          outputFilename = redactedDocxFilename('document')
           outputSha256 = sha256(redactedDocx)
         } else {
           await storage.writeText(objectKey, output)
@@ -695,7 +694,7 @@ export function createRedactReviewRoutes(
         if (attemptedBurn) downgradeReason = burnFallbackReason(error)
         await storage.writeText(objectKey, output)
         outputMimeType = 'text/plain'
-        outputFilename = redactedTextFilename(run.sourceFilename)
+        outputFilename = redactedTextFilename('document')
         outputSha256 = sha256(Buffer.from(output, 'utf8'))
       }
     }
@@ -832,7 +831,7 @@ export function createRedactReviewRoutes(
         404,
       )
     const mimeType = outputMimeTypeOf(run)
-    const filename = outputFilenameOf(run, mimeType)
+    const filename = outputFilenameOf(mimeType)
     if (isBinaryOutput(mimeType)) {
       return c.json({
         mimeType,
@@ -881,7 +880,7 @@ export function createRedactReviewRoutes(
         404,
       )
     const mimeType = outputMimeTypeOf(run)
-    const filename = outputFilenameOf(run, mimeType)
+    const filename = outputFilenameOf(mimeType)
     const disposition = downloadContentDisposition(
       safeDownloadFilename(filename, { fallback: 'redacted-output' }),
     )

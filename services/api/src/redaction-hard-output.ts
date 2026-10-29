@@ -107,7 +107,7 @@ export async function buildHardRedactionPdf(
   }
 
   await validateSecurePdf({ bytes, spans, decisions })
-  return { bytes, filename: redactedPdfFilename(input.run.sourceFilename) }
+  return { bytes, filename: redactedPdfFilename('document') }
 }
 
 async function buildSecurePdfFromSourcePdf(

@@ -10,6 +10,7 @@ import {
 } from '@obiter/contracts'
 import { appendAuditLog, getMatter } from '../database'
 import { ensureOrgUser } from '../authz'
+import { lockMatterForEdit } from '../matter-lock'
 
 interface RouteUser {
   id: string
@@ -112,11 +113,23 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
-    // Re-saving a source that was unsaved revives the same row: the unique
-    // key is (matter, kind, source), so filing it twice stays one entry and
-    // the audit trail keeps the earlier filing.
-    const result = await pool.query<SavedSourceRow>(
-      `insert into matter_saved_sources (
+    const client = await pool.connect()
+    let committed = false
+    try {
+      await client.query('begin')
+      if (
+        !(await lockMatterForEdit(client, {
+          organisationId: user.organisationId,
+          userId: user.id,
+          matterId: matter.id,
+        }))
+      )
+        return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
+      // Re-saving a source that was unsaved revives the same row: the unique
+      // key is (matter, kind, source), so filing it twice stays one entry and
+      // the audit trail keeps the earlier filing.
+      const result = await client.query<SavedSourceRow>(
+        `insert into matter_saved_sources (
          organisation_id, matter_id, source_kind, source_id, title, citation,
          source_url, created_by
        )
@@ -128,28 +141,37 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
          deleted_at = null,
          deleted_by = null
        returning ${savedSourceColumns}`,
-      [
-        user.organisationId,
-        matter.id,
-        parsed.data.kind,
-        parsed.data.sourceId,
-        parsed.data.title,
-        parsed.data.citation ?? null,
-        parsed.data.sourceUrl ?? null,
-        user.id,
-      ],
-    )
-    const savedSource = mapSavedSource(result.rows[0]!)
-    await appendAuditLog(pool, {
-      organisationId: user.organisationId,
-      userId: user.id,
-      entityType: 'matter',
-      entityId: matter.id,
-      action: 'matter.source_save',
-      metadata: { savedSourceId: savedSource.id, kind: savedSource.kind },
-      requestId: c.get('requestId'),
-    })
-    return c.json({ savedSource }, 201)
+        [
+          user.organisationId,
+          matter.id,
+          parsed.data.kind,
+          parsed.data.sourceId,
+          parsed.data.title,
+          parsed.data.citation ?? null,
+          parsed.data.sourceUrl ?? null,
+          user.id,
+        ],
+      )
+      const savedSource = mapSavedSource(result.rows[0]!)
+      await appendAuditLog(client, {
+        organisationId: user.organisationId,
+        userId: user.id,
+        entityType: 'matter',
+        entityId: matter.id,
+        action: 'matter.source_save',
+        metadata: { savedSourceId: savedSource.id, kind: savedSource.kind },
+        requestId: c.get('requestId'),
+      })
+      await client.query('commit')
+      committed = true
+      return c.json({ savedSource }, 201)
+    } finally {
+      try {
+        if (!committed) await client.query('rollback')
+      } finally {
+        client.release()
+      }
+    }
   })
 
   routes.delete(
@@ -167,32 +189,58 @@ export function createMatterSavedSourcesRoutes(pool: Pool) {
       if (!matter) {
         return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
       }
-      const result = await pool.query<{ id: string }>(
-        `update matter_saved_sources
+      const client = await pool.connect()
+      let committed = false
+      try {
+        await client.query('begin')
+        if (
+          !(await lockMatterForEdit(client, {
+            organisationId: user.organisationId,
+            userId: user.id,
+            matterId: matter.id,
+          }))
+        )
+          return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
+        const result = await client.query<{ id: string }>(
+          `update matter_saved_sources
             set deleted_at = now(), deleted_by = $1
           where id = $2 and organisation_id = $3 and matter_id = $4
             and deleted_at is null
         returning id`,
-        [user.id, c.req.param('savedSourceId'), user.organisationId, matter.id],
-      )
-      if (!result.rows[0]) {
-        return errorResponse(
-          c,
-          'saved_source_not_found',
-          'Saved source not found.',
-          404,
+          [
+            user.id,
+            c.req.param('savedSourceId'),
+            user.organisationId,
+            matter.id,
+          ],
         )
+        if (!result.rows[0]) {
+          return errorResponse(
+            c,
+            'saved_source_not_found',
+            'Saved source not found.',
+            404,
+          )
+        }
+        await appendAuditLog(client, {
+          organisationId: user.organisationId,
+          userId: user.id,
+          entityType: 'matter',
+          entityId: matter.id,
+          action: 'matter.source_remove',
+          metadata: { savedSourceId: result.rows[0].id },
+          requestId: c.get('requestId'),
+        })
+        await client.query('commit')
+        committed = true
+        return c.json({ removed: true, savedSourceId: result.rows[0].id })
+      } finally {
+        try {
+          if (!committed) await client.query('rollback')
+        } finally {
+          client.release()
+        }
       }
-      await appendAuditLog(pool, {
-        organisationId: user.organisationId,
-        userId: user.id,
-        entityType: 'matter',
-        entityId: matter.id,
-        action: 'matter.source_remove',
-        metadata: { savedSourceId: result.rows[0].id },
-        requestId: c.get('requestId'),
-      })
-      return c.json({ removed: true, savedSourceId: result.rows[0].id })
     },
   )
 

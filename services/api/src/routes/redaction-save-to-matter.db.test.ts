@@ -142,12 +142,14 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
       const version = await pool.query<{
         document_status: string
         text_object_key: string | null
+        filename: string
       }>(
-        `select document_status, text_object_key from document_versions
+        `select document_status, text_object_key, filename from document_versions
          where id = $1`,
         [body.versionId],
       )
       expect(version.rows[0]?.document_status).toBe('ready')
+      expect(version.rows[0]?.filename).toBe('pasted-extract-redacted.txt')
       expect(storage.text.get(version.rows[0]!.text_object_key!)).toContain(
         'Synthetic redacted witness statement',
       )
@@ -185,6 +187,125 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
         [seed.matterId],
       )
       expect(documents.rows).toHaveLength(2)
+    } finally {
+      await cleanupRun(seed)
+    }
+  })
+
+  it('coalesces simultaneous saves into one document and one audit trail', async () => {
+    const seed = await seedStandaloneRun(await seedMatter(pool, null))
+    try {
+      const storage = storageFor(seed)
+      storage.binary.set(seed.outputKey, copyBytes)
+      const app = saveApp(storage, ownerUser(seed))
+      const readBinary = storage.readBinary.bind(storage)
+      let reads = 0
+      let release: () => void = () => undefined
+      const bothReading = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      storage.readBinary = async (key) => {
+        const bytes = await readBinary(key)
+        if (++reads === 2) release()
+        await bothReading
+        return bytes
+      }
+      const responses = await Promise.all(
+        [1, 2].map(() =>
+          app.request(
+            `/api/redaction-runs/${seed.runId}/save-to-matter`,
+            saveRequest(seed.matterId),
+          ),
+        ),
+      )
+      expect(responses.map((response) => response.status).sort()).toEqual([
+        200, 201,
+      ])
+      const bodies = await Promise.all(
+        responses.map(
+          async (response) => (await response.json()) as { versionId: string },
+        ),
+      )
+      expect(bodies[0].versionId).toBe(bodies[1].versionId)
+      const documents = await pool.query(
+        'select id from matter_documents where matter_id = $1',
+        [seed.matterId],
+      )
+      expect(documents.rows).toHaveLength(2)
+      const audit = await pool.query(
+        "select id from audit_logs where entity_id = $1 and action = 'redaction.saved_to_matter'",
+        [seed.runId],
+      )
+      expect(audit.rows).toHaveLength(1)
+    } finally {
+      await cleanupRun(seed)
+    }
+  })
+
+  it('rolls back a failed storage write so retry creates only one copy', async () => {
+    const seed = await seedStandaloneRun(await seedMatter(pool, null))
+    try {
+      const storage = storageFor(seed)
+      storage.binary.set(seed.outputKey, copyBytes)
+      const originalKeys = [...storage.binary.keys()].sort()
+      const writeText = storage.writeText.bind(storage)
+      storage.writeText = async () => {
+        throw new Error('storage unavailable')
+      }
+      const failed = await saveApp(storage, ownerUser(seed)).request(
+        `/api/redaction-runs/${seed.runId}/save-to-matter`,
+        saveRequest(seed.matterId),
+      )
+      expect(failed.status).toBe(422)
+      const afterFailure = await pool.query(
+        'select id from matter_documents where matter_id = $1',
+        [seed.matterId],
+      )
+      expect(afterFailure.rows).toHaveLength(1)
+      expect([...storage.binary.keys()].sort()).toEqual(originalKeys)
+      expect(
+        [...storage.text.keys()].some((key) => key.endsWith('/text')),
+      ).toBe(false)
+      storage.writeText = writeText
+      const retried = await saveApp(storage, ownerUser(seed)).request(
+        `/api/redaction-runs/${seed.runId}/save-to-matter`,
+        saveRequest(seed.matterId),
+      )
+      expect(retried.status).toBe(201)
+      const afterRetry = await pool.query(
+        'select id from matter_documents where matter_id = $1',
+        [seed.matterId],
+      )
+      expect(afterRetry.rows).toHaveLength(2)
+    } finally {
+      await cleanupRun(seed)
+    }
+  })
+
+  it('conceals a saved copy after the destination share is revoked', async () => {
+    const seed = await seedStandaloneRun(await seedMatter(pool, 'edit'))
+    try {
+      await pool.query(
+        'update redaction_runs set created_by = $2 where id = $1',
+        [seed.runId, seed.editorId],
+      )
+      const storage = storageFor(seed)
+      storage.binary.set(seed.outputKey, copyBytes)
+      const app = saveApp(storage, editorUser(seed))
+      const first = await app.request(
+        `/api/redaction-runs/${seed.runId}/save-to-matter`,
+        saveRequest(seed.matterId),
+      )
+      expect(first.status).toBe(201)
+      await pool.query('delete from matter_shares where id = $1', [
+        seed.shareId,
+      ])
+      const retry = await app.request(
+        `/api/redaction-runs/${seed.runId}/save-to-matter`,
+        saveRequest(seed.matterId),
+      )
+      expect(retry.status).toBe(404)
+      expect(await retry.text()).not.toContain('versionId')
     } finally {
       await cleanupRun(seed)
     }

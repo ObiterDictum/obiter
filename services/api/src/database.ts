@@ -1121,70 +1121,13 @@ export async function createDocument(
   try {
     await client.query('begin')
 
-    // Matter lock before the document insert, so an upload cannot commit on a
-    // share revocation or removed membership that landed while it was queued.
-    if (
-      !(await lockMatterForEdit(client, {
-        organisationId: input.organisationId,
-        matterId: input.matterId,
-        userId: input.userId,
-      }))
-    ) {
+    const created = await createDocumentInTransaction(client, input)
+    if (!created) {
       await client.query('rollback')
       return null
     }
-
-    const documentResult = await client.query<MatterDocumentRow>(
-      `
-        insert into matter_documents (
-          organisation_id, matter_id, created_by, created_at, updated_at
-        )
-        values ($1, $2, $3, now(), now())
-        returning ${documentColumns}
-      `,
-      [input.organisationId, input.matterId, input.userId],
-    )
-    const document = mapDocument(documentResult.rows[0])
-
-    const versionId = createDocumentVersionId()
-    const objectKey = createDocumentObjectKey({
-      organisationId: input.organisationId,
-      matterId: input.matterId,
-      documentId: document.id,
-      versionId,
-    })
-
-    const version = await insertDocumentVersion(client, {
-      id: versionId,
-      organisationId: input.organisationId,
-      matterId: input.matterId,
-      documentId: document.id,
-      filename: input.filename,
-      fileType: input.fileType,
-      sizeBytes: input.sizeBytes,
-      objectKey,
-      textObjectKey: null,
-      documentStatus: 'queued',
-      failureReason: null,
-      versionNumber: 1,
-      contentSha256: input.contentSha256,
-      syncState: input.syncState ?? 'synced',
-      createdBy: input.userId,
-    })
-
-    const updatedDocumentResult = await client.query<MatterDocumentRow>(
-      `
-        update matter_documents
-        set current_version_id = $3, updated_at = now()
-        where id = $1
-          and organisation_id = $2
-        returning ${documentColumns}
-      `,
-      [document.id, input.organisationId, version.id],
-    )
-
     await client.query('commit')
-    return { document: mapDocument(updatedDocumentResult.rows[0]), version }
+    return created
   } catch (error) {
     await client.query('rollback')
     throw error
@@ -1193,8 +1136,80 @@ export async function createDocument(
   }
 }
 
+/** The caller owns commit/rollback when a document is part of a larger write. */
+export async function createDocumentInTransaction(
+  client: PoolClient,
+  input: CreateDocumentInput,
+): Promise<{
+  document: MatterDocumentRecord
+  version: DocumentVersionRecord
+} | null> {
+  // Matter lock before the document insert, so an upload cannot commit on a
+  // share revocation or removed membership that landed while it was queued.
+  if (
+    !(await lockMatterForEdit(client, {
+      organisationId: input.organisationId,
+      matterId: input.matterId,
+      userId: input.userId,
+    }))
+  ) {
+    return null
+  }
+
+  const documentResult = await client.query<MatterDocumentRow>(
+    `
+      insert into matter_documents (
+        organisation_id, matter_id, created_by, created_at, updated_at
+      )
+      values ($1, $2, $3, now(), now())
+      returning ${documentColumns}
+    `,
+    [input.organisationId, input.matterId, input.userId],
+  )
+  const document = mapDocument(documentResult.rows[0])
+
+  const versionId = createDocumentVersionId()
+  const objectKey = createDocumentObjectKey({
+    organisationId: input.organisationId,
+    matterId: input.matterId,
+    documentId: document.id,
+    versionId,
+  })
+
+  const version = await insertDocumentVersion(client, {
+    id: versionId,
+    organisationId: input.organisationId,
+    matterId: input.matterId,
+    documentId: document.id,
+    filename: input.filename,
+    fileType: input.fileType,
+    sizeBytes: input.sizeBytes,
+    objectKey,
+    textObjectKey: null,
+    documentStatus: 'queued',
+    failureReason: null,
+    versionNumber: 1,
+    contentSha256: input.contentSha256,
+    syncState: input.syncState ?? 'synced',
+    createdBy: input.userId,
+  })
+
+  const updatedDocumentResult = await client.query<MatterDocumentRow>(
+    `
+      update matter_documents
+      set current_version_id = $3, updated_at = now()
+      where id = $1
+        and organisation_id = $2
+      returning ${documentColumns}
+    `,
+    [document.id, input.organisationId, version.id],
+  )
+
+  return { document: mapDocument(updatedDocumentResult.rows[0]), version }
+}
+
 export async function updateDocumentExtraction(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   input: {
     organisationId: string
     versionId: string

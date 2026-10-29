@@ -319,13 +319,10 @@ export function createRedactLifecycleRoutes(
             ? 'application/pdf'
             : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'content-disposition': downloadContentDisposition(
-          safeDownloadFilename(
-            scheduleExportFilename(
-              report.originalDocument.filename,
-              `.${format}`,
-            ),
-            { fallback: 'schedule', extension: `.${format}` },
-          ),
+          safeDownloadFilename(scheduleExportFilename(`.${format}`), {
+            fallback: 'schedule',
+            extension: `.${format}`,
+          }),
         ),
       })
     }
