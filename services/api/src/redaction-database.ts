@@ -288,11 +288,12 @@ export function computeSummary(
 
 /**
  * Decisions name the person who made them. The stored record holds the id, so
- * the organisation's member names are joined in at read time; they are never
- * written back, because a name inside `decisions_json` would freeze somebody's
- * name into an audit record and drift from the account it names.
+ * the organisation's member names are joined in where a run is read for
+ * display; they are never written back, because a name inside `decisions_json`
+ * would freeze somebody's name into an audit record and drift from the account
+ * it names.
  */
-async function withDecisionNames(
+export async function withDecisionNames(
   queryable: Pick<Pool, 'query'>,
   organisationId: string,
   decisions: Decisions,
@@ -367,17 +368,7 @@ async function selectRedactionRun(
        and ${redactionRunAccessPredicate('$4', '$5')}`,
     [runId, user.organisationId, includeDeleted, user.id, requiredLevel],
   )
-  const row = result.rows[0]
-  if (!row) return null
-  const run = mapRedactionRun(row)
-  return {
-    ...run,
-    decisions: await withDecisionNames(
-      queryable,
-      run.organisationId,
-      run.decisions,
-    ),
-  }
+  return result.rows[0] ? mapRedactionRun(result.rows[0]) : null
 }
 
 export async function getDeletedRedactionRunForAudit(
