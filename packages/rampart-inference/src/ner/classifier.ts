@@ -362,12 +362,13 @@ function foldForModel(raw: string): FoldedProjection {
       .toLowerCase()
       .normalize('NFKD')
       .replace(COMBINING_MARKS_RE, '')
-    for (const ch of folded) {
-      text += ch
-      rawStart.push(i)
-      rawEnd.push(i + codePoint.length)
-    }
+    const start = i
     i += codePoint.length
+    for (let unit = 0; unit < folded.length; unit++) {
+      rawStart.push(start)
+      rawEnd.push(i)
+    }
+    text += folded
   }
   return { text, rawStart, rawEnd }
 }
