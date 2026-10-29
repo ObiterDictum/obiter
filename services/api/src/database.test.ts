@@ -539,8 +539,8 @@ describe('matter workspace database operations', () => {
     expect(calls.map(([sql]) => sql)).not.toContain('commit')
   })
 
-  it('cascade-restore matches children by the parent deleted_at timestamp (provenance)', async () => {
-    const parentDeletedAt = '2026-02-01T00:00:00.000Z'
+  it('cascade-restore matches children using the parent timestamp without losing microseconds', async () => {
+    const parentDeletedAt = '2026-02-01 00:00:00.123456+00'
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit' || text === 'rollback') {
