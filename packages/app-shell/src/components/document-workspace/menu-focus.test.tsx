@@ -1,6 +1,6 @@
 import '@obiter/test-dom'
 import { expect, it } from 'bun:test'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, waitFor } from '@testing-library/react'
 import { command } from './editor-test-commands'
 import {
   mountWorkspace,
