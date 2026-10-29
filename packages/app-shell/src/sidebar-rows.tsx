@@ -189,8 +189,6 @@ export function MatterRow({
         current && 'bg-hover',
       )}
     >
-      {/* Three letters (a client reference) need 28px at caption size; the
-          former 24px tile pushed "OKA" against its own edges. */}
       <span
         aria-hidden
         className={cn(

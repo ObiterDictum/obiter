@@ -181,7 +181,6 @@ export function DocumentDetailLayoutView({
           )}
         </section>
 
-        {/* Feature sub-routes (e.g. redact/$runId) render here. */}
         <Outlet />
       </ContentFrame>
     </div>

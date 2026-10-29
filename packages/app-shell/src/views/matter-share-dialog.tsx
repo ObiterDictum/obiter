@@ -272,8 +272,7 @@ function ShareRow({
           </span>
         ) : null}
       </span>
-      {/* Access changes in place: revoke-and-regrant would briefly remove the
-          access being adjusted. */}
+
       <Select
         className="w-28 shrink-0"
         ariaLabel={`Access for ${name ?? 'this person'}`}

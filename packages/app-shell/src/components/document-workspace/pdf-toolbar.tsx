@@ -52,8 +52,7 @@ export function PdfWorkspaceToolbar({
           {find.matchLabel}
         </span>
       ) : null}
-      {/* The hits are useless without a way to reach them: the PDF surface
-          carries the same Next/Previous controls as the editor's find bar. */}
+
       {find ? (
         <>
           <EditorIconButton

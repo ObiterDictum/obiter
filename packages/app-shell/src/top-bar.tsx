@@ -122,8 +122,6 @@ function AccountMenu({
         {initialsOf(me.user.name)}
       </MenuTrigger>
       <MenuContent aria-label="Account">
-        {/* Whose account this is, not an action: presentation keeps the menu
-            list a list of menuitems for screen readers. */}
         <div role="presentation" className="px-3 py-2">
           <p className="truncate text-item text-ink">{me.user.name}</p>
           <p className="break-all text-caption text-subtle">{me.user.email}</p>

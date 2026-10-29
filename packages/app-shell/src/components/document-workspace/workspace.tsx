@@ -340,8 +340,6 @@ function PdfWorkspace({
 
   return (
     <WorkspaceShell layout={layout} onKeyDown={documentWorkspaceKeyDown}>
-      {/* The same header contract as the Word workspace: where this document
-          sits and how to leave it, so a read-only PDF is not a dead end. */}
       <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b border-line px-12 py-2 max-compact:px-8">
         {headerLinks?.back}
         <div className="flex min-w-0 items-center gap-2">

@@ -124,9 +124,7 @@ export function useAuth(): UseAuthReturn {
   async function refreshSessionAfterAuth() {
     try {
       await realSession.refetch()
-    } catch {
-      // Best-effort: cookie is set; a later render/refetch can pick up session.
-    }
+    } catch {}
   }
 
   async function signInWithEmail(input: SignInEmailInput) {

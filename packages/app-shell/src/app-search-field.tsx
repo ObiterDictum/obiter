@@ -209,8 +209,6 @@ export function AppSearchField() {
         )}
         onSubmit={onCompactSubmit}
       >
-        {/* Narrow widths have no room for a field, so a real button opens the
-            same composer the field would. */}
         <button
           type="button"
           aria-label="Search Obiter"

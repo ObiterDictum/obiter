@@ -140,9 +140,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       if (parked) setStaleDraft(parked.baseVersionId)
     }
     setHydrated(true)
-    // `scope` identity is stable for the mount: DocumentWorkspace keys this
-    // workspace on documentId, so organisation, user and document cannot change
-    // underneath the effects.
   }, [scope.baseVersionId, storage, hydrated])
 
   function persistBundle(next: DraftBundle) {

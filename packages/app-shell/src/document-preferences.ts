@@ -27,8 +27,5 @@ export function writeCitationStyle(
 ) {
   try {
     storage.setItem(`${KEY_PREFIX}${documentId}`, style)
-  } catch {
-    // Storage-full or private-mode refusals leave the session's choice in
-    // memory; the document itself is unaffected.
-  }
+  } catch {}
 }

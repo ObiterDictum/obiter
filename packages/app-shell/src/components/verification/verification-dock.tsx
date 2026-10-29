@@ -335,8 +335,6 @@ export function VerificationDock({
         </Button>
       </div>
 
-      {/* Rendered only while open: the index reads the signed-in user, and a
-          closed dialog must not add a query to the workspace. */}
       {verification.indexOpen ? (
         <VerificationFindingsIndex
           open

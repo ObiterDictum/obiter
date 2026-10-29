@@ -44,9 +44,7 @@ export function WorkspaceBanners({
           {transientNotice}
         </p>
       ) : null}
-      {/* A document selection is custom rather than the textarea's own, so its
-          state and any refusal is announced rather than only painted. No
-          role="status" so the transient banner stays the only status region. */}
+
       <p className="sr-only" aria-live="polite" data-selection-status>
         {selectionNotice}
       </p>

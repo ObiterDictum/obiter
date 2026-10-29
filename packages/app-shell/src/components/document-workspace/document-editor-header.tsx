@@ -130,11 +130,7 @@ function DocumentEditorHeader({
               </StatusDot>
             )}
           </span>
-          {/* The top bar's breadcrumb already names the matter at compact
-              widths, so the header keeps one sub-line there. The status and
-              the matter share one line: the matter truncates rather than
-              wrapping, because a wrapped line would start with the dot that
-              only separates it from the status. */}
+
           {matterLink ? (
             <span className="flex min-w-0 items-center gap-2 max-compact:hidden">
               <span aria-hidden>·</span>
