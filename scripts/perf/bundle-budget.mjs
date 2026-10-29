@@ -74,9 +74,15 @@ import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 // need the shared code import the entry — so the net cost is about 5 kB gzip,
 // the menu and tooltip themselves. 236 kB leaves 1.7% headroom over the
 // measurement; the lazy, per-chunk and PDF-worker budgets are unchanged.
+//
+// The lazy budget was re-baselined to 425 kB on 2026-10-29, after the UI review
+// fixes (#364-#368): the editor menu bar and docked panels, Redact's legend and
+// schedule export, Verify's reviewer names, and search's provision structure,
+// saved sources and dd/mm/yyyy date picker measure 417.6 kB together. 425 kB
+// leaves 1.8% headroom; initial, per-chunk and PDF-worker budgets are unchanged.
 export const BUDGETS = {
   initialGzipBytes: 236 * 1024,
-  lazyGzipBytes: 410 * 1024,
+  lazyGzipBytes: 425 * 1024,
   largestLazyChunkGzipBytes: 200 * 1024,
   pdfWorkerGzipBytes: 320 * 1024,
 }
