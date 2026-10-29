@@ -2,14 +2,6 @@ import type { Pool } from 'pg'
 
 import type { LegislationProvisionKind } from './legislation-kind'
 
-/**
- * Postgres reads for Stage 1 legislation serving. Postgres is the record:
- * exact citation resolution reads these rows, never the derived
- * legislation_provisions index, so a stale index copy can never answer an
- * exact lookup. Keyword search may use the index; its misses fall back to
- * nothing, never to a guessed row.
- */
-
 export interface StoredLegislationDocument {
   identity: string
   actType: string
@@ -18,8 +10,6 @@ export interface StoredLegislationDocument {
   title: string
   sourceUrl: string
   extent: string
-  /** When this corpus read the Act's data.xml; null when the document has
-   * not been re-stored since the column existed. Never derived. */
   acquiredAt: string | null
 }
 
@@ -28,17 +18,10 @@ export interface StoredLegislationProvision {
   documentIdentity: string
   labelPath: string
   label: string
-  /** The provision's own published heading, empty when the source carries
-   * none. */
   heading: string
   extent: string
   text: string
-  /** Text written directly inside this provision, excluding nested
-   * sub-provisions; null for a row predating the column, whose flat `text`
-   * is all that is known. */
   ownText: string | null
-  /** Set on rows read through the provision tree; the nearest addressable
-   * ancestor used to nest them. */
   parentLabelPath?: string | null
   hasUnappliedEffects: boolean
   effectsCheckedAt: string | null
@@ -56,28 +39,16 @@ export type LegislationActListEntry = Omit<
 export interface StoredLegislationActProvision {
   label: string
   labelPath: string
-  /** The provision's own heading; empty for container rows and for
-   * provisions whose source carries none. */
   heading: string
   extent: string
   hasUnappliedEffects: boolean
-  /** Timestamp of the successful effects check that produced the flag,
-   * null when the row was never checked (legacy default, skipped pass). */
   effectsCheckedAt: string | null
   docOrder: number
   kind: LegislationProvisionKind
   parentLabelPath: string | null
-  /** Holder for container heading text; empty for provision rows. */
   text: string
 }
 
-/**
- * Fail-closed servability for provision text: current text serves only
- * after a successful effects check (non-null timestamp) found no unapplied
- * effects. A false flag with a null timestamp is a legacy row that was
- * never verified — it withholds like an unknown flag, never serves.
- * Containers never carry effects state; callers exempt them where needed.
- */
 export function provisionTextServable(
   hasUnappliedEffects: StoredLegislationProvision['hasUnappliedEffects'],
   effectsCheckedAt: StoredLegislationProvision['effectsCheckedAt'],
@@ -86,33 +57,10 @@ export function provisionTextServable(
 }
 
 export interface LegislationActProvisionsSnapshot {
-  /** Document holds no NULL-kind row: the whole Act page may serve. */
   classified: boolean
-  /** Containers plus P1 rows in document order, empty while unclassified. */
   rows: StoredLegislationActProvision[]
 }
 
-/**
- * One-statement read of the Act-page gate and its contents: the flag and
- * the rows come back from a single statement, so they share one snapshot
- * and always describe the same committed state. A --force-reparse rewrites
- * every row of a document in one transaction, so the read sees either all
- * of it (gate open, rows present) or none of it (legacy NULL-kind rows
- * filtered out, gate closed) — never the old torn mix where an independent
- * gate statement read post-commit at the same time the listing read
- * pre-commit, which served an empty tree as 200 instead of 503.
- *
- * Rows whose kind is NULL are pre-0022 legacy rows that no --force-reparse
- * has rewritten: their true classification is unknown, so they must never
- * reach the tree. The gate withholds the whole document until none remain
- * (fail-closed: any other outcome reads as not-classified).
- *
- * Contents arrive in document order via json_agg over the inner ORDER BY:
- * inserted sections (s. 13A between ss. 13 and 14) keep their enacted
- * position, and containers interleave with their content. provision_text is
- * read for container rows only — the Act page renders container heading
- * text but never provision body text (the provision page carries that
- * gate) — so the query never pulls full provision bodies. */
 export async function getLegislationActProvisionsSnapshot(
   pool: Pick<Pool, 'query'>,
   identity: string,
@@ -181,15 +129,6 @@ export async function getLegislationProvision(
   return result.rows[0] ?? null
 }
 
-/**
- * One provision row plus every row beneath it, in document order. Children
- * attach through the stored parent pointer (CLML nesting), never through a
- * label-path prefix: inserted-amendment rows carry hierarchical IdURIs
- * (part/2/section/100/kn1) whose prefixes name a container, not the section
- * that physically holds them. `own_text` rides along so the page can render
- * each level's own words instead of the section's concatenated text repeated
- * under every subsection.
- */
 export async function listLegislationProvisionTree(
   pool: Pick<Pool, 'query'>,
   documentIdentity: string,
@@ -227,33 +166,11 @@ export type StoredProvisionPathResolution =
   | { status: 'missing'; labelPath: string }
   | { status: 'underspecified' }
 
-/**
- * The two reads the single-schedule resolution needs. Injecting them lets the
- * serving path wrap each read in its store timeout and the authority-existence
- * path read the pool directly, while both run the same algorithm.
- */
 export interface StoredProvisionPathLookup {
   getProvision(provisionId: string): Promise<StoredLegislationProvision | null>
   pathExists(documentIdentity: string, labelPath: string): Promise<boolean>
 }
 
-/**
- * Resolve a citation's label path against the store, tolerating the
- * single-schedule storage shape. Some Acts leave their only schedule
- * unnumbered, so its paragraphs store at `schedule/paragraph/N` while a
- * citation says "Schedule 1 paragraph N". The numbered path wins when it
- * exists; the unnumbered fallback applies only when the citation names
- * Schedule 1 and the Act has no numbered Schedule 1. Schedule 2 is never
- * mapped onto an unnumbered schedule, and a paragraph citation with no
- * schedule number on a numbered-schedule Act is non-resolution, not a
- * not-held claim.
- *
- * This is the one owner of the alias. The serving layer and the
- * authority-existence check both call it, so a citation the Act page resolves
- * cannot read as not-held to verification, or the reverse. It never crosses
- * documents and never loosens the canonical path: the alias only rewrites the
- * schedule prefix of the path the caller already gave.
- */
 export async function resolveStoredProvisionPath(
   lookup: StoredProvisionPathLookup,
   identity: string,
@@ -266,9 +183,6 @@ export async function resolveStoredProvisionPath(
   }
   const numbered = labelPath.match(/^schedule\/(\d+)\//)
   if (!numbered) {
-    // An unnumbered citation only resolves on the exact path above, which
-    // exists for the single-schedule shape. On an Act with numbered
-    // schedules the schedule number is missing: say so rather than guess.
     const hasNumberedSchedule = await lookup.pathExists(identity, 'schedule/1')
     return hasNumberedSchedule
       ? { status: 'underspecified' }
@@ -291,13 +205,6 @@ export async function resolveStoredProvisionPath(
     : { status: 'missing', labelPath: alternateLabelPath }
 }
 
-/**
- * True when a provision or container row exists at `labelPath` or beneath
- * it. The single-schedule fallback uses this to tell a numbered schedule the
- * Act holds from one it does not: a citation for Schedule 1 may only fall
- * back to an unnumbered schedule when the Act has no numbered Schedule 1
- * container at all.
- */
 export async function legislationProvisionPathExists(
   pool: Pick<Pool, 'query'>,
   documentIdentity: string,
@@ -314,7 +221,6 @@ export async function legislationProvisionPathExists(
   return result.rows[0]?.exists ?? false
 }
 
-/** Whole act directory for citation suffix matching (~200 rows in scope). */
 export async function listLegislationActs(
   pool: Pick<Pool, 'query'>,
 ): Promise<LegislationActListEntry[]> {

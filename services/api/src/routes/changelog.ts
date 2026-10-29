@@ -2,64 +2,23 @@ import { Hono, type Context } from 'hono'
 import { z } from 'zod'
 import { readBoundedResponseText } from '../bounded-upstream-body'
 
-/**
- * Bounds the anonymous changelog route's GitHub traffic. The cache is a single
- * application-owned slot (the resource is fixed, so there is no key space to
- * evict), concurrent cold or expired callers share one refresh, a failure or
- * throttle sets a cooldown, each upstream request has a deadline, and a
- * validated body is served stale for at most {@link CHANGELOG_STALE_MAX_MS}
- * after a failure.
- *
- * At most two upstream requests are made per refresh: releases, then commits
- * only when releases is empty or unusable. A throttled releases response ends
- * the refresh, so a rate limit cannot trigger the commits fallback. Regardless
- * of regime, every one of those requests draws on the same rolling
- * {@link CHANGELOG_REQUEST_BUDGET}, which is the route's hard ceiling.
- *
- * The bound is per API process, so N replicas multiply it N times, and any
- * other client sharing the egress IP also draws on GitHub's unauthenticated
- * allowance. No credential, shared cache or background polling is used.
- */
-
-/** Fresh results are reused for ten minutes: about six refreshes an hour. */
 const CHANGELOG_FRESH_TTL_MS = 10 * 60_000
 
-/** A failed refresh is not retried for two minutes: at most 30 an hour. */
 const CHANGELOG_FAILURE_COOLDOWN_MS = 2 * 60_000
 
-/** Successfully fetched data is served for at most a day after a failure. */
 const CHANGELOG_STALE_MAX_MS = 24 * 60 * 60_000
 
-/** Each upstream request is aborted after five seconds. */
 const CHANGELOG_UPSTREAM_TIMEOUT_MS = 5_000
 
-/**
- * Hard per-process ceiling on upstream HTTP requests inside any rolling hour.
- * GitHub's unauthenticated allowance is 60 requests/hour/IP, so 30 leaves 2x
- * headroom for other replicas or clients sharing the egress IP. The budget is
- * spent per request, not per refresh, so successes, failures, the commits
- * fallback and throttled refreshes all draw on it.
- */
 const CHANGELOG_REQUEST_BUDGET = 30
 const CHANGELOG_REQUEST_WINDOW_MS = 60 * 60_000
 
-/**
- * A throttled refresh waits at least a minute, GitHub's secondary-rate-limit
- * guidance. A valid provider delay can extend that; it can never shorten it.
- */
 const CHANGELOG_THROTTLE_MIN_COOLDOWN_MS = 60_000
 
-/**
- * A provider delay beyond a day is treated as extreme and capped, so a
- * malformed or hostile header cannot park refreshes indefinitely. An hour is
- * far below this and is honoured as sent.
- */
 const CHANGELOG_COOLDOWN_MAX_MS = 24 * 60 * 60_000
 
-/** A single upstream body is rejected, unparsed, once it passes this size. */
 const CHANGELOG_MAX_BODY_BYTES = 64 * 1024
 
-/** GitHub's own per_page cap; a larger array is treated as malformed. */
 const CHANGELOG_MAX_ENTRIES = 5
 
 const RELEASES_URL =
@@ -67,11 +26,6 @@ const RELEASES_URL =
 const COMMITS_URL =
   'https://api.github.com/repos/ObiterDictum/obiter/commits?sha=dev&per_page=5'
 
-/**
- * Release and commit bodies are untrusted, and `html_url` is rendered as an
- * anchor href. Restrict it to the GitHub origin: `z.string().url()` would also
- * accept `javascript:` and other unwanted schemes.
- */
 function isGithubLink(value: string): boolean {
   try {
     const url = new URL(value)
@@ -145,7 +99,6 @@ function commitEntry(
   }
 }
 
-/** 429, or 403 with the remaining counter at zero, is a spent rate limit. */
 function isRateLimited(response: Response): boolean {
   return (
     response.status === 429 ||
@@ -154,20 +107,11 @@ function isRateLimited(response: Response): boolean {
   )
 }
 
-/** A positive, finite, capped delay, or null when the value is unusable. */
 function boundedCooldown(ms: number): number | null {
   if (!Number.isFinite(ms) || ms <= 0) return null
   return Math.min(ms, CHANGELOG_COOLDOWN_MAX_MS)
 }
 
-/**
- * The cooldown a throttled response requires: the local throttle floor, or a
- * longer valid provider delay when one is present. `Retry-After` (seconds or
- * HTTP date) and `x-ratelimit-reset` (epoch seconds) are both considered, and
- * the longer valid instruction wins. Malformed, past, zero, negative and
- * non-finite values are ignored rather than allowed to shorten the floor,
- * retry immediately or overflow the clock.
- */
 function throttleCooldownMs(response: Response, now: number): number {
   const requested: number[] = []
   const retryAfter = response.headers.get('retry-after')
@@ -193,10 +137,6 @@ function throttleCooldownMs(response: Response, now: number): number {
   return Math.max(CHANGELOG_THROTTLE_MIN_COOLDOWN_MS, provider)
 }
 
-/**
- * Reads a response body up to a byte cap, then parses and validates it.
- * Returns null for an oversized, unreadable or invalid body.
- */
 async function parseBoundedBody<T>(
   response: Response,
   schema: z.ZodType<T>,
@@ -221,8 +161,6 @@ async function requestUpstream<T>(
   now: () => number,
   reserve: () => boolean,
 ): Promise<UpstreamOutcome<T>> {
-  // The budget is spent before the request is made, so an attempt that later
-  // fails, is throttled, or triggers the commits fallback still counts.
   if (!reserve()) return { kind: 'unavailable' }
 
   let response: Response
@@ -232,12 +170,9 @@ async function requestUpstream<T>(
         Accept: 'application/vnd.github+json',
         'User-Agent': 'obiter-api',
       },
-      // Aborts the response body too, so a stalled upstream cannot hold the
-      // socket open past the deadline.
       signal: AbortSignal.timeout(timeoutMs),
     })
   } catch {
-    // A network failure and the deadline are both an unusable refresh.
     return { kind: 'unavailable' }
   }
 
@@ -249,8 +184,6 @@ async function requestUpstream<T>(
   }
   if (!response.ok) return { kind: 'unavailable' }
 
-  // Validate before anything is cached: a malformed or oversized body must not
-  // replace a good cached result.
   const value = await parseBoundedBody(response, schema)
   if (value === null) return { kind: 'unavailable' }
   return { kind: 'ok', value }
@@ -269,8 +202,6 @@ async function refresh(
     reserve,
   )
 
-  // A throttled releases response ends the refresh: calling commits next is
-  // the fallback storm this route is bounded against.
   if (releases.kind === 'throttled') {
     return { kind: 'failed', cooldownMs: releases.cooldownMs }
   }
@@ -284,7 +215,6 @@ async function refresh(
     }
   }
 
-  // Empty or unusable releases keep the established commits fallback.
   const commits = await requestUpstream(
     COMMITS_URL,
     commitsSchema,
@@ -309,9 +239,7 @@ async function refresh(
 }
 
 export interface ChangelogRouteOptions {
-  /** Injectable clock, so tests can advance the fresh, cooldown and stale windows. */
   now?: () => number
-  /** Upstream deadline override; defaults to {@link CHANGELOG_UPSTREAM_TIMEOUT_MS}. */
   upstreamTimeoutMs?: number
 }
 
@@ -323,16 +251,8 @@ export function createChangelogRoutes(options: ChangelogRouteOptions = {}) {
   let cached: { body: ChangelogBody; fetchedAt: number } | null = null
   let inFlight: Promise<RefreshOutcome> | null = null
   let cooldownUntil = 0
-  // Upstream request timestamps inside the rolling budget window. The array is
-  // bounded by CHANGELOG_REQUEST_BUDGET entries, so it cannot grow without
-  // limit even under sustained failures or throttles.
   const requestTimes: number[] = []
 
-  /**
-   * Spends one slot of the rolling upstream-request budget. Every fetch goes
-   * through here, so the ceiling holds across successes, failures, fallbacks
-   * and throttling rather than only through the fresh-cache TTL.
-   */
   const reserveUpstreamRequest = (): boolean => {
     const at = now()
     const cutoff = at - CHANGELOG_REQUEST_WINDOW_MS
@@ -359,8 +279,6 @@ export function createChangelogRoutes(options: ChangelogRouteOptions = {}) {
       },
     )
     inFlight = running
-    // Only one refresh can run at a time, because a new one starts only when
-    // inFlight is clear, so clearing it here cannot clear a newer refresh.
     const clear = () => {
       inFlight = null
     }
@@ -369,11 +287,6 @@ export function createChangelogRoutes(options: ChangelogRouteOptions = {}) {
   }
 
   const respondFromCache = (c: Context) => {
-    // Stale data inside the window is returned byte-identical to a fresh hit:
-    // `source` is unchanged, so consumers cannot tell the two apart. That is
-    // the documented policy, not a bug. The boundary is inclusive: at exactly
-    // CHANGELOG_STALE_MAX_MS the cached body is still served, and past it the
-    // route answers 503.
     if (cached && now() - cached.fetchedAt <= CHANGELOG_STALE_MAX_MS) {
       return c.json(cached.body)
     }

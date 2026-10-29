@@ -8,16 +8,6 @@ import {
   type RedactionSpan,
 } from '@obiter/redaction-policy'
 
-/**
- * Secure PDF output for hard redaction, and the validation gate that runs
- * before a run may be marked finalized.
- *
- * Two jobs live here: turn plain text into an image-only paginated PDF, and
- * refuse to publish anything that could still carry source text. The output is
- * rasterized page images with no fonts, annotations, forms, attachments or
- * accessibility structure, so no selectable text layer exists to copy.
- */
-
 const A4_WIDTH_POINTS = 595.28
 const A4_HEIGHT_POINTS = 841.89
 const RENDER_SCALE = 2
@@ -26,7 +16,6 @@ const FONT_SIZE_POINTS = 11
 const LINE_HEIGHT_POINTS = 15
 const REDACTED_MARKER = '[REDACTED]'
 
-/** Limits keep malformed or hostile documents from exhausting the worker. */
 export const MAX_SECURE_PDF_PAGES = 2000
 export const MAX_SECURE_PDF_PAGE_POINTS = 20_000
 export const MAX_SECURE_PDF_BYTES = 200 * 1024 * 1024
@@ -52,12 +41,6 @@ function sha256(bytes: Uint8Array) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-/**
- * Render already-redacted text into an image-only PDF. `text` is the output of
- * `applyRedacted`, so accepted regions are already `[REDACTED]` markers; each
- * marker is painted as an opaque black bar, and the surrounding text is drawn
- * into page pixels. The result has no text layer.
- */
 export async function buildSecurePdfFromText(
   text: string,
 ): Promise<Uint8Array> {
@@ -112,18 +95,11 @@ export async function buildSecurePdfFromText(
   output.setAuthor('')
   output.setSubject('')
   output.setKeywords([])
-  // Deliberately empty: a producer string is our own untrusted metadata, and a
-  // non-empty one would collide with the source-text scan for ordinary words.
   output.setProducer('')
   output.setCreator('')
   return output.save()
 }
 
-/**
- * Draw one laid-out line, replacing each `[REDACTED]` marker with an opaque
- * black bar at the exact glyph position, so the marker itself never appears and
- * the covered region cannot be read back.
- */
 function drawLineWithBars(
   context: SKRSContext2D,
   line: string,
@@ -141,8 +117,6 @@ function drawLineWithBars(
       cursor += context.measureText(part).width
     }
     if (index < parts.length - 1) {
-      // Opaque black only: alpha is explicitly 1, and validation re-checks the
-      // published PDF has no covered text.
       context.globalAlpha = 1
       context.fillRect(cursor, baseline - fontSize * 0.8, barWidth, fontSize)
       cursor += barWidth
@@ -211,11 +185,6 @@ function breakLongWord(
   return pieces.length > 0 ? pieces : ['']
 }
 
-/**
- * Refuse to publish a PDF that could still reveal accepted source content.
- * Bounds are enforced before parsing so a decompression bomb or extreme page
- * geometry fails quickly.
- */
 export async function validateSecurePdf(input: {
   bytes: Uint8Array
   spans: RedactionSpan[]
@@ -272,9 +241,6 @@ export async function validateSecurePdf(input: {
         'page_geometry',
         'The secure PDF has a page with invalid dimensions.',
       )
-    // pdf-lib writes an empty /Annots array on every page, so only a
-    // non-empty one is an annotation the source could hide in. /AA (additional
-    // actions) is never valid on a rasterized output page.
     const annots = page.node.Annots()
     if (annots instanceof PDFArray && annots.size() > 0)
       throw new SecurePdfValidationError(
@@ -292,8 +258,6 @@ export async function validateSecurePdf(input: {
         'not_rasterized',
         'A secure PDF page was not rasterized.',
       )
-    // Resolve through references: a font or image dictionary reached only by
-    // an indirect reference must still be seen by this check.
     const fonts = resources.lookupMaybe(PDFName.of('Font'), PDFDict)
     if (fonts && fonts.keys().length > 0)
       throw new SecurePdfValidationError(
@@ -322,9 +286,6 @@ export async function validateSecurePdf(input: {
 
 function assertNoStructuredContent(document: PDFDocument) {
   const catalog = document.catalog
-  // Every catalog entry that can carry source text, hide an action, or add a
-  // structure the rasterized pages do not represent. The output is produced by
-  // this API with only /Type and /Pages, so any of these is a leak.
   const deniedCatalogKeys = [
     'AcroForm',
     'Names',
@@ -354,13 +315,6 @@ function assertNoStructuredContent(document: PDFDocument) {
     )
 }
 
-/**
- * The strongest form of "accepted source strings do not survive": every
- * accepted span of four or more characters must be absent from the published
- * bytes. Shorter spans are excluded because they collide with ordinary binary
- * content and would produce false refusals; they are already covered by the
- * no-text-layer check.
- */
 function assertSourceTextAbsent(
   bytes: Uint8Array,
   spans: RedactionSpan[],

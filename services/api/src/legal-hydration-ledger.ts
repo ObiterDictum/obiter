@@ -6,50 +6,15 @@ import type {
 } from './legal-search-hydration-budget'
 
 export interface PostgresLegalHydrationLedgerConfig {
-  /**
-   * Unexpired in-flight leases allowed across every replica. This bounds the
-   * leases the ledger counts, not every still-running operation: an operation
-   * that outlives `leaseTtlMs` drops out of the count, so a second operation
-   * can be admitted while the first still runs.
-   */
   queueMax: number
-  /** Distinct misses one subject may charge in the rolling window. */
   perClientMax: number
-  /** Rolling window length in milliseconds. */
   windowMs: number
-  /**
-   * How long an unreleased lease keeps its in-flight slot. It must exceed the
-   * longest legitimate operation, so a slow-but-alive replica is not
-   * over-admitted; a crashed replica holds capacity for at most this long, and
-   * so does an operation that outlives its lease.
-   */
   leaseTtlMs: number
-  /** Bound on waiting for the admission advisory lock. */
   lockTimeoutMs: number
-  /** Bound on any one statement in the admission transaction. */
   statementTimeoutMs: number
 }
 
-/**
- * The cluster-visible hydration admission authority.
- *
- * It lives on the application database (`DATABASE_URL`): the database every
- * API replica migrates at boot and may write. It is deliberately not the
- * legal corpus, whose lane configuration is read-only (`CORPUS_DATABASE_URL`
- * alone gives the process no corpus writer) and whose contents are licensed
- * source material that operational rows must not join.
- *
- * The window is persisted rows counted inside one transaction, not an
- * advisory lock. The lock only makes the check-and-record atomic across
- * replicas: an advisory lock alone would serialise writers without holding
- * the window, so it could not answer "how many misses in the last ten
- * minutes" after a restart.
- *
- * Cross-replica same-key deduplication is deliberately not provided. Two
- * replicas admitting the same canonical key both take a lease and both charge
- * a miss; only the in-process gate deduplicates equivalent work, and only
- * within one process. The canonical key is therefore not persisted at all.
- */
+// Legal: The legal corpus holds licensed source material; hydration ledger rows must live on the application database, never join the corpus.
 export class PostgresLegalHydrationLedger implements LegalHydrationLedger {
   constructor(
     private readonly pool: Pool,
@@ -79,20 +44,12 @@ export class PostgresLegalHydrationLedger implements LegalHydrationLedger {
     try {
       client = await this.pool.connect()
     } catch {
-      // Fail closed. The caller refuses new hydration; stored reads run on
-      // other pools and keep serving.
       console.error('Legal hydration admission ledger unavailable')
       return { status: 'unavailable' }
     }
 
     try {
       await client.query('begin')
-      // Bound the wait for the cluster-wide admission lock. Postgres defaults
-      // `lock_timeout` and `statement_timeout` to 0 (wait forever), so a
-      // wedged holder (stalled event loop, paused process, partition after
-      // `begin`) would stall every admission on every replica instead of
-      // failing closed. Both settings are transaction-local, so the pooled
-      // connection returns to its previous settings on commit or rollback.
       await client.query(`select set_config('lock_timeout', $1, true)`, [
         `${this.config.lockTimeoutMs}ms`,
       ])
@@ -102,9 +59,6 @@ export class PostgresLegalHydrationLedger implements LegalHydrationLedger {
       await client.query(
         `select pg_advisory_xact_lock(hashtext('legal_hydration_admission'))`,
       )
-      // Housekeeping only: the counts below filter on time, so an expired
-      // lease or an out-of-window miss is already excluded even before it is
-      // swept. Deleting keeps the tables small.
       await client.query(
         `delete from legal_hydration_leases where expires_at <= now()`,
       )
@@ -151,8 +105,6 @@ export class PostgresLegalHydrationLedger implements LegalHydrationLedger {
       return { status: 'admitted', leaseId }
     } catch {
       await rollbackQuietly(client)
-      // No subject, key, lease or query text is logged: the error names the
-      // failure, nothing about the work.
       console.error('Legal hydration admission ledger unavailable')
       return { status: 'unavailable' }
     } finally {
@@ -167,9 +119,6 @@ export class PostgresLegalHydrationLedger implements LegalHydrationLedger {
         [leaseId],
       )
     } catch {
-      // A failed release must not mask the operation's outcome. The lease
-      // expires on its own, so an unreachable release cannot hold capacity
-      // forever.
       console.error('Legal hydration lease release failed')
     }
   }

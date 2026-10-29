@@ -29,36 +29,6 @@ export async function findOrganisation(
   return result.rows[0] ?? null
 }
 
-/**
- * Creates an organisation, assigns the creating user to it as owner, clears
- * any stashed sign-up organisation name, and writes the audit row — all in
- * one transaction. The single-org invariant is enforced in code here: the
- * user row is locked with SELECT ... FOR UPDATE and the function rejects
- * (returns `{ created: false }`, 409 in the route) if the user already has
- * an organisationId. No DB-level unique constraint backs this — a per-user
- * index would be wrong (it would allow distinct organisations per user
- * rather than serialising the same-user race, and a
- * one-organisation-per-user index would block future multi-member orgs).
- * The row lock serialises concurrent creation for the same user.
- *
- * The name is explicit when given (POST /api/organisations, Settings
- * rename path never reaches here). When omitted (first-use
- * auto-provisioning), the stashed sign-up name is consumed in place of the
- * default workspace name — it lives on the user row, so verification on a
- * different device still provisions the typed name. A missing or invalid
- * stash (forged over-long/invisible value, pre-stash account) falls back
- * to the default; the stash is cleared either way so it is single-use.
- *
- * If the user row is missing entirely, the function rolls back and throws
- * so the caller surfaces a 500 rather than inserting an orphan organisation
- * + audit row. Any other failure likewise throws.
- *
- * When the user already has an organisation, returns `{ created: false,
- * organisationId, role }` so callers that auto-provision (matters/redact)
- * can continue with the existing tenant without a second lookup. A stale
- * stash there is cleared too, so a pending name never lingers once the
- * user belongs to an organisation.
- */
 export async function createOrganisationForUser(
   pool: Pool,
   input: { userId: string; name?: string; requestId: string },
@@ -84,8 +54,6 @@ export async function createOrganisationForUser(
       [input.userId],
     )
     if (existing.rows.length === 0) {
-      // No user row: a data-integrity failure, not the normal org-less state.
-      // Fail closed rather than inserting an organisation nothing references.
       await client.query('rollback')
       throw new Error('User record not found.')
     }
@@ -108,9 +76,6 @@ export async function createOrganisationForUser(
       }
     }
 
-    // Explicit names win (the route validates before reaching here); the
-    // stash is validated with the same shared rule and falls back to the
-    // default when absent or forged.
     const stashed = parseOrganisationName(
       current?.pendingOrganisationName ?? '',
     )
@@ -156,13 +121,6 @@ export async function createOrganisationForUser(
   }
 }
 
-/**
- * Ensures the user has an organisation for tenant-scoped product data.
- * Creates the tenant with the stashed sign-up name when present, else a
- * personal workspace; otherwise returns the existing organisation. Used by
- * Matters/Documents/Redact auth helpers so product surfaces work without a
- * prior Settings visit.
- */
 export async function ensureOrganisationForUser(
   pool: Pool,
   input: { userId: string; requestId: string },
@@ -185,12 +143,6 @@ export async function ensureOrganisationForUser(
   }
 }
 
-/**
- * Renames an organisation and writes the audit row in one transaction.
- * Returns null when the organisation does not exist so the caller can
- * surface a 404 without writing an audit row (no existence leak).
- * A no-op rename (same name) still succeeds without an audit row.
- */
 export async function renameOrganisation(
   pool: Pool,
   input: {
@@ -247,8 +199,6 @@ export async function renameOrganisation(
   }
 }
 
-// An org-less user has role null; /api/me returns them with organisation null
-// so the client can offer optional organisation setup in Settings.
 export function toCurrentUser(user: SessionUserRecord): CurrentUser {
   return {
     id: user.id,

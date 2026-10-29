@@ -27,12 +27,6 @@ function when(value: string) {
   return timestampFormat.format(new Date(value))
 }
 
-/**
- * The schedule as a reader sees it. The removed words are deliberately absent:
- * the schedule is a file that gets emailed and printed, and reproducing the text
- * it proves was removed would carry the disclosure risk into the audit file.
- * Each row is addressed by its position in the decision list instead.
- */
 export function scheduleLines(report: AuditReport): string[] {
   const decisions = report.spanDecisions
   const kept = decisions.filter(
@@ -68,7 +62,6 @@ export function scheduleLines(report: AuditReport): string[] {
   ]
 }
 
-/** A4, 10pt, one line of text per schedule line, wrapped to the page width. */
 export async function renderSchedulePdf(report: AuditReport) {
   const pdf = await PDFDocument.create()
   const font = await pdf.embedFont(StandardFonts.Helvetica)
@@ -110,11 +103,6 @@ export async function renderSchedulePdf(report: AuditReport) {
   return pdf.save()
 }
 
-/**
- * The Word export is the same plain lines, one paragraph each. The package
- * builder is the one already in `@obiter/ooxml`; a schedule needs no styling
- * fidelity, so building a styled document here would be work with no reader.
- */
 export async function renderScheduleDocx(report: AuditReport) {
   return createSyntheticDocx(scheduleLines(report))
 }

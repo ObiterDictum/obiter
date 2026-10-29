@@ -37,8 +37,6 @@ function extractionErrorResponse(c: Context, error: unknown) {
   return errorResponse(
     c,
     'validation_failed',
-    // Curated messages name the actual obstacle, e.g. that the document
-    // needs OCR. Wrapped library failures stay generic.
     error.userFacing
       ? error.message
       : 'Document text could not be read for redaction.',
@@ -242,9 +240,6 @@ export function createRedactRunCreationRoutes(
         404,
       )
     const id = `red_${crypto.randomUUID()}`
-    // DOCX review coordinates must come from Redact's own walker over the
-    // version's original bytes, as for uploads. The matter's stored text,
-    // extracted for Search, stays untouched and is never Redact's source.
     const docx = isDocxMimeOrFilename(
       source.filename,
       mimeTypeFromStoredFileType(source.file_type),

@@ -6,13 +6,6 @@ import {
   verificationListMaxLimit,
 } from '@obiter/contracts'
 
-/**
- * Keyset pagination for the verification run and finding lists. A cursor names
- * the last row of the previous page by its `(created_at, id)` key, so a page
- * boundary is stable when several rows share a timestamp and when rows are
- * inserted between requests. It is opaque to the client: base64url of a strict
- * JSON object, rejected whole if it does not decode.
- */
 const cursorPayloadSchema = z
   .object({
     createdAt: z.string().datetime({ offset: true }),
@@ -40,10 +33,6 @@ export function decodeVerificationCursor(
   }
 }
 
-/** The cursor a caller sends to fetch the page after `row`. `cursor_created_at`
- * is the database's full-precision UTC text for the row timestamp; an ISO
- * millisecond round-trip would drop microseconds and repeat a row across a page
- * boundary. */
 export function cursorFromRow(row: {
   cursor_created_at: string
   id: string
@@ -51,8 +40,6 @@ export function cursorFromRow(row: {
   return { createdAt: row.cursor_created_at, id: row.id }
 }
 
-/** The cursor a caller sends to fetch the page after `row`, ordered by
- * `(created_at, finding_id)`. */
 export function findingCursorFromRow(row: {
   cursor_created_at: string
   finding_id: string
@@ -60,12 +47,6 @@ export function findingCursorFromRow(row: {
   return { createdAt: row.cursor_created_at, id: row.finding_id }
 }
 
-/**
- * A requested limit is validated, not trusted: anything outside `1..max` is a
- * caller error the route answers with 400, and the default is used when the
- * parameter is absent. The store still issues `limit + 1` rows so it can tell
- * "exactly a page" from "there is a next page" without a count query.
- */
 export function resolveRunListLimit(requested: number | undefined) {
   return resolveLimit(
     requested,

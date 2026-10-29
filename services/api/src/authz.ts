@@ -7,12 +7,6 @@ import type {
 } from '@obiter/contracts'
 import { ensureOrganisationForUser } from './organisation-database'
 
-/**
- * The session user as seen by route handlers. better-auth exposes `role`
- * (owner/admin/member) via user.additionalFields; org-less users have a null
- * role and organisationId until they create one in Settings or a product
- * surface auto-provisions a personal workspace.
- */
 export interface AuthzUser {
   id: string
   name?: string
@@ -34,13 +28,6 @@ export interface AuthenticatedOrgUser {
   role: UserRole
 }
 
-/**
- * Authenticates the caller and ensures they have an organisation tenant.
- * Org-less users are provisioned on first Matters/Documents/Redact use —
- * with the stashed sign-up name when present, else a personal workspace —
- * so product surfaces are not gated on Settings. Returns the org-scoped
- * user, or a 401 Response for the caller to return.
- */
 export async function ensureOrgUser(
   c: AuthzContext,
   pool: Pool,
@@ -88,12 +75,6 @@ export async function ensureOrgUser(
   }
 }
 
-/**
- * Requires an owner or admin role. This is the first real authorization
- * distinction in the product: members may not delete, restore, or read the
- * audit report of a deleted run. Enforced server-side — UI hiding is not
- * authorization. Auto-provisions a personal workspace when still org-less.
- */
 export async function requireManageRole(
   c: AuthzContext,
   pool: Pool,
@@ -132,14 +113,6 @@ type RoleRank = { member: number; admin: number; owner: number }
 
 const ROLE_RANK: RoleRank = { member: 0, admin: 1, owner: 2 }
 
-/**
- * An actor may grant at most the role they themselves hold. Owner is a strict
- * tier above admin — rename, organisation update and member removal all
- * require `requireOwnerRole` — so granting owner is precisely the action that
- * dissolves that tier. Callers must reject a grant above the actor's role
- * loudly rather than downgrade it, because a silent grant would give the
- * invitee a different role than the actor asked for.
- */
 export function canGrantRole(actor: UserRole, granted: UserRole): boolean {
   return ROLE_RANK[granted] <= ROLE_RANK[actor]
 }

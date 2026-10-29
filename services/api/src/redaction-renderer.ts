@@ -1,37 +1,15 @@
-/**
- * HTTP client for the sandboxed redaction rendering worker.
- *
- * The worker turns a sanitized `.docx` — sensitive text already destructively
- * removed by `buildRedactedDocx` — into an intermediate PDF. It runs in its own
- * process and is reached only over this HTTP contract; this module deliberately
- * does not import the worker package so the API compiles and tests without it.
- *
- * Contract (agreed with the renderer PR, do not redefine):
- *   POST /render  body: raw sanitized .docx bytes
- *                 content-type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
- *                 -> 200 application/pdf bytes
- *                 -> non-2xx typed JSON { error: { code, message } }
- *
- * Any non-2xx, network failure, timeout, or invalid PDF is a hard failure: the
- * caller must not finalize the run or present a substitute output.
- */
-
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 export type RedactionRendererFailure =
   | 'renderer_unavailable'
   | 'renderer_timeout'
-  // The worker is healthy but busy or still warming. Distinct from a generic
-  // error because both are retriable rather than a property of the document.
   | 'renderer_at_capacity'
   | 'renderer_not_ready'
-  // The document itself is outside a worker bound and will fail every retry.
   | 'renderer_input_too_large'
   | 'renderer_too_many_pages'
   | 'renderer_error'
   | 'renderer_invalid_pdf'
-  // The response body exceeded this client's buffer ceiling before any parse.
   | 'renderer_too_large'
 
 export class RedactionRendererError extends Error {
@@ -51,40 +29,14 @@ export interface RedactionRenderer {
 export interface HttpRedactionRendererOptions {
   url: string
   timeoutMs?: number
-  /**
-   * Ceiling on the intermediate PDF before it is buffered whole. Defaults to
-   * `MAX_INTERMEDIATE_PDF_BYTES`; overridable so a test can prove the bound
-   * without allocating the production cap.
-   */
   maxResponseBytes?: number
-  /** Injectable for tests; defaults to the global fetch. */
   fetchImpl?: typeof fetch
 }
 
-/**
- * Whole-request budget for one `POST /render`.
- *
- * The worker's bounded worst case is two 60s render passes (a layout pass plus
- * `page.pdf`) plus up to 60s waiting for its single render slot, plus Node-side
- * DOCX parse/inflate before the passes start. 240s covers that with headroom.
- * A shorter API timeout aborts a legitimate large render while the worker keeps
- * rendering and holding its only slot, so the retry fails the same way and the
- * worker stays saturated.
- *
- * Follow-up: once the renderer contract exposes its limits, import the shared
- * constants here instead of restating them. This module deliberately does not
- * depend on the renderer package yet.
- */
 const RENDER_TIMEOUT_MS = 240_000
 
-/**
- * Ceiling on the intermediate PDF before it is buffered whole. The 200 MB
- * final-output limit is checked after rasterization; this bound stops an
- * oversized or runaway response from being read into API memory first.
- */
 const MAX_INTERMEDIATE_PDF_BYTES = 200 * 1024 * 1024
 
-/** Typed worker failures are small JSON bodies; anything larger is ignored. */
 const MAX_ERROR_BODY_BYTES = 16 * 1024
 
 const FAILURE_BY_WORKER_CODE = [
@@ -164,10 +116,6 @@ async function readBoundedBody(
   return bytes
 }
 
-/**
- * Read only the stable worker code from a typed failure. The message is never
- * logged or surfaced: a misbehaving worker could echo document content in it.
- */
 async function readWorkerFailure(
   response: Response,
 ): Promise<RedactionRendererFailure> {
@@ -178,9 +126,7 @@ async function readWorkerFailure(
       const failure = workerFailureForCode(parsed.error.code)
       if (failure) return failure
     }
-  } catch {
-    // Fall through to the generic category.
-  }
+  } catch {}
   return 'renderer_error'
 }
 

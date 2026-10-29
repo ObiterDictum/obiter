@@ -30,9 +30,6 @@ const storyKinds: DocumentStoryKind[] = [
   'comments',
 ]
 
-/** The domain location carries the story as an opaque string; the view's
- * contract types it. Narrow rather than assert, so an unknown story is dropped
- * instead of reaching the response untyped. */
 function asStoryKind(value: string | undefined) {
   return storyKinds.find((kind) => kind === value)
 }
@@ -117,12 +114,6 @@ function authorityLabel(citation: NormalizedCitation) {
   }
 }
 
-/**
- * The case name the stored judgment carries, looked up through the finding's
- * own judgment evidence. Nothing is derived from the citation itself: a
- * citation that names a source the store has no title for yields null and the
- * UI shows the citation alone.
- */
 function authorityName(
   finding: VerificationFinding,
   sources: Map<string, StoredFindingSource> | undefined,
@@ -153,11 +144,6 @@ function evidenceLabel(reference: EvidenceReference): string {
   return `Provision ${reference.sourceId} ${reference.labelPath}`
 }
 
-/**
- * The evidence's own location. A judgment's stage 7 page takes a paragraph
- * anchor; a provision's page is its canonical `/ln/` path. `pinpoint` is stated
- * only when the evidence names one, and a whole-document reference names none.
- */
 function evidenceSource(
   reference: EvidenceReference,
   sources: Map<string, StoredFindingSource> | undefined,
@@ -192,8 +178,6 @@ function evidenceSource(
         ? `judgment position ${String(reference.ordinal)}`
         : `judgment [${String(reference.paragraphNumber)}]`
       : null,
-    // Stage 7 anchors a paragraph by the number the court printed, so a
-    // judgment with no printed number links the page rather than guessing one.
     anchor:
       fragment && reference.paragraphNumber != null
         ? `para-${String(reference.paragraphNumber)}`

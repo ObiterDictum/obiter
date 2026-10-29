@@ -50,18 +50,10 @@ export interface DocumentVersionRecord {
   createdBy: string
   createdAt: string
   updatedAt: string
-  /** E50 cross-version edit lineage; null for uploads and legacy versions. */
   lineage: unknown
-  /** The Redact run that produced this version, when Redact made it. */
   redaction: DocumentVersionRedaction | null
 }
 
-/**
- * Provenance for a version Redact produced. `canOpen` is whether this reader may
- * open the run itself: a standalone run's copy is filed into a matter the
- * reviewer may not otherwise reach, and its run stays with the person who ran
- * it. The name is joined for display and never stored on the version.
- */
 export interface DocumentVersionRedaction {
   runId: string
   producedBy: string | null

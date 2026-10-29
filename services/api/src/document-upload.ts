@@ -5,7 +5,6 @@ import {
 } from './document-extraction'
 import { DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES } from './request-limit-defaults'
 
-/** Bounds buffering and document parsing for authenticated uploads. */
 export const MAX_DOCUMENT_UPLOAD_BYTES = DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES
 
 export class DocumentUploadError extends Error {

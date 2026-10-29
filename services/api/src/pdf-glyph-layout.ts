@@ -1,31 +1,13 @@
-/**
- * Exact per-glyph geometry from the PDF content stream.
- *
- * `getTextContent` aggregates glyphs into runs and reports one advance for the
- * whole run, so per-character positions can only be interpolated. Interpolation
- * is wrong for proportional faces: a redaction bar derived from it can both
- * over-cover neighbouring words and leave part of the redacted text visible,
- * which was measured at over a character of exposed ink on ordinary lines.
- *
- * The operator list carries the real numbers. `showText` arguments are glyph
- * records with the font-unit advance of each glyph, interleaved with the TJ
- * kerning adjustments, so replaying the text state machine gives exact
- * positions. This module replays it.
- */
 import type { LaidChar } from './document-layout'
 
-/** PDF transform [a b c d e f]. */
 type Matrix = [number, number, number, number, number, number]
 
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
 
-/** Glyph widths are expressed in 1/1000 em. */
 const FONT_UNITS = 1000
 
-/** Baseline shift, relative to font size, that starts a new line. */
 const LINE_BREAK_RATIO = 0.3
 
-/** A same-line positioning gap above this size carries semantic whitespace. */
 const SEMANTIC_SPACE_RATIO = 0.2
 
 interface Glyph {
@@ -45,7 +27,6 @@ interface TextState {
   leading: number
 }
 
-/** Font ascent/descent ratios, keyed by the loaded name `setFont` reports. */
 export type FontStyles = Record<
   string,
   { ascent?: number; descent?: number; vertical?: boolean } | undefined
@@ -113,7 +94,6 @@ function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-/** Read a numeric operator argument; pdf.js emits a number for these ops. */
 function numericArgument(
   args: unknown[] | undefined,
   index: number,
@@ -122,10 +102,7 @@ function numericArgument(
 }
 
 function asMatrix(value: unknown): Matrix | null {
-  // pdf.js passes matrices as arrays or as array-like objects.
   // SAFETY: pdf.js supplies matrices as arrays or array-like objects; every
-  // entry is re-validated with Number.isFinite below, so the element type only
-  // affects how the value is read.
   const source = value as ArrayLike<number> | undefined
   if (!source || typeof source !== 'object') return null
   const out: number[] = []
@@ -150,11 +127,6 @@ function initialState(): TextState {
   }
 }
 
-/**
- * Replay one page's text operators into per-glyph laid characters. Returns an
- * empty array when the page draws no text through the glyph path (Type 3 fonts
- * and some generators), so the caller can fall back rather than lose content.
- */
 export function laidCharsFromOperatorList(input: {
   operatorList: OperatorListPage
   ops: PdfOps
@@ -168,10 +140,6 @@ export function laidCharsFromOperatorList(input: {
   let textMatrix: Matrix = IDENTITY
   let lineMatrix: Matrix = IDENTITY
   let state = initialState()
-  // The PDF graphics state stack (`q`/`Q`, Form XObjects, annotations). One
-  // stack for every saved field, not one per field: pdf.js restores the CTM,
-  // the text state and both text matrices together, and a field omitted from
-  // the snapshot is precisely how a restore desynchronised the replay.
   const graphicsStack: Array<{
     ctm: Matrix
     textMatrix: Matrix
@@ -184,11 +152,6 @@ export function laidCharsFromOperatorList(input: {
   }
 
   const restoreGraphicsState = () => {
-    // pdf.js `CanvasGraphics.restore` early-returns on an empty stack
-    // (pdf.mjs:10268), so a stray `Q` is ignored by the renderer. Popping
-    // unconditionally would reset the replay to identity and place every later
-    // glyph in the wrong space while the page still draws it where the reader
-    // sees it — the P0.29 off-page cover.
     const restored = graphicsStack.pop()
     if (!restored) return
     ctm = restored.ctm
@@ -211,19 +174,16 @@ export function laidCharsFromOperatorList(input: {
     if (!Array.isArray(items)) return
     for (const entry of items) {
       if (typeof entry === 'number') {
-        // TJ adjustment: a positive number moves left, in 1/1000 em.
         const shift = (-entry / FONT_UNITS) * state.fontSize * state.hScale
         textMatrix = multiply(translation(shift, 0), textMatrix)
         continue
       }
       // SAFETY: a showText array holds pdf.js glyph records; unicode, width
-      // and isSpace are all read defensively below.
       const glyph = entry as Glyph
       const unicode = glyph.unicode ?? ''
       const advanceWidth =
         typeof glyph.width === 'number' ? glyph.width / FONT_UNITS : 0
 
-      // Glyph space → text space → user space.
       const scaling: Matrix = [
         state.fontSize * state.hScale,
         0,
@@ -264,8 +224,6 @@ export function laidCharsFromOperatorList(input: {
           typeof styleDescent === 'number' && Number.isFinite(styleDescent)
             ? Math.abs(styleDescent)
             : 0.2
-        // Positioning includes spacing and TJ adjustments, but a glyph's cover
-        // width is only its own drawn advance. Ligature characters share it.
         const perCharWidth =
           Math.abs(glyphAdvance * horizontal) / Math.max([...unicode].length, 1)
         let offset = 0
@@ -296,7 +254,6 @@ export function laidCharsFromOperatorList(input: {
   for (let index = 0; index < fnArray.length; index += 1) {
     const fn = fnArray[index]
     // SAFETY: pdf.js emits each operator's arguments as an array, or omits
-    // them entirely; every read below tolerates an undefined entry.
     const args = argsArray[index] as unknown[] | undefined
 
     switch (fn) {
@@ -321,9 +278,6 @@ export function laidCharsFromOperatorList(input: {
         restoreGraphicsState()
         break
       case ops.beginAnnotation: {
-        // An annotation's page placement lives only in this operator's
-        // transform/matrix arguments, so restart from the page base and
-        // apply them in order like the renderer does.
         pushGraphicsState()
         ctm = IDENTITY
         const transform = asMatrix(args?.[2])
@@ -345,12 +299,6 @@ export function laidCharsFromOperatorList(input: {
         applyFont(args?.[0], args?.[1])
         break
       case ops.setGState: {
-        // An ExtGState /Font entry changes the text font and size through the
-        // renderer's setFont path, so it moves every subsequent glyph; the
-        // replay must apply it or the cover lands at the previous font's
-        // geometry while the page drew that text at a different size. The
-        // worker emits args[0] as an array of [key, value] pairs, and only
-        // Font carries placement — line width, colours and blend mode do not.
         const entries = args?.[0]
         if (Array.isArray(entries)) {
           for (const entry of entries) {
@@ -369,7 +317,6 @@ export function laidCharsFromOperatorList(input: {
         state.wordSpacing = numericArgument(args, 0) ?? 0
         break
       case ops.setHScale:
-        // Tz is a percentage.
         state.hScale = (numericArgument(args, 0) ?? 100) / 100
         break
       case ops.setTextRise:
@@ -421,11 +368,6 @@ export function laidCharsFromOperatorList(input: {
   return chars
 }
 
-/**
- * Insert newlines between glyphs that sit on different baselines. Reading
- * order is measured in the run's own writing direction, not page x/y, so a
- * vertical baseline does not turn every rotated glyph into a separate line.
- */
 export function withLineBreaks(chars: LaidChar[]): LaidChar[] {
   const out: LaidChar[] = []
   for (let index = 0; index < chars.length; index += 1) {
@@ -466,10 +408,6 @@ export function withLineBreaks(chars: LaidChar[]): LaidChar[] {
   return out
 }
 
-/**
- * Recover spaces that PDF producers express only as text positioning. This runs
- * after line-break injection so a page-space gap can never bridge two lines.
- */
 export function withSemanticSpaces(chars: LaidChar[]): LaidChar[] {
   const out: LaidChar[] = []
   for (const current of chars) {

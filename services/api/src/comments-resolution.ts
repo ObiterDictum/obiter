@@ -14,13 +14,6 @@ import {
 import { appendAuditLog } from './audit-log'
 import { lockMatterForEdit } from './matter-lock'
 
-/**
- * Resolves or reopens a comment thread. The author-or-manager predicate is
- * inside the UPDATE itself, so a concurrent author change cannot be raced:
- * the row either transitions under the caller's authority or does not move.
- * The thread's replies are read inside the transaction before commit, so the
- * response renders the committed state rather than a post-commit re-read.
- */
 export async function setDocumentCommentResolution(
   pool: Pool,
   input: {
@@ -37,7 +30,6 @@ export async function setDocumentCommentResolution(
 ): Promise<ResolutionResult> {
   const canManage = input.actorRole === 'owner' || input.actorRole === 'admin'
   const outcome = await commentTransaction(pool, async (client) => {
-    // Matter before document, matching comment create and the revocation lock.
     if (
       !(await lockMatterForEdit(client, {
         organisationId: input.organisationId,
@@ -82,9 +74,6 @@ export async function setDocumentCommentResolution(
     let row = updated.rows[0]
     let applied = true
     if (!row) {
-      // The update missed: distinguish a comment that does not exist in scope
-      // from one the actor may not transition, and from one already holding
-      // the requested state.
       const probe = await client.query<CommentRow>(
         `
           select ${commentColumns}

@@ -47,13 +47,6 @@ export async function getDocumentModel(
   }
 }
 
-/**
- * Storage reads and writes stay here, on the serving loop's async side; every
- * synchronous parse and validation of the model runs on the bounded document
- * model worker pool (`document-model-pool.ts`). A medium document used to
- * hold this loop hostage for four seconds inflating and parsing its OOXML
- * package, which is what timed out in-flight searches and served false 503s.
- */
 async function readOrGenerateModel(
   storage: StorageService,
   sourceObjectKey: string,
@@ -71,15 +64,10 @@ async function readOrGenerateModel(
     try {
       cached = await runDocumentModelTask({ kind: 'parse', json: cachedJson })
     } catch {
-      // A worker that dies mid-task is a model-load failure to every caller,
-      // exactly like a parser failure inside the worker; it must not escape
-      // as a raw thread error past the curated store error.
       throw new DocumentModelStoreError()
     }
     if (cached.status === 'ok') return cached.model
     if (cached.status === 'failed') throw new DocumentModelStoreError()
-    // 'invalid': the cached model is unusable or from an older layout, so the
-    // stored source regenerates it exactly as an absent cache would.
   }
 
   try {

@@ -22,27 +22,6 @@ import {
 } from './routes/legal-search/source-store'
 import { listLegislationActs } from './routes/legal-search/legislation-store'
 
-/**
- * Citation resolution (V3): raw citation candidate to canonical identity. It
- * answers one question, whether the candidate resolves unambiguously to the
- * canonical authority it purports to name, and hands a resolved identity to
- * the authority-existence check (V2). It never decides whether an authority is
- * held, never reads Meilisearch, never writes, and never touches matter data:
- * the only store it reads is the public legal-source record.
- *
- * Both database-backed steps are batched per call, not per citation. A
- * document-level caller issues at most one candidate lookup for every case-law
- * citation on the document and one Act-directory read for the legislation
- * citations that need a title resolved. A canonical `/ln/` path needs no store
- * read at all, because the identity is in the path.
- */
-
-/**
- * One already-extracted citation candidate. `id` is the caller's stable
- * identifier for it (for example a paragraph id plus offsets); it is echoed in
- * the result so a document-level caller can map results back without relying on
- * array order. `rawText` is the candidate only, never the paragraph around it.
- */
 export interface CitationCandidate {
   id: string
   rawText: string
@@ -53,10 +32,6 @@ export interface CitationCandidateResolution {
   resolution: CitationResolution
 }
 
-/**
- * Classify neutral citations before legislation: the title grammar would
- * otherwise treat the court words as an Act title.
- */
 type CandidateShape =
   | 'blank'
   | 'legislation_path'
@@ -65,9 +40,6 @@ type CandidateShape =
   | 'legislation_text'
 
 function candidateShape(rawText: string): CandidateShape {
-  // A blank candidate is decided by its own grammar, not by the store: it is
-  // outside the accepted grammar whether or not a directory is reachable, so it
-  // must never become inconclusive because a read failed.
   if (rawText === '') return 'blank'
   if (rawText.startsWith('/ln/')) return 'legislation_path'
   const neutral = classifyNeutralCitationCandidate(rawText)
@@ -76,15 +48,6 @@ function candidateShape(rawText: string): CandidateShape {
   return 'legislation_text'
 }
 
-/**
- * Resolve a batch of already-extracted candidates, in input order. The result
- * array is parallel to `candidates`, and each result echoes its candidate id.
- *
- * A dependency that fails makes the candidates that needed it `inconclusive`
- * and leaves the rest alone, so a partial failure is reported as a partial
- * failure rather than as a negative result or as a whole-batch error. Nothing
- * is retried or guessed: an unresolved identity stays unresolved.
- */
 export async function resolveCitationCandidates(
   pool: Pick<Pool, 'query'>,
   candidates: readonly CitationCandidate[],
@@ -111,9 +74,6 @@ export async function resolveCitationCandidates(
     const acts = await readStoreDependency('legislation_directory', () =>
       listLegislationActs(pool),
     )
-    // Building the directory is not a store read: a row that cannot be folded
-    // is a programmer error, and it propagates rather than reading as an
-    // unavailable store.
     if (acts !== null) directory = createActDirectory(acts)
   }
 
@@ -137,12 +97,6 @@ export async function resolveCitationCandidate(
   return resolved.resolution
 }
 
-/**
- * A store read that could not complete is `inconclusive`, never a negative
- * result: an unreachable record cannot establish that a citation has no
- * identity. The diagnostic carries the dependency and the error message only,
- * never a candidate or matter text.
- */
 async function readStoreDependency<T>(
   dependency: 'case_law_lookup' | 'legislation_directory',
   read: () => Promise<T>,
@@ -176,10 +130,6 @@ function resolveOne(
     case 'case_law':
       return resolveCaseLaw(rawText, dependencies.caseLawMatches)
     case 'case_law_unsupported_court':
-      // A well-formed neutral citation for a court this grammar does not carry
-      // is an unsupported source family, not a malformed citation. It is
-      // decided from the grammar alone, so an unlisted court is never looked up
-      // as though it were supported.
       return { outcome: 'unsupported' }
     case 'legislation_text':
       return resolveLegislationText(rawText, dependencies.directory)
@@ -190,12 +140,6 @@ function resolveOne(
   }
 }
 
-/**
- * A pasted canonical path, resolved by the shared path grammar with no store
- * read. A canonical-shaped path naming an act type this repository does not
- * store is an unsupported source family, which is a different answer from a
- * path that is not canonical at all, so a reviewer is told which one it is.
- */
 function resolveLegislationPath(rawText: string): CitationResolution {
   const normalized = normalizeLegislationCitationPath(rawText)
   if (normalized) return { outcome: 'resolved', citation: normalized }
@@ -208,27 +152,6 @@ function resolveLegislationPath(rawText: string): CitationResolution {
     : { outcome: 'malformed' }
 }
 
-/**
- * The one canonical identity for a neutral citation is the stored authority
- * document id, so it takes a store read (one batch call for the whole
- * document). Zero carriers is `unresolved`: it is not evidence that the
- * authority does not exist, and it must not be presented as one.
- *
- * The live/withdrawn carrier rule is shared with the authority-existence check
- * (`selectAuthorityCarriers`), so the two stages cannot disagree about the same
- * store state: one live carrier resolves even when withdrawn historical
- * carriers sit beside it, and two or more live carriers are `ambiguous`. The
- * flag is read through that one rule, not re-derived here.
- *
- * A single withdrawn carrier is still an unambiguous identity and resolves; V2
- * then reports `evidence_unavailable` for it. Two or more withdrawn carriers
- * are not representable through one `sourceId`, and resolution never picks by
- * row order, so it fails closed as `ambiguous` rather than choosing a carrier.
- *
- * `neutralCitation` is the candidate as the caller wrote it, after the trim.
- * The documented folds are applied at comparison, so the identity here is the
- * stored `sourceId`; the stored printed form is deliberately not re-read.
- */
 function resolveCaseLaw(
   rawText: string,
   matches: Map<string, StoredAuthorityCarrier[]> | null,
@@ -264,20 +187,6 @@ function resolvedCaseLaw(
   }
 }
 
-/**
- * Free-text legislation: the existing Search classifier resolves the Act title
- * or chapter against the stored directory, and this layer keeps only what
- * resolution owns, the canonical identity and the structured label path.
- * Whether the Act or the provision is held is the authority-existence check's
- * question, so a missing provision of a resolvable Act still resolves and is
- * reported by V2.
- *
- * A chapter citation the directory does not hold is resolved rather than
- * unresolved: the classifier proves the canonical identity from the year and
- * number, so V2 can answer the honest "not held" for it. A title the directory
- * cannot resolve stays unresolved, because the local directory is partial and a
- * failed title lookup is not proof that the Act is absent.
- */
 function resolveLegislationText(
   rawText: string,
   directory: ActDirectory | null,

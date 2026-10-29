@@ -17,12 +17,6 @@ export function createDocumentCompareRoutes(
 ) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
-  /**
-   * Compare two ready versions of one document. Both inputs pass the shared
-   * version resolver — organisation, matter, document, readiness and the
-   * historical-version gate — so a caller cannot reach a denied version's
-   * model by naming it on either side of the pair.
-   */
   routes.get('/api/documents/:id/compare', async (c) => {
     const query = documentCompareQuerySchema.safeParse({
       baseVersionId: c.req.query('baseVersionId'),
@@ -71,12 +65,6 @@ export function createDocumentCompareRoutes(
       base.version.contentSha256 === target.version.contentSha256
     const notes: string[] = []
     if (!byteIdentical && compared.entries.length === 0) {
-      // The model covers paragraphs, formatting, story structure, styles,
-      // numbering, relationships, revisions and comments — not opaque package
-      // parts like media bytes. When the files differ but no entry explains
-      // why, the difference is outside the compared surface; say so rather
-      // than reporting a clean document. A difference the entries already
-      // explain needs no caveat.
       notes.push(
         'The comparison covers the document model; package parts outside it may also differ.',
       )

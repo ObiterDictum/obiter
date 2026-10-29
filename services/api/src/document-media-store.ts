@@ -11,19 +11,8 @@ type DocumentMediaSource = Pick<
 type ImagePart = { bytes: Uint8Array; contentType: string }
 type ImagePartMap = ReadonlyMap<string, ImagePart>
 
-/** Immutable versions retained per API process. */
 const DOCUMENT_IMAGE_PART_CACHE_LIMIT = 16
 
-/**
- * Retained image bytes per API process, independent of the entry cap. An
- * uploaded package is capped at 25 MiB and its parts at 24 MiB each and 72 MiB
- * uncompressed in total, so 16 uncapped entries can retain more than a
- * gigabyte. 64 MiB holds a full legitimate upload with headroom while staying
- * below the whole-package ceiling only a pathological image set reaches.
- *
- * This bounds bytes the cache retains. A load in progress, the package being
- * unzipped, and the per-request response copy are outside it.
- */
 const DOCUMENT_IMAGE_PART_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
 export type DocumentImagePartCache = {
@@ -32,11 +21,6 @@ export type DocumentImagePartCache = {
   delete(key: string): boolean
 }
 
-/**
- * Bytes a resolved image-part map retains. A part's whole backing buffer stays
- * alive while any view of it does, so measure the buffer rather than the view,
- * and count a buffer shared by several parts once.
- */
 export function retainedImagePartBytes(parts: ImagePartMap): number {
   const buffers = new Set<ArrayBufferLike>()
   let total = 0
@@ -87,10 +71,8 @@ export function createDocumentImagePartCache(
   }
 
   const record = (key: string, entry: ImagePartEntry, parts: ImagePartMap) => {
-    // The entry may have been replaced or evicted while its load was pending.
     if (entries.get(key) !== entry) return
     const bytes = retainedImagePartBytes(parts)
-    // A result larger than the whole budget is served but never retained.
     if (bytes > byteCap) {
       entries.delete(key)
       return
@@ -121,8 +103,6 @@ export function createDocumentImagePartCache(
       value.then(
         (parts) => record(key, entry, parts),
         () => {
-          // A failed load is never cached; the identity check stops an old
-          // rejection deleting a newer entry for the same key.
           if (entries.get(key) === entry) entries.delete(key)
         },
       )

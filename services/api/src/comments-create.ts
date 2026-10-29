@@ -29,8 +29,6 @@ export async function createDocumentComment(
   },
 ): Promise<CreateCommentResult | null> {
   return commentTransaction(pool, async (client) => {
-    // Matter before document, so a comment cannot commit on access that share
-    // revocation removed while the request was queued.
     if (
       !(await lockMatterForEdit(client, {
         organisationId: input.organisationId,
@@ -72,12 +70,6 @@ export async function createDocumentComment(
     )
     const row = inserted.rows[0]
     if (row === undefined) {
-      // The client key already exists for this author and document: replay
-      // only when the stored row carries the same payload, so a reused key
-      // cannot silently return a comment it did not create. The organisation
-      // filter is belt-and-braces — the document foreign key already pins the
-      // row's organisation — but keeps the replay scope uniform with every
-      // other comment query.
       const stored = (
         await client.query<CommentRow>(
           `
@@ -119,13 +111,6 @@ export async function createDocumentComment(
   })
 }
 
-/**
- * The canonical create payload: the anchor the author selected plus the
- * body. `end_paragraph_id` is normalised the same way the insert stores it,
- * so `endParagraphId === paragraphId` and an absent end paragraph compare
- * equal. The anchor version is deliberately excluded — it is the version
- * the row happened to be created on, not part of the author's intent.
- */
 function sameCommentPayload(
   row: CommentRow,
   input: { anchor: DocumentCommentAnchor; body: string },

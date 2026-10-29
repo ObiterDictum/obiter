@@ -2,15 +2,6 @@ import { Pool } from 'pg'
 import { pathToFileURL } from 'node:url'
 import { createClient, listDocumentIds } from '@obiter/search-client'
 
-/**
- * Search parity reconciler: Postgres `legal_source_documents` is the record,
- * the Meilisearch product index is derived. Pages every non-withdrawn
- * document id from Postgres, lists every id in the index, and diffs both
- * directions. Read-only: it reports drift, it never writes.
- *
- * Exit non-zero on drift so CI or a cron wrapper can fail closed on it.
- */
-
 const localMeilisearchHost = 'http://127.0.0.1:7700'
 const localMeilisearchAdminKey = 'obiter-local-dev-key'
 const localDatabaseUrl = 'postgres://obiter:obiter@localhost:5432/obiter'
@@ -25,8 +16,6 @@ export interface ParityReport {
   extraInIndex: string[]
 }
 
-/** Both-directions diff over sorted id sets. Pure so drift detection is
- * testable without a database or an engine. */
 export function diffParity(
   postgresIds: string[],
   indexIds: string[],

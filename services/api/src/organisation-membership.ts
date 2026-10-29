@@ -127,13 +127,6 @@ export async function moveUserAndDeleteEmptyOrganisation(
     [input.toOrganisationId, input.role, input.userId],
   )
   if (!input.fromOrganisationId) return
-  // The vacated org is empty (matters, other members, artefacts, and open
-  // invites are refused before this runs). Remaining audit rows are the
-  // invitee's own auth and organisation.create events. Null them deliberately:
-  // reassignment would be a false record (e.g. auth.sign_in/auth.sign_out
-  // sessions from before the invitee joined did not happen inside the firm).
-  // The real fix is a denormalised tenant snapshot that deletion does not
-  // touch. Do not run this against a non-empty org.
   await client.query(
     `update audit_logs set organisation_id = null where organisation_id = $1`,
     [input.fromOrganisationId],
@@ -147,13 +140,6 @@ export async function moveUserAndDeleteEmptyOrganisation(
   ])
 }
 
-/**
- * Revokes every matter share held by a member who is leaving the organisation,
- * writing the same audit row the matter-share revocation route writes. 0027's
- * composite grantee key rejects the organisationId change while a share
- * remains, so this runs in the caller's transaction before the user row is
- * updated.
- */
 export async function revokeMemberMatterShares(
   client: PoolClient,
   input: {

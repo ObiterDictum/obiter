@@ -37,16 +37,6 @@ export type ReplyRow = {
   created_at: Date | string
 }
 
-/**
- * A stored product-authored reply. Exactly one of `commentId` (a product
- * thread head) and `importedCommentId` (a package-carried `ooxml-<w:id>`
- * thread head) is set; replies to an imported thread keep working when the
- * version's comments part changes, and surface as orphaned when it does not.
- * `importedParentFingerprint` pins the head the reply was written against so
- * a later version that reuses the same `w:id` for a different thread cannot
- * silently inherit it; rows written before the fingerprint existed carry
- * null and do not reattach.
- */
 export type DocumentCommentReplyRecord = {
   id: string
   commentId: string | null
@@ -62,12 +52,6 @@ export type ListedDocumentComments = {
   replies: DocumentCommentReplyRecord[]
 }
 
-/**
- * A client-key create resolves to one of three outcomes: the row was
- * inserted, the key replayed a stored row whose payload matches
- * (idempotent retry), or the key was reused with a different payload —
- * reported as a typed conflict rather than silently served the wrong row.
- */
 export type CreateCommentResult =
   | { status: 'created' | 'replayed'; comment: DocumentCommentRecord }
   | { status: 'conflict' }
@@ -76,14 +60,6 @@ export type CreateReplyResult =
   | { status: 'created' | 'replayed'; reply: DocumentCommentReplyRecord }
   | { status: 'conflict' }
 
-/**
- * A resolution transition: 'applied' changed the stored state, 'unchanged'
- * means the comment already held the requested state for an authorised
- * caller, and 'forbidden' means the comment exists in scope but the actor is
- * neither its author nor an organisation manager. `replies` is read inside
- * the same transaction before commit, so the route renders the state it
- * actually committed rather than a post-commit re-read.
- */
 export type ResolutionResult =
   | {
       status: 'applied' | 'unchanged'

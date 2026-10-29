@@ -27,8 +27,6 @@ interface PdfFont {
 export async function extractPdfContent(
   buffer: Buffer,
 ): Promise<ExtractedDocumentContent> {
-  // Copy before handing bytes to PDF.js — getDocumentProxy may transfer/
-  // detach the ArrayBuffer, which would break later writes of the original.
   const bytes = Uint8Array.from(buffer)
   const pdf = await getDocumentProxy(bytes)
   try {
@@ -46,8 +44,6 @@ export async function extractPdfContent(
       const viewport = page.getViewport({ scale: 1 })
       pages.push({ width: viewport.width, height: viewport.height })
       const pageIndex = pageNumber - 1
-      // getTextContent still supplies the font ascent/descent ratios, keyed by
-      // the same loaded name the operator list reports for setFont.
       const content = await page.getTextContent()
 
       const exact = await exactPageChars(
@@ -64,8 +60,6 @@ export async function extractPdfContent(
         continue
       }
 
-      // No glyph-path text on this page (Type 3 fonts, unusual generators):
-      // fall back to interpolated item geometry rather than losing content.
       let lastY = 0
       let lastX = 0
       let lastHeight = 12
@@ -147,7 +141,6 @@ export async function extractPdfContent(
   }
 }
 
-/** Two newlines separate pages, anchored on the last glyph drawn. */
 function pushPageBreak(chars: LaidChar[], anchor: LaidChar) {
   const separator: LaidChar = { ...anchor, ch: '\n', width: 0 }
   chars.push({ ...separator }, { ...separator })
@@ -161,10 +154,6 @@ function assertWithinLength(chars: LaidChar[]) {
     )
 }
 
-/**
- * Per-glyph geometry replayed from the page's content stream. Returns an empty
- * array when the operator list is unavailable or draws no glyph-path text.
- */
 async function exactPageChars(
   page: {
     getOperatorList?: () => Promise<{
@@ -281,10 +270,6 @@ function operatorListUsesType3Font(
       if (isType3(args?.[0])) return true
       continue
     }
-    // A font can also arrive through setGState's /Font entry, and that reaches
-    // the renderer's setFont path too. Type 3 has to be screened on both, or a
-    // font set only through the graphics state would be replayed instead of
-    // rejected even though the glyph replay cannot read its metrics.
     if (operatorList.fnArray[index] !== ops.setGState) continue
     const gstate: unknown = args?.[0]
     if (!Array.isArray(gstate)) continue
@@ -304,12 +289,10 @@ function operatorListUsesType3Font(
 
 let cachedOps: PdfOps | null | undefined
 
-/** unpdf re-exports the pdf.js `OPS` enum from its bundled build. */
 async function loadPdfOps(): Promise<PdfOps | null> {
   if (cachedOps !== undefined) return cachedOps
   try {
     // SAFETY: unpdf re-exports the pdf.js OPS enum from its bundled build without types; only
-    // the optional OPS member is read, and a missing enum yields null exactly as a failed import.
     const module = (await import('unpdf/pdfjs')) as {
       OPS?: PdfOps
     }
@@ -360,10 +343,6 @@ function pdfItemBaseline(item: { transform?: number[] }) {
   }
 }
 
-/**
- * Interpolated item covers extend perpendicular to the baseline, so skewed
- * glyph axes must fail closed here exactly as they do in operator replay.
- */
 function assertItemAxesPerpendicular(transform: number[]) {
   const alongMagnitude = Math.hypot(transform[0] ?? 1, transform[1] ?? 0) || 1
   const acrossMagnitude = Math.hypot(transform[2] ?? 0, transform[3] ?? 1) || 1
@@ -417,17 +396,12 @@ function pushPdfItemChars(
   })
 }
 
-/**
- * Drop format controls and normalise CR before text/layout are derived so
- * heuristic patterns see the same offsets as stored layout segments.
- */
 export function prepareLaidChars(chars: LaidChar[]): LaidChar[] {
   const stripped: LaidChar[] = []
   for (let index = 0; index < chars.length; index += 1) {
     const item = chars[index]!
     if (/\p{Cf}/u.test(item.ch)) continue
     if (item.ch === '\r') {
-      // Match the old page-text normaliser: \r\n? → \n.
       if (chars[index + 1]?.ch === '\n') continue
       stripped.push({ ...item, ch: '\n' })
       continue

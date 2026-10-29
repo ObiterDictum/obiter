@@ -8,7 +8,6 @@ import type { StorageService } from './storage'
 const PRESENCE_DOCUMENT_MAX_COUNT = 1_000
 export const PRESENCE_EXPIRY_MS = 15_000
 
-/** One heartbeat row's identity: document scope, account, and client tab. */
 export interface DocumentPresenceScope {
   organisationId: string
   matterId: string
@@ -18,18 +17,6 @@ export interface DocumentPresenceScope {
   clientId: string
 }
 
-/**
- * The collaboration route's presence seam. Production wires the Postgres
- * store (`PostgresDocumentPresence`) so presence is shared between API
- * instances; tests inject `DocumentPresenceRegistry`, the in-memory
- * implementation, when no database is available. Implementations may answer
- * synchronously — the route awaits either.
- *
- * `cursor: null` is a leave: it removes the caller's own (user, client)
- * heartbeat row only. Reads return live cursors anchored to the version the
- * reader resolved, so presence written against a superseded version stops
- * matching without a delete.
- */
 export interface DocumentPresenceBackend {
   update(
     scope: DocumentPresenceScope,
@@ -152,12 +139,6 @@ export class DocumentPresenceRegistry implements DocumentPresenceBackend {
   }
 }
 
-/**
- * Validates a heartbeat cursor against the version it claims to point into.
- * The check runs on the stored, cached model — the same derived file /model
- * serves — so heartbeat validation never re-parses source bytes on the
- * serving loop.
- */
 export async function validateDocumentCursor(
   storage: StorageService,
   version: DocumentVersionRecord,

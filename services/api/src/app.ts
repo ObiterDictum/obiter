@@ -64,30 +64,13 @@ interface AppVariables {
   session: SessionRecord | null
 }
 
-/** The adapter serving the app, declared by the entry point that built it. */
 export type ApiRuntimeKind = 'node' | 'bun'
 
 interface ApiAppOptions {
   auth?: Auth
   storage?: StorageService
-  /**
-   * Sandboxed document renderer used by DOCX hard-redaction finalize. Defaults
-   * to the HTTP client for `OBITER_REDACTION_RENDERER_URL`; null when no URL is
-   * configured, which makes a DOCX secure-PDF finalize fail visibly.
-   */
   redactionRenderer?: RedactionRenderer | null
-  /**
-   * The adapter serving this app, declared by the entry point that built it.
-   * Omitted by tests that build the app directly, so health stays minimal.
-   */
   runtime?: ApiRuntimeKind
-  /**
-   * Legal-corpus access. Omitted in the default configuration, where the
-   * corpus is the application database and reads and writes both use `pool`.
-   * `corpus.write === null` is what a process pointed at a separate corpus
-   * without a writer credential has: reads run there, and no corpus write is
-   * reachable from this app.
-   */
   corpus?: CorpusAccess
 }
 
@@ -95,12 +78,6 @@ interface DevelopmentApiProvenance {
   commitSha: string
   checkoutRoot: string
   envFile: string | null
-  /**
-   * The database this process's pool is bound to. Lane checks need to prove
-   * the API writes where the run declared — a CLI flag alone cannot attest
-   * that — so the server reports its own identity rather than leaving the
-   * check to compare against a file the API may not have read.
-   */
   databaseName: string | null
 }
 
@@ -111,10 +88,7 @@ function readDevelopmentApiProvenance(
   let databaseName: string | null = null
   try {
     databaseName = readDatabaseIdentity(databaseUrl, 'DATABASE_URL').database
-  } catch {
-    // Health must stay useful on a malformed env; the lane check treats a
-    // null name as "cannot prove the write target" and refuses.
-  }
+  } catch {}
   try {
     const checkoutRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
       cwd: process.cwd(),
@@ -129,8 +103,6 @@ function readDevelopmentApiProvenance(
       ? { checkoutRoot, commitSha, envFile, databaseName }
       : null
   } catch {
-    // A source checkout is expected in development, but health must remain
-    // useful when the process is started without git metadata.
     return null
   }
 }
@@ -181,12 +153,8 @@ export function createApiApp(
       : env.redactionRendererUrl
         ? createHttpRedactionRenderer({ url: env.redactionRendererUrl })
         : null
-  // The default is the compatibility seam: corpus reads and writes are the
-  // application pool, exactly as they were before the seam existed.
   const corpusAccess = options.corpus ?? { read: pool, write: pool }
   const corpusReadOnly = corpusAccess.write === null
-  // This is deliberately development-only: the public health route must not
-  // expose filesystem paths or build metadata in production.
   const developmentProvenance =
     env.nodeEnv === 'development'
       ? readDevelopmentApiProvenance(env.localEnvFile, env.databaseUrl)
@@ -253,9 +221,6 @@ export function createApiApp(
       session
     ) {
       await appendAuditLog(pool, {
-        // Org-less users can sign out too; the audit row carries null org,
-        // consistent with the nullable audit_logs.organisation_id (migration
-        // 0009) and the auth sign-in/sign-up audit rows.
         organisationId: sessionUser.organisationId ?? null,
         userId: sessionUser.id,
         entityType: 'session',
@@ -268,18 +233,6 @@ export function createApiApp(
       })
     }
 
-    // A password change is the one auth outcome the session hooks above cannot
-    // see: better-auth's after-hook reports sign-in/sign-up, and a successful
-    // change returns a user object, not a session. Audited here, at the same
-    // boundary, after the change has been applied. The request body is never
-    // read, so no password material can reach the audit row or the logs.
-    //
-    // The change is already committed inside `auth.handler` — password
-    // updated, other sessions revoked, replacement session minted — so the
-    // audit append is deliberately non-fatal: `appendPasswordChangedAudit`
-    // reports its own failure without turning a completed credential mutation
-    // into a false 500. Invariant kept: this branch is reached only on
-    // `response.ok`, so a rejected change can never mint a success event.
     if (
       c.req.method === 'POST' &&
       c.req.path === '/api/auth/change-password' &&
@@ -300,23 +253,7 @@ export function createApiApp(
     const health = {
       status: 'ok' as const,
       service: 'obiter-api' as const,
-      // Reported only when an entry point declared it, so a test that builds
-      // the app directly keeps the minimal body. This is what lets a canary or
-      // an integration check confirm which adapter answered rather than
-      // inferring it from a process name.
       ...(options.runtime ? { runtime: options.runtime } : {}),
-      // The corpus access mode: whether corpus reads share the application pool
-      // (`colocated`, the compatibility default) and whether this process may
-      // write the corpus. `colocated: true` means no separate corpus target was
-      // configured, so there is one database and corpus writes behave exactly
-      // as they did before the seam. `readOnly: false` with `colocated: false`
-      // means a dedicated corpus writer was configured. The mode follows
-      // configuration provenance, not URL equality: a configured reader is
-      // separate even when it names the same database. It says nothing about
-      // whether a shared corpus exists; no shared corpus is deployed, and this
-      // reports only what this process is configured to do. Deliberately no
-      // host, port or database name: the booleans are enough to tell the modes
-      // apart and disclose no connection detail.
       corpus: {
         colocated: corpusAccess.read === pool,
         readOnly: corpusReadOnly,
@@ -385,11 +322,6 @@ export function createApiApp(
     const currentUser = toCurrentUser(sessionUser)
     const organisationId = sessionUser.organisationId
 
-    // Org-less users (organisationId null) are a first-class state: the user
-    // exists and is authenticated but has not yet named an organisation in
-    // Settings (and may not have hit Matters/Redact, which auto-provision on
-    // first use). Return organisation null so Settings can offer
-    // optional setup; product surfaces do not require it first.
     if (!organisationId) {
       const response: MeResponse = {
         user: currentUser,
@@ -400,8 +332,6 @@ export function createApiApp(
 
     const organisation = await findOrganisation(pool, organisationId)
 
-    // The user has an organisationId but the row is missing — a data
-    // integrity problem, not the normal org-less state. Surface it distinctly.
     if (!organisation) {
       const error = errorResponse(
         'organisation_not_found',
@@ -420,12 +350,6 @@ export function createApiApp(
     return c.json(response)
   })
 
-  /**
-   * The signed-in account's own display name. There is no user id in the path
-   * or the body: the update scope is the session's user, so a request cannot
-   * name a different account. The response is the canonical stored user, so the
-   * client shows what the server kept rather than what it typed.
-   */
   app.patch('/api/me', async (c) => {
     const requestId = c.get('requestId')
     const sessionUser = c.get('user')
@@ -460,8 +384,6 @@ export function createApiApp(
       requestId,
     })
 
-    // The session user exists, so a missing row means the session outlived its
-    // user; the session is no longer usable.
     if (!user) {
       const error = errorResponse(
         'unauthenticated',

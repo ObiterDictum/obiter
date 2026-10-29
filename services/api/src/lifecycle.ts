@@ -1,23 +1,10 @@
 import { ApiBootError } from './runtime'
 
-/**
- * How long a drain may take before the process is forced to exit non-zero.
- * Short enough that a supervisor's own kill timeout is never the thing that
- * ends the process, long enough for an in-flight inference or upload.
- */
 const DEFAULT_DRAIN_DEADLINE_MS = 10_000
 
-/**
- * What a runtime must expose for shutdown. Each adapter supplies its own
- * socket-layer calls; the order, the deadline and the exit code are owned here
- * so both runtimes shut down identically.
- */
 export interface DrainPlan {
-  /** Stop accepting new work and settle once in-flight work has finished. */
   stopAccepting: () => Promise<void>
-  /** Release resources this process owns — the Postgres pool today. */
   closeResources: () => Promise<void>
-  /** Open connections, for the shutdown log. Omit when the adapter has none. */
   pendingCount?: () => number | Promise<number | null>
 }
 
@@ -27,12 +14,6 @@ export interface DrainOptions {
   exit?: (code: number) => void
 }
 
-/**
- * Bounded graceful shutdown: SIGTERM/SIGINT stops new work, lets in-flight
- * requests finish, closes the pool, then exits. The deadline is the only path
- * to a forced exit, and a second signal is ignored rather than interrupting a
- * drain already in progress.
- */
 export function installGracefulShutdown(
   plan: DrainPlan,
   options: DrainOptions = {},
@@ -48,8 +29,6 @@ export function installGracefulShutdown(
       try {
         pending = await plan.pendingCount()
       } catch {
-        // The count is a log field, not a decision. A failure to read it must
-        // not change how the drain itself proceeds.
         pending = null
       }
     }
@@ -95,7 +74,6 @@ function isAddressInUse(error: unknown) {
   return error instanceof Error && error.message.includes('EADDRINUSE')
 }
 
-/** Report why boot failed and stop, rather than serving in an unknown state. */
 export function exitOnStartupFailure(error: unknown): never {
   if (error instanceof ApiBootError) {
     console.error(

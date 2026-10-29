@@ -10,11 +10,6 @@ export const UNREADABLE_DOCX_MESSAGE =
   'This DOCX could not be read. The file may be corrupt, password-protected, or not a valid Word document.'
 
 export class DocumentExtractionError extends Error {
-  /**
-   * Whether the message was written for the person uploading the document.
-   * Wrapped library failures stay false so their internals are not returned to
-   * the client; callers decide what to show in their place.
-   */
   readonly userFacing: boolean
 
   constructor(message: string, userFacing = false) {

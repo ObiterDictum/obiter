@@ -2,14 +2,6 @@ import type { Pool } from 'pg'
 import type { CitationTarget, RecentlyOpenedDocument } from '@obiter/contracts'
 import { matterAccessPredicate } from './matter-access-boundary'
 
-/**
- * "Where you left off", stored per person rather than per document: it is a
- * fact about a reader, not about the file. Access is not implied by a row —
- * both the write and the read are gated by the matter boundary, so a row that
- * outlives a revoked share cannot surface the document.
- */
-
-/** Record that this person opened the document now. Returns the stored time. */
 export async function recordDocumentOpen(
   pool: Pool,
   input: {
@@ -43,11 +35,6 @@ interface RecentlyOpenedRow {
   opened_at: Date | string
 }
 
-/**
- * The newest document this person may still read. A document deleted since, or
- * a matter they no longer reach, is skipped rather than shown and then refused:
- * the answer is the last place they can actually continue from.
- */
 export async function getRecentlyOpenedDocument(
   pool: Pool,
   user: { id: string; organisationId: string },
@@ -91,14 +78,6 @@ interface CitationTargetRow extends RecentlyOpenedRow {
   can_edit: boolean
 }
 
-/**
- * Where a citation may be typed: the documents this person opened, newest
- * first, each with the stored file type and whether they may edit its matter.
- * The same boundary as the single read applies to every row, and the edit
- * permission is answered here rather than guessed in the UI — a row the person
- * may only view is still offered, marked, so the menu can say why it cannot
- * take the insertion.
- */
 export async function listCitationTargets(
   pool: Pool,
   user: { id: string; organisationId: string },

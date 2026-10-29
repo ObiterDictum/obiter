@@ -45,29 +45,11 @@ function outputFileType(run: RedactionRunRecord) {
   return 'txt'
 }
 
-/**
- * Inside the matter the copy keeps its source's name: the matter is the firm's
- * own access-controlled space, and a dozen copies all called
- * "document-redacted" could not be told apart. Only downloads, which leave the
- * firm, drop the source name.
- */
 function outputFilename(run: RedactionRunRecord) {
   const stem = run.sourceFilename.replace(/\.[^.]+$/u, '') || 'document'
   return `${stem}-redacted.${outputFileType(run)}`
 }
 
-/**
- * Files a finalized run's copy into a matter as version 1 of a new document.
- *
- * A run started from pasted text or a standalone upload has no source document
- * to return to, so "save to matter" is the only way its copy becomes a version
- * at all. The bytes are the stored finalized output, re-hashed and compared with
- * the SHA-256 recorded at finalisation, so what lands in the matter is the file
- * the reviewer actually approved. Creating the document goes through the same
- * `createDocumentInTransaction` + extraction + audit path, and the matter is
- * access-checked for edit: the run's own access does not grant write access to
- * a matter it was never filed in.
- */
 export async function saveRedactionOutputToMatter(
   pool: Pool,
   storage: StorageService,
@@ -83,8 +65,6 @@ export async function saveRedactionOutputToMatter(
   if (run.status !== 'finalized' || run.replacementRunId || !run.outputId)
     return { status: 'not_finalized' }
 
-  // A run linked to a document has a version to return to, so the standalone
-  // path refuses rather than forking one run into two records.
   if (run.matterId || run.documentId) return { status: 'not_standalone' }
   if (!(await getMatter(pool, input.user, input.matterId, 'edit')))
     return { status: 'matter_not_found' }

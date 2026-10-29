@@ -20,57 +20,22 @@ export interface StoredLegalAuthorityRecord {
   summary: LegalAuthority
   document?: LegalAuthority
   provider: ProviderSourceMetadata
-  /** The bench, read from published metadata. Empty when the source carried
-   * no field for it; never derived from the judgment text. */
   judges?: CaseLawJudge[]
-  /** The court's published summary, quoted whole. Null when the source has
-   * none. Absent on stores that do not model it. */
   publishedSummary?: CaseLawSummary | null
-  /** Set when the row is marked withdrawn upstream. Search excludes these
-   * from default results; the document route surfaces a banner instead. */
   withdrawn?: WithdrawnInfo | null
 }
 
-/**
- * One stored carrier of a neutral citation: the document id and whether the row
- * carries upstream withdrawal evidence. It is the whole input the live/withdrawn
- * rule needs, so resolution and the existence check classify the same shape.
- */
 export interface StoredAuthorityCarrier {
   id: string
   withdrawn: boolean
 }
 
-/**
- * What a set of stored carriers means for identity selection. It states which
- * identities exist and which are trustworthy, and nothing about whether the
- * authority is held: that stays the existence check's decision.
- */
 export type AuthorityCarrierSelection =
   | { kind: 'none' }
   | { kind: 'single_live'; id: string }
   | { kind: 'ambiguous' }
   | { kind: 'no_live'; ids: string[] }
 
-/**
- * The one live/withdrawn carrier rule, shared by V2 (authority existence) and V3
- * (citation resolution) so the two adjacent stages cannot disagree about the
- * same store state again.
- *
- * One live carrier is `single_live` whatever withdrawn history sits beside it: a
- * withdrawn row is a source that was once minted and is no longer trustworthy,
- * not a second candidate identity, so a live source plus withdrawn duplicates is
- * not ambiguous. Two or more live carriers are `ambiguous` and no carrier wins by
- * arriving first. With no live carrier, every withdrawn id is returned so the
- * caller decides; a single withdrawn id is still a usable identity, while more
- * than one is not, and that gap is a documented V1 limitation, not a reason to
- * pick one.
- *
- * `document_id` is the store's primary key, so a duplicate id is not reachable
- * from the store; it is deduped here so a direct caller cannot make the outcome
- * depend on how many times it passed the same id, and a conflicting duplicate is
- * treated as withdrawn, which fails closed rather than clearing on it.
- */
 export function selectAuthorityCarriers(
   carriers: readonly StoredAuthorityCarrier[],
 ): AuthorityCarrierSelection {
@@ -87,24 +52,14 @@ export function selectAuthorityCarriers(
   return { kind: 'no_live', ids: withdrawn }
 }
 
-/**
- * What a completed corpus write means for the derived Meilisearch index.
- * `indexable` is the post-merge withdrawal state, read by the statement that
- * wrote the row, so a withdrawal that serialised with the write is respected in
- * either order. Deciding it from an earlier read cannot tell those orders apart
- * and would put a withdrawn judgment back in the index.
- */
 interface AuthorityWriteResult {
   indexable: boolean
 }
 
-/** Corpus reads. Always available, including when writes are not. */
 export interface LegalAuthorityReadStore {
   get(documentId: string): Promise<StoredLegalAuthorityRecord | null>
 }
 
-/** Corpus writes. Absent from a process with no corpus write path, so a
- * read-only process cannot attempt one and cannot swallow a permission error. */
 interface LegalAuthorityWriteStore {
   upsertSummary(
     summary: LegalAuthority,
@@ -135,9 +90,6 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
           ...existing?.provider,
           ...provider,
         },
-        // Mirror the Postgres merge upsert, which preserves the withdrawn
-        // flag across re-ingests: a fresh provider payload never carries the
-        // flag, so dropping it here would silently resurrect withdrawals.
         withdrawn: existing?.withdrawn,
       })
 
@@ -178,12 +130,6 @@ interface LegalAuthorityWriteRow extends QueryResultRow {
   indexable: boolean
 }
 
-/**
- * A stored row whose JSON is valid JSON but not a legal-source record. It is a
- * store-boundary failure with its own category so the caller can tell a
- * schema-invalid row from a database that is unavailable, without the detail
- * ever reaching a finding.
- */
 export class MalformedStoredRecordError extends Error {
   constructor(documentId: string, options?: { cause?: unknown }) {
     super(
@@ -194,10 +140,6 @@ export class MalformedStoredRecordError extends Error {
   }
 }
 
-/**
- * Corpus reads against Postgres, which is the record. Constructed on its own so
- * a process with no corpus write path never builds a writer at all.
- */
 export function createPostgresLegalAuthorityReadStore(
   pool: Pick<Pool, 'query'>,
 ): LegalAuthorityReadStore {
@@ -217,10 +159,6 @@ export function createPostgresLegalAuthorityReadStore(
   }
 }
 
-/**
- * Corpus writes against Postgres. Every upsert merges `provider_json` rather
- * than replacing it, and reports whether the merged row may be indexed.
- */
 export function createPostgresLegalAuthorityWriteStore(
   pool: Pick<Pool, 'query'>,
 ): LegalAuthorityWriteStore {
@@ -306,7 +244,6 @@ export function createPostgresLegalAuthorityWriteStore(
   }
 }
 
-/** Read and write access, for a process that owns the corpus. */
 export function createPostgresLegalAuthoritySourceStore(
   pool: Pick<Pool, 'query'>,
 ): LegalAuthoritySourceStore {
@@ -349,29 +286,6 @@ interface StoredAuthorityCitationRow extends QueryResultRow {
   providerJson: unknown
 }
 
-/**
- * Stored authority carriers whose neutral citation canonically equals one of
- * `neutralCitations`, keyed by the normalized form of the citation they match.
- * The record is Postgres; the fold is search-client's `normalizeCitationValue`,
- * the same one the search path compares with, so an exact citation lookup
- * cannot drift from search's notion of equality.
- *
- * The query transfers the citation projection and the provider block only,
- * never document bodies, and it pushes the citation's year into SQL: the fold
- * never changes the year, so a row whose citation does not contain it cannot
- * match, and rejecting those rows in the database removes the bulk of the
- * transfer (91-97% on the lane corpus, year-dependent). The database predicate
- * is a superset of the fold (a `like` can match the digits anywhere), so the
- * exact comparison still runs in Node and SQL is never trusted for equality.
- *
- * The API is a batch: a caller with many citations pays one query for the year
- * set instead of one full-table transfer per citation, which is what V3's
- * per-document caller needs. Rows are ordered by `document_id` and each carrier
- * list is sorted, so the result does not depend on table or scan order. The
- * withdrawn flag is carried too: it is the difference between a live source and
- * a withdrawal, and {@link selectAuthorityCarriers} is the one rule that reads
- * it.
- */
 export async function findStoredAuthorityCarriersByNeutralCitations(
   pool: Pick<Pool, 'query'>,
   neutralCitations: string[],
@@ -404,9 +318,6 @@ export async function findStoredAuthorityCarriersByNeutralCitations(
     rows.push(...result.rows)
   }
   if (includesUnparseableYear) {
-    // A citation with no parsable year cannot use the year predicate, so it
-    // scans the citation projection. That is the pre-existing cost for that
-    // input, not the common path.
     const result = await pool.query<StoredAuthorityCitationRow>(
       `select document_id as "documentId",
               summary_json->>'neutralCitation' as "neutralCitation",
@@ -434,11 +345,6 @@ export async function findStoredAuthorityCarriersByNeutralCitations(
   return matches
 }
 
-/**
- * The id-only projection of {@link findStoredAuthorityCarriersByNeutralCitations},
- * for a caller that needs the stored ids and makes its own record reads. The
- * batch carrier function is the one implementation; this narrows it.
- */
 export async function findStoredAuthorityIdsByNeutralCitations(
   pool: Pick<Pool, 'query'>,
   neutralCitations: string[],
@@ -457,12 +363,6 @@ export async function findStoredAuthorityIdsByNeutralCitations(
   return ids
 }
 
-/**
- * The single-citation form of {@link findStoredAuthorityIdsByNeutralCitations}.
- * A caller with several citations should use the batch function: the year
- * predicate is shared, so one query covers all of them instead of one
- * full-table transfer per citation.
- */
 export async function findStoredAuthorityIdsByNeutralCitation(
   pool: Pick<Pool, 'query'>,
   neutralCitation: string,

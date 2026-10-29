@@ -44,7 +44,6 @@ function quoteFinding(result: QuoteCheckResult, request: QuoteFidelityRequest) {
   })
 }
 
-/** Wire V3, V2 and V4 onto one extracted document. Findings keep V1 identities. */
 export async function collectVerificationFindings(
   pool: Pick<Pool, 'query'>,
   subject: VerificationSubject,

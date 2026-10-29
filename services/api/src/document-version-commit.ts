@@ -60,14 +60,8 @@ type PreparedVersionCommitInput = DocumentVersionScope & {
   expectedCurrentVersionId: string
   parentVersion: LockedDocumentVersion
   preparedBytes: Uint8Array
-  /** E50 lineage for the resulting version, minus the id commit assigns. */
   lineage?: Omit<DocumentVersionLineage, 'versionId'> | null
   audit: PreparedVersionAudit
-  /**
-   * Runs after the version row, pointer move, and audits, inside the same
-   * transaction — used by provenance writes that must commit atomically with
-   * the version they name (e.g. the redaction return marker).
-   */
   onCommitted?: (client: PoolClient, versionId: string) => Promise<void>
 }
 
@@ -231,7 +225,6 @@ export async function commitPreparedVersion(
       action: 'document.version_create',
       metadata: {
         documentId: input.documentId,
-        // This is the lineage parent; a collaboration audit may record the client's stale base separately.
         baseVersionId: input.parentVersion.id,
         versionNumber,
       },
@@ -258,9 +251,6 @@ export async function commitPreparedVersion(
       await rollback(client)
       if (candidateKey) await cleanupCandidate(storage, candidateKey)
     }
-    // Once COMMIT is sent, its response can fail after PostgreSQL has committed.
-    // Keep the candidate object in that uncertain state rather than deleting an
-    // object that a committed immutable version may require.
     throw new DocumentEditStoreError()
   }
 }
@@ -268,9 +258,7 @@ export async function commitPreparedVersion(
 export async function rollback(client: PoolClient) {
   try {
     await client.query('rollback')
-  } catch {
-    // The public failure remains curated when rollback cannot be confirmed.
-  }
+  } catch {}
 }
 
 async function writeCandidate(

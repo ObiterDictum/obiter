@@ -18,11 +18,6 @@ export type MappedDocxNode = {
   end: number
 }
 
-/** One coordinate system for review and burn. Offsets are UTF-16, like JS slices.
- * Paragraphs contribute two newlines, breaks one, tabs one. No Unicode folding.
- * Choice is Word's live shape; Fallback is a duplicate, never a second occurrence.
- * Deleted text and comments are included so a reviewer can explicitly select them.
- */
 export function mapDocxText(entries: ReadonlyMap<string, Uint8Array>) {
   const nodes: MappedDocxNode[] = []
   let text = ''
@@ -98,8 +93,6 @@ export function mapDocxText(entries: ReadonlyMap<string, Uint8Array>) {
       } else text += event.value ?? ''
     }
   }
-  // Leading/trailing layout whitespace is not review content. Adjust every
-  // coordinate rather than searching for the trimmed text in the document.
   const leading = text.length - text.trimStart().length
   text = text.trim()
   for (const node of nodes) {
@@ -140,7 +133,6 @@ export function nodeText(
   return undefined
 }
 
-/** Preserve XML annotations separately from the reviewable character data. */
 export function hiddenXmlMarkup(inner: string) {
   return [...inner.matchAll(/<!\[CDATA\[[^]*?\]\]>|<!--[^]*?-->|<\?[^]*?\?>/gu)]
     .filter((segment) => !segment[0].startsWith('<![CDATA['))

@@ -69,8 +69,6 @@ export function createDocumentExportRoutes(
       })
     } catch (error) {
       if (error instanceof ShareSafeExportRefusalError) {
-        // `refusalReason` is the bounded policy class — never the detail,
-        // which can name parts and shapes inside the private package.
         console.warn('share_safe_export_refused', {
           requestId: c.get('requestId'),
           reason: error.refusalReason,

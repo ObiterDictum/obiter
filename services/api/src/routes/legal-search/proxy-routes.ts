@@ -49,39 +49,17 @@ interface LegalSearchProxyRouteVariables {
 }
 
 interface LegalSearchProxyRouteOptions {
-  /**
-   * Stage 1 legislation serving. Absent in tests that predate it, in which
-   * case fetch stays judgment-only and no legislation group is served.
-   */
   legislation?: {
     pool: Pool
     indexName: string
   }
 }
 
-// Bounds every stored lookup: Meili pool fetch and Postgres withdrawn-record
-// checks. Sized for a 100-hit paragraph pool (~1s measured worst case,
-// ~690ms p50 on stored paths; held-citation phrase queries stay ~20-50ms);
-// a slower engine fails visibly with 503 rather than holding the route open.
 const storedSearchTimeoutMs = 2000
 const storedCourtBrowseLimit = 10
-/**
- * Engine candidates re-ranked per stored-index query. The engine cutoff used
- * to sit at its default 20, so the exact-match re-rank could only reorder
- * survivors and party-name targets the engine ranked 41-92 never surfaced.
- * Served responses stay capped below; the pool only feeds the re-rank.
- */
 const storedIndexRerankPoolLimit = 100
-/** Stored-index hits served per query; the suite measures the top 20. */
 const servedStoredHitsLimit = 20
 
-/**
- * A rejection in one search half must not reject the other. The judgment and
- * legislation corpora are federated precisely so each fails independently; an
- * unhandled rejection from either half used to lose both and 500 the request.
- * The failure is logged, not swallowed, and the half reports a failure marker
- * so a crash is never mistaken for "not attempted" or for a clean empty.
- */
 type SettledSearchHalf<T> =
   { status: 'settled'; value: T } | { status: 'failed' }
 
@@ -108,10 +86,6 @@ export function createLegalSearchProxyRoutes(
   reads: LegalAuthorityReadStore = createInMemoryLegalAuthoritySourceStore(),
   options: LegalSearchProxyRouteOptions = {},
 ) {
-  // Corpus-only boundary: these routes read Obiter-owned records and the
-  // derived index only. They never construct a Find Case Law client, never
-  // queue hydration, and never retry an upstream request. National Archives
-  // access belongs to an explicit indexing run, not to a user request.
   const app = new Hono<{ Variables: LegalSearchProxyRouteVariables }>()
   const searchClient = createClient(
     env.meilisearchHost,
@@ -144,10 +118,6 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
-    // The request flag is retained so an older desktop or web client is not
-    // rejected, but the API is corpus-only: no live provider search runs. The
-    // diagnostic below says so explicitly instead of leaving the client to
-    // infer it from liveProviderSearched.
     const foregroundLiveRequested = parsed.data.foregroundLiveResults === true
 
     if (!isImplementedFetchSourceType(parsed.data)) {
@@ -167,16 +137,7 @@ export function createLegalSearchProxyRoutes(
     const filters = toSearchFilters(parsed.data)
     const storedOnlyBrowse = isStoredOnlyBrowse(parsed.data)
     const exactLookup = classifyExactLookup(parsed.data.query)
-    // Recognised citation surface form: the phrase the stored index searches
-    // for and the label served hits carry. Null for every other query.
     const recognisedCitation = exactLookup?.recognisedQuery ?? null
-    // Stage 1 legislation half: Postgres exact answers plus a labelled
-    // keyword group, federated after the judgment flat hits. Skipped only
-    // when the caller narrows to judgments or the route was built without
-    // a legislation store (older tests). Never touches the judgment flow.
-    // Started without awaiting so it runs concurrently with the judgment
-    // lookups below: a slow legislation store (2s fail-open) must not hold
-    // the judgment half open. Every return path awaits it before responding.
     const judgmentExactAttempted = !storedOnlyBrowse && exactLookup !== null
     const exactLookupToRun = !storedOnlyBrowse ? exactLookup : null
     const legislationOptions =
@@ -184,8 +145,6 @@ export function createLegalSearchProxyRoutes(
         ? options.legislation
         : undefined
     const legislationAttempted = legislationOptions !== undefined
-    // Overlap the two halves: neither holds the other open beyond its own
-    // 2s fail-open bounds, and one half's failure cannot take the other down.
     const [judgmentExactHalf, legislationHalf] = await Promise.all([
       settleSearchHalf(
         exactLookupToRun
@@ -227,10 +186,6 @@ export function createLegalSearchProxyRoutes(
       (legislationHalf.status === 'failed' || legislation?.failed === true)
     const legislationServed = legislationGroupsServed(legislation)
 
-    // Meilisearch is the sole judgment query engine. Its outage is normally
-    // the whole answer, but a legislation half that already answered from
-    // Postgres must keep its hits: the corpora are federated so neither
-    // failure discards the other's results.
     const exactIndexUnavailable =
       exactStoredAuthority?.storedIndexStatus === 'unavailable'
 
@@ -238,14 +193,7 @@ export function createLegalSearchProxyRoutes(
       return c.json(searchIndexUnavailable(requestId), 503)
     }
 
-    // Folds every later judgment-side outage into one failure flag. The exact
-    // hit branch below raises it only for a rejected exact half; the stored
-    // and citing lookups raise it after their own engine calls.
     let judgmentSearchFailed = judgmentExactFailed
-    // A judgment leg that failed or was skipped cannot be reported as searched,
-    // and a citation verdict it would have established is not established. The
-    // exact lookup completes only when it ran and the engine answered; the
-    // stored-index flag is derived from the main search's own status below.
     const exactLookupCompleted =
       exactLookup !== null && !judgmentExactFailed && !exactIndexUnavailable
 
@@ -300,32 +248,18 @@ export function createLegalSearchProxyRoutes(
 
     const cachedIndexUnavailable =
       exactIndexUnavailable || cached?.storedIndexStatus === 'unavailable'
-    // Whether the main stored judgment index search actually answered. A leg
-    // that failed is never reported as searched.
     const storedIndexCompleted = cached?.storedIndexStatus === 'ok'
-    // The derived index lags the checker: filter Meili hits against the
-    // Postgres withdrawn flag before responding, so a stale indexed copy of
-    // a withdrawn judgment never serves. Unknown (lookup miss/timeout)
-    // stays visible — only an explicit withdrawn flag hides a hit.
     const visibleCachedHits =
       cached && cached.storedIndexStatus === 'ok'
         ? await excludeWithdrawnIndexHits(reads, cached.hits)
         : []
     judgmentSearchFailed = judgmentSearchFailed || cachedIndexUnavailable
 
-    // A judgment-side engine outage is the whole answer only when nothing
-    // else answered. A legislation half already served from Postgres keeps
-    // its hits and is marked incomplete below instead of being discarded.
     if (cachedIndexUnavailable && !legislationServed) {
       return c.json(searchIndexUnavailable(requestId), 503)
     }
 
-    // Honesty gate: a recognised citation is only found when a visible hit
-    // IS that citation. Keyword neighbours that merely mention it are citing
-    // cases, not the judgment, so they fall through to live instead of
-    // suppressing it. Any visible hit still satisfies other queries.
     if (hasGoodStoredHits(visibleCachedHits, exactLookup)) {
-      // search() already re-ranked the pool; serve the top page of it.
       const summaries = visibleCachedHits
         .slice(0, servedStoredHitsLimit)
         .map((hit, index) =>
@@ -389,22 +323,6 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
-    // Corpus-only: there is no live call. A
-    // recognised citation with no exact stored hit is honestly not held —
-    // but stored judgments that cite it are still served, labelled by
-    // their citationMatch, so the answer reads as not-held-with-citing
-    // rather than a silent no-match. Candidates prove the citation with
-    // full paragraph text (hydrated where the index serves summaries)
-    // against a bounded phrase, so keyword neighbours stay excluded even
-    // when scattered terms co-occur.
-    //
-    // The ranked search above carries the relevance floor, which starves
-    // exact-phrase citation lookups once sort is applied (measured: the
-    // [2003] UKHL 1 phrase matches ten citing judgments unfiltered and
-    // zero with the floor). The citing lookup below repeats the same
-    // phrase without the floor; matchingStrategy is untouched, and the
-    // floor still gates every ranked result. Precision comes from the
-    // phrase plus the bounded-phrase body check, not the score.
     const citingLookup =
       !cachedIndexUnavailable && exactLookup && recognisedCitation
         ? await searchStoredAuthorities(
@@ -460,19 +378,12 @@ export function createLegalSearchProxyRoutes(
         }),
       )
     }
-    // A leg that failed cannot be reported as a completed verdict. With no
-    // usable hit from either half the whole request is untrustworthy, so it
-    // answers an explicit incomplete error instead of no_match or
-    // recognised_not_held.
     if (
       !legislationServed &&
       (judgmentSearchFailed || legislationSearchFailed)
     ) {
       return c.json(searchIncomplete(requestId), 503)
     }
-    // Corpus-only: a recognised citation
-    // with no exact stored hit and no stored citing case is honestly not
-    // held, not a silent no-match.
     const { citation, citationDiagnostics } = citationFieldsWithLegislation(
       exactLookup,
       [],
@@ -513,9 +424,6 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
-    // Fail closed: an unknown store state (timeout/error) must not fall
-    // through to the derived index, which could serve a stale full text of
-    // a withdrawn judgment. Only a confirmed store miss continues.
     const storedLookup = await getDocumentRouteSourceRecord(reads, parsed.data)
     if (storedLookup.status === 'unavailable') {
       return c.json(
@@ -528,10 +436,6 @@ export function createLegalSearchProxyRoutes(
       )
     }
     const storedSourceRecord = storedLookup.record
-    // Postgres is the record: a withdrawn row stays stored but marked, so
-    // direct fetch returns 200 with metadata and a banner, never 404 and
-    // never full text. Checked before the derived index because a rebuild
-    // may not have dropped the copy yet.
     if (storedSourceRecord?.withdrawn) {
       const { paragraphs: _paragraphs, ...metadata } =
         storedSourceRecord.summary
@@ -554,13 +458,7 @@ export function createLegalSearchProxyRoutes(
     )
 
     const courtParagraphNumbers = hasCourtParagraphNumbers(storedSourceRecord)
-    // The retrieval date the source page shows: when the corpus read this
-    // judgment's metadata. Absent remains absent — never the row's
-    // updated_at, which moves on re-index without the source being re-read.
     const acquiredAt = storedSourceRecord?.provider.acquiredAt ?? null
-    // Both read from published metadata only (see 0039). An empty list and a
-    // null summary are the honest "the source publishes none", so the page
-    // renders nothing rather than a placeholder.
     const published = {
       judges: storedSourceRecord?.judges?.map((judge) => judge.name) ?? [],
       summary: storedSourceRecord?.publishedSummary
@@ -593,11 +491,6 @@ export function createLegalSearchProxyRoutes(
       })
     }
 
-    // Corpus-only: there is no provider fallback. A stored summary with no
-    // full text (a PDF-only judgment) is still held locally, so serve its
-    // metadata rather than answering not-found or reaching Find Case Law.
-    // The case view renders the stored metadata alongside its "full text
-    // unavailable" state, so nothing is invented and nothing is fetched.
     if (storedSourceRecord?.summary) {
       return c.json({
         document: storedSourceRecord.summary,
@@ -715,26 +608,14 @@ function isImplementedFetchSourceType(request: LegalFetchRequest) {
   )
 }
 
-/** A caller that narrows to judgments opts out of the legislation group. */
 function isJudgmentOnlyFetch(request: LegalFetchRequest) {
   return request.sourceType === 'judgment'
 }
 
-/**
- * Merges the legislation half into a judgment-half response. Groups ride
- * along on every site so the flat judgment hits array is byte-identical
- * with or without legislation; outcome flips to results only when the
- * legislation half actually served hits into an otherwise empty answer.
- */
 function legislationGroupsServed(legislation: LegislationFetchResult | null) {
   return legislation?.groups.some((group) => group.hits.length > 0) ?? false
 }
 
-/**
- * Spread into a site diagnostics literal. Empty when legislation is off.
- * `failures` names a half that did not complete, so the response never reads
- * as a clean verdict and the client can show incomplete coverage.
- */
 function legislationDiagnosticsFor(
   legislation: LegislationFetchResult | null,
   failures: { judgment: boolean; legislation: boolean },
@@ -742,36 +623,21 @@ function legislationDiagnosticsFor(
   return {
     ...(legislation
       ? {
-          // A failed leg never reads as searched, even where the attempt
-          // began: `legislationSearchFailed` carries the truth instead.
           legislationSearched: legislation.searched && !legislation.failed,
           legislationGroupServed: legislationGroupsServed(legislation),
-          // A verdict, not an outage: the note alone cannot distinguish "the
-          // corpus does not hold this" from "the store did not answer".
           ...(legislation.recognisedNotHeld
             ? { legislationNotHeld: true }
             : {}),
-          // A whole-title request no exact key matched, or a title two stored
-          // Acts satisfy. Neither is a not-held verdict, so each rides its own
-          // flag and the page can say only what is known.
           ...(legislation.titleUnresolved
             ? { legislationTitleUnresolved: true }
             : {}),
           ...(legislation.ambiguous ? { legislationAmbiguous: true } : {}),
-          // A held Act whose schedule citation names no schedule: a corrective
-          // prompt, not a verdict. The structured example and Act context let
-          // the client offer a resubmission the parser accepts.
           ...(legislation.scheduleUnderspecified
             ? {
                 legislationScheduleGuidance: legislation.scheduleUnderspecified,
               }
             : {}),
           ...(legislation.note ? { legislationNote: legislation.note } : {}),
-          // The parameters this server sent to the engine on this response.
-          // Emitted by the layer that applied them, not by the caller's
-          // configuration, so a measurement records observed conditions.
-          // Omitted when no keyword search ran (an exact Act or provision
-          // answer, an ambiguous query).
           ...(legislation.keywordSearchParameters
             ? {
                 legislationSearchParameters:
@@ -785,13 +651,6 @@ function legislationDiagnosticsFor(
   }
 }
 
-/**
- * The most specific legislation terminal for an otherwise empty answer. Used
- * by every terminal no-judgment branch so the judgment half's generic
- * `no_match` never overwrites a legislation verdict. `null` means the
- * legislation half has no claim, and the caller's judgment-side outcome
- * stands.
- */
 function legislationEmptyOutcome(
   legislation: LegislationFetchResult | null,
 ): LegalFetchOutcome | null {
@@ -805,17 +664,11 @@ function legislationEmptyOutcome(
   return null
 }
 
-/** Spread into a toFetchResponse options literal. Empty when no group. */
 function legislationGroupsFor(legislation: LegislationFetchResult | null) {
   if (!legislation || legislation.groups.length === 0) return {}
   return { groups: legislation.groups }
 }
 
-/**
- * Statute-shaped queries (the API already classified them) lead with
- * legislation. Judgment citations and keyword queries stay judgment-led.
- * Omitted on judgment-led answers so existing clients keep the same JSON.
- */
 function legislationLeadFor(
   exactLookup: ExactLookup | null,
   legislation: LegislationFetchResult | null,
@@ -834,12 +687,6 @@ function legislationFetchExtras(
   }
 }
 
-/**
- * Citation honesty with the legislation half: a judgment citation keeps its
- * existing verdict; otherwise a held legislation exact wins held_exact and
- * a recognised-but-unheld one wins not_held. Never overrides a judgment
- * exactLookup, so judgment benchmarks read byte-identical fields.
- */
 function citationFieldsWithLegislation(
   exactLookup: ExactLookup | null,
   servedHits: Array<Pick<LegalFetchSearchHit, 'citationMatch'>>,
@@ -869,11 +716,6 @@ function citationFieldsWithLegislation(
   return base
 }
 
-/**
- * Visible 503 when Meilisearch cannot be reached. The engine is the sole
- * query layer, so its outage is search's outage: a named error the UI can
- * quote, never an empty result set standing in for a failure.
- */
 function searchIndexUnavailable(requestId: string) {
   return apiError(
     'search_unavailable',
@@ -882,12 +724,6 @@ function searchIndexUnavailable(requestId: string) {
   )
 }
 
-/**
- * Visible 503 when a federated half failed and the other half had no usable
- * hit. Distinct from the index outage above: the engine may answer and only
- * the legislation or exact-lookup half failed, so a `no_match` here would
- * assert a negative the request never established.
- */
 function searchIncomplete(requestId: string) {
   return apiError(
     'search_incomplete',
@@ -947,13 +783,9 @@ async function findExactStoredAuthority(
     { limit: 5, exactPhrase: lookup.recognisedQuery },
   )
   const storedIndexStatus = storedIndexResult.storedIndexStatus
-  // No engine, no exact lookup: the handler turns this into a visible 503
-  // rather than answering from a differently-ranked second engine.
   if (storedIndexStatus === 'unavailable') {
     return { hit: null, storedIndexStatus }
   }
-  // Same stale-index guard as the main search path: an exact Meili hit for
-  // a withdrawn row is dropped here, and direct fetch owns the banner.
   const visibleIndexHits = await excludeWithdrawnIndexHits(
     reads,
     storedIndexResult.hits,
@@ -963,16 +795,11 @@ async function findExactStoredAuthority(
   )
   if (storedIndexHit) return { hit: storedIndexHit, storedIndexStatus }
 
-  // A document id names its row directly, so the record itself answers when
-  // the index lags. Citation-to-id resolution needs the engine and stays
-  // above: without it there is nothing exact to serve.
   if (lookup.kind === 'document_id') {
     const storedRecord = await getLegalAuthoritySourceRecord(
       reads,
       lookup.normalizedQuery,
     )
-    // Withdrawn rows never surface in search, even on an exact id lookup:
-    // direct fetch owns the banner response.
     if (storedRecord && !storedRecord.withdrawn) {
       const storedDocument = storedRecord.document ?? storedRecord.summary
       if (storedDocument && sourceMatchesFilters(storedDocument, filters)) {
@@ -991,13 +818,6 @@ function isExactDocumentId(normalizedQuery: string) {
   )
 }
 
-/**
- * Honesty gate for the stored early returns. A recognised citation is only
- * found when a visible hit IS that citation (exact id or neutral citation);
- * keyword neighbours that merely mention it are citing cases, not the
- * judgment, and must not suppress live. Every other query keeps the
- * any-hit rule. The 0.25 engine floor stays inside search(), not here.
- */
 function hasGoodStoredHits(
   hits: LegalFetchSearchHit[],
   exactLookup: ExactLookup | null,
@@ -1006,16 +826,6 @@ function hasGoodStoredHits(
   return hits.some((hit) => isExactLookupHit(hit, exactLookup))
 }
 
-/**
- * Stored-only citing set for an anonymous recognised-citation query. Index
- * hits arrive as summaries (paragraphs stripped) carrying short excerpts,
- * which cannot prove a citation either way, so candidates without paragraph
- * text are hydrated from the record store before labelling. Only documents
- * whose body carries the citation as a bounded phrase serve. Exact hits
- * cannot reach here (the gates above return them), and the phrase check
- * keeps keyword neighbours out, so an invented citation with no citing
- * cases honestly serves nothing.
- */
 async function citingStoredSummariesForCitation(
   reads: LegalAuthorityReadStore,
   indexHits: LegalFetchSearchHit[],
@@ -1059,14 +869,6 @@ async function citingStoredSummariesForCitation(
   return citing
 }
 
-/**
- * Paragraph text for the citing check. Hits that already carry paragraphs
- * pass through; summaries are hydrated from the source store so the phrase
- * check reads full body text rather than excerpt windows. Unresolvable and
- * withdrawn records stay as they are and fail the check below — a candidate
- * that cannot prove the citation never serves. Snippets are dropped on
- * hydration so the served summary re-extracts excerpts from the full text.
- */
 async function withCitingBodyText(
   reads: LegalAuthorityReadStore,
   hit: LegalFetchSearchHit,
@@ -1082,14 +884,6 @@ async function withCitingBodyText(
 const citingPhrasePatterns = new Map<string, RegExp>()
 const citingPhrasePatternLimit = 500
 
-/**
- * True citing test: the recognised citation as a bounded phrase in body
- * text, not its terms scattered across a judgment. A neighbour that merely
- * mentions the court, the year, and some other number fails; a judgment
- * quoting the citation passes. Boundaries use the same word class as the
- * engine's whole-term matching so `[2003] UKHL 1` never matches
- * `[2003] UKHL 17`.
- */
 function bodyCitesRecognisedCitation(
   paragraphs: LegalFetchSearchHit['paragraphs'],
   snippets: LegalFetchSearchHit['snippets'],
@@ -1118,12 +912,6 @@ function bodyCitesRecognisedCitation(
   return pattern.test(normalizeExactMatchValue(bodyText))
 }
 
-/**
- * Citation honesty for a served set: held when a served hit is the exact
- * judgment, not held when the citation is recognised but none is, and not
- * a citation question at all otherwise. Read from served citationMatch
- * labels so status and labels cannot disagree.
- */
 function citationFields(
   exactLookup: ExactLookup | null,
   servedHits: Array<Pick<LegalFetchSearchHit, 'citationMatch'>>,
@@ -1135,9 +923,7 @@ function citationFields(
       ? 'held_exact'
       : judgmentComplete
         ? 'not_held'
-        : // The citation was recognised but a judgment leg failed: no verdict
-          // is established, so the response never asserts a negative.
-          'unverified'
+        : 'unverified'
   return {
     citation: { recognised: exactLookup !== null, status },
     citationDiagnostics: {
@@ -1200,17 +986,7 @@ async function searchStoredAuthorities(
     rankingScoreThreshold?: number | null
   } = {},
 ): Promise<StoredAuthoritiesResult> {
-  // A stored-index failure is reported, not swallowed: the caller turns
-  // storedIndexStatus into a visible 503 so a broken engine never reads as
-  // "no results". Only the error message is logged — RULES.md forbids
-  // secrets in logs, so the provider cause is never serialised.
   try {
-    // A recognised citation searches as an exact phrase so an absent
-    // citation finds nothing instead of keyword neighbours.
-    // Paragraphs without snippets: body tiers need the text, but snippet
-    // extraction over a 100-hit pool costs ~1s of normalising (measured
-    // 890ms vs 1634ms for Arch Insurance). Served hits get snippets lazily
-    // from toSummaryHit, so the pool pays for text transfer and parse only.
     const searchOptions: StoredSearchOptions = {
       includeSnippets: false,
       includeParagraphs: true,
@@ -1221,9 +997,6 @@ async function searchStoredAuthorities(
     if (options.exactPhrase) {
       searchOptions.exactPhrase = options.exactPhrase
     }
-    // Opt-in only: every other caller sends the tuned floor by omission.
-    // The anonymous citing lookup passes null to repeat its exact phrase
-    // without the relevance floor.
     if (options.rankingScoreThreshold !== undefined) {
       searchOptions.rankingScoreThreshold = options.rankingScoreThreshold
     }
@@ -1283,11 +1056,6 @@ async function getLegalAuthoritySourceRecord(
   }
 }
 
-/**
- * Cross-checks derived-index hits against the Postgres withdrawn flag.
- * Only an explicit flag hides a hit; a lookup miss, timeout, or error
- * keeps it visible so a transient store wobble cannot blank search.
- */
 async function excludeWithdrawnIndexHits(
   reads: LegalAuthorityReadStore,
   hits: LegalSearchHit[],
@@ -1299,13 +1067,6 @@ async function excludeWithdrawnIndexHits(
   return hits.filter((_, index) => !records[index]?.withdrawn)
 }
 
-/**
- * Document-route store lookup that distinguishes "row absent" (continue to
- * the derived index) from "store unknown" (fail closed with 503). The
- * plain helper above conflates both as null, which is fine for
- * withdrawn-filtering but would serve stale indexed full text on the
- * document route.
- */
 async function getDocumentRouteSourceRecord(
   reads: LegalAuthorityReadStore,
   documentId: string,
@@ -1328,13 +1089,6 @@ async function getDocumentRouteSourceRecord(
   }
 }
 
-/**
- * Only LegalDocML carries the court's own `<num>`. The HTML fallback numbers
- * paragraphs by position, cover sheet included, and is the only path that
- * keeps `rawDocumentHtml`; showing its numbers would invite a pinpoint
- * citation to a paragraph the court never numbered. With no stored row the
- * provenance is unknown, so the numbers are not vouched for either.
- */
 function hasCourtParagraphNumbers(record: StoredLegalAuthorityRecord | null) {
   return record !== null && record.provider.rawDocumentHtml === undefined
 }

@@ -3,11 +3,6 @@ import type {
   DocumentTextLayoutSegment,
 } from '@obiter/contracts'
 
-/**
- * Geometry for overlaying redaction spans on a rendered PDF page.
- * Coordinates are PDF user-space (origin bottom-left), matching pdf.js viewport
- * conversion on the client. `start`/`end` index the extracted document text.
- */
 export type { DocumentTextLayout, DocumentTextLayoutSegment }
 
 export interface ExtractedDocumentContent {
@@ -18,31 +13,24 @@ export interface ExtractedDocumentContent {
 export interface LaidChar {
   ch: string
   pageIndex: number
-  /** Glyph origin on its baseline in PDF user space. */
   x: number
   y: number
-  /** The glyph's own drawn advance, never a kerned origin displacement. */
   width: number
   height: number
   ascent: number
   descent: number
-  /** Unit writing direction in PDF user space. */
   baselineX: number
   baselineY: number
-  /** True when writing and font-height axes are not perpendicular. */
   skewed?: boolean
-  /** Non-identity CTM; translation-only Form XObjects still need extra cover bleed. */
   transformed?: boolean
 }
 
-/** Same baseline slack as coverRectsForSpan union-merge. */
 const BASELINE_MERGE_TOLERANCE = 1.25
 
 function maxWritingDirectionMergeGap(left: LaidChar, right: LaidChar) {
   return Math.max(2.5, Math.min(left.height, right.height) * 0.4)
 }
 
-/** Geometry is rounded to keep layout.json small; 0.001pt is far below ink. */
 function roundGeometry(value: number) {
   return Math.round(value * 1000) / 1000
 }
@@ -78,12 +66,6 @@ function canMergeIntoRun(previous: LaidChar, next: LaidChar) {
   return gap <= maxWritingDirectionMergeGap(previous, next)
 }
 
-/**
- * Build layout segments, merging contiguous glyphs on the same baseline into
- * runs. Each run records its characters' real advances, so merging costs a few
- * bytes per character instead of a whole segment and coverRectsForSpan still
- * places every character exactly where it was drawn.
- */
 function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
   const segments: DocumentTextLayoutSegment[] = []
   let run: DocumentTextLayoutSegment | null = null
@@ -104,8 +86,6 @@ function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
       run.glyphWidthOverrides &&
       canMergeIntoRun(runLast, current)
     ) {
-      // Placement and drawn extent are separate: TJ kerning changes the first,
-      // but a trailing redaction still needs the glyph's full own advance.
       const previousIndex = run.advances.length - 1
       const placementAdvance = roundGeometry(
         displacementAlongBaseline(runLast, current),
@@ -189,23 +169,11 @@ function collapseLineGlyphSpacing(line: string) {
     }
   }
   if (/[a-z]/u.test(next) || !/\s/u.test(next)) return next
-  // Word-boundary anchored: an unanchored [A-Z0-9]{1,3} group matches the
-  // prefix of a longer word ("COU" of "COUNTY"), so the join shredded real
-  // all-caps prose ("IN THE COUNTY COURT AT CENTRAL LONDON" extracted as
-  // "INTHECOUNTY COURTATCENTRAL LONDON", "PARTICULARS OF CLAIM" as
-  // "PARTICULARSOFCLAIM"). Anchored, only runs of short tokens such as
-  // "AB CD EF" still collapse; the first token is short too so a long word
-  // followed by initials is left alone. Runs containing a standalone number
-  // keep their spaces (spaced identifiers such as QQ 12 34 56 C).
   return next.replace(/\b[A-Z0-9]{1,3}(?:\s+[A-Z0-9]{1,3}\b){2,}/gu, (run) =>
     /\b\d+\b/u.test(run) ? run : run.replace(/\s+/gu, ''),
   )
 }
 
-/**
- * Collapse PDF letter-spacing while deleting matching laid characters so
- * offsets stay aligned with stored detection text.
- */
 export function collapsePdfGlyphSpacingWithLayout(
   chars: LaidChar[],
 ): LaidChar[] {
@@ -235,8 +203,6 @@ export function collapsePdfGlyphSpacingWithLayout(
           collapsedIndex += 1
           continue
         }
-        // Drop the spacing glyph the collapse removed; keep any other mismatch
-        // so offsets stay aligned with the surviving characters.
         if (laid.ch === ' ') continue
         result.push(laid)
       }

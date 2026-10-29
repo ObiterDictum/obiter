@@ -21,7 +21,6 @@ export type DismissFindingOutcome =
 export type UndismissFindingOutcome =
   { ok: true; removed: boolean } | { ok: false; reason: 'run_not_found' }
 
-/** Everyone in the matter may see who decided, by name rather than by id. */
 async function dismissalName(
   queryable: Pick<Pool, 'query'>,
   organisationId: string,
@@ -30,12 +29,6 @@ async function dismissalName(
   return (await reviewerNames(queryable, organisationId, [userId])).get(userId)
 }
 
-/**
- * Dismiss one stored finding, or replace an existing dismissal's reason. The
- * check's own outcome is untouched: a dismissal is a person's recorded decision
- * that this finding needs no further action. Editing the matter is required,
- * because the row claims who decided and when for everyone in the matter.
- */
 export async function dismissVerificationFinding(
   queryable: Pick<Pool, 'query'>,
   user: AuthenticatedOrgUser,
@@ -88,13 +81,6 @@ export async function dismissVerificationFinding(
   }
 }
 
-/**
- * Put a dismissed finding back in the queue. The dismissal row is the only
- * record of the decision, so removing it is audited by the route: deleting a
- * row leaves no trace of who reopened the finding or when. Reopening needs the
- * same edit access as dismissing, because it changes what everyone in the
- * matter sees as outstanding work.
- */
 export async function undismissVerificationFinding(
   queryable: Pick<Pool, 'query'>,
   user: AuthenticatedOrgUser,

@@ -7,21 +7,6 @@ import {
   type LegislationProvisionDocument,
 } from '@obiter/search-client'
 
-/**
- * Rebuilds the legislation_provisions Meilisearch index from Postgres, which
- * is the system of record. Repeatable and idempotent: every run streams all
- * of legislation_provisions through a staging index and atomically swaps it
- * into place. Deliberately a separate script from rebuild-search-index.ts
- * rather than a flag on it: the two corpora have different settings,
- * different readiness counts, and a shared script would let one corpus's
- * failure modes move the other's numbers.
- *
- * Provisions flagged has_unapplied_effects ARE indexed (flag included): the
- * serving layer withholds their text, and the flag is what lets it do so
- * without a live call. Excluding them would make amended provisions
- * unfindable instead of honestly labelled.
- */
-
 const readPageSize = 1000
 const localMeilisearchHost = 'http://127.0.0.1:7700'
 const localMeilisearchAdminKey = 'obiter-local-dev-key'
@@ -72,7 +57,6 @@ interface ProvisionRow {
   extent: string
   provision_text: string
   has_unapplied_effects: boolean
-  /** pg returns timestamptz as Date, not the ISO string of the contract. */
   effects_checked_at: Date | string | null
   source_url: string
 }
@@ -114,8 +98,6 @@ async function main() {
     let lastId = ''
     for (;;) {
       const page = await pool.query<ProvisionRow>(
-        // Container rows (Part, Chapter, Schedule, crossheading) are
-        // headings with no searchable body: provisions only reach the index.
         `select p.id, p.document_identity,
                 d.act_type, d.year, d.number, d.title,
                 p.label, p.label_path, p.extent, p.provision_text,
@@ -132,8 +114,6 @@ async function main() {
       const documents: LegislationProvisionDocument[] = page.rows.map((row) => {
         const provisionRef = `${row.document_identity}/${row.label_path}`
         return {
-          // Engine ids reject slashes; the full path stays queryable in
-          // provisionRef while the hyphen form is the primary key.
           id: provisionRef.replaceAll('/', '-'),
           provisionRef,
           documentIdentity: row.document_identity,
@@ -146,8 +126,6 @@ async function main() {
           extent: row.extent,
           text: row.provision_text,
           hasUnappliedEffects: row.has_unapplied_effects,
-          // pg returns timestamptz as Date; the index contract is ISO or
-          // null, and search returns ISO strings, so normalize at write.
           effectsCheckedAt:
             row.effects_checked_at instanceof Date
               ? row.effects_checked_at.toISOString()

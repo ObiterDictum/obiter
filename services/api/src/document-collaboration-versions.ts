@@ -39,11 +39,6 @@ type CollaborationMergeInput = {
   baseVersionId: string
   syncId: string
   operations: readonly DocumentEditOperation[]
-  /**
-   * Same contract as the direct edit: the `w:trackRevisions` state the merged
-   * version persists, and whether the batch is tracked. Omitted leaves the
-   * current version's stored setting in place and tracks by it.
-   */
   trackChanges?: boolean
   userId: string
   userName?: string
@@ -83,9 +78,6 @@ export async function createCollaborationMergeVersion(
 
   try {
     await client.query('begin')
-    // Matter before document, and before the idempotency lookup: a revoked
-    // grantee must not learn through an already_applied replay that a sync id
-    // was previously merged.
     if (!(await lockMatterForEdit(client, input))) {
       await client.query('rollback')
       return { status: 'not_found' }
@@ -111,9 +103,6 @@ export async function createCollaborationMergeVersion(
         ...(existing.lineage
           ? {
               // SAFETY: the column is a JSONB object written only by
-              // `commitPreparedVersion` from a validated lineage, and the
-              // database CHECK constrains it to an object; the stored value is
-              // the same schema this cast names.
               lineage: existing.lineage as DocumentVersionLineage,
             }
           : {}),
@@ -139,9 +128,6 @@ export async function createCollaborationMergeVersion(
     const alignment = baseIsCurrent
       ? null
       : alignMergeDocuments(baseDocument, currentDocument)
-    // A settings-only merge carries no operations, so reconciliation has
-    // nothing to check: a changed current skeleton must not report an empty
-    // conflict list when the only intent is the toggle.
     const reconciliation =
       input.operations.length === 0
         ? ({ mergeable: true } as const)
@@ -163,17 +149,11 @@ export async function createCollaborationMergeVersion(
 
     try {
       const recorder = createLineageRecorder(currentDocument.model)
-      // An omitted toggle rides the current version's own setting, the same
-      // rule the direct edit applies to its base.
       const trackChanges =
         input.trackChanges ?? currentDocument.model.trackRevisions
       const trackRevisionsChanged =
         input.trackChanges !== undefined &&
         input.trackChanges !== currentDocument.model.trackRevisions
-      // A request whose only intent is a flip to the state the current
-      // version already stores writes nothing: no version, no settings
-      // rewrite. It reports the state the request asked for as already in
-      // place so a replayed sync id stays idempotent.
       if (input.operations.length === 0 && !trackRevisionsChanged) {
         await client.query('rollback')
         return {
@@ -186,10 +166,6 @@ export async function createCollaborationMergeVersion(
       if (input.operations.length > 0) {
         applyDocumentEdits(
           currentDocument,
-          // The client addresses its base version; the current version has
-          // reallocated positional ids, so the batch is rewritten to current
-          // addresses before it is applied. Applying base ids directly could
-          // write a run a collaborator inserted there.
           alignment
             ? remapMergeOperations(input.operations, alignment)
             : input.operations,
@@ -202,9 +178,6 @@ export async function createCollaborationMergeVersion(
           recorder,
         )
       }
-      // Same settings write as the direct edit path: the saved version
-      // persists the toggle state the merge request carried; an omitted
-      // field writes nothing.
       if (input.trackChanges !== undefined) {
         writeTrackRevisions(currentDocument, input.trackChanges)
       }
@@ -216,14 +189,8 @@ export async function createCollaborationMergeVersion(
         canonicalParagraphIds,
         baseVersionId: input.baseVersionId,
         versionId: '',
-        // Same tracked-run caveat as the direct edit path.
         runAddressesReliable: !trackChanges,
       })
-      // A merge that reconciled the client's operations onto a newer current
-      // version records its lineage against that current version. Re-express
-      // it against the client's base so the client's history stays
-      // translatable; the correspondence comes from persisted paragraph ids
-      // and the verified run skeleton, never from positions or text.
       const built = alignment
         ? retargetLineageToBaseVersion({
             lineage: currentLineage,

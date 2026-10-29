@@ -7,7 +7,6 @@ import {
 } from '@obiter/contracts'
 
 export type DraftSpan = {
-  /** The paragraph id inside its story. Only unique together with the story. */
   paragraphId: string
   storyKind: DocumentStoryKind
   storyPartName: string
@@ -16,9 +15,6 @@ export type DraftSpan = {
   rawText: string
 }
 
-/** A stable, story-scoped paragraph key. Used for finding identity and quote
- * grouping so two stories that reuse `p1` cannot collide. The unit separator
- * cannot appear in an OOXML part name or paragraph id. */
 export type StoryScopedSpan = DraftSpan & { locationParagraphId: string }
 
 export type ExtractedCitation = StoryScopedSpan & { id: string }
@@ -40,23 +36,12 @@ export type CheckedStory = {
 export type ExtractedCandidates = {
   citations: ExtractedCitation[]
   quotes: ExtractedQuote[]
-  /** The stories actually traversed, in traversal order. */
   checkedStories: CheckedStory[]
-  /** Story kinds present in the model but deliberately not traversed. */
   skippedStoryKinds: DocumentStoryKind[]
 }
 
 export const maxVerificationCandidates = 500
 
-/**
- * The stories V5 checks. Legal drafting puts citations in footnotes and
- * endnotes as often as in the body, so all three are in scope. Headers,
- * footers and comments are deliberately out of scope until a product decision
- * says otherwise: enabling them silently would start verifying boilerplate and
- * reviewer chatter as if it were the draft. `skippedStoryKinds` records what the
- * model held, so a completed run can disclose its coverage rather than imply
- * the whole document was checked.
- */
 export const verificationStoryKinds: DocumentStoryKind[] = [
   'document',
   'footnotes',
@@ -64,25 +49,11 @@ export const verificationStoryKinds: DocumentStoryKind[] = [
 ]
 
 const NEUTRAL_CITATION = new RegExp(neutralCitationPatternSource, 'g')
-/**
- * One lexically bounded `/ln/ukpga/...` token: every non-whitespace character
- * after the prefix, so a malformed suffix (`42x`, `%20`, `?q=1#f`) stays inside
- * the token and the whole token must parse under the canonical parser. There is
- * deliberately no shrink-until-a-prefix-parses loop: a candidate that does not
- * parse verbatim reaches V3 as-is and comes back unresolved, never rewritten
- * into a different authority.
- */
 const LEGISLATION_PATH = /\/ln\/ukpga\/\S+/g
 const CURLY_QUOTE = /\u201C([^\u201D]+)\u201D/g
 const STRAIGHT_QUOTE = /"([^"]+)"/g
 const STORY_SEPARATOR = '\u001f'
 
-/**
- * Sentence punctuation a solicitor writes immediately after a path. At most one
- * is removed, and only when the remainder parses; repeated punctuation is left
- * in the token and so fails to parse rather than collapsing to a valid
- * identity.
- */
 const TRAILING_PROSE_PUNCTUATION = new Set([
   '.',
   ',',
@@ -131,8 +102,6 @@ type StoryParagraph = {
   text: string
 }
 
-/** Every in-scope story, in a fixed traversal order, so reruns are stable
- * regardless of how the model ordered its stories. */
 function storyParagraphs(model: DocumentModelWire) {
   const paragraphs: StoryParagraph[] = []
   const checkedStories: CheckedStory[] = []
@@ -191,16 +160,10 @@ function collectQuoted(text: string, pattern: RegExp) {
   return matches
 }
 
-/** The path a `/ln/ukpga/...` token names, once at most one documented trailing
- * prose punctuation character is removed. The token itself is never rewritten
- * to a different identity: either the whole path parses or the token is
- * reported as written. */
 export function legislationPathToken(token: string) {
   const last = token.at(-1)
   if (last === undefined || !TRAILING_PROSE_PUNCTUATION.has(last)) return token
   const previous = token.at(-2)
-  // Repeated punctuation is not prose punctuation; leaving it in keeps the
-  // token unparseable instead of collapsing it to a valid prefix.
   if (previous !== undefined && TRAILING_PROSE_PUNCTUATION.has(previous)) {
     return token
   }
@@ -275,14 +238,6 @@ function extractQuotes(paragraph: StoryParagraph) {
   )
 }
 
-/**
- * A quotation is compared only when exactly one citation association is
- * defensible. A citation is a candidate when it lies wholly before or wholly
- * after the quotation; a candidate on both sides, several candidates on one
- * side, or one citation that several quotations would claim all yield
- * `ambiguous`, which the check turns into a review-required finding rather than
- * a clear or flagged result. Nothing is chosen by proximity or iteration order.
- */
 function attributeQuotes(
   quotes: StoryScopedSpan[],
   citations: ExtractedCitation[],

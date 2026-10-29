@@ -204,10 +204,6 @@ export function createDocumentsRoutes(
       verifiedHash = computedHash
     }
 
-    // Extract before creating the row so a package-limits rejection (413)
-    // persists nothing — the redact-run route already orders it this way.
-    // Other extraction failures still create a `failed` row (201) with a
-    // distinct status, deletable via DELETE /api/documents/:id.
     let preExtracted: ExtractedDocumentContent | null = null
     if (uploadContents && verifiedType) {
       try {
@@ -224,7 +220,6 @@ export function createDocumentsRoutes(
         ) {
           return errorResponse(c, 'ooxml_limits_exceeded', error.message, 413)
         }
-        // Content-level failures reuse the post-create failure path below.
       }
     }
 
@@ -250,9 +245,7 @@ export function createDocumentsRoutes(
             failureReason,
           })
           if (version) result.version = version
-        } catch {
-          // Preserve the original storage failure response.
-        }
+        } catch {}
       }
       const textObjectKey = result.version.objectKey.replace(
         /\/source$/,
@@ -270,8 +263,6 @@ export function createDocumentsRoutes(
         )
       }
       try {
-        // Reuses the pre-create extraction on success; on content-level
-        // failure it deterministically fails the same way again.
         const extracted =
           preExtracted ??
           (await extractDocumentContent(verifiedType, uploadContents, {
@@ -363,8 +354,6 @@ export function createDocumentsRoutes(
     return c.json({ documents })
   })
 
-  // Registered before the `:id` read: otherwise "recently-opened" would be read
-  // as a document id.
   routes.get('/api/documents/recently-opened', async (c) => {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
@@ -372,9 +361,6 @@ export function createDocumentsRoutes(
     return c.json(recentlyOpenedDocumentResponseSchema.parse({ document }))
   })
 
-  // The list behind "Cite in document": the documents this person opened, so
-  // the citation is typed into one they are already working in. Registered
-  // before `:id` for the same reason as the single read.
   routes.get('/api/documents/citation-targets', async (c) => {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
@@ -386,8 +372,6 @@ export function createDocumentsRoutes(
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
-    // The open is recorded against the document behind the access check, so a
-    // guessed id from another matter or organisation records nothing.
     const result = await getDocument(pool, user, c.req.param('id'), 'view')
     if (!result) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
@@ -423,9 +407,6 @@ export function createDocumentsRoutes(
     if (!result) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
     }
-    // Version history is editor-only: a 'view' share reads the document as it
-    // stands. Conceal the other versions' ids and metadata here so the same
-    // caller cannot enumerate the versions the read routes would deny.
     if (!(await canReadDocumentHistory(pool, user, result.document.matterId))) {
       return c.json({
         ...result,

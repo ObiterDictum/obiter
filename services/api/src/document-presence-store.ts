@@ -7,13 +7,7 @@ import {
   type DocumentPresenceScope,
 } from './document-presence'
 
-/**
- * Heartbeats live longer than one write: the sweep budget bounds how many
- * expired rows a single update may reclaim, so cleanup can never turn a
- * heartbeat into an unbounded delete.
- */
 const SWEEP_EXPIRED_LIMIT = 200
-/** Rows this far past expiry are dead weight — reclaimable, never readable. */
 const SWEEP_GRACE = "interval '1 minute'"
 
 interface PresenceRow {
@@ -24,17 +18,6 @@ interface PresenceRow {
   cursor_offset: number
 }
 
-/**
- * The production presence backend. All state lives in `document_presence`,
- * keyed by (organisation, document, user, client), so cursors written through
- * one API instance are visible to every other instance sharing the database.
- * Expiry is the database clock (`now()`), never the process clock: a stopped
- * tab's row stops matching reads after the TTL without a delete.
- *
- * Every write is a single statement — upsert, expiry sweep and participant
- * cap run as data-modifying CTEs, so a failed write leaves no partial row set
- * behind.
- */
 export class PostgresDocumentPresence implements DocumentPresenceBackend {
   constructor(private readonly pool: Pool) {}
 

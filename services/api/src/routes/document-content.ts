@@ -77,9 +77,6 @@ export function createDocumentContentRoutes(
 ) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
-  // Raw source bytes for any ready version, whatever its type. DOCX keeps
-  // its comment-embedding /export; this route is the byte-identical way back
-  // to what was uploaded (PDF, TXT, and anything else with no viewer).
   routes.get('/api/documents/:id/download', async (c) => {
     const resolved = await resolveReadyDocumentVersion(
       c,
@@ -105,26 +102,12 @@ export function createDocumentContentRoutes(
     }
 
     return createDocumentMediaResponse(
-      // A view, not a copy: Response reads the bytes at construction and
-      // `source` is never mutated afterwards, so sharing the Buffer's
-      // memory is safe (byteOffset/length keep pooled Buffers windowed).
       new Uint8Array(source.buffer, source.byteOffset, source.length),
       downloadContentType(version.fileType),
       version.filename,
     )
   })
 
-  // Plain-text view for ready TXT versions. DOCX answers /model and PDF
-  // answers /pdf-view; TXT had no view route until this one.
-  //
-  // Deliberately uncapped: the 200,000-character bound in
-  // document-extraction applies to the PDF path only, where it bounds
-  // per-glyph geometry work and layout size. TXT extraction is plain UTF-8
-  // decoding, and the siblings are likewise whole-content (/model serves
-  // the full DOCX model, /export the full DOCX bytes), so truncating here
-  // would corrupt the round-trip without bounding any real work. The hard
-  // bound is the upload cap (MAX_DOCUMENT_UPLOAD_BYTES, 25 MB); a stored
-  // text that fails the response schema still fails closed below.
   routes.get('/api/documents/:id/text', async (c) => {
     const resolved = await resolveReadyDocumentVersion(
       c,

@@ -15,7 +15,6 @@ import { prepareDocxForBurn } from './redaction-docx-xml'
 const NO_REVIEWABLE_DOCX_TEXT =
   'This Word document has no body, header, footer, note or comment text Redact can review. Save it as PDF and upload the PDF instead.'
 
-/** Redact coordinates belong only to Redact; matter ingestion keeps Mammoth. */
 export async function extractRedactionContent(
   fileType: SupportedDocumentType,
   bytes: Buffer,
@@ -28,8 +27,6 @@ export async function extractRedactionContent(
     const prepared = await prepareDocxForBurn(bytes, limits)
     const { text } = mapDocxText(await loadOoxmlZipEntries(prepared, limits))
     if (!text.trim()) {
-      // Reuse the curated image-only/unreadable refusal. Never store Mammoth
-      // text as Redact coordinates: the burn could not use them.
       await extractDocumentContent(fileType, bytes, dependencies)
       throw new DocumentExtractionError(NO_REVIEWABLE_DOCX_TEXT, true)
     }

@@ -107,8 +107,6 @@ export async function updateMatter(
   const client = await pool.connect()
   try {
     await client.query('begin')
-    // Matter lock, fresh edit re-check, acting-member lock before the write so
-    // a revocation that commits during the request cannot be outrun.
     if (
       !(await lockMatterForEdit(client, {
         organisationId: user.organisationId,
@@ -166,19 +164,6 @@ export interface DeleteCascadeResult {
   runs: { id: string }[]
 }
 
-/**
- * Soft-deletes a matter and cascades to its documents and their redaction runs
- * in one transaction, writing one `*.delete` audit row per deleted entity.
- *
- * Provenance: every `set deleted_at = now()` in this transaction shares one
- * transaction-stable timestamp `T`. Already-deleted children are skipped
- * (`where deleted_at is null`), so cascade-restore (below) can match only the
- * children this cascade took down by `deleted_at = T` — an individually-deleted
- * child (older timestamp) is not revived. See docs/prds/platform-deletion.md.
- *
- * Returns null when the matter is missing, cross-org, or already deleted —
- * the caller surfaces a 404 without writing any audit row (no existence leak).
- */
 export async function softDeleteMatterWithCascade(
   pool: Pool,
   input: {
@@ -193,7 +178,6 @@ export async function softDeleteMatterWithCascade(
   try {
     await client.query('begin')
 
-    // Matter lock, fresh edit re-check, acting-member lock before the cascade.
     if (
       !(await lockMatterForEdit(client, {
         organisationId: input.organisationId,
@@ -287,12 +271,6 @@ export async function softDeleteMatterWithCascade(
   }
 }
 
-/**
- * Cascade-restore symmetric with softDeleteMatterWithCascade. Reads the matter's
- * `deleted_at` (= T) under FOR UPDATE, then restores only children whose
- * `deleted_at = T` — the ones this matter's deletion took down. An
- * individually-deleted child (timestamp ≠ T) stays deleted.
- */
 export async function restoreMatterWithAudit(
   pool: Pool,
   input: RestoreMatterInput,
@@ -302,11 +280,6 @@ export async function restoreMatterWithAudit(
   try {
     await client.query('begin')
 
-    // The deleted-matter form locks the soft-deleted row, re-checks edit
-    // access on a fresh snapshot, and returns the cascade timestamp as text:
-    // the pg driver returns timestamptz as a JS Date at millisecond precision,
-    // and round-tripping that through a param would drop microseconds and
-    // break the equality match against the children this deletion took down.
     const cascadeTimestamp = await lockDeletedMatterForEdit(client, {
       organisationId: input.organisationId,
       matterId: input.id,

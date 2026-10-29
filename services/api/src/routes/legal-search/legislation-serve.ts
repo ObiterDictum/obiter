@@ -32,25 +32,11 @@ import {
   type LegislationFetchHit,
 } from './response-utils'
 
-/**
- * Legislation half of POST /api/search/fetch. Reads exact answers from
- * Postgres (the record) and keyword candidates from the derived
- * legislation_provisions index; a dead index or store never fails the
- * judgment half, it just serves no legislation group. The two groups are
- * federated by the caller: judgment flat hits first, this group after,
- * never interleaved.
- */
-
 export interface LegislationServeDeps {
   pool: Pick<Pool, 'query'>
   searchClient: Parameters<typeof searchLegislation>[0]
   indexName: string
   keywordLimit?: number
-  /**
-   * Bounds the keyword engine call. Defaults to the stored-lookup budget so a
-   * hung legislation index fails this half within the same 2s every Postgres
-   * read already has.
-   */
   keywordTimeoutMs?: number
 }
 
@@ -58,42 +44,16 @@ export interface LegislationFetchResult {
   groups: LegalFetchResultGroup[]
   citationRecognised: boolean
   citationHeldExact: boolean
-  /** Authoritative not-held: a chapter citation or provision the store proves
-   * is absent. Never set from a failed title lookup alone. */
   recognisedNotHeld: boolean
-  /** The query looked like a whole Act title but the directory could not
-   * resolve it. Suppresses keyword provisions without claiming the Act is
-   * absent. */
   titleUnresolved: boolean
-  /** More than one stored Act satisfies the query. Never a not-held verdict. */
   ambiguous: boolean
-  /** A held Act whose citation names a schedule paragraph but no schedule
-   * number. The store cannot resolve it without guessing, so this carries the
-   * parser-compatible example (built from the citation's own label path) and
-   * the Act context needed to resubmit it. Null otherwise. */
   scheduleUnderspecified: LegislationScheduleGuidance | null
   note: string | null
   searched: boolean
-  /**
-   * True when this half did not complete: the Postgres store, the Act
-   * directory build, or the keyword index failed. Distinct from a completed
-   * search that found nothing, which leaves this false and searched true.
-   * The route turns it into an explicit incomplete-coverage signal and never
-   * reports legislationSearched for it.
-   */
   failed: boolean
-  /**
-   * Search-time parameters the legislation keyword search sent to the engine.
-   * Null when no keyword search ran: an exact Act or provision answer, an
-   * ambiguous query, a store failure, or an empty query. The serve layer
-   * reports what it applied so a caller never has to assert its own
-   * configured constants for conditions it did not observe.
-   */
   keywordSearchParameters: AppliedLegislationSearchParameters | null
 }
 
-// Bounds every stored lookup, mirroring the judgment half: a slow store
-// fails this half open (no group) rather than holding the route.
 const storedLegislationTimeoutMs = 2000
 
 export async function withStoredTimeout<T>(promise: Promise<T>): Promise<T> {
@@ -114,15 +74,6 @@ export async function withStoredTimeout<T>(promise: Promise<T>): Promise<T> {
   }
 }
 
-/**
- * Bounds the legislation keyword engine call with the same fail-open budget as
- * every stored lookup. The Meilisearch client accepts a per-request
- * AbortSignal, so the deadline aborts the fetch itself rather than only
- * abandoning the response. The race is the structural guarantee: a client that
- * ignores the signal still cannot hold the route open. The race owns the
- * engine promise, so a late settle after the deadline is discarded and never
- * becomes an unhandled rejection. One timer, cleared on every outcome.
- */
 async function withKeywordTimeout<T>(
   run: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
@@ -166,11 +117,6 @@ export function officialProvisionUrl(
   return `https://www.legislation.gov.uk/${documentIdentity}/${labelPath}`
 }
 
-/**
- * The serving path's stored-provision resolution: the shared single-schedule
- * algorithm with each store read bounded by the serve timeout, so a slow store
- * fails this half open instead of holding the route.
- */
 async function resolveStoredProvision(
   pool: LegislationServeDeps['pool'],
   identity: string,
@@ -289,19 +235,11 @@ export async function resolveLegislationFetch(
     }
   }
   if (acts.length === 0) return emptyResult
-  // Building the directory and classifying the query run outside the store
-  // read but over its rows: a malformed stored Act must fail this half like
-  // any other store failure, never throw past the route's fail-open boundary
-  // and let an empty answer read as a completed search.
   let outcome: LegislationCitationOutcome
   try {
     const directory = createActDirectory(acts)
     outcome = classifyLegislationCitation(query, directory)
   } catch (error: unknown) {
-    // A malformed stored Act row or a classification defect is a code/data
-    // failure, not a store outage: at base this throw reached settleSearchHalf
-    // and was logged there, so it must keep an operational trace. Only the
-    // error message is logged — never the query or any legal text.
     console.error(
       'Legislation classification failed — serving an incomplete half.',
       { reason: error instanceof Error ? error.message : String(error) },
@@ -327,10 +265,6 @@ export async function resolveLegislationFetch(
   }
 
   if (outcome.kind === 'unresolved_title') {
-    // A whole Act-title request the directory cannot resolve. The local
-    // directory is partial and the fold is imperfect, so this suppression
-    // says only what is known: no exact title key matched. It never claims
-    // the Act itself is absent.
     return {
       ...emptyResult,
       searched: true,
@@ -341,11 +275,6 @@ export async function resolveLegislationFetch(
   }
 
   if (outcome.kind === 'not_held') {
-    // A recognised Act or chapter citation the corpus does not hold: the
-    // legislation mirror of the judgment honesty gate. No keyword search runs,
-    // because a provision that merely shares words with the title is not an
-    // answer to "show me that Act". The note names what was asked for, so the
-    // page reads as not held rather than not searched.
     return {
       ...emptyResult,
       searched: true,
@@ -372,11 +301,6 @@ export async function resolveLegislationFetch(
       }
     }
     if (resolution.status === 'underspecified') {
-      // A held Act with a paragraph citation that names no schedule: the
-      // citation is underspecified, not the provision absent. Guessing
-      // Schedule 1 would be a wrong-Act-class mistake at provision level.
-      // The example and the Act are structured data so the client never has
-      // to parse the note to resubmit a citation the parser accepts.
       const example = formatScheduleCitation(outcome.provision.labelPath)
       return {
         ...emptyResult,
@@ -404,10 +328,6 @@ export async function resolveLegislationFetch(
       }
     }
     const provision = resolution.provision
-    // Fail-closed: only an explicit false carrying a check timestamp
-    // serves text. Undefined (a row the validator would now drop, or a
-    // store row predating the flag) and unchecked legacy rows (a
-    // default-false flag with a null timestamp) both withhold.
     const hit = provisionTextServable(
       provision.hasUnappliedEffects,
       provision.effectsCheckedAt,
@@ -459,9 +379,6 @@ export async function resolveLegislationFetch(
       legislationStatus: 'current',
       title: document.title,
       year: document.year,
-      // The row renders `provisionLabel · title`, so the title here read as
-      // "Sentencing Act 2020 · Sentencing Act 2020". An Act has no provision
-      // label; its chapter number is the identifier that distinguishes it.
       provisionLabel: `${document.year} c. ${document.number}`,
       labelPath: '',
       documentIdentity: document.identity,
@@ -473,14 +390,6 @@ export async function resolveLegislationFetch(
       retrievalPath: 'stored_exact_lookup',
       retrievalRank: 1,
     }
-    // A bare Act-name query serves the Act alone. Every provision of an Act
-    // carries that Act's title, so all of them match this query equally and
-    // the engine breaks the tie by insertion order — which is the identifier
-    // path, and `schedule/` sorts before `section/`. That returned a fixed
-    // handful of Schedule 1 paragraphs, identical for every Act, presented as
-    // if they were the relevant ones. The Act page is the navigation surface
-    // for the rest; a query carrying more than the title is no longer an
-    // Act-name query and falls to the keyword branch below.
     return {
       groups: [{ key: 'legislation', label: 'Legislation', hits: [actHit] }],
       citationRecognised: true,
@@ -502,8 +411,6 @@ export async function resolveLegislationFetch(
     deps.keywordLimit ?? 5,
   )
   if (keyword.failed) {
-    // A rejected keyword engine is a failed leg, not a zero-hit search: the
-    // route must not report legislationSearched for it.
     return {
       ...emptyResult,
       failed: true,
@@ -555,10 +462,6 @@ async function searchKeywordProvisions(
     return { hits: [], failed: true, appliedSearchParameters: null }
   }
   const hits = result.hits.slice(0, limit).map((hit, index) =>
-    // Fail-closed here too: only explicit false after a successful check
-    // serves text; the validator already drops malformed index rows, and
-    // unchecked legacy rows carry a null timestamp, so this covers stale
-    // index copies and any direct caller.
     provisionTextServable(hit.hasUnappliedEffects, hit.effectsCheckedAt)
       ? {
           ...currentProvisionHit(
@@ -603,12 +506,6 @@ async function searchKeywordProvisions(
   }
 }
 
-/**
- * One addressable level under the provision being read: a subsection, a
- * sub-paragraph, or a further nested level. `text` is that level's own words
- * only, so the tree never repeats its parent. `text` is absent when the level
- * is withheld (an unapplied amendment, or a row no effects check has cleared).
- */
 export interface LegislationProvisionSubsection {
   label: string
   labelPath: string
@@ -626,8 +523,6 @@ export interface LegislationProvisionPage {
     year: number
     provisionLabel: string
     labelPath: string
-    /** The provision's own published heading, absent when the source carries
-     * none (a schedule paragraph, most subsections). */
     heading?: string
     extent: string
     legislationStatus: 'current' | 'amended_not_held'
@@ -635,7 +530,6 @@ export interface LegislationProvisionPage {
     subsections?: LegislationProvisionSubsection[]
     officialUrl: string
     sourceUrl: string
-    /** When this corpus read the Act's data.xml; absent when not recorded. */
     acquiredAt?: string
     notice?: string
     canonicalUrl: string
@@ -647,17 +541,6 @@ export type LegislationProvisionPageResult =
   | { status: 'not_found' }
   | { status: 'unavailable' }
 
-/**
- * Assembles the subsection tree for one provision from rows in document
- * order, attaching children through the stored parent pointers (CLML
- * nesting). The root row is dropped: the page renders it as its own heading
- * and body, and every other level beneath it as a numbered subsection.
- */
-/**
- * False for a row predating migration 0037: how its concatenated text splits
- * between levels is unknown, so the page keeps serving that text flat rather
- * than guessing a split.
- */
 function hasStructuredText(row: StoredLegislationProvision) {
   return row.ownText !== null && row.ownText !== undefined
 }
@@ -677,8 +560,6 @@ function buildSubsectionTree(
       labelPath: row.labelPath,
       href: createCanonicalProvisionPath(documentIdentity, row.labelPath),
       legislationStatus: servable ? 'current' : 'amended_not_held',
-      // A withheld level keeps its number and loses its wording: the page
-      // never substitutes text it does not hold.
       ...(servable
         ? { text: hasStructuredText(row) ? row.ownText || undefined : row.text }
         : {}),
@@ -760,8 +641,6 @@ export async function resolveLegislationProvisionPage(
         provision: {
           ...shared,
           legislationStatus: 'current',
-          // With a subsection tree, `text` is the provision's own words: the
-          // concatenation would repeat every subsection under its section.
           text: structured ? (provision.ownText ?? '') : provision.text,
           ...(structured ? { subsections: structured } : {}),
         },

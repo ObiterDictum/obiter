@@ -8,96 +8,13 @@ import {
   readDocxNoteBodies,
 } from './document-extraction'
 
-// Extraction coverage guard: redaction must not finalise over regions it never
-// examined. Size note: this module holds the .docx denylist, the PDF signals,
-// and their dispatch in one file (over the usual ceiling) because they are one
-// guard sharing one threshold and one region vocabulary; splitting would scatter
-// a single safety argument across files. The .docx side is denylist by default: every part the package
-// contains must be extracted into the reviewed text, provably empty of human
-// text, explicitly refused when non-trivial, or safely stripped at burn. An
-// unclassified part refuses. The classes, with why each is safe:
-// - word/document.xml body w:t: read by mammoth, the extraction itself.
-// - Referenced headers/footers and footnote/endnote bodies: read by the
-//   supplemental pass (E43 appends notes as a labelled trailing region), and
-//   re-checked below by presence in the extracted text, so an unreferenced
-//   part or a stale (pre-E43) text still refuses.
-// - [Content_Types].xml and every *.rels: package machinery (MIME manifest,
-//   part paths, ids, hyperlink targets). URLs are addresses, never reviewable
-//   prose; the burn-time whole-package byte gate still refuses when an
-//   accepted span overlaps one.
-// - docProps/thumbnail.*: stripped at burn (a stale rendering would otherwise
-//   leak the unredacted first page), so coverage needs no refusal.
-// - Company/Manager/Template scalars: stripped at burn like authorship, so
-//   coverage treats them as stripped-safe. Longer-lived text scalars (title,
-//   subject, keywords, description, category, creator, lastModifiedBy) refuse
-//   when non-trivial and unexamined: a client name there means the reviewer
-//   never saw it, and the fix is to clear it in Word and re-upload.
-// - Style names, numbering level patterns, font names: template vocabulary,
-//   never rendered as document prose. Prose smuggled into those parts
-//   (w:t/delText/a:t/m:t/instrText) still refuses. A style or level label
-//   carrying exfiltrated text under the size floor is the accepted residual.
-// - word/media/* images: pixels, which text extraction cannot read by design
-//   (the visual-content signal at upload already warns on image-only docs).
-// - Tracked insertions/moves-to and property changes: ins/moveTo w:t is live
-//   text mammoth extracts, so spans address it; pPrChange/rPrChange carry
-//   formatting only. Deleted and moved-from text (w:delText, w:t inside
-//   w:del/w:moveFrom) is invisible to extraction, so any of it that is absent
-//   from the extracted text refuses at any size: it is revision history the
-//   reviewer never saw, and the burn refuses accepted-span overlap in both
-//   directions.
-// Residual risks, deliberately not covered: drawing VML text outside
-// w:txbxContent, structured-document-control edge cases, field-code text
-// (FILENAME/AUTHOR fields can name users — the byte gate covers span
-// overlap), external URL targets, style-name exfiltration under the floor,
-// and short (<20 char) unexamined fragments anywhere. Short tracked-deletion
-// text is the exception: it refuses at any size.
-
-// Parts with fewer non-whitespace chars than this are ignored so empty
-// footnote separators and trivial fragments do not block clean documents.
 const UNEXAMINED_PART_MIN_CHARS = 20
 
-// PDF fusion signals: zero-gap fused runs (adjacent Tj, no spaces) keep every
-// char, so char-ratio shows ~zero loss — the signal is run shape, not char
-// count. Fused probe "HelloWorldthisisfused" (21 chars, 1 token) is NOT
-// rescued by withSemanticSpaces. Two signals, either of which refuses:
-// - Long-token share: whole fused lines run to 100+ chars, so N=30 with >=5%
-//   share catches systemic fusion; longest>=100 catches a single fused line
-//   hiding in a long document.
-// - Long letter-run share: the observed collapse artifact peaked at an
-//   18-letter run (PARTICULARSOFCLAIM) with 0% of chars in tokens over 30,
-//   so the token signal missed it. No token-length threshold can catch that
-//   without flagging clean PDFs (the text-layer fixture carries a 24-char
-//   spaceless token, amina.rahman@example.test), but letter runs separate
-//   them: clean PDF fixtures peak at a 7-letter run (11 post-fix on an
-//   all-caps claim-form probe: PARTICULARS) versus 18 fused, so N=16 with
-//   >=10% letter share flags the artifact while clean fixtures pass with
-//   margin. The 10% level (up from 5%) is measured, not guessed: ordinary
-//   vocabulary already reaches N=16 (responsibilities/characterisation 16,
-//   misrepresentation/unconscionability 17, disproportionately 18), and
-//   four synthetic clean shorts trip the old 5% gate — one long word in a
-//   ~325-letter note is 5.1-5.3%, two in ~425-432 letters is 7.5-8.1% —
-//   while the fused probe sits at 18/112 letters = 16.1%. At 10% the probe
-//   flags with 6.1pp margin and the densest clean short passes with 1.9pp.
-//   The 50-letter floor skips degenerate fragments where one word owns the
-//   share (the probe at 112 letters keeps 62 of margin). Two gates were
-//   measured and rejected: distinct>=2 would blind the guard to the
-//   observed artifact (it carries exactly one 16+ run), and an absolute
-//   long-run-chars minimum points the wrong way (fused 18 < clean
-//   two-word 32-35). The share gate (not longest alone) keeps a single
-//   legit long word in a long document passing.
-// Cannot detect fusion that yields only sub-N runs (e.g. an alphanumeric
-// fusion such as NUMBERQQ123456CWAS, letter runs 8+3 — mitigated because the
-// observed producer fuses whole all-caps lines, which still trip the run
-// signal), a single legit 16+ letter word in a very short document, or
-// over-spaced text (handled nowhere). Scanned PDFs are handled separately
-// via MINIMUM_PDF_CHARS_PER_PAGE. Thresholds validated against clean
-// fixtures in extraction-coverage.test.ts; recalibrate on real fused runs.
 const FUSED_TOKEN_MIN_LENGTH = 30
 const FUSED_TOKEN_CHAR_SHARE = 0.05
 const FUSED_TOKEN_ABSOLUTE_LENGTH = 100
 const FUSED_LETTER_RUN_MIN_LENGTH = 16
 const FUSED_LETTER_RUN_SHARE = 0.1
-// Share is meaningless below a sentence or two: one word owns the ratio.
 const FUSED_LETTER_RUN_MIN_TOTAL_LETTERS = 50
 
 function nonWhitespaceChars(value: string) {
@@ -108,12 +25,6 @@ function regionLabel(name: string, chars: number) {
   return `${name} (${chars} chars not examined)`
 }
 
-/**
- * Non-whitespace chars of note bodies of one kind that are absent from the
- * extracted text. Extraction appends each body verbatim inside its label, so
- * a body present in the text is covered; anything else (including runs
- * extracted before E43) is not.
- */
 function uncoveredNoteChars(
   entries: Map<string, Uint8Array>,
   extractedText: string,
@@ -144,14 +55,12 @@ function decodePart(entries: Map<string, Uint8Array>, name: string) {
   }
 }
 
-/** Non-whitespace chars of `text` that `extractedText` does not contain. */
 function unexaminedChars(text: string, extractedText: string) {
   if (!text || nonWhitespaceChars(text) === 0) return 0
   if (extractedText.includes(text)) return 0
   return nonWhitespaceChars(text)
 }
 
-/** Visible prose carriers inside config/template parts. */
 function partProseText(xml: string) {
   const extra: string[] = []
   for (const tag of ['delText', 'a:t', 'm:t', 'instrText'] as const) {
@@ -167,12 +76,6 @@ function partProseText(xml: string) {
     .join('')
 }
 
-/**
- * Deleted and moved-from revision text per block: w:t/w:delText inside
- * w:del and w:moveFrom, plus stray w:delText outside any block
- * (belt and braces for producer variants). Insertions and moves-to are live
- * text extraction already reads, so they are not revision residue.
- */
 function trackedRevisionBlocks(xml: string) {
   const blocks: string[] = []
   let remainder = xml
@@ -194,7 +97,6 @@ function trackedRevisionBlocks(xml: string) {
   return blocks.filter((block) => nonWhitespaceChars(block) > 0)
 }
 
-/** a:t drawing-textbox prose inside the main document body. */
 function bodyDrawingText(documentXml: string) {
   const parts: string[] = []
   for (const match of documentXml.matchAll(
@@ -208,19 +110,6 @@ function bodyDrawingText(documentXml: string) {
 const CDATA_OPEN = '<![CDATA['
 const CDATA_CLOSE = ']]>'
 
-/**
- * Character data of a custom-vocabulary part (customXml, charts) or an
- * unclassified/altChunk XML part. An index-based scan, not a tag-strip
- * regex: single-pass multi-character `<...>` removal is the incomplete
- * multi-character sanitization CodeQL flags, and it is genuinely lossy
- * (`<x><![CDATA[secret]]></x>` loses `secret` entirely, because the whole
- * CDATA token matches `<[^>]*>`). This walk reads every run between markup
- * tokens, so no run is dropped; `>` inside an attribute or comment is treated
- * as text, which
- * over-counts — the safe direction for a refuse-guard. CDATA content is real
- * character data, so it is included verbatim (entities there are literal,
- * never decoded).
- */
 function elementCharData(xml: string) {
   const parts: string[] = []
   const pushText = (text: string) => {
@@ -247,7 +136,6 @@ function elementCharData(xml: string) {
     }
     const gt = xml.indexOf('>', lt)
     if (gt === -1) {
-      // Unterminated markup token: keep the remainder as text, never drop it.
       pushText(xml.slice(lt))
       break
     }
@@ -280,7 +168,6 @@ function customStringValues(xml: string) {
 
 type AltChunkRef = { partName: string; missing: boolean }
 
-/** altChunk targets: rel-typed aFChunk parts, w:altChunk references, stray HTML. */
 function altChunkRefs(
   entries: Map<string, Uint8Array>,
   storyXml: Map<string, string>,
@@ -358,7 +245,6 @@ function altChunkRefs(
   return [...refs.values()]
 }
 
-/** w:t chars inside w:txbxContent blocks of the main document body. */
 export function countBodyTextboxChars(documentXml: string) {
   let chars = 0
   const blocks = /<w:txbxContent[\s\S]*?<\/w:txbxContent>/gi
@@ -367,15 +253,6 @@ export function countBodyTextboxChars(documentXml: string) {
   return chars
 }
 
-/**
- * Regions of a .docx source that extraction never reads. Denylist by
- * default: every part the package contains is required to be extracted,
- * provably empty, explicitly refused, or safely stripped at burn. The
- * classifier below names each known class; anything unclassified refuses.
- * Footnote/endnote bodies are covered when the extracted text contains them
- * (E43 appends them as a labelled trailing region), so runs extracted before
- * E43 still refuse.
- */
 export async function findUncoveredDocxRegions(
   sourceBytes: Buffer,
   extractedText = '',
@@ -385,13 +262,10 @@ export async function findUncoveredDocxRegions(
   try {
     entries = await loadOoxmlZipEntries(sourceBytes, limits)
   } catch {
-    // Unreadable here means extraction already failed upstream; nothing to add.
     return []
   }
   const regions = docxRegions(entries, extractedText, false)
   if (regions.length === 0) return regions
-  // Only text produced by Redact's own walker covers notes, revisions,
-  // comments and textboxes; legacy Mammoth text keeps the stricter checks.
   let walkerCoordinates = false
   try {
     walkerCoordinates =
@@ -401,9 +275,7 @@ export async function findUncoveredDocxRegions(
           limits,
         ),
       ).text === extractedText.trim()
-  } catch {
-    // Not walker coordinates; the burn refuses these runs on its own.
-  }
+  } catch {}
   return walkerCoordinates ? docxRegions(entries, extractedText, true) : regions
 }
 
@@ -445,15 +317,11 @@ function docxRegions(
   if (!mappedCoverage && uncoveredEndnoteChars >= UNEXAMINED_PART_MIN_CHARS)
     regions.push(regionLabel('endnotes', uncoveredEndnoteChars))
 
-  // Headers/footers: covered when the supplemental pass carried them into
-  // the extracted text, which also catches parts nothing references.
   for (const [name, xml] of storyXml) {
     if (mappedCoverage || !/^word\/(header|footer)/i.test(name)) continue
     pushChars(name, unexaminedChars(extractWordXmlText(xml), extractedText))
   }
 
-  // Tracked deletions and moves-from are invisible to extraction, so any
-  // block absent from the extracted text refuses at any size.
   for (const [name, xml] of storyXml) {
     let chars = 0
     for (const block of trackedRevisionBlocks(xml))
@@ -462,7 +330,6 @@ function docxRegions(
       regions.push(`tracked changes in ${name} (${chars} chars not examined)`)
   }
 
-  // Comments (and modern comment-author lists) are never extracted.
   for (const [name] of entries) {
     const lower = name.toLowerCase()
     const label = /^word\/comments.*\.xml$/i.test(lower)
@@ -477,7 +344,6 @@ function docxRegions(
 
   const documentXml = storyXml.get('word/document.xml')
   if (documentXml) {
-    // Body VML textboxes are dropped by mammoth; drawing textboxes the same.
     if (!mappedCoverage)
       pushChars('textboxes', countBodyTextboxChars(documentXml))
     pushChars(
@@ -486,7 +352,6 @@ function docxRegions(
     )
   }
 
-  // altChunk parts are whole embedded documents extraction never reads.
   const altChunkParts = new Set<string>()
   for (const ref of altChunkRefs(entries, storyXml)) {
     if (ref.missing) {
@@ -506,9 +371,6 @@ function docxRegions(
       )
   }
 
-  // docProps text scalars the reviewer never sees. Company/Manager/Template
-  // are stripped at burn like authorship, so only content-bearing scalars
-  // refuse here.
   const coreXml = decodePart(entries, 'docProps/core.xml')
   if (coreXml) {
     for (const [scalar, value] of docPropsScalarValues(coreXml)) {
@@ -542,10 +404,6 @@ function docxRegions(
     }
   }
 
-  // Template/config parts carry no prose in ordinary documents; any prose
-  // carrier text (w:t, deletions, drawing/math/field text) refuses. Style
-  // names, numbering patterns, and font names are template vocabulary and
-  // are not treated as prose (see the module header for the residual).
   for (const [name] of entries) {
     if (
       !/^word\/(styles.*\.xml|numbering.*\.xml|fontTable\.xml)$/i.test(name) &&
@@ -558,10 +416,6 @@ function docxRegions(
     if (xml) pushChars(name, unexaminedChars(partProseText(xml), extractedText))
   }
 
-  // The inversion: anything not classified above refuses. XML parts are
-  // text-scanned (custom vocabularies included); binary parts cannot prove
-  // themselves empty of text. Images under word/media are the one exception:
-  // pixels, which text extraction cannot read by design.
   for (const [name, payload] of entries) {
     const lower = name.toLowerCase()
     if (
@@ -608,7 +462,6 @@ function docxRegions(
   return regions
 }
 
-/** Fused-text regions of extracted PDF text, via the long-token signal. */
 export function findUncoveredPdfRegions(extractedText: string): string[] {
   const tokens = extractedText.split(/\s+/u).filter((token) => token !== '')
   let total = 0
@@ -664,15 +517,6 @@ function classifySource(
   return null
 }
 
-/**
- * Unexamined regions for a finalize candidate. Null sourceBytes means no
- * stored source was recorded (legacy runs predate the guard), so there is
- * nothing to compare against and this returns []. The caller marks those
- * runs unchecked; a stored source that fails to read never reaches here —
- * the caller refuses finalisation instead, since an unreadable source is
- * not evidence of coverage. Txt sources return [] by design (nothing
- * outside the extracted text can hide).
- */
 export async function findUncoveredRegions(input: {
   filename: string
   mimeType: string | null

@@ -6,40 +6,14 @@ import type {
 } from '@obiter/legal-source-provider'
 
 export interface PostgresMojRequestBudgetConfig {
-  /** Upstream HTTP attempts allowed across every replica in the window. */
   limit: number
-  /** Rolling window length in milliseconds. */
   windowMs: number
-  /** Bound on waiting to acquire a pooled connection. */
   connectTimeoutMs: number
-  /** Bound on waiting for the budget advisory lock. */
   lockTimeoutMs: number
-  /** Bound on any one statement in the charge transaction. */
   statementTimeoutMs: number
 }
 
-/**
- * The cluster-visible Find Case Law request budget.
- *
- * It lives on the application database (`DATABASE_URL`), the database every
- * API replica migrates at boot and may write, and is deliberately not the
- * legal corpus: a lane has no corpus writer, and licensed source material
- * must not carry operational request rows. Bulk ingestion runs with its own
- * corpus-writer connection and does not reach this ledger, so the shared
- * window today covers the API replicas only, not the ingestor.
- *
- * The window is persisted rows counted inside one transaction, not the
- * advisory lock. The lock only makes check-and-record atomic across replicas:
- * an advisory lock alone would serialise writers without holding the window,
- * so it could not answer "how many attempts in the last five minutes" after a
- * restart or on another replica. The database clock, not any replica's, is
- * the authority for both the write and the count, so clock skew cannot widen
- * or narrow the window.
- *
- * A row is a timestamp and nothing else: no URL, query text, subject, user
- * identity or matter data is persisted, so the ledger cannot reconstruct what
- * was fetched or by whom.
- */
+// Legal: Find Case Law material is licensed; operational request rows must not be written into the legal corpus database.
 export class PostgresMojRequestBudget implements MojRequestBudget {
   constructor(
     private readonly pool: Pool,
@@ -62,19 +36,12 @@ export class PostgresMojRequestBudget implements MojRequestBudget {
   async charge(): Promise<MojRequestCharge> {
     const client = await connectWithin(this.pool, this.config.connectTimeoutMs)
     if (!client) {
-      // Fail closed: the caller dispatches no request it cannot show is
-      // inside the allowance.
       console.error('Find Case Law request budget ledger unavailable')
       return { status: 'unavailable' }
     }
 
     try {
       await client.query('begin')
-      // Bound the wait for the cluster-wide budget lock. Postgres defaults
-      // both timeouts to 0 (wait forever), so a wedged holder would stall
-      // every charge on every replica instead of failing closed. Both are
-      // transaction-local, so the pooled connection returns to its previous
-      // settings on commit or rollback.
       await client.query(`select set_config('lock_timeout', $1, true)`, [
         `${this.config.lockTimeoutMs}ms`,
       ])
@@ -84,9 +51,6 @@ export class PostgresMojRequestBudget implements MojRequestBudget {
       await client.query(
         `select pg_advisory_xact_lock(hashtext('legal_moj_request_budget'))`,
       )
-      // Housekeeping only: the count below filters on time, so an
-      // out-of-window row is already excluded even before it is swept.
-      // Deleting keeps the table bounded by the live window.
       await client.query(
         `delete from legal_moj_request_charges
           where charged_at <= now() - ($1::bigint * interval '1 millisecond')`,
@@ -111,9 +75,6 @@ export class PostgresMojRequestBudget implements MojRequestBudget {
 
       if (Number(window.rows[0]?.count ?? '0') >= this.config.limit) {
         await client.query('rollback')
-        // The oldest in-window charge is what frees the next slot, so the
-        // caller gets a meaningful wait rather than a fixed guess. At least
-        // one second, so a rounding error cannot invite an immediate retry.
         const retryAfterSeconds = Math.max(
           1,
           Math.ceil(Number(window.rows[0]?.retry_after_seconds ?? '1')),
@@ -126,8 +87,6 @@ export class PostgresMojRequestBudget implements MojRequestBudget {
       return { status: 'allowed' }
     } catch {
       await rollbackQuietly(client)
-      // No URL, query, subject or identity is logged: the error names the
-      // failure, nothing about the attempt.
       console.error('Find Case Law request budget ledger unavailable')
       return { status: 'unavailable' }
     } finally {
@@ -136,19 +95,6 @@ export class PostgresMojRequestBudget implements MojRequestBudget {
   }
 }
 
-/**
- * Compose the cluster-wide budget with the per-process backstop.
- *
- * The per-process limiter is charged first so it never spends a shared slot on
- * an attempt this replica refuses, and the shared charge is the last thing that
- * happens before dispatch, so an attempt refused here reaches no provider. The
- * backstop cannot widen the shared window, only tighten it: with the process
- * limit at or above the shared limit it rarely binds, and if it does it can
- * only refuse, never admit past the shared ledger.
- *
- * With no shared budget configured (single-process development, tests), the
- * process limiter is the whole budget, exactly as before this change.
- */
 export function composeMojRequestBudget(
   shared: MojRequestBudget | undefined,
   local: MojRequestBudget,
@@ -163,11 +109,6 @@ export function composeMojRequestBudget(
   }
 }
 
-/**
- * Acquire a pooled client within `timeoutMs`, or null. A client that arrives
- * after the timeout is still released, so a bounded charge never leaks a
- * connection back into the pool it could not get one from.
- */
 async function connectWithin(
   pool: Pool,
   timeoutMs: number,
@@ -188,8 +129,6 @@ async function connectWithin(
   if (timer) clearTimeout(timer)
 
   if (client === null) {
-    // The acquisition may still resolve after the timeout won; release that
-    // client rather than leaking it.
     void connecting.then((late) => late.release()).catch(() => {})
     return null
   }

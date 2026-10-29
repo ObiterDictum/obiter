@@ -102,11 +102,6 @@ function auditMetadata(
 
 export async function createAndExecuteVerificationRun(input: {
   pool: Pool
-  /**
-   * Where legal-corpus reads run. Separate from `pool` so a corpus that is not
-   * the application database is read through the corpus seam; the run, its
-   * findings and its audit rows are written to `pool` as before.
-   */
   corpusPool: Pick<Pool, 'query'>
   storage: StorageService
   user: AuthenticatedOrgUser
@@ -138,14 +133,10 @@ export async function createAndExecuteVerificationRun(input: {
       documentVersionId: locked.versionId,
     })
     if (existing?.status === 'running' && leaseIsLive(existing)) {
-      // A genuinely active request is never stolen: its lease still covers now.
       await client.query('commit')
       return { ok: true, runId: existing.id }
     }
     if (existing?.status === 'running') {
-      // A `running` row whose lease has expired has no live executor. Mark it
-      // interrupted (monotonic, findings dropped) and start a fresh run rather
-      // than silently reusing partially executed state.
       await interruptVerificationRun(client, {
         organisationId: input.user.organisationId,
         runId: existing.id,
@@ -167,8 +158,6 @@ export async function createAndExecuteVerificationRun(input: {
       })
     }
     if (existing?.status === 'queued') {
-      // A queued row has no execution behind it yet, so it is resumed rather
-      // than replaced.
       runId = existing.id
     } else {
       runId = await insertVerificationRun(client, {
@@ -266,9 +255,6 @@ async function executeVerificationRun(input: {
       matterDocumentId: input.version.documentId,
       objectKey: input.version.objectKey,
     })
-    // Renew after the model read, the slowest dependency, and then at each
-    // batch boundary inside the checks. Renewal happens at explicit execution
-    // boundaries, never on an interval, so a hung process cannot hold the lease.
     await renew()
     const extracted = extractVerificationCandidates(model)
     findings = await collectVerificationFindings(
@@ -304,8 +290,6 @@ async function executeVerificationRun(input: {
       leaseToken: input.leaseToken,
     })
     if (!completed) {
-      // This executor's lease was reclaimed while it ran. The replacement owns
-      // the version now; this attempt must not overwrite it or write findings.
       await client.query('rollback')
       console.warn('verification_run_reclaimed', {
         runId: input.runId,
