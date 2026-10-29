@@ -14,6 +14,7 @@ import {
 } from '../fixtures/fixture-parts'
 
 import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
+import { expectPartsByteIdentical } from './preservation.test-support'
 
 const TRACKING = { author: 'Reviewer', date: '2026-08-12T12:00:00.000Z' }
 const PNG_BASE64 =
@@ -713,21 +714,12 @@ describe('structural link and reference refusals', () => {
     ])
     const output = await serialiseDocx(document)
     const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
-    const before = await JSZip.loadAsync(input)
-    const after = await JSZip.loadAsync(output)
-    for (const name of [
+    await expectPartsByteIdentical(input, output, [
       'word/styles.xml',
       'word/numbering.xml',
       'word/media/image1.png',
       'word/header1.xml',
-    ]) {
-      const original = before.file(name)
-      const edited = after.file(name)
-      if (!original || !edited) throw new Error(`Missing part ${name}.`)
-      expect(await edited.async('uint8array')).toEqual(
-        await original.async('uint8array'),
-      )
-    }
+    ])
   })
 })
 

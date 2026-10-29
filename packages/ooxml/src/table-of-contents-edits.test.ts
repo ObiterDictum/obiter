@@ -9,6 +9,7 @@ import {
   parseDocx,
   serialiseDocx,
 } from './index'
+import { expectPartsByteIdentical } from './preservation.test-support'
 
 const TRACKING = { author: 'Reviewer', date: '2026-08-12T12:00:00.000Z' }
 
@@ -404,9 +405,7 @@ describe('table-of-contents edits', () => {
       { type: 'insert_table_of_contents', paragraphId: anchor.id, offset: 5 },
     ])
     const output = await serialiseDocx(document)
-    const before = await JSZip.loadAsync(input)
-    const after = await JSZip.loadAsync(output)
-    for (const name of [
+    await expectPartsByteIdentical(input, output, [
       'word/styles.xml',
       'word/numbering.xml',
       'word/header1.xml',
@@ -414,14 +413,7 @@ describe('table-of-contents edits', () => {
       'word/footer1.xml',
       'word/footer2.xml',
       'word/media/image1.png',
-    ]) {
-      const original = before.file(name)
-      const edited = after.file(name)
-      if (!original || !edited) throw new Error(`Missing part ${name}.`)
-      expect(await edited.async('uint8array')).toEqual(
-        await original.async('uint8array'),
-      )
-    }
+    ])
   })
 })
 

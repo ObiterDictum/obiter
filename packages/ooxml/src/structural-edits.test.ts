@@ -11,6 +11,7 @@ import {
   reconcileDocumentEdits,
   serialiseDocx,
 } from './index'
+import { expectPartsByteIdentical } from './preservation.test-support'
 
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -250,20 +251,11 @@ describe('structural edits', () => {
     ])
     const output = await serialiseDocx(document)
     const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
-    const before = await JSZip.loadAsync(input)
-    const after = await JSZip.loadAsync(output)
-    for (const name of [
+    await expectPartsByteIdentical(input, output, [
       'word/styles.xml',
       'word/numbering.xml',
       'word/media/image1.png',
-    ]) {
-      const original = before.file(name)
-      const edited = after.file(name)
-      if (!original || !edited) throw new Error(`Missing part ${name}.`)
-      expect(await edited.async('uint8array')).toEqual(
-        await original.async('uint8array'),
-      )
-    }
+    ])
     const xml = await zipText(output, 'word/document.xml')
     expect(xml).toContain('Merged cell')
     expect(xml).toContain('w:sdt')
