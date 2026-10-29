@@ -62,9 +62,9 @@ describe('open work', () => {
     // Newest first, as the API sends them.
     const runs = [newer, older]
     expect(latestRunsPerDocument(runs)).toEqual([newer])
-    expect(openWorkCount({ verificationRuns: runs, redactionRuns: [] })).toEqual(
-      { verify: 1, redact: 0, total: 1 },
-    )
+    expect(
+      openWorkCount({ verificationRuns: runs, redactionRuns: [] }),
+    ).toEqual({ verify: 1, redact: 0, total: 1 })
     expect(items({ verificationRuns: runs })).toHaveLength(1)
   })
 
@@ -81,7 +81,10 @@ describe('open work', () => {
         dismissedCount: 2,
       },
     })
-    expect(openWorkCount({ verificationRuns: [dismissed], redactionRuns: [] }).verify).toBe(1)
+    expect(
+      openWorkCount({ verificationRuns: [dismissed], redactionRuns: [] })
+        .verify,
+    ).toBe(1)
   })
 
   it('counts a run bound to an earlier version, because it is still unread', () => {
@@ -97,7 +100,9 @@ describe('open work', () => {
         dismissedCount: 0,
       },
     })
-    expect(openWorkCount({ verificationRuns: [stale], redactionRuns: [] }).verify).toBe(2)
+    expect(
+      openWorkCount({ verificationRuns: [stale], redactionRuns: [] }).verify,
+    ).toBe(2)
   })
 
   it('counts a stopped run once, and a run still going not at all', () => {
@@ -112,7 +117,9 @@ describe('open work', () => {
         dismissedCount: 0,
       },
     })
-    expect(openWorkCount({ verificationRuns: [stopped], redactionRuns: [] }).verify).toBe(1)
+    expect(
+      openWorkCount({ verificationRuns: [stopped], redactionRuns: [] }).verify,
+    ).toBe(1)
     expect(
       openWorkCount({
         verificationRuns: [run({ id: 'vrun_live', status: 'running' })],

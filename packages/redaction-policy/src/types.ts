@@ -25,10 +25,17 @@ export interface RedactionSpan {
   suggestion: SpanSuggestion
 }
 
-export type Decisions = Record<
-  string,
-  { decision: SpanDecision; decidedBy: string; decidedAt: string }
->
+export type DecisionRecord = {
+  decision: SpanDecision
+  decidedBy: string
+  decidedAt: string
+  /** The deciding person's member name, added when the API reads a run so a
+   * reviewer reads a colleague's name rather than an internal id. It is never
+   * stored: `decisions_json` keeps only the id the decision was made under. */
+  decidedByName?: string | null
+}
+
+export type Decisions = Record<string, DecisionRecord>
 
 /**
  * Why a finalized run downgraded to text instead of the burned container
