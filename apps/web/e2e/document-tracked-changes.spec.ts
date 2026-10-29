@@ -20,40 +20,23 @@ import {
 } from './editor-chrome'
 import { verifyEmailInDb } from './support'
 
-/*
- * E9 browser journey: tracked changes must survive the whole product path.
- * A real browser decides the native selection the caret mirror reports, the
- * panel's rendered active state, and the exported DOCX a reviewer reopens;
- * the mounted suites cover the wire shapes and the decision engine.
- *
- * The fixture is generated at runtime into /tmp from the OOXML builder so the
- * imported revisions are real w:ins/w:del/move parts, not a committed file.
- * The account is synthetic, created through the product's own sign-up
- * endpoint, and email verification is marked in the task-owned test database.
- */
-
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../..',
 )
 const FIXTURE_PATH = '/tmp/e9-tracked-changes-fixture.docx'
-/** The same fixture plus a one-sided move container the engine cannot decide. */
 const MIXED_PATH = '/tmp/e9-tracked-changes-mixed-fixture.docx'
 const INLINE_PATH = '/tmp/e9-inline-tracked-changes-fixture.docx'
 const MIXED_MARKUP =
   '<w:p><w:moveFromRangeStart w:id="40" w:name="orphanMove" w:author="Jane Example" w:date="2026-08-10T10:06:00Z"/><w:moveFrom w:id="30" w:author="Jane Example" w:date="2026-08-10T10:06:00Z"><w:r><w:delText>Stranded move</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="40"/></w:p>'
 const MIXED_ANCHOR =
   '<w:sectPr><w:headerReference w:type="default" r:id="rId5"/>'
-/** A plain untracked paragraph whose single run the mid-run format splits. */
 const PLAIN = 'Alice Example overview'
-/** Five code units, so the selection never cuts a surrogate pair. */
 const SELECTED = 'Alice'
 const USER_NAME = 'E9 User'
 
 function buildFixture() {
-  // Always rebuild: a cached fixture keeps the shape the builder emitted when
-  // it was written, so an existsSync guard silently reruns stale markup.
   for (const fixturePath of [FIXTURE_PATH, MIXED_PATH]) {
     if (existsSync(fixturePath)) rmSync(fixturePath)
   }
@@ -63,8 +46,6 @@ function buildFixture() {
       '-e',
       `const { buildOoxmlFixture } = await import('${REPO_ROOT}/packages/ooxml/fixtures/builder.ts'); const { default: JSZip } = await import('jszip'); const bytes = await buildOoxmlFixture('full-fidelity-with-w14-ids'); await Bun.write('${FIXTURE_PATH}', bytes); const zip = await JSZip.loadAsync(bytes); const xml = await zip.file('word/document.xml').async('string'); zip.file('word/document.xml', xml.replace('${MIXED_ANCHOR}', '${MIXED_MARKUP}' + '${MIXED_ANCHOR}')); await Bun.write('${MIXED_PATH}', await zip.generateAsync({ type: 'uint8array' }))`,
     ],
-    // jszip is an @obiter/ooxml dependency — the eval resolves it from that
-    // package's directory, not from the repository root.
     { cwd: `${REPO_ROOT}/packages/ooxml`, stdio: 'pipe' },
   )
 }
@@ -95,7 +76,6 @@ async function signIn(page: Page, email: string, password: string) {
   await page.waitForLoadState('networkidle')
 }
 
-/** Opens the generated revision fixture through the product's own navigation. */
 async function openFixtureDocument(
   page: Page,
   email: string,
@@ -165,7 +145,6 @@ async function focusParagraph(page: Page, text: string) {
   throw new Error(`could not focus the paragraph containing "${text}"`)
 }
 
-/** A native within-paragraph selection the custom selection mirrors. */
 async function selectFirst(page: Page, text: string, units: number) {
   await focusParagraph(page, text)
   await page.keyboard.press('Home')
@@ -174,14 +153,8 @@ async function selectFirst(page: Page, text: string, units: number) {
   }
 }
 
-/**
- * Select every decidable row, then decide them in one request. The bulk bar
- * names the exact number of changes it affects; a rejection asks once more.
- */
 async function decideSelection(page: Page, action: 'Accept' | 'Reject') {
   const boxes = panel(page).getByRole('checkbox')
-  // The list arrives with the tracked-changes query; selecting before the
-  // first row paints would build a "0 changes" decision.
   await expect(boxes.first()).toBeVisible({ timeout: 15_000 })
   const count = await boxes.count()
   const label = `${String(count)} ${count === 1 ? 'change' : 'changes'}`
@@ -197,10 +170,6 @@ async function decideSelection(page: Page, action: 'Accept' | 'Reject') {
 }
 
 async function openChangesPanel(page: Page) {
-  // The Review menu's Changes row is the chrome's own control, with its count
-  // when it has one; the panel's filter segment is called "Changes 5" without
-  // parentheses, and clicking that would filter the list the test counts. The
-  // chrome mounts once the document model arrives, so retry the open.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const opened = await openMenu(page, 'Review')
       .then(() => true)
@@ -212,7 +181,6 @@ async function openChangesPanel(page: Page) {
       .then(() => true)
       .catch(() => false)
     if (!clicked) continue
-    // The row keeps the menu open (it is a toggle); close it before counting.
     await closeMenu(page).catch(() => undefined)
     const shown = await expect(panel(page))
       .toBeVisible({ timeout: 5_000 })
@@ -224,8 +192,6 @@ async function openChangesPanel(page: Page) {
 }
 
 async function reviewToggle(page: Page, on: boolean) {
-  // Same mount race as openChangesPanel: the header switch appears with the
-  // document model, so retry until it reports the expected state.
   const toggle = trackChangesSwitch(page)
   await expect(toggle).toBeVisible({ timeout: 15_000 })
   await setTrackChanges(page, on)
@@ -259,11 +225,7 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
 
   await openChangesPanel(page)
 
-  // The imported revisions render with author, kind and covered text — five
-  // rows: ins, del, the move (one row for both halves) and the two property
-  // markers.
   const list = panel(page).getByRole('list')
-  // Five tracked changes plus the fixture's one imported comment thread.
   await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 15_000 })
   await expect(list).toContainText('Alice Example')
   await expect(list).toContainText('Jane Example')
@@ -271,11 +233,8 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   await expect(list).toContainText('Deletion')
   await expect(list).toContainText('Move')
   await expect(list).toContainText('Formatting')
-  // The counts name what is there, and the move is counted once.
   await expect(panel(page)).toContainText('4 changes · 1 move · 1 comment')
 
-  // No change is active yet; the Review menu's single Accept/Reject publish
-  // their reason as a description, never as part of the command's name.
   await openMenu(page, 'Review')
   const acceptChange = menuItem(page, 'Accept change')
   await expect(acceptChange).toBeDisabled()
@@ -289,17 +248,12 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   ).toBeVisible()
   await closeMenu(page)
 
-  // Panel navigation marks the active row and reveals it in the document.
-  // Rows are in document order and the comment thread is row 1, so the first
-  // change row is row 2.
   await list.getByRole('button', { name: 'Show this change' }).first().click()
   await expect(panel(page)).toContainText('2 of 6')
   await panel(page).getByRole('button', { name: 'Next' }).click()
   await expect(panel(page)).toContainText('3 of 6')
   await expect(list.locator('li[aria-current="true"]')).toHaveCount(1)
 
-  // Rejecting the active change from the ribbon writes one immutable
-  // version; the decided change leaves the list and its slot names the next.
   const rejectResponse = page.waitForResponse(
     (incoming) =>
       /\/api\/documents\/[^/]+\/tracked-changes\/decision$/u.test(
@@ -309,15 +263,9 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   await runMenuCommand(page, 'Review', 'Reject change')
   const rejected = await rejectResponse
   expect(rejected.status(), await rejected.text()).toBe(201)
-  // Four remaining changes plus the fixture's comment thread.
   await expect(list.getByRole('listitem')).toHaveCount(5, { timeout: 15_000 })
-  // The rejected row left; the review slot now names the next decidable
-  // change, which is the third row of the five that remain (a comment thread
-  // is row one).
   await expect(panel(page)).toContainText('3 of 5')
 
-  // Selecting every remaining row and accepting it lands them in one atomic
-  // version; the bar named exactly how many changes that would be.
   const acceptAllResponse = page.waitForResponse(
     (incoming) =>
       /\/api\/documents\/[^/]+\/tracked-changes\/decision$/u.test(
@@ -327,12 +275,8 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   await decideSelection(page, 'Accept')
   const accepted = await acceptAllResponse
   expect(accepted.status(), await accepted.text()).toBe(201)
-  // Every tracked change is decided; the document's comment thread remains,
-  // so the panel reports no changes rather than an empty list.
   await expect(panel(page)).toContainText('0 changes', { timeout: 15_000 })
 
-  // The export resolves every marker: no tracked element survives, the
-  // accepted insertion stayed, and the rejected deletion kept its text.
   const downloadPromise = page.waitForEvent('download')
   await runMenuCommand(page, 'File', 'Export')
   const download = await downloadPromise
@@ -345,9 +289,6 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   expect(documentXml).toContain('Inserted')
   expect(documentXml).toContain('Deleted')
 
-  // A fresh context reads the decided state back: no tracked change remains.
-  // The imported comment thread is still a row, so the panel reports zero
-  // changes rather than pretending the document has nothing to read.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
@@ -369,8 +310,6 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   buildFixture()
   const { email, password } = await createAccount(request)
   const matter = `E9 undecidable ${String(Date.now())}`
-  // Capture the list response so the test knows the server's own verdict on
-  // the undecidable change, not a client-side guess.
   const listResponse = page.waitForResponse(
     (incoming) =>
       /\/api\/documents\/[^/]+\/tracked-changes$/u.test(incoming.url()) &&
@@ -393,24 +332,16 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
 
   await openChangesPanel(page)
 
-  // Six rows: the supported revisions (the move pair is one row) plus the
-  // stranded move, which renders marked and disabled while the row still
-  // navigates to it.
   const list = panel(page).getByRole('list')
-  // Six changes plus the fixture's one imported comment thread.
   await expect(list.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 })
   const undecidableRow = list.locator('li', { hasText: 'Stranded move' })
   await expect(undecidableRow).toContainText('This move cannot be decided here')
-  // A move that cannot be paired offers no decision at all: one row that says
-  // who, what moved and why, rather than two dead buttons.
   await expect(undecidableRow.getByRole('button')).toHaveCount(1)
   await expect(
     undecidableRow.getByRole('button', { name: 'Show this change' }),
   ).toBeVisible()
   await expect(undecidableRow.getByText("Move · can't be paired")).toBeVisible()
   await undecidableRow.getByRole('button', { name: 'Show this change' }).click()
-  // Rows are in document order, so the stranded move is last: seven rows
-  // including the fixture's comment thread.
   await expect(panel(page)).toContainText('7 of 7')
   await openMenu(page, 'Review')
   const acceptChange = menuItem(page, 'Accept change')
@@ -424,8 +355,6 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   ).toBeVisible()
   await closeMenu(page)
 
-  // The undecidable row offers no checkbox, so a selection can only ever name
-  // supported changes; the request carries their ids with the move's pair.
   await expect(undecidableRow.getByRole('checkbox')).toHaveCount(0)
   const bulkResponse = page.waitForResponse(
     (incoming) =>
@@ -442,15 +371,11 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   expect(payload.changeIds).toHaveLength(6)
   expect(payload.changeIds).not.toContain(undecidableId)
 
-  // The undecidable change is the only one left — still listed, still marked.
-  // The stranded move and the fixture's comment thread are what remain.
   await expect(list.getByRole('listitem')).toHaveCount(2, { timeout: 15_000 })
   await expect(list.locator('li', { hasText: 'Stranded move' })).toContainText(
     'This move cannot be decided here',
   )
 
-  // The export keeps its markup untouched: nothing decided it silently, and
-  // the supported changes resolved around it.
   const downloadPromise = page.waitForEvent('download')
   await runMenuCommand(page, 'File', 'Export')
   const xml = zipPart(await (await downloadPromise).path(), 'word/document.xml')
@@ -460,14 +385,12 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   expect(xml).not.toContain('<w:ins')
   expect(xml).not.toContain('<w:del ')
 
-  // A fresh context reads the same honest state back after the decision.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter, MIXED_PATH)
     await openChangesPanel(reloaded)
     const reloadedList = panel(reloaded).getByRole('list')
-    // The undecidable move and the fixture's comment thread remain.
     await expect(reloadedList.getByRole('listitem')).toHaveCount(2, {
       timeout: 15_000,
     })
@@ -487,12 +410,9 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   const matter = `E9 tracking ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  // Wait for the model-backed chrome before turning tracking on.
   await openChangesPanel(page)
   await setTrackChanges(page, true)
 
-  // Bold only the first five code units of an untouched single-run
-  // paragraph; the run must split so the rest keeps its properties.
   await selectFirst(page, PLAIN, SELECTED.length)
   await page.getByRole('button', { name: 'Bold', exact: true }).click()
 
@@ -505,18 +425,13 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   const saved = await saveResponse
   expect(saved.status(), await saved.text()).toBe(201)
 
-  // The saved version lists the new property change under this session's
-  // author alongside the imported revisions.
   await openChangesPanel(page)
   const list = panel(page).getByRole('list')
-  // Six changes plus the fixture's one imported comment thread.
   await expect(list.getByRole('listitem')).toHaveCount(7, { timeout: 15_000 })
   const recorded = list.locator('li', { hasText: USER_NAME }).first()
   await expect(recorded).toBeVisible()
   await expect(recorded).toContainText('Formatting')
 
-  // The export carries a real w:rPrChange whose covered run is split off,
-  // leaving the untouched tail intact in its own run.
   const pendingDownload = page.waitForEvent('download')
   await runMenuCommand(page, 'File', 'Export')
   const pendingXml = zipPart(
@@ -527,9 +442,6 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   expect(pendingXml).toContain(`>${SELECTED}</w:t>`)
   expect(pendingXml).toContain(' Example overview')
 
-  // Rejecting the recorded format restores the run's pre-change properties;
-  // the text and its neighbours are untouched, and the export carries no
-  // leftover marker or stray bold.
   const decisionResponse = page.waitForResponse(
     (incoming) =>
       /\/api\/documents\/[^/]+\/tracked-changes\/decision$/u.test(
@@ -539,8 +451,6 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   await decideSelection(page, 'Reject')
   const decided = await decisionResponse
   expect(decided.status(), await decided.text()).toBe(201)
-  // Every tracked change is decided; the document's comment thread remains,
-  // so the panel reports no changes rather than an empty list.
   await expect(panel(page)).toContainText('0 changes', { timeout: 15_000 })
 
   const decidedDownload = page.waitForEvent('download')
@@ -549,10 +459,6 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
     await (await decidedDownload).path(),
     'word/document.xml',
   )
-  // The rejected format restores the run's pre-change properties: the pieces
-  // stay split runs (decisions never merge runs), so the paragraph's text is
-  // contiguous across `</w:t>` boundaries only — assert the pieces and the
-  // absent marker rather than one literal text run.
   expect(decidedXml).not.toContain('PrChange')
   expect(decidedXml).toContain(`>${SELECTED}</w:t>`)
   expect(decidedXml).toContain(' Example overview')
@@ -568,11 +474,8 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   const matter = `E9 granular ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  // The fixture's settings.xml carries w:trackRevisions, so the Review toggle
-  // must open ON without a click — the persisted state, not a default.
   await reviewToggle(page, true)
 
-  // Substitute the quantity inside the first paragraph's single run.
   await focusParagraph(page, PLAIN)
   await page.keyboard.press('Home')
   await page.keyboard.press('End')
@@ -600,21 +503,17 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   const docxPath = await (await downloadPromise).path()
   const documentXml = zipPart(docxPath, 'word/document.xml')
   const settingsXml = zipPart(docxPath, 'word/settings.xml')
-  // Only the changed token is wrapped; the sentence around it stays live runs.
   expect(documentXml).toContain('<w:delText>Alice</w:delText>')
   expect(documentXml).toContain('>Alicia</w:t>')
   expect(documentXml).not.toContain(`<w:delText>${PLAIN}`)
   expect(settingsXml).toContain('trackRevisions')
 
-  // A fresh context reopens with tracking still on — the flag persisted.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter)
     const tracking = await reviewToggle(reloaded, true)
 
-    // Flip the toggle off and save: a lone flip is a settings-only write —
-    // the request carries an empty operation list and the pending value.
     await tracking.click()
     await expect(trackChangesSwitch(reloaded)).not.toBeChecked()
     const settingsSave = reloaded.waitForResponse(
@@ -642,8 +541,6 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
     await fresh.close()
   }
 
-  // A third context reads the persisted off state back: the toggle must not
-  // reopen on a default or on the stale value an earlier tab held.
   const reread = await browser.newContext()
   const rereadPage = await reread.newPage()
   try {
@@ -707,8 +604,6 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
   await expect(insertion).toHaveAttribute('aria-current', 'true')
   const selectedRow = panel(page).locator('li[aria-current="true"]')
   await expect(selectedRow).toContainText('revised')
-  // Append at the unchanged editable paragraph end. Tracking is an independent
-  // session toggle; explicitly switch it off for this ordinary follow-up edit.
   await setTrackChanges(page, false)
   await target.click()
   await editor(page).press('Control+End')

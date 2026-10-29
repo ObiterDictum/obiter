@@ -2,19 +2,6 @@ import { CalendarBlank, CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { cn } from './lib/cn'
 
-/**
- * DatePicker — a date field for a UK legal workspace: the visible and typed
- * format is dd/mm/yyyy, and the value crossing the component boundary is an
- * ISO `YYYY-MM-DD` string (or '' for no date). The browser's
- * `<input type="date">` renders in the browser's locale, which put mm/dd/yyyy
- * in front of every user here, so the field is a text input with its own
- * calendar rather than a formatted native control.
- *
- * The calendar expands beneath the field instead of floating: a date filter
- * sits in a side column with room below it, and a floating layer would tie the
- * search route to the shell's whole overlay graph for one grid.
- */
-
 const monthNames = [
   'January',
   'February',
@@ -31,13 +18,11 @@ const monthNames = [
 ]
 const weekdayInitials = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
-/** dd/mm/yyyy to ISO, or null when the text is not a real date. */
 export function parseDdMmYyyy(text: string): string | null {
   const match = text.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (!match) return null
   const [, day, month, year] = match
   const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
-  // Rejects 31/02 and friends: the components must survive the round trip.
   if (
     date.getUTCDate() !== Number(day) ||
     date.getUTCMonth() !== Number(month) - 1
@@ -47,7 +32,6 @@ export function parseDdMmYyyy(text: string): string | null {
   return toIsoDate(date)
 }
 
-/** ISO (YYYY-MM-DD) to dd/mm/yyyy, or '' when there is no date. */
 export function formatDdMmYyyy(iso: string): string {
   const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   return match ? `${match[3]}/${match[2]}/${match[1]}` : ''
@@ -57,7 +41,6 @@ function toIsoDate(date: Date) {
   return date.toISOString().slice(0, 10)
 }
 
-/** The days of a month grid, Monday first, with blanks before the 1st. */
 export function monthCells(year: number, month: number): Array<number | null> {
   const firstWeekday = (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
@@ -69,7 +52,6 @@ export function monthCells(year: number, month: number): Array<number | null> {
 
 export interface DatePickerProps {
   label?: ReactNode
-  /** ISO `YYYY-MM-DD`, or '' for no date. */
   value: string
   onChange: (iso: string) => void
   name?: string
@@ -88,10 +70,6 @@ export function DatePicker({
   const id = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
-  // `draft` holds the typed text while it is being edited: half a date
-  // ("12/0") is not a value, and pushing it up would either invent one or
-  // fight the user's keystrokes. Null means "show the value", so an external
-  // change (a cleared filter chip) needs no effect to reach the field.
   const [draft, setDraft] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [visibleMonth, setVisibleMonth] = useState(() => monthOf(value))
@@ -103,8 +81,6 @@ export function DatePicker({
     const iso = parseDdMmYyyy(nextText)
     if (iso !== null) onChange(iso)
     else if (nextText.trim() === '') onChange('')
-    // Anything else is not a date: fall back to what is committed rather
-    // than leaving text that claims a value the filter does not hold.
     setDraft(null)
   }
 

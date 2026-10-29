@@ -39,7 +39,6 @@ describe('section and break edit contracts', () => {
         pageSize: { width: 16_838, height: 11_906 },
       }).success,
     ).toBe(false)
-    // A consistent pair and a size without an orientation both parse.
     expect(
       parse({
         type: 'set_section_properties',

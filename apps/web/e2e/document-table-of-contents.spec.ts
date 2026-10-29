@@ -6,23 +6,6 @@ import { fileURLToPath } from 'node:url'
 import { openRibbonTab } from './editor-chrome'
 import { closeMenu, openMenu } from './editor-chrome'
 
-/*
- * E7c browser journey: the References ribbon's Table of contents control
- * must refuse honestly while the document holds no heading the field can
- * list, then paint a pending multi-paragraph field — one entry per heading
- * with its `PAGEREF` resolved against the laid-out page — and write the
- * stored `TOC` field on save so a fresh context reads the same entries
- * back. Only a real browser decides the pending fold's paint, the
- * bookmark→page resolution and the re-parse; the mounted suites cover the
- * drafts, the fold, the save plan and the writer round-trip.
- *
- * The fixture carries a `Heading 1` style with no explicit outline level:
- * styling a paragraph exercises the built-in styleId fallback end to end.
- * The account is synthetic and created through the product's own sign-up
- * endpoint; verification is marked directly in the task-owned test
- * database, never the shared one.
- */
-
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
 const HEADING = 'E4 Heading'
@@ -67,10 +50,6 @@ test('table of contents refuses without headings, then paints, saves and reloads
     }
   })
 
-  // With no heading the control is a real refusal, not a `soon` chip: the
-  // accessible name carries the reason the field cannot be placed. A caret
-  // must sit in a paragraph first — before it does, the unanchored reason
-  // is the honest one.
   await focusParagraph(page, 'Alpha item')
   await openRibbon(page, 'References')
   const refused = tocButton(page)
@@ -82,9 +61,6 @@ test('table of contents refuses without headings, then paints, saves and reloads
   ).toBeVisible()
   await shot(page, '01-no-headings-refusal')
 
-  // Style a paragraph as Heading 1 through the gallery. The style has no
-  // explicit outline level — the built-in styleId fallback is what admits
-  // it to the field's `\o "1-3"` range.
   await focusParagraph(page, HEADING)
   await openMenu(page, 'Format')
   const headingStyle = page.getByRole('menuitemradio', { name: 'Heading 1' })
@@ -92,27 +68,17 @@ test('table of contents refuses without headings, then paints, saves and reloads
   await expect(headingStyle).toHaveAttribute('aria-checked', 'true')
   await closeMenu(page)
 
-  // The caret in an ordinary paragraph takes the pending field: one folded
-  // entry paragraph per heading, its `PAGEREF` resolving through the
-  // bookmark→page map, the anchor's text unchanged in the editable stream.
   await focusParagraph(page, 'Alpha item')
   await openRibbon(page, 'References')
   await expect(tocButton(page)).toBeEnabled()
   await tocButton(page).click()
   await expect(headingParagraphs(page)).toHaveCount(2)
-  // The folded entry is the second element carrying the heading's text; its
-  // `PAGEREF` paints the heading's page.
   await expect(headingParagraphs(page).nth(1)).toContainText('1')
   await shot(page, '02-pending-contents')
 
   await saveAndWait(page)
   await shot(page, '03-saved')
 
-  // The journey must still save after writing the field — earlier slices
-  // shipped a refused-second-save defect that single-save journeys could
-  // not see. Saving is disabled while the workspace is clean, so a small
-  // edit gives the second save real work; the stored field must not
-  // duplicate its entries.
   await focusParagraph(page, 'Alpha item')
   await page.keyboard.press('End')
   await page.keyboard.type(' E7CSECOND')
@@ -128,8 +94,6 @@ test('table of contents refuses without headings, then paints, saves and reloads
     expect.objectContaining({ type: 'insert_table_of_contents' }),
   )
 
-  // A fresh context reads the stored field back: the generated entry
-  // paragraph and its resolved page number are real document content now.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {

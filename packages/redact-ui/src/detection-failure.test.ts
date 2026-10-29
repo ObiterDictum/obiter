@@ -36,7 +36,6 @@ function failedRun(overrides: Partial<RedactionRun>): RedactionRun {
 
 describe('detectionFailureMessage', () => {
   it('never describes a Word document failure in PDF words', () => {
-    // The stored reason came from a PDF run; the reviewer is holding a .docx.
     const message = detectionFailureMessage(
       failedRun({
         summary: {

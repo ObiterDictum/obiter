@@ -1,19 +1,11 @@
 import { z } from 'zod'
 
-/**
- * Organisation, membership and the authenticated-user view. Split out of the
- * contracts barrel so that file stays under the RULES.md ceiling; the barrel
- * re-exports this module, so `@obiter/contracts` is still the one import path.
- */
-
 export const userRoleSchema = z.enum(['owner', 'admin', 'member'])
 export type UserRole = z.infer<typeof userRoleSchema>
 
 export const organisationPlanSchema = z.enum(['private_beta'])
 export type OrganisationPlan = z.infer<typeof organisationPlanSchema>
 
-// role is nullable: a newly self-registered user has no organisation and no
-// role until they explicitly create one. It is set to 'owner' on org creation.
 export const currentUserSchema = z.object({
   id: z.string().min(1),
   email: z.string().email(),
@@ -29,9 +21,6 @@ export const currentOrganisationSchema = z.object({
 })
 export type CurrentOrganisation = z.infer<typeof currentOrganisationSchema>
 
-// organisation is nullable: self-registration no longer provisions an org.
-// GET /api/me returns { user, organisation: null } for an org-less user, and
-// the client renders the create-organisation surface instead of matters.
 export const meResponseSchema = z.object({
   user: currentUserSchema,
   organisation: currentOrganisationSchema.nullable(),
@@ -40,7 +29,6 @@ export type MeResponse = z.infer<typeof meResponseSchema>
 
 export const ORGANISATION_NAME_MAX_LENGTH = 120
 
-/** Default tenant name for auto-provisioned workspaces (see ensureOrganisationForUser). */
 export const PERSONAL_WORKSPACE_NAME = 'Personal workspace'
 
 export const createOrganisationInputSchema = z.object({
@@ -54,14 +42,6 @@ export type CreateOrganisationInput = z.infer<
   typeof createOrganisationInputSchema
 >
 
-/**
- * A display name people read back: the account name and the organisation name.
- * One builder for both, because two name paths that strip different characters
- * disagree about what an empty name is, and that disagreement stores names
- * nobody can see. Strips Unicode format characters (category Cf — zero-width
- * spaces, joiners, directional marks) that `trim()` leaves behind, then applies
- * the emptiness and length rules to the cleaned value.
- */
 export function displayNameField(label: string, maxLength: number) {
   return z
     .string()
@@ -79,11 +59,6 @@ export const organisationNameFieldSchema = displayNameField(
   ORGANISATION_NAME_MAX_LENGTH,
 )
 
-/**
- * Shared organisation-name validation for create + rename + sign-up stash
- * consumption. Non-string input keeps its own message rather than Zod's
- * "expected string", so a body with no `name` reads the same as an empty one.
- */
 export function parseOrganisationName(
   rawName: unknown,
 ): { ok: true; name: string } | { ok: false; message: string } {
@@ -116,11 +91,6 @@ export type AcceptOrganisationInviteInput = z.infer<
   typeof acceptOrganisationInviteInputSchema
 >
 
-/**
- * Sign-up asks, for an invite's own email, whether an account already exists
- * so an existing invitee can be routed to sign-in instead of a duplicate-email
- * dead end. Only answerable for the email the invite was sent to.
- */
 export const organisationInviteAccountExistsInputSchema = z.object({
   token: z.string().min(1),
   email: z.string().trim().email().max(320),

@@ -19,7 +19,6 @@ const toneClasses = {
   danger: 'bg-danger-soft text-danger',
 } satisfies Record<BadgeTone, string>
 
-/** Badge — a compact status/label pill. Use tones for semantic meaning only. */
 export function Badge({ tone = 'neutral', children, className }: BadgeProps) {
   return (
     <span

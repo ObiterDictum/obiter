@@ -35,11 +35,6 @@ export const DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX = 1_638
 export const DOCUMENT_EDIT_TWIP_MIN = 0
 export const DOCUMENT_EDIT_TWIP_MAX = 31_680
 export const DOCUMENT_EDIT_COLOUR_PATTERN = /^(auto|[0-9A-Fa-f]{6})$/
-/**
- * The largest list restart value the contract accepts. Word stores a start
- * override as a decimal number, but no real list starts past a signed 16-bit
- * count; the bound keeps a hostile client from writing an unbounded marker.
- */
 export const DOCUMENT_EDIT_NUMBERING_START_MAX = 32_767
 
 export const documentEditHighlightSchema = z.enum([
@@ -148,11 +143,6 @@ const lineSpacingSchema = z
   })
   .strict()
 
-/**
- * Direct page-margin overrides in twips. A field leaves the attribute alone when
- * absent and releases it to its inherited/default value when null. `margins:
- * null` releases the whole `w:pgMar` element.
- */
 const sectionMarginsSchema = z
   .object({
     top: twipSchema.nullable().optional(),
@@ -286,11 +276,6 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
       paragraphId: editIdSchema,
       numId: editIdSchema.nullable(),
       ilvl: z.number().int().min(0).max(8).optional(),
-      /**
-       * Restart the list at this number. `null`/absent leaves the numbering
-       * instance as-is; a value points the paragraph at an instance that
-       * carries `w:lvlOverride`/`w:startOverride` for `ilvl`.
-       */
       startOverride: z
         .number()
         .int()
@@ -335,11 +320,6 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('insert_paragraph_after'),
       paragraphId: editIdSchema,
-      /**
-       * Opaque client correlation id. It is echoed back in the lineage so the
-       * client can name the stored paragraph without matching insert order.
-       * It is never a persisted document identity and is validated server-side.
-       */
       intentId: editIdSchema.optional(),
       text: editTextSchema.optional(),
       runs: z
@@ -378,7 +358,6 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('insert_paragraph_before'),
-      /** The paragraph the restored content is placed before. */
       paragraphId: editIdSchema,
       intentId: editIdSchema.optional(),
       text: editTextSchema.optional(),
@@ -436,10 +415,6 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
         context,
         'At least one section property must be assigned.',
       )
-      // An explicit size and an orientation cannot contradict: the writer
-      // emits `w:orient` alongside the dimensions, and readers disagree on
-      // which wins. The dimensions are authoritative, matching the writer's
-      // own derivation.
       const size = operation.pageSize
       const orientation = operation.orientation
       if (size && orientation !== undefined && orientation !== null) {
@@ -489,10 +464,3 @@ export function insertParagraphRuns(
 ): DocumentEditRun[] {
   return operation.runs ?? [{ text: operation.text ?? '' }]
 }
-
-/**
- * Batch semantics - the coordinate space operations address, replacement
- * precedence, overlap resolution and atomic failure - are normative in
- * docs/architecture.md, "Document edit operation batches". The request and
- * response envelopes live in `document-edit-request.ts`.
- */

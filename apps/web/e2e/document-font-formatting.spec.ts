@@ -10,24 +10,8 @@ import {
   setTrackChanges,
 } from './editor-chrome'
 
-/*
- * E2 browser journey: Font family, Font size, Font colour and Clear formatting
- * must agree end to end. Only a real browser decides the painted run CSS, the
- * native text selection the custom selection mirrors, and a fresh context
- * reading the stored version back; the mounted suites cover the projection and
- * the save plan.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; verification is marked directly in the task-owned test database,
- * never the shared one. The fixture is the repo's synthetic DOCX.
- */
-
-/** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
-/** Six code units, so the selection never cuts a surrogate pair. */
 const SELECTED = 'IN THE'
-// Set to a directory to capture the journey stage by stage; a normal run
-// writes nothing.
 const shots = process.env.E2_E2E_SHOTS
 
 function shot(page: Page, name: string) {
@@ -35,12 +19,10 @@ function shot(page: Page, name: string) {
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
 }
 
-/** The Font family / size / colour selects, exact at rest. */
 const fontFamily = (page: Page) => selectedValue(page, 'Font')
 const fontSize = (page: Page) => selectedValue(page, 'Font size')
 const fontColour = (page: Page) => selectedValue(page, 'Font colour')
 
-/** A native within-paragraph selection the custom selection mirrors. */
 async function selectFirst(page: Page, text: string, units: number) {
   await focusParagraph(page, text)
   await page.keyboard.press('Home')
@@ -105,8 +87,6 @@ test('font family, size and colour paint, save, and reload from a fresh context'
   await choose(page, 'Font size', '12')
   await choose(page, 'Font colour', 'Red')
 
-  // The chosen options and the painted run agree; 12pt is 24 half-points,
-  // which the paint renders at 16px.
   await expect(fontFamily(page)).toHaveText('Georgia')
   await expect(fontSize(page)).toHaveText('12')
   await expect(fontColour(page)).toHaveText('Red')
@@ -129,8 +109,6 @@ test('font family, size and colour paint, save, and reload from a fresh context'
     }),
   )
 
-  // A fresh context reads the stored version back: the paint and the select
-  // values come only from the saved run properties.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
@@ -179,8 +157,6 @@ test('clear formatting removes direct character formatting and saves nulls', asy
 
   await page.getByRole('button', { name: 'Clear formatting' }).click()
 
-  // Every direct property is released, so the select values fall back and the
-  // bold control reads unpressed even if a style still paints bold.
   await expect(fontFamily(page)).toHaveText('Default font')
   await expect(fontSize(page)).toHaveText('Default')
   await expect(fontColour(page)).toHaveText('Automatic')
@@ -232,9 +208,6 @@ test('queues font formatting and clear formatting on a tracked partial selection
   await enableTracking(page)
   await selectFirst(page, HEADING, SELECTED.length)
 
-  // A tracked range split is recorded as a w:rPrChange, so the font controls
-  // and Clear formatting stay available and queue a draft instead of
-  // refusing.
   await openFormatting(page)
   await expect(fontFamily(page)).toBeEnabled()
   await expect(fontSize(page)).toBeEnabled()
@@ -254,8 +227,6 @@ test('queues font formatting and clear formatting on a tracked partial selection
 
   await saveAndWait(page)
 
-  // The batch flew tracked and addressed the selection as a paragraph range,
-  // the address a mid-run split has to carry.
   expect(editBodies.at(-1)?.trackChanges).toBe(true)
   const operations = editBodies.flatMap((body) => body.operations ?? [])
   expect(operations).toContainEqual(

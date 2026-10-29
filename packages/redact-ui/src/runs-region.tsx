@@ -19,10 +19,6 @@ const runStatus = {
   { label: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger' }
 >
 
-/**
- * The redaction runs for one document, on the document page (contract §4). A
- * run is described by its state and its decided count, never by its id.
- */
 export function RedactionRunsRegion({
   documentId,
   onOpenRun,

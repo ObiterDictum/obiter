@@ -1,51 +1,24 @@
 import type { DocumentTextLayoutSegment } from '@obiter/contracts'
 
-/**
- * Map redaction spans onto PDF glyph geometry.
- *
- * Layout `y` is the text baseline (PDF user space, origin bottom-left).
- * Prefer font ascent/descent captured at extraction; fall back to em heuristics.
- */
-
-/** Ink that often exceeds the font descent line. */
 const DEEP_DESCENDER = /[gjpqyQJ]/u
 
-/**
- * Largest whitespace bridge a coalesced bar may cross, in em of the smaller
- * adjacent glyph. Two em is about seven ordinary spaces (a space is ~0.28em),
- * which covers multiple spaces and tabs, yet stays far below the hundreds of
- * points a column, table cell, or layout fragment leaves. A wider gap that
- * source adjacency alone cannot justify falls back to separate bars, which
- * stay secure, instead of one page-wide bar that could hide unredacted text.
- */
 const WHITESPACE_GAP_EM = 2
 
 export interface GlyphCoverInput {
   x: number
-  /** Glyph baseline in PDF user space. */
   y: number
   width: number
-  /** Em size (from the text matrix / pdf.js item height). */
   fontSize: number
-  /** Characters this rect covers — selects extra descender slack. */
   ink?: string
-  /** Font ascent above baseline (PDF units), from pdf.js styles. */
   ascent?: number
-  /** Font descent below baseline (PDF units, positive), from pdf.js styles. */
   descent?: number
-  /** Unit writing direction; defaults to ordinary left-to-right text. */
   baselineX?: number
   baselineY?: number
-  /**
-   * Non-identity CTM (Form XObject translation included). Rotation is inferred
-   * from the baseline; this flag covers transforms that leave it at (1, 0).
-   */
   transformed?: boolean
 }
 
 export interface GlyphCoverRect {
   x: number
-  /** Bottom edge in PDF user space. */
   y: number
   width: number
   height: number
@@ -58,12 +31,6 @@ export interface DeviceCoverBox {
   bottom: number
 }
 
-/**
- * Expand a cover to whole device pixels after the viewport transform.
- * Floor min edges, ceil max edges. Outward-only is safe: extra covered
- * pixels stay black; inward rounding would re-open the sub-pixel leak
- * this exists to close (raster ink can sit 0.136vu past a fractional edge).
- */
 export function snapDeviceCoverOutward(box: DeviceCoverBox): DeviceCoverBox {
   return {
     left: Math.floor(box.left),
@@ -83,13 +50,9 @@ type TrackedGlyph = GlyphCoverRect & {
   advanceWidth: number
   baselineX: number
   baselineY: number
-  /** Source character index; a gap means whitespace between two glyphs. */
   index: number
 }
 
-/**
- * Cover one glyph using font metrics when available.
- */
 export function glyphCoverRect(input: GlyphCoverInput): GlyphCoverRect {
   const fontSize = Math.max(input.fontSize, 4)
   const ink = input.ink ?? ''
@@ -100,13 +63,6 @@ export function glyphCoverRect(input: GlyphCoverInput): GlyphCoverRect {
     input.transformed === true ||
     Math.abs(baselineX - 1) > 0.001 ||
     Math.abs(baselineY) > 0.001
-  // Transformed ink (rotation or a nested CTM, including Form XObject
-  // translation) leaves the pixel grid; rasterisers disagree more than on
-  // upright text. Cover tests use 12pt Times (`/F1 12 Tf`) at viewport scale 2.
-  // CI shortfalls: rotated left 0.688vu = 0.344pt (0.029em); Form XObject
-  // right 1.056vu = 0.528pt (0.044em). 0.02em was below that and only padded
-  // the writing direction, which does not move a 90° cover's left edge (ascent).
-  // 0.08em is ~1.8× the larger shortfall, on all four sides.
   const transformedSlack = transformed ? fontSize * 0.08 : 0
   const slack = fontSize * 0.08 + transformedSlack
   const ascent = (input.ascent ?? fontSize * 0.8) + slack
@@ -144,10 +100,6 @@ export function glyphCoverRect(input: GlyphCoverInput): GlyphCoverRect {
   }
 }
 
-/**
- * Build cover rects for a span by mapping each overlapping layout character,
- * then union-merging neighbours on the same baseline (left → right).
- */
 export function coverRectsForSpan(input: {
   segments: LayoutSegmentLike[]
   spanStart: number
@@ -251,10 +203,6 @@ function hasFiniteSegmentGeometry(segment: LayoutSegmentLike) {
   return values.every((value) => value === undefined || Number.isFinite(value))
 }
 
-/**
- * Where a character actually sits, when extraction recorded real advances.
- * Interpolating instead can leave part of a redacted word outside its bar.
- */
 function exactPlacementOffsets(segment: LayoutSegmentLike) {
   const advances = segment.advances
   if (!advances || advances.length !== segment.end - segment.start) return null
@@ -308,11 +256,6 @@ function unionMergeGlyphs(
       : Number.POSITIVE_INFINITY
     const smallerHeight = Math.min(previous?.height ?? 0, glyph.height)
     const maxGap = Math.max(2.5, smallerHeight * 0.4)
-    // A coalesced region has only whitespace between its glyphs, so the gap
-    // may exceed the single-span threshold (multiple spaces, a tab) and still
-    // belong to one bar. Bound that bridge to WHITESPACE_GAP_EM of the smaller
-    // adjacent glyph so a distant fragment cannot be bridged on source
-    // adjacency alone.
     const maxWhitespaceGap = Math.max(maxGap, smallerHeight * WHITESPACE_GAP_EM)
     const directionMatch = previous
       ? previous.baselineX * glyph.baselineX +
@@ -345,8 +288,6 @@ function unionMergeGlyphs(
       previous.along = Math.min(previous.along, glyph.along)
       previous.advanceWidth = advanceEnd - previous.along
       previous.ink = `${previous.ink}${glyph.ink}`
-      // Track the last merged glyph so the whitespace check compares against
-      // the glyph immediately to the left, not the group's first glyph.
       previous.index = glyph.index
       continue
     }

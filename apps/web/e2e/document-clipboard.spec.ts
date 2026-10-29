@@ -9,23 +9,8 @@ import { resolveJourneyTargets } from '../journey-target.mjs'
 import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
 import { fixturePath, verifyEmailInDb } from './support'
 
-/*
- * E1 browser journey: the Clipboard ribbon controls, a multi-paragraph paste
- * as one undo step, the native paste path, and the Ctrl/Cmd+B/I/U layer. Only a
- * real browser decides the clipboard integration, the native paste event and
- * the painted run; the mounted suites cover the projection, the pure splitter
- * and the history grouping.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; verification is marked directly in the task-owned test database,
- * never the shared one. The fixture is the repo's synthetic DOCX.
- */
-
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
-/** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
-// Set to a directory to capture the journey stage by stage; a normal run
-// writes nothing.
 const shots = process.env.E1_E2E_SHOTS
 
 function shot(page: Page, name: string) {
@@ -34,8 +19,6 @@ function shot(page: Page, name: string) {
 }
 
 async function createAccount(request: APIRequestContext) {
-  // A UUID keeps the synthetic account id unique without an insecure PRNG,
-  // which CodeQL flags even in test fixtures.
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `e1-${runId}@obiter.test`
   const password = `E1-${runId}-Aa1!`
@@ -78,7 +61,6 @@ async function signIn(page: Page, email: string, password: string) {
   throw new Error('sign-in did not leave the sign-in route')
 }
 
-/** Opens the synthetic fixture through the product's own navigation. */
 async function openFixtureDocument(
   page: Page,
   email: string,
@@ -129,11 +111,6 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-/**
- * The clipboard commands live in the Edit menu. A row's reason is a
- * description beside it, not part of its name, so a disabled Copy still reads
- * "Copy" to a screen reader.
- */
 async function clipboardRow(page: Page, name: 'Copy' | 'Cut' | 'Paste') {
   await openMenu(page, 'Edit')
   return menuItem(page, name)
@@ -161,7 +138,6 @@ async function focusParagraph(page: Page, text: string) {
   throw new Error(`could not focus the paragraph containing "${text}"`)
 }
 
-/** A native within-paragraph selection the custom selection mirrors. */
 async function selectFirst(page: Page, units: number) {
   await page.keyboard.press('Home')
   for (let step = 0; step < units; step += 1) {
@@ -199,7 +175,6 @@ test('enables the clipboard controls from the document selection', async ({
   await closeMenu(page)
   await shot(page, '02-clipboard-enabled-with-a-selection')
 
-  // Copy writes the selection and leaves the document alone.
   const before = await page.locator('[data-paragraph-id]').count()
   await runMenuCommand(page, 'Edit', 'Copy')
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before)
@@ -222,13 +197,9 @@ test('pastes multiple paragraphs and undoes it in one step', async ({
     navigator.clipboard.writeText('Alpha paragraph\nBeta paragraph'),
   )
   await runMenuCommand(page, 'Edit', 'Paste')
-  // Two pasted lines split into one extra paragraph, not a hard break inside
-  // one; the ribbon read the clipboard and applied the same splitter the native
-  // paste event uses.
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before + 1)
   await shot(page, '04-multi-paragraph-paste')
 
-  // One paste is one history entry: a single undo restores the document.
   await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before)
   await shot(page, '05-paste-undone-in-one-step')

@@ -18,11 +18,6 @@ const warningCopy = {
   },
 } satisfies Record<LimitedDetectionMode, { title: string; description: string }>
 
-/**
- * What the run could not see. Stated as a warning note and repeated in the
- * finalise gates, because a run whose model never ran must not read like a run
- * that found nothing.
- */
 export function DetectionModeWarning({
   detectionMode,
   role = 'note',

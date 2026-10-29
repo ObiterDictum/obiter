@@ -9,11 +9,6 @@ import {
 import { RedactionRunsRegion } from '@obiter/redact-ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
-/**
- * Document detail (PRD FR4). A layout route: DocumentDetailLayoutView renders
- * the document metadata + redaction-runs region and an <Outlet/>, so feature
- * sub-routes (redact/$runId) nest beneath it. Backed by GET /api/documents/:id.
- */
 export const Route = createFileRoute(
   '/matters/$matterId/documents/$documentId',
 )({
@@ -26,8 +21,6 @@ export const Route = createFileRoute(
         documentQueryOptions(params.documentId),
       ),
     )
-    // The editor header names the matter, so the breadcrumb is there on a
-    // direct load rather than appearing a moment later.
     await guardAuth(context.queryClient, () =>
       context.queryClient.prefetchQuery(matterQueryOptions(params.matterId)),
     )
@@ -38,7 +31,6 @@ export const Route = createFileRoute(
 function DocumentDetailRouteComponent() {
   const { matterId, documentId } = Route.useParams()
   const navigate = useNavigate()
-  // Feeds Home's "continue where you left off" line.
   useRecordDocumentOpen(documentId)
   return (
     <DocumentDetailLayoutView

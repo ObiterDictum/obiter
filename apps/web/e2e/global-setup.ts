@@ -48,9 +48,6 @@ export default async function globalSetup() {
   await checkPostgres()
   await checkMeilisearch()
 
-  // Runs after the web servers are up (Playwright sets up webServer plugins
-  // before global setup) and before any browser: a suite that measures another
-  // worktree's code must fail here, not produce a plausible wrong result.
   const targets = resolveLaneTargets()
   const served = await verifyServedCheckout(targets, {
     headSha: headSha() ?? undefined,

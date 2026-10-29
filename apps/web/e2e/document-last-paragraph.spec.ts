@@ -5,23 +5,9 @@ import { expect, test, type Page } from '@playwright/test'
 import { createSyntheticDocx } from '../../../packages/ooxml/src/index'
 import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
 
-/*
- * E0 browser journey: the editor must never reach a zero-paragraph state.
- * This drives a real web and API stack with a synthetic one-paragraph DOCX,
- * proves the Delete paragraph control is unavailable with an accurate reason,
- * exercises the keyboard boundary, and then proves a valid deletion saves,
- * reloads and reopens as one valid paragraph.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; email verification is marked directly in the task-owned test
- * database, never the shared one. The DOCX is built in memory and contains
- * fictional text only.
- */
-
 const FIRST = 'E0 sole paragraph of the synthetic fixture.'
 const SECOND = 'E0 second paragraph after insertion.'
 
-/** Uploads an in-memory one-paragraph DOCX and opens the editor. */
 async function openSyntheticDocument(
   page: Page,
   email: string,
@@ -76,7 +62,6 @@ async function openSyntheticDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-/** The Edit menu's Delete paragraph row, opened where it lives. */
 async function deleteButton(page: Page) {
   if (
     !(await page
@@ -125,7 +110,6 @@ async function saveAndWait(page: Page) {
   await expect.poll(() => saveState(page), { timeout: 30_000 }).toBe('saved')
 }
 
-/** Fails the test if the page logged an error or a request failed. */
 function watchForFaults(page: Page) {
   const faults: string[] = []
   page.on('pageerror', (error) => faults.push(`pageerror: ${error.message}`))
@@ -134,8 +118,6 @@ function watchForFaults(page: Page) {
   })
   page.on('requestfailed', (request) => {
     const error = request.failure()?.errorText ?? ''
-    // An aborted request is a cancellation (a navigation, an unmount or the
-    // context closing), not a product failure.
     if (error.includes('ERR_ABORTED')) return
     faults.push(`requestfailed: ${request.url()} ${error}`)
   })
@@ -147,8 +129,6 @@ function watchForFaults(page: Page) {
   return faults
 }
 
-// The journey opens the Edit menu for every deletion, which costs more than
-// the default 60s budget.
 test.setTimeout(140_000)
 
 test.use({ viewport: { width: 1440, height: 900 } })
@@ -163,8 +143,6 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   const matter = `E0 ${String(Date.now())}`
   await openSyntheticDocument(page, email, password, matter)
 
-  // 7-8. One paragraph: Delete paragraph is unavailable with an accurate
-  // accessible reason.
   await expect(page.locator('[data-paragraph-id]').first()).toContainText(FIRST)
   const unavailable = await deleteButton(page)
   await expect(unavailable).toBeDisabled()
@@ -173,8 +151,6 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   ).toBeVisible()
   await closeMenu(page)
 
-  // 9-11. Keyboard boundaries: Backspace at the start and Delete at the end of
-  // the only paragraph must not remove it or dirty the document.
   await page.locator('[data-paragraph-id]').first().click()
   await expect(editor(page)).toHaveValue(FIRST)
   await page.keyboard.press('Control+Home')
@@ -187,8 +163,6 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   expect(await saveState(page)).not.toBe('unsaved')
   await expect(saveButton(page)).toBeDisabled()
 
-  // 12-13. A pending inserted paragraph is effective, so Delete becomes
-  // available.
   await runMenuCommand(page, 'Edit', 'Insert paragraph')
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
@@ -198,9 +172,6 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   await saveAndWait(page)
   expect(await settledParagraphCount(page)).toBe(2)
 
-  // A whole-document selection delete joins the two paragraphs and must leave
-  // one; undo restores both. This is the selection-deletion path, which cannot
-  // reach zero paragraphs because a range needs two endpoints.
   await page.locator('[data-paragraph-id]').first().click()
   await page.keyboard.press('Control+a')
   await page.keyboard.press('Delete')
@@ -208,26 +179,19 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   await undoButton(page).click()
   expect(await settledParagraphCount(page)).toBe(2)
 
-  // 14-15. Delete the stored second paragraph; exactly one remains and the
-  // surviving paragraph holds a usable, focused editor.
   await page.locator('[data-paragraph-id]', { hasText: SECOND }).first().click()
   await (await deleteButton(page)).click()
   expect(await settledParagraphCount(page)).toBe(1)
   await expect(await deleteButton(page)).toBeDisabled()
-  // The menu row hands focus back to its trigger; the surviving paragraph is
-  // the one on screen and holds the text the deletion must not touch.
   await expect(editor(page)).toHaveValue(FIRST)
 
-  // 16-17. Undo restores both; redo removes the second again.
   await undoButton(page).click()
   expect(await settledParagraphCount(page)).toBe(2)
   await redoButton(page).click()
   expect(await settledParagraphCount(page)).toBe(1)
 
-  // 18. Save the valid deletion.
   await saveAndWait(page)
 
-  // 19-21. A fresh context reopens the stored version: one valid paragraph.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   const freshFaults = watchForFaults(reloaded)

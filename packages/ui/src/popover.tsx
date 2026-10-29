@@ -2,20 +2,6 @@ import { Popover as BasePopover } from '@base-ui-components/react/popover'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { cn } from './lib/cn'
 
-/**
- * Popover — a styled compound over Base UI Popover. Anchor positioning, flip
- * and shift collision avoidance, and edge padding come from Base UI; we own the
- * visual layer. It is deliberately non-modal by default: a contextual panel
- * beside a document must not trap focus or lock page scroll.
- *
- *   <Popover open={open} onOpenChange={setOpen}>
- *     <PopoverPortal>
- *       <PopoverPositioner anchor={element} side="top" align="start">
- *         <PopoverPopup>…</PopoverPopup>
- *       </PopoverPositioner>
- *     </PopoverPortal>
- *   </Popover>
- */
 export function Popover(
   props: ComponentPropsWithoutRef<typeof BasePopover.Root>,
 ) {

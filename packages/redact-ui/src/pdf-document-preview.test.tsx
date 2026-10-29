@@ -35,8 +35,6 @@ mock.module('pdfjs-dist', () => ({
 
 const { PdfDocumentPreview } = await import('./pdf-document-preview')
 
-// jsdom has no canvas backend; the component only needs a truthy 2D context
-// object to proceed to the render task, which the pdf.js mock drives.
 HTMLCanvasElement.prototype.getContext = (() => ({})) as never
 
 beforeEach(() => {
@@ -121,7 +119,6 @@ describe('PdfDocumentPreview', () => {
       await waitFor(() => {
         expect(MockIntersectionObserver.instances).toHaveLength(3)
       })
-      // Labels exist for every page, but no canvas has rendered yet.
       expect(screen.getByText('Page 1 of 3')).toBeTruthy()
       expect(screen.getByText('Page 3 of 3')).toBeTruthy()
       expect(pdfjs.render).not.toHaveBeenCalled()
@@ -134,7 +131,6 @@ describe('PdfDocumentPreview', () => {
         pageCount: 3,
       })
 
-      // Page 3 entering the viewport renders only page 3, not page 2.
       act(() => MockIntersectionObserver.instances[2]?.intersect())
       await waitFor(() => expect(pdfjs.render).toHaveBeenCalledTimes(2))
     } finally {

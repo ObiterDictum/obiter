@@ -9,7 +9,6 @@ export interface EmptyStateProps {
   className?: string
 }
 
-/** EmptyState — a calm, directive empty surface (no data, no results, not found). */
 export function EmptyState({
   title,
   body,

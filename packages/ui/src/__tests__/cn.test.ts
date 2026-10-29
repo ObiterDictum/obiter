@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { cn } from '../lib/cn'
 
-/* Guards the cn() registration of the semantic type scale: a size must never
- * swallow the colour utility it sits beside, and vice versa. */
 describe('semantic text utilities', () => {
   it('keeps a colour beside a semantic size', () => {
     expect(cn('bg-brand text-brand-fg', 'text-item')).toBe(

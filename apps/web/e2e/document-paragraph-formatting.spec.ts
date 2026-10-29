@@ -5,21 +5,7 @@ import path from 'node:path'
 import { fixturePath } from './support'
 import { choose, openFormatting, selectedValue } from './editor-chrome'
 
-/*
- * E3 browser journey: Align, Line spacing and Indent must agree end to end.
- * Only a real browser decides the painted paragraph CSS, the native selection
- * the custom selection mirrors, and a fresh context reading the stored version
- * back; the mounted suites cover the projection and the save plan.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; verification is marked directly in the task-owned test database,
- * never the shared one. The fixture is the repo's synthetic DOCX.
- */
-
-/** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
-// Set to a directory to capture the journey stage by stage; a normal run
-// writes nothing.
 const shots = process.env.E3_E2E_SHOTS
 
 function shot(page: Page, name: string) {
@@ -32,7 +18,6 @@ const alignCentre = (page: Page) =>
 const lineSpacing = (page: Page) => selectedValue(page, 'Line spacing')
 const indent = (page: Page) => selectedValue(page, 'Indent')
 
-/** The inline paragraph layout the browser paints on the target block. */
 async function paragraphStyle(page: Page, text: string) {
   return page.evaluate((value) => {
     const roots = [...document.querySelectorAll('[data-paragraph-id]')]
@@ -83,8 +68,6 @@ test('align, line spacing and indent paint, save, and reload from a fresh contex
   await choose(page, 'Indent', 'First line')
   await expect(indent(page)).toHaveText('First line')
 
-  // The chosen options and the painted paragraph agree: centred text, a 1.5
-  // line box, and Word's half-inch first-line indent (720 twips = 48px).
   const painted = await paragraphStyle(page, HEADING)
   expect(painted?.textAlign).toBe('center')
   expect(painted?.textIndent).toBe('48px')
@@ -106,8 +89,6 @@ test('align, line spacing and indent paint, save, and reload from a fresh contex
     }),
   )
 
-  // A fresh context reads the stored version back: the paint and the control
-  // values come only from the saved paragraph properties.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {

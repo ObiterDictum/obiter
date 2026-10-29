@@ -53,7 +53,7 @@ Additional presentation primitives (no domain state):
 
 ## 2. Design tokens (`--obiter-*`)
 
-Source of truth is `packages/ui/src/tokens.css`, consumed by Tailwind v4 via `@theme`. **Token names are frozen; values may tune within the same theme.** Light is the token default (`:root`); dark is an explicit `[data-theme="dark"]` override. Both themes must render every screen correctly (FR6). Light is the default the product renders; the saved choice is light, dark, or **match system**, and matching the system follows `prefers-color-scheme` live (a media-query subscription, not an effect on derived state).
+Source of truth is `packages/ui/src/tokens.css`, consumed by Tailwind v4 via `@theme`. `@obiter/ui/tailwind.css` imports with `source(none)`, so every app declares its own source trees with `@source`: automatic detection scans whatever is on disk, and in the production image build (no `.gitignore`) the SSR pass rescanned the client pass's `dist/` output and named a stylesheet the client never emitted. **Token names are frozen; values may tune within the same theme.** Light is the token default (`:root`); dark is an explicit `[data-theme="dark"]` override. Both themes must render every screen correctly (FR6). Light is the default the product renders; the saved choice is light, dark, or **match system**, and matching the system follows `prefers-color-scheme` live (a media-query subscription, not an effect on derived state).
 
 ### 2.1 Color (semantic, defined per theme)
 

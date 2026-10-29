@@ -33,14 +33,6 @@ import {
   spanDecisionState,
 } from './span-copy'
 
-/**
- * The decision bar. It states the span under review, what the detector found,
- * who decided it and when, and only then offers a decision — the reviewer sees
- * the evidence and the consequence on the same line as the button.
- *
- * Placement: Previous/Next move the selection through the same ordered list the
- * panel shows, so a reviewer can walk a run without touching the panel.
- */
 export function DecisionBar({
   span,
   position,
@@ -66,7 +58,6 @@ export function DecisionBar({
   currentUserId: string | undefined
   page: number | null
   pageCount: number | null
-  /** Occurrences of this span's text in the run, including this one. */
   occurrences: number
   pending: boolean
   error: string | null
@@ -75,13 +66,8 @@ export function DecisionBar({
   onPrevious: () => void
   onNext: () => void
   onDecide: (decision: SpanDecision) => void
-  /** Repeats this span's recorded decision on every other occurrence. */
   onApplyToAll: (decision: SpanDecision) => void
 }) {
-  // A confirmation is not needed: a decision is a recorded, repeatable review
-  // action, and the panel shows the result immediately. The refusal is legal
-  // state, so the overrides live behind a menu rather than beside the everyday
-  // pair.
   const [menuOpen, setMenuOpen] = useState(false)
   if (!span) {
     return (

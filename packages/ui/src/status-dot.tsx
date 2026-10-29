@@ -1,7 +1,6 @@
 import { cn } from './lib/cn'
 
 export interface StatusDotProps {
-  /** The visible status word. Required: colour alone must never carry status. */
   children: string
   tone?: 'neutral' | 'info' | 'success' | 'warning' | 'danger'
   className?: string
@@ -15,7 +14,6 @@ const dotTones = {
   danger: 'bg-danger',
 } satisfies Record<NonNullable<StatusDotProps['tone']>, string>
 
-/** StatusDot — a quiet dot plus its status word, readable without colour. */
 export function StatusDot({
   children,
   tone = 'neutral',

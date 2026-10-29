@@ -2,18 +2,6 @@ import { Tabs as BaseTabs } from '@base-ui-components/react/tabs'
 import type { ComponentPropsWithoutRef } from 'react'
 import { cn } from './lib/cn'
 
-/**
- * Tabs — a styled compound over Base UI Tabs. Keyboard roving + focus from Base UI.
- *
- *   <Tabs defaultValue="a">
- *     <TabsList>
- *       <TabsTrigger value="a">A</TabsTrigger>
- *       <TabsTrigger value="b">B</TabsTrigger>
- *     </TabsList>
- *     <TabsContent value="a">…</TabsContent>
- *     <TabsContent value="b">…</TabsContent>
- *   </Tabs>
- */
 export function Tabs(props: ComponentPropsWithoutRef<typeof BaseTabs.Root>) {
   return <BaseTabs.Root {...props} />
 }
@@ -43,8 +31,6 @@ export function TabsTrigger({
         'relative h-7 rounded-sm px-2 text-caption text-subtle',
         'transition-[color,background-color,box-shadow] duration-150',
         'hover:text-ink',
-        // Raised and outlined: on the dark surface `bg-raised` sits *below* the
-        // fill, so a fill difference alone left the selected tab invisible.
         'data-[selected]:bg-raised data-[selected]:text-ink data-[selected]:font-medium',
         'data-[selected]:shadow-sm data-[selected]:ring-1 data-[selected]:ring-brand/40',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
