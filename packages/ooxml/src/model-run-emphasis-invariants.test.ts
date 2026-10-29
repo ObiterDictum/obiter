@@ -9,9 +9,6 @@ import {
   save,
 } from './model-run-emphasis.test-support'
 
-// E44 review finding 3: the coordinate space is a contract, not an incidental
-// consequence of operation order. Every operation in a batch addresses the
-// paragraph text after all replace_run_text operations in that batch.
 describe('composed edit coordinate space', () => {
   it('addresses the final draft even when emphasis is listed first', async () => {
     const document = await load('<w:p><w:r><w:t>seed</w:t></w:r></w:p>')
@@ -71,12 +68,6 @@ describe('composed edit coordinate space', () => {
   })
 })
 
-// E44 review finding 4: materialiseRun deleted overlay keys as it folded,
-// before the effective-text guard ran. Every caller discards the model on
-// OoxmlError today, so the mutation is unobservable in production; this pins
-// the structural invariant anyway by checking the model still serialises the
-// pending replacement after a rejected apply. The rejection here is a
-// surrogate-splitting range, validated after the replacement has been applied.
 describe('overlay mutation on a rejected composed edit', () => {
   it('keeps the pending replacement when a split is rejected', async () => {
     const document = await load(

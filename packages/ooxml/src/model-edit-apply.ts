@@ -41,7 +41,6 @@ import type { createTrackedEditWriter } from './tracked-edits'
 
 type TrackedEditWriter = ReturnType<typeof createTrackedEditWriter>
 
-// Per-batch mutable state shared across the operations of one edit batch.
 export type EditApplyState = {
   insertionCounts: Map<string, number>
   postAnchorCounts: Map<string, number>
@@ -59,35 +58,14 @@ export type EditApplyState = {
 
 export function newEditApplyState(): EditApplyState {
   return {
-    // Post-anchor insertions chain in operation order at the same source
-    // offset: overlay keys emit in insertion order, so the wire model must
-    // splice each new paragraph or table after the wire the previous
-    // insertion appended. `postAnchorCounts` counts every wire appended
-    // after an anchor — paragraph inserts, cell wires, separators and a
-    // table's trailing paragraph — and `postAnchorTails` names the last of
-    // them, so a paragraph insert after a table and a table after a
-    // paragraph insert both land where the serialised output puts them.
     insertionCounts: new Map(),
     postAnchorCounts: new Map(),
     postAnchorTails: new Map(),
-    // Per-anchor occurrence counters keep each table's overlay key and
-    // separator decision distinct and each image's splice key unique.
     tableCounts: new Map(),
     imageCounts: new Map(),
     structureCounts: new Map(),
-    // Page-break offsets are accumulated per run, run-local, so multiple
-    // breaks on one run materialise as a single replacement instead of
-    // overlapping `:text:` writes.
     breakOffsets: new Map(),
-    // Range emphasis is collected per paragraph and applied after the loop.
-    // Every operation in a batch addresses the same paragraph text, so the
-    // boundaries from all of them must form one split per run; applying them
-    // one at a time would let each split overwrite the previous run
-    // structure.
     rangeEmphasis: new Map(),
-    // The tracked form collects the ranges with the index of the operation
-    // that produced them, so the changes a deferred split creates still
-    // record against the right batch entry.
     trackedRangeEmphasis: new Map(),
   }
 }
@@ -154,8 +132,6 @@ export function applyPlannedOperation(
         operation.to !== undefined
       ) {
         if (trackedWriter) {
-          // The tracked split marks every covered piece's properties with its
-          // own `w:rPrChange`; see applyTrackedRunEmphasisRanges.
           const entry = state.trackedRangeEmphasis.get(operation.paragraph)
           const range = {
             from: operation.from,
@@ -205,14 +181,9 @@ export function applyPlannedOperation(
   ) {
     const position =
       operation.type === 'insert_paragraph_before' ? 'before' : 'after'
-    // The wire splice lands in the anchor's own story: an insert after a
-    // header paragraph joins the header's paragraph list, not the body's.
     const anchorStory = storyOfParagraph(document, operation.paragraph)
     if (!anchorStory) throw new OoxmlError('model-node-not-editable')
     if (trackedWriter) {
-      // A tracked batch cannot carry structural insertions, so the
-      // post-anchor maps stay empty and the tracked insert chains count on
-      // their own.
       const count = state.insertionCounts.get(operation.paragraphId) ?? 0
       trackedWriter.insertParagraphAfter(
         anchorStory,
@@ -276,9 +247,6 @@ export function applyPlannedOperation(
       )
     }
   } else if (operation.type === 'set_section_properties') {
-    // Section properties and breaks are not recorded as tracked changes yet.
-    // Fail closed rather than apply untracked while the client asked for a
-    // tracked edit; the save reports the refusal and holds the change.
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     setSectionProperties(document, operation)
   } else if (operation.type === 'insert_break') {
@@ -295,16 +263,10 @@ export function applyPlannedOperation(
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) insertSectionBreak(document, operation.paragraph)
   } else if (operation.type === 'insert_table') {
-    // Structural insertions have no tracked form; validateTrackedOperations
-    // refuses them before any write. Keep the guard here so a future tracked
-    // path cannot slip through silently.
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {
       const key = operation.paragraph.wire.id
       const occurrence = state.tableCounts.get(key) ?? 0
-      // `postAnchorTails` is the last wire appended after the anchor — a
-      // same-batch paragraph insert or a previous table's last cell — so the
-      // new cell wires land where the zero-width overlays serialise.
       const inserted = insertTable(
         document,
         mainStory,
@@ -320,16 +282,6 @@ export function applyPlannedOperation(
         key,
         (state.postAnchorCounts.get(key) ?? 0) + inserted.appended,
       )
-      // The trailing paragraph's overlay is deleted and re-set on every
-      // table op, so it serialises after all content appended at this anchor
-      // so far — move its wire to the end of the appended region to match.
-      // Paragraph inserts do not re-park it: their overlay key stays ahead of
-      // the re-set key in serialisation order only when they ran before the
-      // last table op. The lookup must be by id: a repeated insert dedupes
-      // the wire but mints a fresh object, so an identity search would miss
-      // and park a second copy. The wire already parked — not the fresh
-      // object — is what moves, so its lineage provenance (keyed by
-      // identity) survives the relocation.
       if (inserted.trailingWire) {
         const trailing = inserted.trailingWire
         const from = mainStory.paragraphs.findIndex(
@@ -395,8 +347,6 @@ export function applyPlannedOperation(
       state.structureCounts.set(key, occurrence + 1)
     }
   } else if (operation.type === 'insert_footnote') {
-    // A footnote writes a package part and a relationship — no tracked form —
-    // so validateTrackedOperations refuses it before any write.
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {
       const key = operation.paragraph.wire.id
@@ -412,8 +362,6 @@ export function applyPlannedOperation(
       state.structureCounts.set(key, occurrence + 1)
     }
   } else if (operation.type === 'insert_page_number') {
-    // A PAGE field has no tracked form either; the field's instruction and
-    // characters would need matching tracked markup across five runs.
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {
       const key = operation.paragraph.wire.id
@@ -442,9 +390,6 @@ export function applyPlannedOperation(
         lineage ? { recorder: lineage, operationIndex } : undefined,
       )
       state.structureCounts.set(key, occurrence + 1)
-      // The field's tail paragraph is the anchor's post-split half: a later
-      // table or paragraph insert at the same anchor chains after it, the
-      // same way the serialised output places it after the tail's `</w:p>`.
       state.postAnchorTails.set(key, inserted.lastWire)
       state.postAnchorCounts.set(
         key,
@@ -466,8 +411,6 @@ export function applyPlannedOperation(
         lineage ? { recorder: lineage, operationIndex } : undefined,
       )
       state.structureCounts.set(key, occurrence + 1)
-      // As with the contents table: the field's tail is the anchor's
-      // post-split half, so later post-anchor insertions chain after it.
       state.postAnchorTails.set(key, inserted.lastWire)
       state.postAnchorCounts.set(
         key,

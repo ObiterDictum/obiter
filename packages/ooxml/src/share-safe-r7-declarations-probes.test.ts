@@ -14,14 +14,6 @@ import {
   WP,
 } from './share-safe-probe-kit'
 
-/**
- * R7 declarations and byte-level mirror: `.rels` and `[Content_Types].xml`
- * carry only the grammar OPC declares — IDs, URI-shaped values and the
- * two `TargetMode` spellings — and every bound the transform applies is
- * re-derived from the emitted bytes, so a writer splice faces the same
- * refusal. The shared harness and needle conventions match
- * `share-safe-r7-probes.test.ts`.
- */
 const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
 
 const DRAW = (inner: string) =>
@@ -135,8 +127,6 @@ describe('share-safe r7: declaration grammar', () => {
       overrides: override('/word/styles.xml', 'styles'),
     })
     const rels = parts.get('word/_rels/document.xml.rels') ?? ''
-    // Only internal relationships ship, so canonical emission leaves the
-    // attribute off entirely — the emitted id is the generated `rId1`.
     expect(rels).toContain('Id="rId1"')
     expect(rels).toContain('Target="styles.xml"')
     expect(rels).not.toContain('TargetMode')

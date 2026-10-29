@@ -28,16 +28,11 @@ describe('table-of-authorities edits', () => {
     const output = await serialiseDocx(document)
     const xml = await zipText(output, 'word/document.xml')
 
-    // The generated field: instruction, heading, one entry carrying the
-    // citation text and a PAGEREF to the citing paragraph's bookmark.
     expect(xml).toContain(' TOA ')
     expect(xml).toContain('Table of Cases')
     expect(xml).toContain('w:name="_ToA1"')
     expect(xml).toContain('PAGEREF _ToA1')
-    // The hidden TA mark sits after the citation inside the citing run.
     expect(xml).toContain(' TA \\l "[2020] UKSC 1" \\s "[2020] UKSC 1" \\c 1 ')
-    // The anchor split: head text, then the field result, then the tail
-    // holding the rest of 'Jane Example referenceJane Example reference'.
     const head = xml.indexOf('Jane ')
     const entryOffset = xml.indexOf('[2020] UKSC 1</w:t>', head)
     const tailOffset = xml.indexOf('Example reference', entryOffset)
@@ -45,9 +40,6 @@ describe('table-of-authorities edits', () => {
     expect(head).toBeLessThan(entryOffset)
     expect(entryOffset).toBeLessThan(tailOffset)
 
-    // Reparse: the entry paragraph reads back with its stored text, the
-    // citing paragraph carries the bookmark and the hidden mark runs, and
-    // the tail holds the field's `end` ahead of the rest of the anchor.
     const reparsed = await parseDocx(output)
     const paragraphs = mainParagraphs(reparsed)
     const headIndex = paragraphs.findIndex(
@@ -126,8 +118,6 @@ describe('table-of-authorities edits', () => {
       'word/document.xml',
     )
 
-    // Two entries sorted by citation text: the shared citation collects
-    // both citing paragraphs' bookmarks as two PAGEREF fields.
     expect(xml).toContain(' TA \\l "[2019] EWCA Civ 12"')
     expect(xml).toContain(' TA \\l "[2020] UKSC 1"')
     const reparsed = await parseDocx(await serialiseDocx(document))
@@ -139,8 +129,6 @@ describe('table-of-authorities edits', () => {
         paragraph.runs.map((run) => run.text).join(''),
       ),
     ).toEqual(['[2019] EWCA Civ 12', '[2020] UKSC 1, '])
-    // The shared entry references both citing paragraphs' bookmarks —
-    // the ', ' above is the separator between its two PAGEREF fields.
     expect(
       entries[1]?.runs.some((run) =>
         run.preservedXmlFragments.some((fragment) =>
@@ -202,8 +190,6 @@ describe('table-of-authorities edits', () => {
     const output = await serialiseDocx(document)
     const xml = await zipText(output, 'word/document.xml')
 
-    // The pending paragraph's text saves, but no mark or entry binds it: a
-    // paragraph with no stored anchor cannot hold a `_ToA` bookmark.
     expect(xml).not.toContain(' TA \\l "[2021] UKSC 2"')
     const reparsed = await parseDocx(output)
     const entries = mainParagraphs(reparsed).filter(
@@ -220,8 +206,6 @@ describe('table-of-authorities edits', () => {
     const document = await parseFixture()
     const { cited, anchor } = toaFixture(document)
 
-    // A `TableofAuthorities`-styled paragraph holds captured output, not a
-    // citing instance: with it the only citation, the field refuses empty.
     expect(() =>
       applyDocumentEdits(document, [
         ...cite(document, cited.id, 'Restated [2020] UKSC 1.'),
@@ -281,8 +265,6 @@ describe('table-of-authorities edits', () => {
           'Controlled content' && anchor !== undefined
       )
     })
-    // The content-control paragraph may not be anchorable at all — either a
-    // missing anchor or a refusal is the fail-closed answer.
     if (!nested) {
       expect(
         mainParagraphs(document).some(
@@ -434,13 +416,6 @@ function toaFixture(document: Awaited<ReturnType<typeof parseDocx>>) {
   return { cited, second, anchor }
 }
 
-/**
- * The op rewriting the paragraph's first run so the batch reads the citation
- * text — the effective-text update the writer's collector reads, without a
- * fixture carrying real citation prose. Returned as operations rather than
- * applied: each `applyDocumentEdits` is one save batch, and composing a
- * pending replacement twice serialises differently than one batch does.
- */
 function cite(
   document: Awaited<ReturnType<typeof parseDocx>>,
   paragraphId: string,

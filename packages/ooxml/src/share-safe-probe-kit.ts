@@ -3,13 +3,6 @@ import { expect } from 'bun:test'
 
 import { buildShareSafeDocx, parseDocx, ShareSafeRefusal } from './index'
 
-/**
- * Shared hostile-package harness for the share-safe probe suites: build a
- * synthetic DOCX carrying one crafted shape, run the export, and inspect
- * the emitted archive's bytes. Needles are always synthetic `SECRET*`
- * markers — never real content.
- */
-
 export const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 export const R =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
@@ -25,19 +18,12 @@ export const WP =
 export const STRICT_W = 'http://purl.oclc.org/ooxml/wordprocessingml/main'
 
 export interface ProbeSpec {
-  /** Extra markup appended to the default document's `w:body`. */
   body?: string
-  /** Full `word/document.xml` source, replacing the default. */
   document?: string
-  /** `Relationship` markup for `word/_rels/document.xml.rels`. */
   documentRels?: string
-  /** Extra `Relationship` markup for `_rels/.rels`. */
   rootRels?: string
-  /** Extra parts, name → XML source or binary payload. */
   parts?: Record<string, string | Uint8Array>
-  /** Extra `Override` markup for `[Content_Types].xml`. */
   overrides?: string
-  /** Extra `Default` markup for `[Content_Types].xml`. */
   defaults?: string
 }
 
@@ -74,7 +60,6 @@ export async function probePackage(spec: ProbeSpec): Promise<Uint8Array> {
   return zip.generateAsync({ type: 'uint8array' })
 }
 
-/** The emitted archive as text and binary part maps. */
 export async function outputParts(spec: ProbeSpec) {
   const document = await parseDocx(await probePackage(spec))
   const bytes = await buildShareSafeDocx(document)
@@ -93,11 +78,6 @@ export async function probeOutput(spec: ProbeSpec) {
   return (await outputParts(spec)).parts
 }
 
-/**
- * A clean export: every emitted part is searched for the probe needles,
- * the `Visible.` marker must survive, and the emitted parts come back for
- * further assertions.
- */
 export async function expectClean(spec: ProbeSpec, needles: string[]) {
   const { parts, binary } = await outputParts(spec)
   const found: string[] = []

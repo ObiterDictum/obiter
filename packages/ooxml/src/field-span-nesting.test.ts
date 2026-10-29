@@ -23,15 +23,10 @@ function spansOf(body: string): readonly StoredFieldSpan[] {
   return fieldSpans(parseXmlElements(source), source)
 }
 
-/** The same answer, asked one span at a time. A caller that needs it for every
- * field used to ask this of every field, which is the quadratic shape the
- * batched index exists to remove. */
 function oneByOne(spans: readonly StoredFieldSpan[]) {
   return new Set(spans.filter((span) => spanNestedInField(spans, span)))
 }
 
-/** Compared by membership rather than by iteration order: the batched answer
- * walks the spans sorted by where they begin, the per-span one walks the part. */
 function expectSameAnswer(spans: readonly StoredFieldSpan[]) {
   const batched = nestedFieldSpans(spans)
   const one = oneByOne(spans)
@@ -51,12 +46,10 @@ describe('batched field nesting', () => {
   })
 
   it('matches the per-span answer on nested fields', () => {
-    // B begins and ends inside A, so B is nested and A is not.
     const spans = spansOf(`<w:p>${begin('A')}${begin('B')}${end}${end}</w:p>`)
     expect(spans).toHaveLength(2)
     const nested = expectSameAnswer(spans)
     expect(nested.size).toBe(1)
-    // The inner field is the one B opened.
     const inner = spans.find(
       (span) => span.beginParagraph === spans[1]?.beginParagraph,
     )
@@ -64,8 +57,6 @@ describe('batched field nesting', () => {
   })
 
   it('matches the per-span answer when a field never closes', () => {
-    // An open field encloses every field that begins after it, and is itself
-    // never reported: the rule only fires for a span carrying both markers.
     const spans = spansOf(`<w:p>${begin('A')}${begin('B')}${end}</w:p>`)
     expect(spans).toHaveLength(2)
     const nested = expectSameAnswer(spans)
@@ -73,8 +64,6 @@ describe('batched field nesting', () => {
   })
 
   it('matches the per-span answer on a long spread of shapes', () => {
-    // Sequential, nested, open and repeated-id fields in one part, so the two
-    // implementations are compared over the shapes that separate them.
     const spans = spansOf(
       [
         `<w:p>${begin('A')}${end}</w:p>`,
@@ -90,10 +79,6 @@ describe('batched field nesting', () => {
   })
 
   it('answers in linear time where the per-span question is quadratic', () => {
-    // The caller asks this of every field, so the per-span shape costs fields ×
-    // fields: 1,000 fields is 1M comparisons and 8,000 is 64M. The batched index
-    // sorts once. Both sizes are timed so a fixed bound is not the only check —
-    // an 8× size must not cost 64×.
     const time = (fields: number) => {
       const spans = spansOf(
         Array.from(

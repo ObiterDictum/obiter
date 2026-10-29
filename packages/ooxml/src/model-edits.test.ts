@@ -378,9 +378,6 @@ describe('OOXML document edits', () => {
     const onlyId = mainParagraphs(single)[0]?.id
     if (!onlyId) throw new Error('Single paragraph is missing.')
 
-    // A tracked delete records the word-compatible deleted markup instead of
-    // removing the paragraph, so the persisted body still holds a paragraph and
-    // the last-paragraph invariant holds without an untracked-style refusal.
     applyDocumentEdits(
       single,
       [{ type: 'delete_paragraph', paragraphId: onlyId }],
@@ -418,11 +415,8 @@ describe('OOXML document edits', () => {
     const delRun = xml.slice(0, insStart)
     expect(insRun).toContain('<w:b/>')
     expect(insRun).toContain('<w:t>Typed</w:t>')
-    // the property revision is subsumed by the insertion — a marker nested
-    // inside w:ins is not a listed change and could never be decided
     expect(insRun).not.toContain('<w:rPrChange ')
     expect(delRun).toContain('<w:delText>')
-    // the deleted run keeps the original formatting
     const delRunRpr = delRun.slice(delRun.lastIndexOf('<w:rPr'))
     expect(delRunRpr).not.toContain('<w:b/>')
   })
@@ -563,8 +557,6 @@ describe('OOXML document edits', () => {
     )
     if (!deletion) throw new Error('Tracked blank deletion is missing.')
 
-    // Accepting the mark would remove the only `w:p`, so the decision is
-    // refused with the same typed reason the edit guard uses.
     expect(() =>
       applyTrackedChangeDecisions(reparsed, [deletion.id], 'accept'),
     ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
@@ -592,8 +584,6 @@ describe('OOXML document edits', () => {
     expect(() =>
       applyTrackedChangeDecisions(document, [mark.id], 'accept'),
     ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
-    // The refused decision must not have folded the sibling change or touched
-    // the source: the serialised part is byte-identical.
     expect(document.trackedChanges.get(run.id)?.absorbed).toBeFalsy()
     expect(
       await zipText(await serialiseDocx(document), 'word/document.xml'),

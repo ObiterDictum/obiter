@@ -8,12 +8,6 @@ import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import type { PlannedOperation } from './model-edit-validation'
 import type { RunEmphasis } from './model-property-edits'
 
-/**
- * Operation planning: resolve each contract operation's addresses to anchors
- * and reject malformed or unmodelled requests before any overlay write. Kept
- * apart from `model-edits.ts`, which is at its source ceiling carrying the
- * dispatch alone.
- */
 export function planOperation(
   document: OoxmlDocument,
   runParagraphs: ReadonlyMap<string, ParagraphAnchor>,
@@ -26,15 +20,6 @@ export function planOperation(
   validateParagraphFormat(operation)
   validateNumbering(operation, numberingIds)
   if (operation.type === 'set_section_properties') return operation
-  // Breaks, tables, pictures, hyperlinks and cross-references stay body-only:
-  // they write package parts or block-level structure the margin stories do
-  // not carry, or relationships the header/footer parts would each need. A
-  // footnote reference joins them: its note lives in the shared footnotes
-  // story, not in whichever part the reference happened to land in. A table
-  // of contents splices paragraph siblings, so it is body-only too — and a
-  // table of authorities, whose entries cite the body's paragraphs. A
-  // defined-term mark names the term it binds, and that meaning lives in the
-  // main story.
   if (
     operation.type === 'insert_break' ||
     operation.type === 'insert_section_break' ||
@@ -61,9 +46,6 @@ export function planOperation(
     }
   }
   if (operation.type === 'insert_page_number') {
-    // The field resolves the page its story belongs to: body, header or
-    // footer. A note story has no page of its own, so the editable-story
-    // catch-all below cannot be the check here.
     const paragraph = requireEditableParagraph(document, operation.paragraphId)
     const story = storyOfParagraph(document, paragraph)
     if (!(story && PAGE_STORY_KINDS.has(story.kind))) {
@@ -269,7 +251,6 @@ export function runEmphasisFields(
   }
 }
 
-/** The base run a tracked operation's reversal is keyed to, when run-keyed. */
 export function trackedRunIdOf(operation: PlannedOperation): string | null {
   if (operation.type === 'replace_run_text') return operation.run.wire.id
   if (operation.type === 'set_run_style') return operation.run.wire.id

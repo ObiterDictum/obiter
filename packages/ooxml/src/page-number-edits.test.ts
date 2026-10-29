@@ -27,7 +27,6 @@ describe('page-number edits', () => {
       '<w:instrText xml:space="preserve"> PAGE </w:instrText>',
     )
     expect(field).toContain('w:fldCharType="separate"')
-    // The field splits 'Second footer' at offset 7: 'Second ' then 'footer'.
     expect(xml.indexOf('Second ')).toBeLessThan(
       xml.indexOf('fldCharType="begin"'),
     )
@@ -89,7 +88,6 @@ describe('page-number edits', () => {
 
     expect(xml).toContain('Matter header')
     expect(xml.match(FIELD)?.[0]).toContain(' PAGE ')
-    // The splice landed after the replaced text: the field sits at the end.
     expect(xml.indexOf('Matter header')).toBeLessThan(
       xml.indexOf('fldCharType="begin"'),
     )
@@ -206,8 +204,6 @@ describe('page-number edits', () => {
         await original.async('uint8array'),
       )
     }
-    // The edited header part itself carries only the field splice: the run is
-    // split at offset 4 around the field.
     const xml = await zipText(output, 'word/header2.xml')
     expect(xml.match(FIELD)?.[0]).toContain(' PAGE ')
     expect(xml).toContain('<w:t>Jane</w:t>')

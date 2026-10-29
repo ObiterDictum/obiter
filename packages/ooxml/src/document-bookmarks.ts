@@ -13,23 +13,9 @@ import {
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 
-// Pending replacement values are fragments without namespace declarations, so
-// bookmark attributes written earlier in the batch are read from the attribute
-// text rather than parsed as a document.
 const PENDING_BOOKMARK_NAME = /<w:bookmarkStart[^>]*\bw:name="([^"]*)"/gu
 const PENDING_BOOKMARK_ID = /<w:bookmarkStart[^>]*\bw:id="(\d+)"/gu
 
-/**
- * Ensures `target` carries a `namePrefix`-family bookmark and returns its
- * name. A bookmark in the family already inside the target's range is
- * reused, so repeat references stay idempotent; otherwise the next free
- * `<namePrefix><n>` is allocated from the whole part — source and pending
- * replacements alike — because wire ids are encounter-order on documents
- * without `w14:paraId` and shift under a later parse, so they cannot seed a
- * durable name. The bookmarkStart/End pair wraps the paragraph's content —
- * after `w:pPr`, before `</w:p>` — so the paragraph's runs become the
- * bookmark's anchor text.
- */
 export function ensureParagraphBookmark(
   document: OoxmlDocument,
   target: ParagraphAnchor,
@@ -44,8 +30,6 @@ export function ensureParagraphBookmark(
     range,
     namePrefix,
   )
-  // A family bookmark already wrapping the paragraph is the bookmark —
-  // writing a second pair with the same name would nest a duplicate.
   if (inRange) return inRange
   const name = `${namePrefix}${String(nextNameIndex(taken, namePrefix))}`
   const paragraphElement = elements.find(
@@ -126,11 +110,6 @@ function refuseCoveringReplacement(
   }
 }
 
-/**
- * Every `namePrefix`-family bookmark name in the part, split into the name
- * already sitting inside `range` — the candidate for reuse — and the full
- * taken set the allocator must avoid.
- */
 function bookmarkNamesInUse(
   overlay: XmlOverlay,
   elements: readonly XmlElement[],
@@ -161,11 +140,6 @@ function bookmarkNamesInUse(
   return { inRange, taken }
 }
 
-/**
- * One more than the highest numeric suffix among the taken
- * `<namePrefix><n>` names, so an allocated name can never collide with or
- * recycle an existing one.
- */
 function nextNameIndex(taken: ReadonlySet<string>, namePrefix: string) {
   let next = 1
   for (const name of taken) {
@@ -178,11 +152,6 @@ function nextNameIndex(taken: ReadonlySet<string>, namePrefix: string) {
   return next
 }
 
-/**
- * One more than the highest `w:id` among the part's bookmarkStarts — source
- * and pending replacements, since a same-batch bookmark exists only as a
- * pending value.
- */
 export function nextBookmarkId(overlay: XmlOverlay) {
   let next = 0
   for (const element of parseXmlElements(overlay.source)) {

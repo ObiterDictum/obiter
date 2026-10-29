@@ -1,17 +1,5 @@
 import { enumBound, type ShareSafeValueBound } from './share-safe-value-bounds'
 
-/**
- * Preset enumeration bounds for the embedded (DrawingML) attribute
- * policy — shape types, cameras, light rigs, materials, patterns and
- * transform warps. Each set is the declared enumeration for its slot
- * (checked against the ISO 29500 `dml-main` simple types), so a preset
- * attribute keeps only a value Office itself could have written; a
- * token that is not on the list refuses rather than shipping arbitrary
- * text in a semantic slot. Colour-name enumerations live in
- * `share-safe-preset-colors.ts`.
- */
-
-/** `a:prstGeom prst` — the preset geometry catalogue. */
 export const PRESET_GEOMETRY: ShareSafeValueBound = enumBound([
   'accentBorderCallout1',
   'accentBorderCallout2',
@@ -202,7 +190,6 @@ export const PRESET_GEOMETRY: ShareSafeValueBound = enumBound([
   'wedgeRoundRectCallout',
 ])
 
-/** `a:prstGeomDef`/`a:camera prst` — preset camera positions. */
 export const PRESET_CAMERA: ShareSafeValueBound = enumBound([
   'isometricBottomDown',
   'isometricBottomUp',
@@ -268,7 +255,6 @@ export const PRESET_CAMERA: ShareSafeValueBound = enumBound([
   'perspectiveRight',
 ])
 
-/** `a:lightRig rig` — preset lighting rigs. */
 export const PRESET_LIGHT_RIG: ShareSafeValueBound = enumBound([
   'balanced',
   'brightRoom',
@@ -299,7 +285,6 @@ export const PRESET_LIGHT_RIG: ShareSafeValueBound = enumBound([
   'twoPt',
 ])
 
-/** `a:sp3d prstMaterial` — preset 3-D materials. */
 export const PRESET_MATERIAL: ShareSafeValueBound = enumBound([
   'legacyMatte',
   'legacyPlastic',
@@ -318,12 +303,10 @@ export const PRESET_MATERIAL: ShareSafeValueBound = enumBound([
   'softmetal',
 ])
 
-/** `a:prstShdw prst` — the twenty preset shadows. */
 export const PRESET_SHADOW: ShareSafeValueBound = enumBound(
   Array.from({ length: 20 }, (_unused, index) => `shdw${index + 1}`),
 )
 
-/** `a:bevelT`/`a:bevelB`/`a:bevel prst` — preset bevel types. */
 export const PRESET_BEVEL: ShareSafeValueBound = enumBound([
   'angle',
   'artDeco',
@@ -339,7 +322,6 @@ export const PRESET_BEVEL: ShareSafeValueBound = enumBound([
   'softRound',
 ])
 
-/** `a:pattFill prst` — the preset fill patterns. */
 export const PRESET_PATTERN: ShareSafeValueBound = enumBound([
   'cross',
   'dashDnDiag',
@@ -397,7 +379,6 @@ export const PRESET_PATTERN: ShareSafeValueBound = enumBound([
   'zigZag',
 ])
 
-/** `a:prstTxWarp prst` — preset text warp shapes. */
 export const PRESET_TEXT_WARP: ShareSafeValueBound = enumBound([
   'textArchDown',
   'textArchDownPour',

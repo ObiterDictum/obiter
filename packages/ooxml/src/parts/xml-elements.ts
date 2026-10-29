@@ -16,7 +16,6 @@ export type XmlElement = ExpandedName & {
   selfClosing: boolean
   parent?: XmlElement
   attributes: XmlAttribute[]
-  /** In-scope prefix → namespace URI bindings at this element. */
   namespaces?: ReadonlyMap<string, string>
 }
 
@@ -82,10 +81,6 @@ export function isWord(element: XmlElement, localName: string) {
   )
 }
 
-// One owner for break classification: the parser's text extraction, the model
-// anchors and the text-replacement path must all agree that a w:br is text
-// (bears a newline) only when its type is textWrapping or absent. Every other
-// type is structure: it consumes no text offset and must survive a text edit.
 export function isTextWrappingBreak(element: XmlElement) {
   if (isWord(element, 'cr')) return true
   if (!isWord(element, 'br')) return false
@@ -102,11 +97,6 @@ export function isDescendantOf(element: XmlElement, ancestor: XmlElement) {
   return false
 }
 
-/**
- * Direct children of each element, in document order. Passes that need an
- * element's children build this once: filtering the whole element list per
- * element is quadratic in a part where every element is a candidate.
- */
 export function childrenByParent(elements: readonly XmlElement[]) {
   const index = new Map<XmlElement, XmlElement[]>()
   for (const element of elements) {

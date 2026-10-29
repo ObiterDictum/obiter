@@ -26,7 +26,6 @@ export function trackedElementText(source: string, element: XmlElement) {
       )
 }
 
-/** Visit each opaque wrapper once; the review engine still lists only the outer change. */
 export function trackedDisplaySegments(
   source: string,
   root: XmlElement,

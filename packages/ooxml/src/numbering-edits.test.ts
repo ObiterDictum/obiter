@@ -12,8 +12,6 @@ describe('numbering override scanning', () => {
       '<w:lvlOverride w:ilvl="0"/>' +
       '<w:lvlOverride w:ilvl="1"><w:startOverride w:val="7"/></w:lvlOverride>' +
       '</w:num>'
-    // The self-closing override at ilvl 0 carries no start, so a 7 that belongs
-    // to ilvl 1 must not make it look like a pure ilvl-0 restart.
     expect(hasPureStartOverride(fragment, 0, 7)).toBe(false)
     expect(levelStartOverride(fragment, 0)).toBeUndefined()
     expect(levelStartOverride(fragment, 1)).toBe(7)

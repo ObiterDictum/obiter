@@ -46,23 +46,9 @@ import {
 import { DRAWINGML_MAIN_NAMESPACE, MATH_NAMESPACE } from './share-safe-parts'
 import { refuseShareSafe } from './share-safe-refusal'
 
-/**
- * The byte-level half of verification: independent of the element parser,
- * the emitted source is walked lexeme by lexeme and must show the shape
- * canonical emission promised — the standard declaration, no comments,
- * processing instructions, CDATA wrappers or DOCTYPEs, only namespace
- * declarations spelling canonical prefixes for allow-listed URIs, and no
- * prefixed attribute carrying revision identity.
- *
- * This layer deliberately re-derives structure from the emitted bytes
- * rather than trusting the element list — a writer that byte-spliced
- * anything the parser never modelled is caught here, not by DOM replay.
- */
-
 const XML_DECLARATION =
   /^<\?xml version="1\.0" encoding="UTF-8" standalone="yes"\?>[\r\n]*/u
 
-/** Every namespace URI a byte-level declaration may name. */
 const SAFE_NAMESPACE_URIS = new Set([
   ...CANONICAL_NAMESPACE_PREFIXES.keys(),
   CORE_PROPERTIES_NAMESPACE,
@@ -71,7 +57,6 @@ const SAFE_NAMESPACE_URIS = new Set([
   DOC_PROPS_VT_NAMESPACE,
 ])
 
-/** The prefix a declared URI must spell — canonical or metadata emit. */
 const EXPECTED_PREFIXES = new Map<string, string>([
   ...CANONICAL_NAMESPACE_PREFIXES,
   [CORE_PROPERTIES_NAMESPACE, 'cp'],
@@ -80,7 +65,6 @@ const EXPECTED_PREFIXES = new Map<string, string>([
   [DOC_PROPS_VT_NAMESPACE, 'vt'],
 ])
 
-/** Prefixed attribute local names that identify revision markup. */
 const REVISION_IDENTITY_LOCALS = new Set(['author', 'date', 'ed', 'edGrp'])
 
 const BOOKMARK_NAME = /^bm\d+$/u
@@ -88,15 +72,9 @@ const BOOKMARK_NAME = /^bm\d+$/u
 export interface ByteCheckResult {
   bookmarkNames: string[]
   anchorTargets: string[]
-  /** Reference-field operands (`REF`/`PAGEREF`/`NOTEREF`/`GOTOBUTTON`). */
   fieldReferences: string[]
 }
 
-/**
- * Asserts the lexical postconditions on one emitted XML part and returns
- * the bookmark names and anchor targets it declares for the package-level
- * cross-check (`w:anchor` must name a bookmark that shipped).
- */
 export function checkShareSafeXmlBytes(
   part: SourcePart,
   source: string,
@@ -109,15 +87,11 @@ export function checkShareSafeXmlBytes(
       `${part.name} is missing the canonical XML declaration`,
     )
   }
-  // Declaration parts carry no text at all — every byte between tags must
-  // be whitespace, so a spliced payload in a gap refuses.
   const declarationsOnly = isDeclarationPartName(part.name)
   const declaredPrefixes = new Map<string, string>()
   const bookmarkNames: string[] = []
   const anchorTargets: string[] = []
   const fieldReferences: string[] = []
-  // Canonical emission numbers `Relationship` declarations `rId1`, `rId2`,
-  // … in order — anything else is a spliced identifier.
   const relationshipSequence = { next: 1 }
 
   let cursor = declaration[0].length
@@ -162,9 +136,6 @@ export function checkShareSafeXmlBytes(
       continue
     }
 
-    // Attribute scan inside the tag body — bounded to the tag's extent,
-    // never free text. Namespace declarations resolve first so the tag
-    // name and every attribute check against this element's decls.
     const inner = body.slice(tagName.length)
     const attributes = [
       ...inner.matchAll(/([A-Za-z_][\w.:-]*)\s*=\s*("[^"]*"|'[^']*')/gu),
@@ -213,8 +184,6 @@ export function checkShareSafeXmlBytes(
         const prefix = name.slice(0, colon)
         const local = name.slice(colon + 1)
         if (prefix === 'xml') {
-          // `xml:space` is the only `xml:` attribute that may emit, and
-          // only with one of its two switch values.
           if (local !== 'space' || !XML_SPACE_VALUES.has(value)) {
             refuseShareSafe(
               'unverifiable-output',
@@ -232,14 +201,6 @@ export function checkShareSafeXmlBytes(
             `${part.name} carries identity attribute ${name}`,
           )
         }
-        // A `w:` attribute must sit on the `w:` element that declares it
-        // — `w:instr`/`w:name`/`w:anchor`/`w:uri`/`w:id` out of scope are
-        // payload channels, not formatting. Relationship pointers are
-        // proven against the package graph by the package-level check;
-        // `mc:` attributes are only ever the `Ignorable` declaration,
-        // which is checked below. Every other embedded namespace declares
-        // no prefixed attributes at all, so one reaching the emitted bytes
-        // is a writer splice.
         if (prefix === 'w') {
           const wmlLocal = tagName.startsWith('w:') ? tagName.slice(2) : ''
           const allowed = WML_ELEMENT_ATTRIBUTES.get(wmlLocal)
@@ -249,9 +210,6 @@ export function checkShareSafeXmlBytes(
               `${part.name} carries ${name} out of element scope`,
             )
           }
-          // The emitted value must satisfy the same bound the transform
-          // applied — a writer that spliced an out-of-enumeration value
-          // into a declared slot is caught here.
           if (wmlAttributeVerdict(wmlLocal, local, value) !== 'keep') {
             refuseShareSafe(
               'unverifiable-output',
@@ -259,8 +217,6 @@ export function checkShareSafeXmlBytes(
             )
           }
         } else if (prefix === 'm') {
-          // OMML `m:val` resolves through the same per-element bound the
-          // transform applied; any other `m:` attribute refuses.
           const mmlLocal = tagName.startsWith('m:') ? tagName.slice(2) : ''
           if (mathAttributeVerdict(mmlLocal, local, value) !== 'keep') {
             refuseShareSafe(
@@ -276,8 +232,6 @@ export function checkShareSafeXmlBytes(
             )
           }
         } else if (prefix === 'r') {
-          // A relationship pointer ships only the canonical `rId<n>` the
-          // declaration rewrite produced — any other value is a splice.
           if (!/^rId\d+$/u.test(value)) {
             refuseShareSafe(
               'unverifiable-output',
@@ -299,9 +253,6 @@ export function checkShareSafeXmlBytes(
         }
       }
       if (colon === -1) {
-        // An unqualified attribute on a `w:` element is a payload channel
-        // Word never writes; on an embedded element it must satisfy the
-        // same bounded vocabulary the transform applied.
         if (elementUri === WORD_NAMESPACE) {
           refuseShareSafe(
             'unverifiable-output',
@@ -341,10 +292,6 @@ export function checkShareSafeXmlBytes(
       }
     }
 
-    // An element whose refusal needs no parent context — the alpha
-    // erasure family and OMML phantoms — must not appear in emitted
-    // bytes either; the parent-scoped checks (`a:noFill` under run
-    // properties) stay with the plan replay, which sees the tree.
     if (
       elementUri !== undefined &&
       EMBEDDED_ELEMENTS.has(elementUri) &&
@@ -358,10 +305,6 @@ export function checkShareSafeXmlBytes(
         `${part.name} emits hidden-content element ${tagName}`,
       )
     }
-    // An element the schema gives a required attribute must show it in
-    // the emitted bytes — a writer that spliced an `a:biLevel`
-    // without `thresh` or a `Relationship` without `Target` is caught
-    // here, on the same required map the transform applied.
     if (elementUri !== undefined && EMBEDDED_ELEMENTS.has(elementUri)) {
       const required = EMBEDDED_REQUIRED_ATTRIBUTES.get(elementLocal)
       if (required !== undefined) {
@@ -374,9 +317,6 @@ export function checkShareSafeXmlBytes(
           }
         }
       }
-      // `a:ext` is two schema types under one local name — a byte-level
-      // check cannot see the parent, so the emitted tag must show either
-      // the extension record's `uri` or the size pair's `cx`/`cy`.
       if (elementLocal === 'ext' && elementUri === DRAWINGML_MAIN_NAMESPACE) {
         const carriesExtension = unqualifiedAttributes.has('uri')
         const carriesSize =
@@ -399,9 +339,6 @@ export function checkShareSafeXmlBytes(
         )
       }
     }
-    // Package declarations must spell exactly the canonical values the
-    // transform generates — sequential ids, keep-listed types, relative
-    // targets, declared MIME pairs — re-derived from raw bytes.
     checkDeclarationTagBytes(
       part,
       tagName,
@@ -419,9 +356,6 @@ export function checkShareSafeXmlBytes(
     )
   }
 
-  // Field instructions surviving in emitted bytes must all be keep-class;
-  // a reference field's operands are collected so the package-level check
-  // can prove each names a bookmark that shipped.
   for (const instruction of fieldInstructionsInXml(source)) {
     if (isFormulaFieldInstruction(instruction)) continue
     const name = fieldInstructionName(instruction)
@@ -444,7 +378,6 @@ export function checkShareSafeXmlBytes(
   return { bookmarkNames, anchorTargets, fieldReferences }
 }
 
-/** A qualified name's prefix must resolve to a declared canonical URI. */
 function checkPrefixedName(
   part: SourcePart,
   qualifiedName: string,

@@ -11,14 +11,6 @@ import {
   stripPropertyChange,
 } from './tracked-edit-xml'
 
-/**
- * The property-change half of the tracked-edit writer: `rPr` and `pPr`
- * patches recorded as `w:rPrChange`/`w:pPrChange` markers, and their merge
- * rules when a text replacement on the same node has already claimed the
- * run's fragment. The writer calls these through `createTrackedEditWriter`;
- * this module exists so the writer stays under the file-size ceiling.
- */
-
 export function setTrackedProperties(
   document: OoxmlDocument,
   input: {
@@ -28,8 +20,6 @@ export function setTrackedProperties(
     propertiesRange?: XmlElementRange
     propertiesName: 'rPr' | 'pPr'
     prefix: string
-    // Lazily allocated: a distributed or merged marker set needs one id per
-    // piece and a merged path needs none, so callers defer the allocation.
     attributes: () => string
     patch: (current: string) => string
   },
@@ -42,12 +32,6 @@ export function setTrackedProperties(
       )
     : `<${input.prefix}:${input.propertiesName}/>`
 
-  // A tracked text replacement on the same node covers the whole run,
-  // including the properties element. When both fire in one batch the
-  // property change distributes over every piece that survives an accept —
-  // the shared runs and the inserted run each carry the patch with their own
-  // change marker — so the order the operations ran in cannot strand it on
-  // the inserted text alone.
   const trackedText = part.overlay.replacements.get(`${input.id}:tracked-text`)
   if (trackedText) {
     const distributed = foldRprIntoTrackedText(
@@ -58,8 +42,6 @@ export function setTrackedProperties(
       input.attributes,
     )
     if (distributed === undefined) {
-      // Not a piece sequence this writer built: keep the single host, the
-      // inserted run or the deleted run when nothing survives.
       const currentRpr = extractInsertedRunRpr(
         trackedText.value,
         input.prefix,

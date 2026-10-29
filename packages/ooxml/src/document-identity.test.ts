@@ -50,7 +50,6 @@ describe('paragraph identity canonicalisation', () => {
 
     expect(ids[0]).toBe('para-w14-AAAA1111')
     expect(ids[1]).toBe('para-w14-BBBB2222')
-    // The malformed value is replaced, not persisted.
     expect(ids[2]).toMatch(/^para-w14-[0-9A-F]{8}$/u)
     expect(ids[2]).not.toBe('para-w14-not-hex')
     expect(new Set(ids).size).toBe(3)

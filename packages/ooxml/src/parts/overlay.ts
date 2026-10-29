@@ -36,8 +36,6 @@ type ParsedStartTag = {
   selfClosing: boolean
 }
 
-// Built on first use: an eager module-scope instance drags fast-xml-parser
-// into the client bundle for a validation path only document parsing runs.
 let validationParser: XMLParser | undefined
 
 export function createXmlOverlay(source: string) {
@@ -231,12 +229,6 @@ export function escapeXmlAttribute(value: string) {
     .replaceAll("'", '&apos;')
 }
 
-/**
- * Parses one start tag's body — the slice between `<` and `>` — into its
- * qualified name, raw attribute values (still entity-encoded) and
- * self-closing flag. Exported for the field-instruction scan, which walks
- * XML fragments that are not complete documents.
- */
 export function parseStartTag(body: string): ParsedStartTag {
   const selfClosing = /\/\s*$/u.test(body)
   const content = selfClosing ? body.replace(/\/\s*$/u, '') : body

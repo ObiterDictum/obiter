@@ -159,7 +159,6 @@ describe('OOXML package limits', () => {
   })
 
   it('accepts a real-toolchain-shaped ratio below the ceiling', () => {
-    // python-docx styles parts reach ~32x; the ceiling must clear them.
     const zip = buildZipWithCentralDirectory([
       {
         name: 'word/styles.xml',

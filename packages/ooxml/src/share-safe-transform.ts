@@ -18,13 +18,6 @@ import {
 } from './share-safe-parts'
 import { refuseShareSafe } from './share-safe-refusal'
 
-/**
- * Applies the inventory's verdict to the working copy. Kept XML parts are
- * emitted canonically from their content plans — the serialised bytes are
- * the plan's output, not the input with edits — so lexical content the
- * parser never modelled cannot survive. A failed write fails the whole
- * export rather than leaving partial state.
- */
 export function applyShareSafePlan(
   document: OoxmlDocument,
   plan: ShareSafePlan,
@@ -34,8 +27,6 @@ export function applyShareSafePlan(
     if (!disposition || disposition.kind === 'drop') continue
 
     if (part.kind === 'binary') {
-      // Binary parts serialise straight from `originalPayload` — a dirty
-      // flag would demand an overlay they do not have.
       const payload = plan.binaryPayloads.get(name)
       if (payload !== undefined) part.originalPayload = payload
       continue
@@ -46,8 +37,6 @@ export function applyShareSafePlan(
       refuseShareSafe('malformed-package', `${name} has no parse surface`)
     }
 
-    // Canonical metadata parts discard their input wholesale — the
-    // analysis already proved the root.
     if (
       disposition.kind === 'scrub-core-properties' ||
       disposition.kind === 'scrub-app-properties'
@@ -65,8 +54,6 @@ export function applyShareSafePlan(
       continue
     }
 
-    // The content-types stream is generated wholesale from the plan —
-    // original declarations inform nothing but the kept-part set.
     if (name === CONTENT_TYPES_PART) {
       const emitted = canonicalContentTypesXml(plan)
       if (emitted !== overlay.source) {
@@ -98,8 +85,6 @@ export function applyShareSafePlan(
     }
   }
 
-  // A relationships part left with no declarations ships nothing; the
-  // package-level `_rels/.rels` always keeps the officeDocument pointer.
   for (const [name, part] of document.sourceParts) {
     const disposition = plan.dispositions.get(name)
     if (
@@ -128,11 +113,6 @@ export function applyShareSafePlan(
     if (disposition.kind === 'drop') document.sourceParts.delete(name)
   }
 
-  // Part names are identifier text: every shipped part emits under the
-  // canonical name its role dictates — `word/document.xml`,
-  // `word/media/image1.png` — so the zip entry itself carries nothing the
-  // author chose. Renames collect first so applying one cannot rewrite
-  // a part the next lookup still expects under its source name.
   const renames: [string, string][] = []
   for (const name of document.sourceParts.keys()) {
     const canonical = name.endsWith('.rels')

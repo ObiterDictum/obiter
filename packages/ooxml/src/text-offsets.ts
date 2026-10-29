@@ -6,16 +6,6 @@ import {
 } from './model'
 import { decodeXmlReferences } from './xml-lexemes'
 
-/**
- * The shared owner for resolving a model text offset to a position in a
- * part's source XML. Comment markers, emphasis cuts, hyperlinks, page breaks,
- * table-of-contents and section splices all place boundaries by the same
- * rule: a paragraph's wire text is the concatenation of its runs' editable
- * text nodes, and a boundary inside a run lands at the decoded-text
- * position the node reports. Splitting this module out of comment-anchors
- * keeps one traversal owner so no caller can disagree about a break or an
- * entity boundary.
- */
 type RunSplitPoint = {
   kind: 'run'
   run: TextRunAnchor
@@ -32,16 +22,6 @@ export type InsertionPoint = {
   split?: SplitPoint
 }
 
-/**
- * `afterBoundaryContent` chooses which side of a text-element boundary an
- * interior offset resolves to. Boundary-hugging callers — comment markers,
- * emphasis cuts, page breaks — keep the default `after-element` answer (the
- * preceding element's close). Splice insertions pass `true` so the point is
- * the next editable element's start, after any non-editable siblings the
- * batch already placed at that effective offset: the wire model lands
- * repeated inserts at one offset in operation order (it skips zero-length
- * runs), and the source splice must order identically.
- */
 export function locateOffset(
   source: string,
   paragraph: ParagraphAnchor,
@@ -86,10 +66,6 @@ export function locateOffset(
   throw new OoxmlError('comment-anchor-unresolved')
 }
 
-// The run's editable text as source-order nodes. A `w:t` contributes its
-// decoded text; a text-wrapping `w:br` contributes exactly one `\n`, matching
-// the parser's `runPlainText` and `DocumentTextRunWire.text`. Everything else
-// in a run is structure and contributes no offset.
 export type EditableTextNode = { range: XmlElementRange; textBreak: boolean }
 
 export function editableTextNodes(run: TextRunAnchor): EditableTextNode[] {
@@ -115,9 +91,6 @@ function locateInsideRun(
     ...node,
     text: node.textBreak ? '\n' : decodeXmlReferences(node.raw),
   }))
-  // A run whose anchors do not reconstruct its model text, such as a break the
-  // parser counted but did not anchor, cannot be split faithfully. Refuse
-  // rather than place a boundary by guesswork.
   if (decoded.map((node) => node.text).join('') !== run.wire.text) {
     throw new OoxmlError('comment-anchor-unresolved')
   }

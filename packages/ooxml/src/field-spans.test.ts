@@ -3,10 +3,6 @@ import { describe, expect, it } from 'bun:test'
 import { parseDocx } from './parse'
 import { probePackage, W } from './share-safe-probe-kit'
 
-/**
- * The pairing walks a part's elements with binary-searched windows rather than
- * whole-list scans. These pin the windows' edges.
- */
 function fieldDocument(inner: string) {
   return `<?xml version="1.0"?><w:document xmlns:w="${W}"><w:body>${inner}</w:body></w:document>`
 }
@@ -29,9 +25,6 @@ describe('field spans', () => {
   })
 
   it('names the root paragraph when the part root is the paragraph itself', async () => {
-    // Malformed on purpose: the part's root is the `w:p`, so the paragraph has
-    // no parent and the sibling window cannot be built from one. The span must
-    // still name the paragraph rather than report none.
     const document = await parseDocx(
       await probePackage({
         document: `<?xml version="1.0"?><w:p xmlns:w="${W}">${complexField('REF a')}</w:p>`,

@@ -23,11 +23,6 @@ async function partSource(bytes: Uint8Array, name: string) {
   return file.async('string')
 }
 
-/**
- * The shared fixture carries real tracked changes, which the policy refuses.
- * This variant drops the tracked-change markup — but keeps `w:trackRevisions`
- * in settings — so the removal half of the policy is exercised end to end.
- */
 async function withoutTrackedChanges() {
   const zip = await JSZip.loadAsync(
     await buildOoxmlFixture('full-fidelity-with-w14-ids'),
@@ -88,14 +83,11 @@ describe('share-safe export', () => {
 
   it('strips comments, markers, authorship metadata and signatures', async () => {
     const zip = await fixtureZip()
-    // The fixture leaves settings.xml undeclared; a real package declares it,
-    // and a declared settings part must survive with its tracking flag gone.
     await declarePart(zip, 'settings', 'settings.xml')
     const document = await parseDocx(await zipBytes(zip))
     const bytes = await buildShareSafeDocx(document)
     const parts = await zipParts(bytes)
 
-    // Comment parts and every dangling pointer into them are gone.
     expect(parts.has('word/comments.xml')).toBe(false)
     expect(parts.has('word/_rels/comments.xml.rels')).toBe(false)
     expect(parts.get('word/_rels/document.xml.rels')).not.toContain(
@@ -107,25 +99,17 @@ describe('share-safe export', () => {
     expect(story).not.toContain('commentRangeStart')
     expect(story).not.toContain('commentRangeEnd')
     expect(story).not.toContain('commentReference')
-    // The commented run's text, and the footnote/endnote references sharing
-    // its sibling run, are content and survive.
     expect(story).toContain('Commented text')
     expect(story).toContain('footnoteReference')
     expect(story).toContain('endnoteReference')
 
-    // Authorship and descriptive metadata leave as a bare properties root —
-    // children go whole, so nothing rides in a foreign element's attributes.
     expect(parts.get('docProps/core.xml')).toContain(
       '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"></cp:coreProperties>',
     )
     expect(parts.get('docProps/core.xml')).not.toContain('Alice Example')
-    // The signature over the original bytes is void and dropped.
     expect(parts.has('_xmlsignatures/sig1.xml')).toBe(false)
-    // Track-changes-on is not inherited by the recipient.
     expect(parts.get('word/settings.xml')).not.toContain('trackRevisions')
-    // Unreferenced parts ride along in the source but never reach the copy.
     expect(parts.has('customXml/item1.xml')).toBe(false)
-    // Visible content is untouched.
     expect(story).toContain('Alice Example overview')
   })
 
@@ -283,8 +267,6 @@ describe('share-safe export', () => {
     )
     const document = await parseDocx(await zipBytes(zip))
     const bytes = await buildShareSafeDocx(document)
-    // Wherever the source put it, the emitted part ships under its
-    // canonical name — the source spelling never reaches the archive.
     const scrubbed = await partSource(bytes, 'docProps/core.xml')
     expect(scrubbed).not.toContain('SECRETPAYLOAD')
   })

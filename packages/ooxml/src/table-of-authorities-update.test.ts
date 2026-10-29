@@ -41,14 +41,9 @@ describe('table-of-authorities update', () => {
     const output = await serialiseDocx(reparsed)
     const xml = await zipText(output, 'word/document.xml')
 
-    // Still exactly one TOA field: the update replaced the generated
-    // range rather than splicing a second field next to it.
     expect(countOccurrences(xml, ' TOA \\h \\c "1" ')).toBe(1)
-    // The new citation is marked once; the stored mark is not duplicated.
     expect(countOccurrences(xml, ' TA \\l "[2019] EWCA Civ 12"')).toBe(1)
     expect(countOccurrences(xml, ' TA \\l "[2020] UKSC 1"')).toBe(1)
-    // The stored `_ToA` bookmark name is reused — not reallocated — and
-    // the fresh citing paragraph takes the next free name.
     expect(xml).toContain('w:name="_ToA1"')
     expect(xml).toContain('PAGEREF _ToA1')
     expect(xml).toContain('w:name="_ToA2"')
@@ -62,7 +57,6 @@ describe('table-of-authorities update', () => {
         paragraph.runs.map((run) => run.text).join(''),
       ),
     ).toEqual(['[2019] EWCA Civ 12', '[2020] UKSC 1'])
-    // The tail keeps the field's `end` and the anchor's remaining text.
     const tail = mainParagraphs(reparsedTwice).find(
       (paragraph) =>
         paragraph.runs.map((run) => run.text).join('') ===
@@ -114,8 +108,6 @@ describe('table-of-authorities update', () => {
       },
     ])
     const reparsed = await parseDocx(await serialiseDocx(document))
-    // The pre-split anchor still names itself — the field's `begin`
-    // lives in the generated heading paragraph after it.
     const anchorAgain = mainParagraphs(reparsed).find(
       (paragraph) => paragraph.id === anchor.id,
     )
@@ -142,8 +134,6 @@ describe('table-of-authorities update', () => {
       },
     ])
     const stored = await serialiseDocx(document)
-    // Strip the field's `end` character — the first one after the TOA
-    // heading — so the update walk finds no tail to claim.
     const xml = await zipText(stored, 'word/document.xml')
     const toaAt = xml.indexOf(' TOA ')
     const endAt = xml.indexOf('<w:fldChar w:fldCharType="end"/>', toaAt)
@@ -221,9 +211,6 @@ describe('table-of-authorities update', () => {
     const stored = await storedToaDocument()
     const xml = await zipText(stored, 'word/document.xml')
     const toaEnd = fieldEndAfter(xml, xml.indexOf(' TOA '))
-    // A `w:tbl` sibling between the entry paragraphs and the tail sits
-    // inside the field's range: the wire cannot describe it and the
-    // rewrite cannot safely replace across it.
     const tailStart = paragraphStartBefore(xml, toaEnd)
     const foreign = await rewritePart(
       stored,
@@ -243,8 +230,6 @@ describe('table-of-authorities update', () => {
     const stored = await storedToaDocument()
     const xml = await zipText(stored, 'word/document.xml')
     const toaEnd = fieldEndAfter(xml, xml.indexOf(' TOA '))
-    // Wrap the tail paragraph in a block `w:sdt`: the `end` no longer sits
-    // inside a body-child paragraph the rewrite can splice around.
     const tailStart = paragraphStartBefore(xml, toaEnd)
     const tailEnd = xml.indexOf('</w:p>', toaEnd) + '</w:p>'.length
     const foreign = await rewritePart(
@@ -272,9 +257,6 @@ describe('table-of-authorities update', () => {
     const stored = await storedToaDocument()
     const xml = await zipText(stored, 'word/document.xml')
     const toaAt = xml.indexOf(' TOA ')
-    // Open a second field immediately before the `TOA` begin: the inner
-    // field now closes inside the outer one's range, so replacing it
-    // would strand the outer `end`.
     const toaBegin = xml.lastIndexOf(
       '<w:fldChar w:fldCharType="begin"/>',
       toaAt,
@@ -306,8 +288,6 @@ describe('table-of-authorities update', () => {
         'Example referenceJane Example reference',
     )
     if (!tail) throw new Error('Fixture model is missing.')
-    // Removing the tail alone strands the field's `begin` and `separate`:
-    // even with no refresh queued the batch cannot leave them unpaired.
     expect(() =>
       applyDocumentEdits(reparsed, [
         { type: 'delete_paragraph', paragraphId: tail.id },
@@ -321,8 +301,6 @@ describe('table-of-authorities update', () => {
     const head = toaFieldHead(reparsed)
     const paragraphs = mainParagraphs(reparsed)
     const headIndex = paragraphs.indexOf(head)
-    // head + entry + tail: every boundary marker of the `TOA` field and
-    // the `PAGEREF` inside its entry is removed together.
     const range = paragraphs.slice(headIndex, headIndex + 3)
     expect(
       range
@@ -345,8 +323,6 @@ describe('table-of-authorities update', () => {
       'word/document.xml',
     )
     expect(countOccurrences(xml, ' TOA ')).toBe(0)
-    // The citing paragraph's own `TA` mark field stays balanced — the only
-    // complex field left is its begin/end pair.
     expect(countOccurrences(xml, 'fldCharType="begin"')).toBe(1)
     expect(countOccurrences(xml, 'fldCharType="end"')).toBe(1)
   })
@@ -354,8 +330,6 @@ describe('table-of-authorities update', () => {
   it('does not re-mark a citation whose stored mark splits across runs', async () => {
     const stored = await storedToaDocument()
     const xml = await zipText(stored, 'word/document.xml')
-    // Split the stored mark's instruction across two `instrText` runs —
-    // the semantic parse still reads it as the citation's `TA` field.
     const markAt = xml.indexOf(' TA \\l "[2020] UKSC 1"')
     expect(markAt).toBeGreaterThan(-1)
     const closeAt = xml.indexOf('</w:instrText>', markAt)
@@ -373,7 +347,6 @@ describe('table-of-authorities update', () => {
       await serialiseDocx(reparsed),
       'word/document.xml',
     )
-    // The split mark is left alone — no second `TA` for the citation.
     expect(countOccurrences(output, ' TA \\l "[2020]')).toBe(1)
     expect(countOccurrences(output, ' UKSC 1" \\s ')).toBe(1)
     expect(countOccurrences(output, ' TOA \\h \\c "1" ')).toBe(1)
@@ -382,8 +355,6 @@ describe('table-of-authorities update', () => {
   it('does not re-mark a citation whose stored mark is a fldSimple', async () => {
     const stored = await storedToaDocument()
     const xml = await zipText(stored, 'word/document.xml')
-    // Replace the complex `TA` mark — begin, instruction, end runs — with
-    // an equivalent `w:fldSimple` carrying the same instruction.
     const markBegin = xml.lastIndexOf(
       '<w:fldChar w:fldCharType="begin"/>',
       xml.indexOf(' TA \\l '),
@@ -409,7 +380,6 @@ describe('table-of-authorities update', () => {
       await serialiseDocx(reparsed),
       'word/document.xml',
     )
-    // The simple field stays the only `TA` mark for the citation.
     expect(countOccurrences(output, ' TA \\l ')).toBe(1)
     expect(output).toContain('w:fldSimple')
     expect(countOccurrences(output, ' TOA \\h \\c "1" ')).toBe(1)
@@ -434,8 +404,6 @@ describe('table-of-authorities update', () => {
         'Example referenceJane Example reference',
     )
     if (!tail) throw new Error('Fixture model is missing.')
-    // Deleting the tail removes the field's `end` — the refresh cannot
-    // hold what it would need to preserve.
     expect(() =>
       applyDocumentEdits(reparsed, [
         { type: 'delete_paragraph', paragraphId: tail.id },
@@ -449,10 +417,6 @@ async function parseFixture() {
   return parseDocx(await buildOoxmlFixture('full-fidelity-with-w14-ids'))
 }
 
-/**
- * A serialised document holding one generated `TOA` field — the shape each
- * foreign-structure test then mutates at the XML level.
- */
 async function storedToaDocument() {
   const document = await parseFixture()
   const { cited, anchor } = toaFixture(document)
@@ -467,10 +431,6 @@ async function storedToaDocument() {
   return serialiseDocx(document)
 }
 
-/**
- * The offset of the `TOA` field's own `end` — the second `end` after the
- * instruction, since the entry's nested `PAGEREF` closes first.
- */
 function fieldEndAfter(xml: string, from: number) {
   const first = xml.indexOf('<w:fldChar w:fldCharType="end"/>', from)
   expect(first).toBeGreaterThan(from)
@@ -479,7 +439,6 @@ function fieldEndAfter(xml: string, from: number) {
   return second
 }
 
-/** The start of the `w:p` element `position` sits inside. */
 function paragraphStartBefore(xml: string, position: number) {
   const start = Math.max(
     xml.lastIndexOf('<w:p>', position),
@@ -504,11 +463,6 @@ function toaFixture(document: Awaited<ReturnType<typeof parseDocx>>) {
   return { cited, second, anchor }
 }
 
-/**
- * The stored paragraph the field's `begin`, `TOA` instruction and
- * `separate` live in — the generated heading wire, which is the id an
- * `update_table_of_authorities` operation names.
- */
 function toaFieldHead(document: Awaited<ReturnType<typeof parseDocx>>) {
   const head = mainParagraphs(document).find(
     (paragraph) =>

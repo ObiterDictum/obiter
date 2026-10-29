@@ -1,13 +1,3 @@
-/**
- * The value bounds and element-scoped attribute table for embedded
- * (DrawingML, picture, wordprocessing-drawing, extension-shape)
- * elements. Every bound names the enumeration or grammar the declared
- * simple type permits — an attribute a table does not list strips as
- * inert metadata, while a declared slot holding an out-of-bound value
- * refuses the copy. `embeddedAttributeVerdict` in
- * `share-safe-drawing-attributes.ts` resolves against these tables.
- */
-
 import {
   ARROW_SIZE_VALUES,
   ARROW_TYPE_VALUES,
@@ -89,68 +79,44 @@ const HEX20 = shapeBound(/^[0-9A-Fa-f]{20}$/u)
 const GUID = shapeBound(
   /^\{[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}\}$/u,
 )
-/** A bounded alphanumeric token — preset names, field types, rig styles. */
 const TOKEN = shapeBound(/^[A-Za-z][A-Za-z0-9]{0,31}$/u)
-/** A geometry guide name (`a:gd`): referenced by `fmla` formulas. */
 const IDENT = shapeBound(/^[A-Za-z_][\w.-]{0,62}$/u)
-/** Language tags (`en`, `en-US`) — short primary subtag, bounded tail. */
 const LANG_TAG = shapeBound(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8}){0,3}$/u)
-/** Four-letter ISO 15924 script codes (`Latn`, `Cyrl`, `Jpan`). */
 const SCRIPT_TAG = shapeBound(/^[A-Za-z]{4}$/u)
-/** Font names are text, but never markup: bounded length, no `<>&"'`. */
 const FONT_NAME = shapeBound(/^[^<>&"']{0,64}$/u)
-/** `a:gd` formulas: operators and operands, no markup or string literals. */
 const FMLA = shapeBound(/^[0-9A-Za-z_+*/(). ?:-]{1,64}$/u)
 
-/**
- * The OOXML percentage family, each bound the union the schema declares:
- * a thousandths-of-a-percent integer plus the `N%`/`N.NN%` literal form
- * the same simple type permits.
- */
 const PERCENT_FORM = /^-?[0-9]+(?:\.[0-9]+)?%$/u
 const POSITIVE_PERCENT_FORM = /^[0-9]+(?:\.[0-9]+)?%$/u
 const POSITIVE_FIXED_PERCENT_FORM = /^(?:100|[0-9][0-9]?)(?:\.[0-9][0-9]?)?%$/u
 const FIXED_PERCENT_FORM = /^-?(?:100|[0-9][0-9]?)(?:\.[0-9][0-9]?)?%$/u
 
-/** `ST_Percentage` — signed thousandths int or signed `N%` literal. */
 const PERCENTAGE = unionBound([
   intRangeBound(-2147483648, 2147483647),
   shapeBound(PERCENT_FORM),
 ])
-/** `ST_PositivePercentage` — the same union with no negative sign. */
 const POSITIVE_PERCENTAGE = unionBound([
   intRangeBound(0, 2147483647),
   shapeBound(POSITIVE_PERCENT_FORM),
 ])
-/** `ST_PositiveFixedPercentage` — 0 to 100% in either literal form. */
 const POSITIVE_FIXED_PERCENTAGE = unionBound([
   intRangeBound(0, 100000),
   shapeBound(POSITIVE_FIXED_PERCENT_FORM),
 ])
-/** `ST_FixedPercentage` — -100% to 100% in either literal form. */
 const FIXED_PERCENTAGE = unionBound([
   intRangeBound(-100000, 100000),
   shapeBound(FIXED_PERCENT_FORM),
 ])
-/** `ST_PositiveFixedAngle` — 60000ths of a degree, `[0, 21600000)`. */
 const POSITIVE_FIXED_ANGLE = intRangeBound(0, 21599999)
-/** `ST_FOVAngle` — `[0, 10800000]`. */
 const FOV_ANGLE = intRangeBound(0, 10800000)
-/** `a:spcPct val` — `ST_TextSpacingPercentOrPercentString`. */
 const SPACING_PERCENT = unionBound([
   intRangeBound(0, 13200000),
   shapeBound(POSITIVE_PERCENT_FORM),
 ])
-/** `a:buSzPct val` — the 25%-400% literal the schema patterns. */
 const BULLET_SIZE_PERCENT = shapeBound(
   /^0*(?:(?:2[5-9])|(?:[3-9][0-9])|(?:[1-3][0-9][0-9])|400)%$/u,
 )
 
-/**
- * Reads a percentage attribute in thousandths-of-a-percent units
- * regardless of which literal form it spells — `50000` and `50%` are
- * the same value, so hidden-content checks compare numbers, not text.
- */
 const PERCENT_LITERAL = /^(-?)([0-9]+)(?:\.([0-9]+))?%$/u
 
 export function percentThousandths(value: string): number | undefined {
@@ -194,15 +160,6 @@ const WRAP_TEXT = enumBound(WRAP_TEXT_VALUES)
 const FONT_REF_INDEX = enumBound(FONT_REF_INDEX_VALUES)
 const FLIP = enumBound(FLIP_VALUES)
 
-/**
- * Unqualified attribute names embedded elements may carry when their
- * bound is the same everywhere. Names not listed — here or in the scoped
- * table — strip; a consumer resolves them only as inert metadata anyway.
- * The integer and flag shapes cannot carry text, so a kept value is
- * always inert — a bound failure refuses rather than shipping an
- * arbitrary string in a value slot. The name lists themselves live in
- * `share-safe-drawing-attribute-sets.ts`.
- */
 export const EMBEDDED_ATTRIBUTES: ReadonlyMap<string, ShareSafeValueBound> =
   new Map<string, ShareSafeValueBound>([
     ...INT_ATTRIBUTES.map((name): [string, ShareSafeValueBound] => [name, INT]),
@@ -212,14 +169,6 @@ export const EMBEDDED_ATTRIBUTES: ReadonlyMap<string, ShareSafeValueBound> =
     ]),
   ])
 
-/**
- * Unqualified attributes legal only on named embedded elements, with the
- * value bound each placement declares. `typeface` is a font declaration's
- * face name; placed on any other element it is a metadata channel. A name
- * absent from the element's set strips; a name present whose value fails
- * the bound refuses — an enum or grammar slot holding foreign text is a
- * payload, not formatting.
- */
 export const EMBEDDED_SCOPED_ATTRIBUTES: ReadonlyMap<
   string,
   ReadonlyMap<string, ShareSafeValueBound>
@@ -263,13 +212,7 @@ export const EMBEDDED_SCOPED_ATTRIBUTES: ReadonlyMap<
   ['a', scoped(POSITIVE_FIXED_PERCENTAGE, ['alphaRepl'])],
   ['thresh', scoped(POSITIVE_FIXED_PERCENTAGE, ['biLevel'])],
   ['amt', scoped(POSITIVE_PERCENTAGE, ['alphaModFix'])],
-  // `rad` is a non-negative radius wherever it ships — `blur`, `glow` and
-  // `softEdge` declare `ST_PositiveCoordinate`; `alphaOutset` declares a
-  // signed `ST_Coordinate` whose negative form is an alpha inset that
-  // erodes the shape's alpha mask, so it shares the same bound.
   ['rad', scoped(UINT_BOUND, ['alphaOutset', 'blur', 'glow', 'softEdge'])],
-  // `a:fillOverlay@blend` is required; the transitional `ST_BlendMode`
-  // set contains no alpha-erasing mode, so the full enum may ship.
   ['blend', scoped(enumBound(BLEND_MODE_VALUES), ['fillOverlay'])],
   [
     'pos',

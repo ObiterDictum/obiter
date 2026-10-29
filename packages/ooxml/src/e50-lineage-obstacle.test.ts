@@ -59,9 +59,6 @@ describe('E50 lineage obstacles (real parser/serializer)', () => {
     if (!first || !second) throw new Error('paragraphs')
     const headRun = first.runs[0]
     if (!headRun) throw new Error('head run')
-    // A join concatenates the tail paragraph's text into the head run and
-    // deletes the tail paragraph: two runs become one and a run crosses a
-    // paragraph boundary.
     applyDocumentEdits(doc, [
       {
         type: 'replace_run_text',
@@ -99,10 +96,6 @@ describe('E50 lineage obstacles (real parser/serializer)', () => {
         })),
       ),
     )
-    // Tracked wrappers are excluded from the paragraph model; the granular
-    // writer keeps the unchanged head as a live run and only the inserted
-    // text lives in `changes`, which carry no run id. This is the identity
-    // gap the version lineage must bridge for tracked saves.
     expect(shape(after)[0]?.runs).toEqual([
       { id: 'text-000001', text: 'Hello' },
     ])

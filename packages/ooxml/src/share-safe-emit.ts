@@ -14,10 +14,6 @@ import { refuseShareSafe } from './share-safe-refusal'
 
 export const XML_DECLARATION =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
-/**
- * XML 1.0 legality: control codes below 0x20 except tab, LF and CR are
- * not legal characters, and a text node carrying one cannot emit.
- */
 function carriesControlCharacter(text: string) {
   for (let index = 0; index < text.length; index += 1) {
     const code = text.charCodeAt(index)
@@ -28,19 +24,6 @@ function carriesControlCharacter(text: string) {
   return false
 }
 
-/**
- * The canonical serialiser: a kept part's output is written from the
- * parsed element tree and the content plan, never spliced from input
- * bytes. Comments, processing instructions, CDATA wrappers, unused
- * `xmlns` declarations and `mc:` attributes cannot reach the output
- * because nothing here reads the source as markup — the source only
- * supplies text content between element boundaries.
- *
- * Namespaces are redeclared from scratch: every emitted element and
- * attribute spells the canonical prefix for its expanded namespace, the
- * root declares exactly the namespaces the emitted surface uses, and
- * `mc:Ignorable` is generated only when a kept element needs it.
- */
 export function emitShareSafePart(
   part: SourcePart,
   contentPlan: ShareSafeContentPlan,
@@ -72,8 +55,6 @@ export function emitShareSafePart(
     childrenOf.set(element.parent, siblings)
   }
 
-  // The namespaces the emitted surface actually uses — element names and
-  // surviving attribute names only.
   const usedNamespaces = new Set<string>()
   for (const element of elements) {
     if (gone(element) || contentPlan.unwrapped.has(element)) continue
@@ -136,9 +117,6 @@ export function emitShareSafePart(
       seen.add(key)
       const override = contentPlan.attrOverrides.get(attribute)
       const value = override === undefined ? attribute.value : override
-      // Checked for every emitted attribute, not just overrides: a value
-      // taken straight from the source is author text too, and the XML 1.0
-      // character rule does not care where it came from.
       if (carriesControlCharacter(value)) {
         refuseShareSafe(
           'malformed-package',
@@ -158,10 +136,6 @@ export function emitShareSafePart(
     }
     const override = contentPlan.textOverrides.get(element)
     if (override !== undefined) {
-      // A rewritten override is author-derived text (a field instruction):
-      // an author byte that is not legal XML 1.0 refuses here exactly as it
-      // does on the source text and CDATA paths, rather than emitting an
-      // invalid document.
       if (carriesControlCharacter(override)) {
         refuseShareSafe(
           'malformed-package',
@@ -199,12 +173,6 @@ export function emitShareSafePart(
     return emitElement(element, false)
   }
 
-  /**
-   * Text between two element boundaries: comments and processing
-   * instructions drop, CDATA contributes its literal text, and the rest
-   * decodes entity references then re-escapes — so `&amp;` spells and
-   * raw bytes both arrive as one canonical text form.
-   */
   function emitText(start: number, end: number) {
     let output = ''
     let cursor = start
@@ -228,8 +196,6 @@ export function emitShareSafePart(
             `${part.name} carries an unclosed CDATA section`,
           )
         }
-        // CDATA content is literal: no reference decoding — `&#60;` inside
-        // a section is the characters, not a `<`.
         const literal = source.slice(opening + 9, close)
         if (carriesControlCharacter(literal)) {
           refuseShareSafe(
@@ -252,8 +218,6 @@ export function emitShareSafePart(
           `${part.name} carries a declaration inside content`,
         )
       }
-      // Any element tag inside a text gap belongs to a node the element
-      // walk already consumed — encountering one is an emitter bug.
       let tagEnd: number
       try {
         tagEnd = findXmlTagEnd(source, opening + 1)
@@ -295,12 +259,6 @@ export function emitShareSafePart(
   }
 }
 
-/**
- * Whether an attribute emits: keep and relationship-pointer verdicts emit
- * (the latter only after the analysis resolved it), strips and refuse
- * classes never do. An override of `undefined` drops the attribute — a
- * dangling bookmark anchor loses its pointer rather than a dead name.
- */
 function emittedAttribute(
   element: XmlElement,
   attribute: XmlAttribute,

@@ -15,14 +15,6 @@ import {
 const ONOFF = FLAG_BOUND
 const ID: ReadonlyMap<string, ShareSafeValueBound> = new Map([['id', WML_INT]])
 
-/**
- * The reference attribute surface — identifiers, cross-references, field
- * machinery and revision hooks — mapped element → attribute → bound.
- * `EXTERNAL_BOUND` marks values a dedicated validator owns: `w:instr`
- * passes through the field classifier, bookmark names through the
- * `bm<n>` rename, and `w:anchor` through the anchor-resolution check —
- * none is a free channel, but none is boundable here either.
- */
 export const WML_REFERENCE_ATTRIBUTE_BOUNDS: ReadonlyArray<
   readonly [string, ReadonlyMap<string, ShareSafeValueBound>]
 > = [

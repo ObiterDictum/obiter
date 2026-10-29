@@ -16,26 +16,6 @@ export const WORD_2010_NAMESPACE =
 
 const CANONICAL_PARA_ID = /^[0-9A-Fa-f]{8}$/u
 
-/**
- * `w14:paraId` is the only standard persisted paragraph identity (`AG_Parids`
- * applies to `CT_P`). Word preserves it on round-trip, and our parser derives
- * the model id `para-w14-<value>` from it. Canonicalising every paragraph of
- * every editable story in a new version — the body, the header/footer margin
- * stories and the footnotes story, the shared `EDITABLE_STORY_KINDS` set,
- * so endnote and comment stories stay untouched — gives cross-version
- * paragraph identity without a
- * positional guess: a paragraph that already carries a valid, unique id keeps
- * it; an absent, malformed or duplicate one receives a deterministic fresh
- * value, and no two source paragraphs are ever given the same identity.
- *
- * The attribute is written through the existing overlay, so it lands only in
- * the document being serialised. Historical versions are never rewritten.
- * The rule runs on every edit save, not only ones that touch a margin story:
- * the first save of any kind on a document whose header/footer paragraphs
- * lack the attribute rewrites those parts once, injecting `xmlns:w14` and
- * `w14:paraId`. Once canonical the ids persist, so every later save leaves
- * the margin parts byte-stable.
- */
 export function canonicaliseParagraphIdentities(
   document: OoxmlDocument,
 ): Map<DocumentParagraphWire, string> {
@@ -46,7 +26,6 @@ export function canonicaliseParagraphIdentities(
   const nextId = () => {
     for (;;) {
       counter += 1
-      // 8 uppercase hex digits, matching ST_LongHexNumber; never zero.
       if (counter > 0xffffffff) throw new Error('paragraph-id-space-exhausted')
       const value = counter.toString(16).toUpperCase().padStart(8, '0')
       if (value === '00000000') continue
@@ -58,11 +37,6 @@ export function canonicaliseParagraphIdentities(
 
   const namespaceParts = new Set<string>()
   for (const story of document.model.stories) {
-    // Every editable story needs persisted identity: a margin paragraph's
-    // positional `para-NNNNNN` id shifts on the next parse as soon as any
-    // sibling gains a w14 id, so a save that names it in the lineage would
-    // address a paragraph the result does not carry. Read-only stories keep
-    // their bytes and ids untouched, and their w14 values still seed `used`.
     if (!EDITABLE_STORY_KINDS.has(story.kind)) continue
     for (const paragraph of story.paragraphs) {
       const existing = paragraph.sourceParaId
@@ -72,9 +46,6 @@ export function canonicaliseParagraphIdentities(
         existing !== '00000000' &&
         !seenInDocument.has(existing.toUpperCase())
       const value = valid ? existing.toUpperCase() : nextId()
-      // Always write the canonical value. A valid-but-lowercase id would
-      // otherwise keep its original bytes while the map used the uppercase
-      // form, so the reloaded model id and every lineage address disagreed.
       paragraph.sourceParaId = value
       seenInDocument.add(value)
       canonical.set(paragraph, `para-w14-${value}`)
@@ -96,10 +67,6 @@ export function canonicaliseParagraphIdentities(
       const part = requireEditablePart(document, story.partName)
       const anchor = document.paragraphAnchors.get(paragraph.id)
       if (anchor) {
-        // A structural edit can already own the paragraph's opening tag (for
-        // example a section break expanding a self-closing `<w:p/>`). Inject
-        // the identity into that replacement rather than writing a second
-        // replacement over the same range, which would fail to serialise.
         const covering = coveringReplacement(
           part.overlay,
           anchor.paragraphRange,
@@ -124,8 +91,6 @@ export function canonicaliseParagraphIdentities(
         part.dirty = true
         continue
       }
-      // An inserted paragraph has no parsed anchor: its identity is injected
-      // into the overlay replacement the insert writer produced.
       const key = `${paragraph.id}:insert`
       const replacement = part.overlay.replacements.get(key)
       if (!replacement) continue
@@ -152,19 +117,12 @@ function collectExistingIds(model: DocumentModelWire) {
   return used
 }
 
-/** Injects an attribute into the opening tag of a `<w:p>…</w:p>` fragment. */
 function injectIntoOpeningTag(fragment: string, value: string) {
   const match = fragment.match(/^<[^>]*>/u)
   if (!match) return fragment
   return `${injectAttribute(match[0], 'w14:paraId', value)}${fragment.slice(match[0].length)}`
 }
 
-/**
- * The overlay replacement that already owns a paragraph's opening tag, if any.
- * Only a replacement whose value opens with the paragraph element is a
- * candidate: a tracked-delete wrapper also spans the range but its opening tag
- * is `w:del`, and injecting the identity there would corrupt the markup.
- */
 function coveringReplacement(
   overlay: XmlOverlay,
   range: { start: number; startTagEnd: number },
@@ -192,8 +150,6 @@ function ensureWord2010Namespace(overlay: {
   if (!root) return
   const startTag = overlay.source.slice(root.start, root.startTagEnd)
   const declared = `xmlns:w14="${WORD_2010_NAMESPACE}"`
-  // Insert after the element name, before the first whitespace or the closing
-  // bracket. An explicit index avoids a non-global replace.
   const at = startTag.search(/[\s>]/u)
   if (at < 0) return
   const value = `${startTag.slice(0, at)} ${declared}${startTag.slice(at)}`

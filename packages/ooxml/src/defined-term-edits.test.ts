@@ -29,7 +29,6 @@ describe('mark_defined_term edits', () => {
     )
     if (!anchor) throw new Error('Anchor paragraph is missing.')
 
-    // [0, 13) covers 'Alice Example' — the defined term.
     applyDocumentEdits(document, [
       {
         type: 'mark_defined_term',
@@ -41,12 +40,10 @@ describe('mark_defined_term edits', () => {
     const output = await serialiseDocx(document)
     const xml = await zipText(output, 'word/document.xml')
 
-    // Scope to the anchor's stored w14 paraId.
     const paragraphXml = xml.slice(
       xml.indexOf('A1B2C3D4'),
       xml.indexOf('</w:p>', xml.indexOf('A1B2C3D4')),
     )
-    // The bookmark id must clear the fixture's stored w:id="4".
     const start =
       /<w:bookmarkStart w:id="(\d+)" w:name="_Def_alice_example"\/>/u.exec(
         paragraphXml,
@@ -56,11 +53,9 @@ describe('mark_defined_term edits', () => {
     expect(paragraphXml).toContain(
       `<w:bookmarkEnd w:id="${start?.[1] ?? ''}"/>`,
     )
-    // The pair wraps the term: start before, end after, text untouched.
     const ordered =
       /<w:bookmarkStart[^>]*_Def_alice_example[^>]*\/>[\s\S]*Alice Example[\s\S]*<w:bookmarkEnd[^>]*\/>/u
     expect(paragraphXml).toMatch(ordered)
-    // The covered run splits at the mark's edge; the text joins unchanged.
     expect(paragraphXml).toContain('Alice Example')
     expect(paragraphXml).toContain(' overview')
 
@@ -83,7 +78,6 @@ describe('mark_defined_term edits', () => {
     )
     if (!anchor) throw new Error('Anchor paragraph is missing.')
 
-    // [6, 13) covers 'Example'.
     applyDocumentEdits(document, [
       {
         type: 'mark_defined_term',
@@ -105,7 +99,6 @@ describe('mark_defined_term edits', () => {
       paragraph.runs.some((run) => run.text === 'Alice Example overview'),
     )
     if (!anchor) throw new Error('Anchor paragraph is missing.')
-    // [5, 6) is the space between 'Alice' and 'Example' — no word characters.
     expect(() =>
       applyDocumentEdits(document, [
         {
@@ -162,8 +155,6 @@ describe('mark_defined_term edits', () => {
     )
     if (!anchor) throw new Error('Surrogate paragraph is missing.')
 
-    // 'Term \u{1F600} end': offsets 5 and 6 are the emoji's surrogate
-    // halves, so a boundary at 6 would cut the pair in two.
     for (const range of [
       { from: 0, to: 6 },
       { from: 6, to: 11 },
@@ -178,8 +169,6 @@ describe('mark_defined_term edits', () => {
         ]),
       ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
     }
-    // Boundaries at the pair's edges compose: the pair travels inside the
-    // marked run instead of being severed by a bookmark half.
     applyDocumentEdits(document, [
       { type: 'mark_defined_term', paragraphId: anchor.id, from: 8, to: 11 },
     ])
@@ -196,9 +185,6 @@ describe('mark_defined_term edits', () => {
     )
     if (!anchor) throw new Error('Linked paragraph is missing.')
 
-    // 'See ' [0,4) 'the report' [4,14) ' today' [14,20): a mark strictly
-    // inside the link, and a mark whose edge lands inside it, would both
-    // cut the anchor text under the w:hyperlink element.
     for (const range of [
       { from: 4, to: 8 },
       { from: 0, to: 5 },
@@ -214,8 +200,6 @@ describe('mark_defined_term edits', () => {
         ]),
       ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
     }
-    // A link wholly inside the marked range composes: the pair is legal
-    // OOXML around it, so the whole sentence — link included — marks.
     applyDocumentEdits(document, [
       { type: 'mark_defined_term', paragraphId: anchor.id, from: 0, to: 20 },
     ])
@@ -232,10 +216,6 @@ describe('mark_defined_term edits', () => {
     const [first, second] = paragraphs(document)
     if (!first || !second) throw new Error('paragraphs')
 
-    // The same term marked in two places is a drafting fact the check
-    // reports as a duplicate — the writer keeps both pairs under the same
-    // name and must still give each a unique w:id, since duplicated ids
-    // break the pairing Word relies on.
     applyDocumentEdits(document, [
       { type: 'mark_defined_term', paragraphId: first.id, from: 0, to: 4 },
       { type: 'mark_defined_term', paragraphId: second.id, from: 0, to: 4 },
@@ -282,9 +262,6 @@ describe('mark_defined_term edits', () => {
       baseVersionId: 'ver_1',
       versionId: 'ver_2',
     })
-    // [6,13) cuts 'Alice Example overview' into 'Alice ', 'Example' and
-    // ' overview': three continuing runs, each naming its own slice of the
-    // source run rather than a whole-run origin on every part.
     const slices = (lineage.paragraphs[0]?.runs ?? []).map((run) =>
       run.segments.map((segment) => [
         segment.fromRunId,
@@ -311,10 +288,6 @@ async function parseFixture() {
   return parseDocx(await buildOoxmlFixture('full-fidelity-with-w14-ids'))
 }
 
-/**
- * A paragraph whose text holds a two-code-unit emoji, so a mark boundary
- * can be placed inside the surrogate pair.
- */
 function surrogateFixtureBytes() {
   const zip = new JSZip()
   const fixed = documentXml.replace(
@@ -335,10 +308,6 @@ async function parseSurrogateFixture() {
   return parseDocx(await surrogateFixtureBytes())
 }
 
-/**
- * A paragraph with a stored `w:hyperlink` wrapping its middle run, so a
- * mark boundary can be placed inside the link's anchor text.
- */
 function linkedFixtureBytes() {
   const zip = new JSZip()
   const fixed = documentXml.replace(

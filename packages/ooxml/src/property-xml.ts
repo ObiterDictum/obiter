@@ -4,11 +4,6 @@ import {
   propertyChildInsertPosition,
 } from './model-properties'
 
-/**
- * Removes one child element from a `w:pPr`/`w:rPr` fragment while preserving a
- * trailing `w:pPrChange`/`w:rPrChange` history record. The history records the
- * pre-change state, so an untracked edit must never delete inside it.
- */
 export function stripPropertyChild(fragment: string, localName: string) {
   const changeStart = fragment.search(/<w:(?:pPr|rPr)Change\b/u)
   const active =
@@ -23,7 +18,6 @@ export function stripPropertyChild(fragment: string, localName: string) {
   )}${tail}`
 }
 
-/** Inserts one child into a `w:pPr`/`w:rPr` fragment at its schema position. */
 export function insertPropertyChild(
   fragment: string,
   localName: string,
@@ -39,10 +33,6 @@ export function insertPropertyChild(
   return `${fragment.slice(0, position)}${instruction}${fragment.slice(position)}`
 }
 
-/**
- * Applies `patch` to a wire's property fragment — its `w:rPr` or `w:pPr` —
- * appending `patch(empty)` when the wire carries none.
- */
 export function patchPropertyFragments(
   wire: { preservedXmlFragments: string[] },
   patch: (xml: string) => string,
