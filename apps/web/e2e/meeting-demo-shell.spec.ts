@@ -214,7 +214,12 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
 
   // The checked version is named by its number, as everywhere else in the
   // product; the internal version id is never shown.
-  await expect(page.locator('main').getByText(/version 3/).first()).toBeVisible()
+  await expect(
+    page
+      .locator('main')
+      .getByText(/version 3/)
+      .first(),
+  ).toBeVisible()
   await expect(page.locator('main').getByText(VERSION_ID)).toBeHidden()
 
   // Matches are folded behind one line that opens in place.
