@@ -183,6 +183,29 @@ describe('table-of-contents edits', () => {
     ).toBe(false)
   })
 
+  it('refuses a delete that removes only part of a stored field', async () => {
+    const document = await parseFixture()
+    const { xrefAnchor } = tocFixture(document)
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_table_of_contents',
+        paragraphId: xrefAnchor.id,
+        offset: 0,
+      },
+    ])
+    const reparsed = await parseDocx(await serialiseDocx(document))
+    const entry = mainParagraphs(reparsed).find(
+      (paragraph) => paragraph.styleId === 'TOC1',
+    )
+    if (!entry) throw new Error('TOC entry is missing.')
+
+    expect(() =>
+      applyDocumentEdits(reparsed, [
+        { type: 'delete_paragraph', paragraphId: entry.id },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
+
   it('captures entries at outline level, not by display text', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document).find(

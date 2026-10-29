@@ -680,3 +680,35 @@ describe('trackRevisions settings persistence', () => {
     expect(reparsed.model.trackRevisions).toBe(true)
   })
 })
+
+describe('tracked change id allocation', () => {
+  it('allocates above the highest stored change id rather than reusing a free one', async () => {
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="9" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>Stored</w:t></w:r></w:ins></w:p><w:p><w:r><w:t>Target text</w:t></w:r></w:p></w:body></w:document>',
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const run = document.model.stories[0]?.paragraphs[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+    applyDocumentEdits(
+      document,
+      [{ type: 'replace_run_text', runId: run.id, text: 'Changed text' }],
+      changeContext,
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+
+    expect(
+      [...xml.matchAll(/<w:(?:ins|del) w:id="(\d+)"/gu)].map(
+        (match) => match[1],
+      ),
+    ).toEqual(['9', '10', '11'])
+  })
+})

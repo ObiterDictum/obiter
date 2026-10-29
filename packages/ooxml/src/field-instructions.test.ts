@@ -141,6 +141,11 @@ describe('fieldInstructionsInXml', () => {
     expect(fieldInstructionsInXml(xml)).toEqual([' TA \\l "a & b" '])
   })
 
+  it('ignores a comment inside instrText instead of folding it into the instruction', () => {
+    const xml = `<w:r>${BEGIN}${instr(' TA <!-- <w:fldChar w:fldCharType="end"/> --> \\l "Report" ')}${END}</w:r>`
+    expect(fieldInstructionsInXml(xml)).toEqual([' TA  \\l "Report" '])
+  })
+
   it("emits an unclosed field's partial instruction", () => {
     const xml = `<w:r>${BEGIN}${instr(' TOA \\h ')}</w:r>`
     expect(fieldInstructionsInXml(xml)).toEqual([' TOA \\h '])

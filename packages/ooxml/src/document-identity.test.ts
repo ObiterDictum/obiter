@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
+import { buildOoxmlFixture } from '../fixtures/builder'
 import {
   canonicaliseParagraphIdentities,
   createSyntheticDocx,
@@ -79,5 +80,34 @@ describe('paragraph identity canonicalisation', () => {
       sourceParaId: item.sourceParaId,
     }))
     expect(after).toEqual(before)
+  })
+
+  it('gives margin-story paragraphs persisted ids', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    canonicaliseParagraphIdentities(document)
+    const header = document.model.stories.find(
+      (story) => story.kind === 'header',
+    )?.paragraphs[0]
+    const footer = document.model.stories.find(
+      (story) => story.kind === 'footer',
+    )?.paragraphs[0]
+
+    expect(header?.sourceParaId).toMatch(/^[0-9A-F]{8}$/u)
+    expect(footer?.sourceParaId).toMatch(/^[0-9A-F]{8}$/u)
+  })
+
+  it('leaves a read-only endnote story byte-identical', async () => {
+    const source = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const document = await parseDocx(source)
+    canonicaliseParagraphIdentities(document)
+    const JSZip = (await import('jszip')).default
+    const before = await JSZip.loadAsync(source)
+    const after = await JSZip.loadAsync(await serialiseDocx(document))
+
+    expect(await after.file('word/endnotes.xml')?.async('string')).toBe(
+      await before.file('word/endnotes.xml')?.async('string'),
+    )
   })
 })

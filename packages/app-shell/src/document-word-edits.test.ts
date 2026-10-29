@@ -68,6 +68,15 @@ describe('applyDeleteBackward', () => {
     expect(result?.caret).toEqual({ paragraphId: 'p1', offset: 4 })
   })
 
+  it('stores no extra run for an edit inside the stored runs', () => {
+    const result = applyDeleteBackward(twoParagraphs, emptyEditorState(), {
+      paragraphId: 'p1',
+      offset: 2,
+    })
+
+    expect(result?.state.extraRuns).toEqual({})
+  })
+
   it('does not join the first paragraph', () => {
     expect(
       applyDeleteBackward(twoParagraphs, emptyEditorState(), {

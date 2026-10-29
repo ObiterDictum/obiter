@@ -138,6 +138,27 @@ describe('document draft persistence', () => {
     )
   })
 
+  it('round-trips a draft carrying a pending section change', () => {
+    const storage = new MapStorage()
+    const state = stateWithText('hello')
+    state.format.section = {
+      margins: { top: 1440, left: null },
+      orientation: 'landscape',
+    }
+    expect(
+      writeDocumentDraft(storage, scope, {
+        baseVersionId: 'ver_1',
+        state,
+        held: [],
+      }),
+    ).toBe(true)
+
+    const restored = readDocumentDraft(storage, scope, 'ver_1')
+    expect(restored.status).toBe('restored')
+    if (restored.status !== 'restored') throw new Error('expected restored')
+    expect(restored.state.format.section).toEqual(state.format.section)
+  })
+
   it('round-trips a draft whose emphasis came from an out-of-contract run', () => {
     const storage = new MapStorage()
     const state = stateWithText('hello')

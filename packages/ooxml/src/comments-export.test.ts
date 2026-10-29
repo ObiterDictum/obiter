@@ -448,4 +448,90 @@ describe('imported comment extraction', () => {
     expect(imported?.body).toBe('Fictional review comment')
     expect(imported?.anchor).toBeNull()
   })
+
+  it('lists a comment with a negative w:id anonymously so it stays visible but unanchored', async () => {
+    const JSZip = (await import('jszip')).default
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const part = zip.file('word/comments.xml')
+    if (!part) throw new Error('Fixture part is missing.')
+    zip.file(
+      'word/comments.xml',
+      (await part.async('string')).replace('w:id="0"', 'w:id="-1"'),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+
+    const imported = document.model.comments.find(
+      (entry) => entry.id === 'ooxml-anon-0',
+    )
+    expect(imported?.ooxmlId).toBeNull()
+    expect(imported?.body).toBe('Fictional review comment')
+    expect(imported?.anchor).toBeNull()
+  })
+
+  it('drops the anchor when the end marker precedes the start marker', async () => {
+    const JSZip = (await import('jszip')).default
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const part = zip.file('word/document.xml')
+    if (!part) throw new Error('Fixture part is missing.')
+    zip.file(
+      'word/document.xml',
+      (await part.async('string'))
+        .replace('<w:commentRangeStart w:id="0"/>', '@@START@@')
+        .replace(
+          '<w:commentRangeEnd w:id="0"/>',
+          '<w:commentRangeStart w:id="0"/>',
+        )
+        .replace('@@START@@', '<w:commentRangeEnd w:id="0"/>'),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+
+    const imported = document.model.comments.find(
+      (entry) => entry.id === 'ooxml-0',
+    )
+    expect(imported?.body).toBe('Fictional review comment')
+    expect(imported?.anchor).toBeNull()
+  })
+
+  it('drops the anchor when the range markers sit in different story parts', async () => {
+    const JSZip = (await import('jszip')).default
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const documentPart = zip.file('word/document.xml')
+    const headerPart = zip.file('word/header1.xml')
+    if (!documentPart || !headerPart) {
+      throw new Error('Fixture part is missing.')
+    }
+    zip.file(
+      'word/document.xml',
+      (await documentPart.async('string')).replace(
+        '<w:commentRangeEnd w:id="0"/>',
+        '',
+      ),
+    )
+    zip.file(
+      'word/header1.xml',
+      (await headerPart.async('string')).replace(
+        '</w:p>',
+        '<w:commentRangeEnd w:id="0"/></w:p>',
+      ),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+
+    const imported = document.model.comments.find(
+      (entry) => entry.id === 'ooxml-0',
+    )
+    expect(imported?.body).toBe('Fictional review comment')
+    expect(imported?.anchor).toBeNull()
+  })
 })
