@@ -31,7 +31,7 @@ const RECENT_MATTERS_LIMIT = 4
  * than the page it leads to. Read from the same newest-run-per-document rule
  * the counts come from, so the dot and the number describe one set of runs.
  */
-export function verificationAttentionTone(
+function verificationAttentionTone(
   runs: VerificationRun[],
 ): 'danger' | 'warning' | 'success' {
   const tones = latestRunsPerDocument(runs)

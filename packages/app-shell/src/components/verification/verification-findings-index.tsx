@@ -107,8 +107,7 @@ export function VerificationFindingsIndex({
                   finding={finding}
                   currentUserId={currentUserId}
                   checkedLabel={`Checked ${formatRunTime(
-                    verification.run.completedAt ??
-                      verification.run.createdAt,
+                    verification.run.completedAt ?? verification.run.createdAt,
                   )}`}
                   onDismiss={() => {
                     if (onDismiss) onDismiss(finding)
