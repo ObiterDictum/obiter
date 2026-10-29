@@ -1,3 +1,5 @@
+import { command, openRibbonTab } from './editor-test-commands'
+
 import '@obiter/test-dom'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
@@ -22,12 +24,12 @@ describe('E45 a rejected save must not poison later saves', () => {
     })
     mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Draft insight' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Heading 1' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Heading 1'))
+    fireEvent.click(command('Save'))
 
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
     const operations = editAsync.mock.calls[0]?.[0].operations as
@@ -81,9 +83,9 @@ describe('E45 a rejected save must not poison later saves', () => {
     mountSaveWorkspace({ editAsync, paragraphs: ['Hello', 'Second'] })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
 
     await waitFor(() => {
       expect(saved).toContain('Hello world')
@@ -105,7 +107,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => {
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
@@ -113,7 +115,7 @@ describe('E45 a rejected save must not poison later saves', () => {
 
     // The refused slot is still pending, so the retry carries it. When the
     // resend commits the banner clears and the save reports clean.
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
     expect(editAsync.mock.calls[1]?.[0].operations).toEqual([
       { type: 'replace_run_text', runId: 'r1', text: 'Hello world' },
@@ -141,7 +143,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello first' } })
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
     // The user keeps typing while the request is in flight. That text was not
@@ -157,7 +159,7 @@ describe('E45 a rejected save must not poison later saves', () => {
 
     await waitFor(() => expect(saveState()).toBe('unsaved'))
     expect(bodyEditor().value).toBe('Hello second')
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
     expect(editAsync.mock.calls[1]?.[0].operations).toEqual([
       { type: 'replace_run_text', runId: 'r1', text: 'Hello second' },
@@ -213,13 +215,13 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
 
     await waitFor(() => {
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
     expect(screen.getByText(/stays in your drafts/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Retry save' })).toBeTruthy()
+    expect(command('Retry save')).toBeTruthy()
     expect(saveState()).toBe('unsaved')
   })
 
@@ -229,13 +231,13 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello edited' } })
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
 
     await waitFor(() => {
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
     expect(editAsync).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
     // The slot was refused again and is still pending: the banner stays up
     // and the workspace never reports the save as clean.
@@ -256,11 +258,11 @@ describe('E45 a rejected save must not poison later saves', () => {
     mountSaveWorkspace({ editAsync, paragraphs: ['Hello', 'Second'] })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
-    fireEvent.click(screen.getByRole('tab', { name: 'Insert' }))
-    fireEvent.click(screen.getByRole('button', { name: /Insert table/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+    openRibbonTab('Insert')
+    fireEvent.click(command('Insert table'))
+    fireEvent.click(command('Insert'))
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
 
     // The batch is refused; containment retries without the table and the
     // typed text commits.
@@ -276,7 +278,7 @@ describe('E45 a rejected save must not poison later saves', () => {
 
     // The refused slot stays pending: the next save resends it rather than
     // letting the partial commit read as a clean save with the table gone.
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(3))
     const retried = editAsync.mock.calls[2]?.[0].operations
     expect(
@@ -286,9 +288,7 @@ describe('E45 a rejected save must not poison later saves', () => {
 
     // The discard affordance drops only the refused slot; the save is clean
     // only once nothing remains pending.
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Discard rejected change' }),
-    )
+    fireEvent.click(command('Discard rejected change'))
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', {
@@ -314,9 +314,9 @@ describe('E45 a rejected save must not poison later saves', () => {
     mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Heading 1' }))
+    fireEvent.click(command('Heading 1'))
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
 
     fireEvent.change(bodyEditor(), {
@@ -353,7 +353,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello doomed' } })
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
     // The same rejected slot is extended while the request is in flight.
@@ -386,7 +386,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello doomed' } })
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() =>
       expect(screen.getByText(/rejected typed text/i)).toBeTruthy(),
     )
@@ -396,9 +396,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.change(bodyEditor(), {
       target: { value: 'Hello doomed plus newer typing' },
     })
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Discard rejected change' }),
-    )
+    fireEvent.click(command('Discard rejected change'))
     await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy())
     // The copy does not promise a deletion: an edited slot is kept.
     expect(
@@ -431,29 +429,25 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello keep me' } })
     openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.click(command('Save'))
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Reload and discard' }),
-      ).toBeTruthy()
+      expect(command('Reload and discard')).toBeTruthy()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reload and discard' }))
+    fireEvent.click(command('Reload and discard'))
     expect(bodyEditor().value).toBe('Hello keep me')
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeTruthy()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(command('Cancel'))
     expect(bodyEditor().value).toBe('Hello keep me')
     expect(screen.queryByRole('dialog')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reload and discard' }))
+    fireEvent.click(command('Reload and discard'))
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeTruthy()
     })
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Discard unsaved work' }),
-    )
+    fireEvent.click(command('Discard unsaved work'))
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })

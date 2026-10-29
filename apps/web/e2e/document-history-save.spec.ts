@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runMenuCommand, setTrackChanges } from './editor-chrome'
 
 /*
  * E50 browser journey: undo across a successful save must persist the reversal
@@ -85,9 +86,7 @@ async function saveAndWaitForDecision(page: Page) {
 }
 
 async function enableTracking(page: Page) {
-  await page.getByRole('tab', { name: 'Review' }).click()
-  await page.getByRole('button', { name: 'Track changes off' }).click()
-  await page.getByRole('tab', { name: 'Home' }).click()
+  await setTrackChanges(page, true)
 }
 
 test.use({ viewport: { width: 1440, height: 900 } })
@@ -145,7 +144,7 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
   await focusParagraph(page, HEADING)
   const before = await settledParagraphCount(page)
 
-  await page.getByRole('button', { name: 'Insert paragraph' }).click()
+  await runMenuCommand(page, 'Edit', 'Insert paragraph')
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
   // The typed character is one step and the insert itself another, so two
@@ -239,7 +238,7 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   await focusParagraph(page, HEADING)
   const before = await settledParagraphCount(page)
 
-  await page.getByRole('button', { name: 'Insert paragraph' }).click()
+  await runMenuCommand(page, 'Edit', 'Insert paragraph')
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
   await pending.pressSequentially('X')

@@ -69,11 +69,13 @@ export interface AuditRecordInput {
     | 'redaction.coverage_unchecked'
     | 'redaction.token_map_access'
     | 'redaction.return_to_document'
+    | 'redaction.saved_to_matter'
     | 'redaction_run.delete'
     | 'redaction_run.restore'
     | 'verification.run_create'
     | 'verification.run_complete'
     | 'verification.run_fail'
+    | 'verification.finding_undismissed'
     | 'user.profile_update'
     | 'auth.password_changed'
   metadata: Record<string, string | number | boolean | null | string[]>

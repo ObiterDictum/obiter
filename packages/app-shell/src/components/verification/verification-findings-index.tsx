@@ -9,9 +9,9 @@ import {
   DialogTitle,
 } from '@obiter/ui'
 import {
+  formatRunTime,
   verificationStoredVersionNote,
   verificationUnmappedLabel,
-  verificationRunTime,
 } from '../../verification-copy'
 import type { UnmappedReason } from './verification-mapping'
 import { VerifyDismissDialog } from './verify-dismiss-dialog'
@@ -64,13 +64,10 @@ export function VerificationFindingsIndex({
         <div className="px-6 pt-6">
           <DialogTitle>All findings</DialogTitle>
           <DialogDescription>
-            {verificationStoredVersionNote(
-              verification.checkedVersionId ?? 'unknown',
-              {
-                unsaved: verification.dirty,
-                stale: verification.stale,
-              },
-            )}{' '}
+            {verificationStoredVersionNote(verification.checkedVersionNumber, {
+              unsaved: verification.dirty,
+              stale: verification.stale,
+            })}{' '}
             Checks cover the main document, footnotes and endnotes. Headers,
             footers and comments are not checked.
           </DialogDescription>
@@ -109,7 +106,9 @@ export function VerificationFindingsIndex({
                 <VerifyFinding
                   finding={finding}
                   currentUserId={currentUserId}
-                  checkedLabel={`Checked ${verificationRunTime(verification.run!)}`}
+                  checkedLabel={`Checked ${formatRunTime(
+                    verification.run.completedAt ?? verification.run.createdAt,
+                  )}`}
                   onDismiss={() => {
                     if (onDismiss) onDismiss(finding)
                     else setDismissing(finding)

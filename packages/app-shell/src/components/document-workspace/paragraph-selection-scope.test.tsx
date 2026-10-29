@@ -2,12 +2,15 @@ import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
   rerenderWorkspace,
+  command,
 } from './docx-workspace-harness'
+
 import {
   bodyField,
   clickParagraph,
@@ -76,7 +79,7 @@ describe('selection scope', () => {
   it('clears the selection when the paragraph holding it is deleted', () => {
     mountWorkspace({ models: { doc_1: model() }, editAsync: vi.fn() })
     selectAcrossBoundary()
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     expect(selectionStatus()).toBe('')
     expect(document.querySelectorAll('[data-selected-text]')).toHaveLength(0)
     expect(screen.queryByText('Bravo')).toBeNull()
@@ -86,11 +89,11 @@ describe('selection scope', () => {
   it('clears the selection when a find hit moves the caret', () => {
     mountWorkspace({ models: { doc_1: model() }, editAsync: vi.fn() })
     selectAcrossBoundary()
-    fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
+    openRibbonTab('Review')
     fireEvent.change(screen.getByLabelText('Find in document'), {
       target: { value: 'Charlie' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Next match' }))
+    fireEvent.click(command('Next match'))
     expect(selectionStatus()).toBe('')
     expect(document.querySelectorAll('[data-selected-text]')).toHaveLength(0)
     expect(bodyField().value).toBe('Charlie')

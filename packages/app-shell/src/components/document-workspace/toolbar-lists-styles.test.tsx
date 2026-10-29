@@ -14,6 +14,7 @@ import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
+  command,
 } from './docx-workspace-harness'
 import { clickParagraph } from './paragraph-selection-harness'
 
@@ -63,24 +64,25 @@ function operations(editAsync: ReturnType<typeof vi.fn>) {
 }
 
 async function save(editAsync: ReturnType<typeof vi.fn>) {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   await waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
 describe('the Styles gallery and list restart controls', () => {
-  it('shows one disabled control, not fake chips, when a document has no styles', () => {
+  it('shows one disabled style control, not fake chips, when a document has no styles', () => {
     mountWorkspace({
       models: { doc_1: multiParagraphModel([paragraph('p1', 'Hello')]) },
     })
     clickParagraph('p1')
 
-    const select = screen.getByLabelText(
-      'Paragraph style: This document has no paragraph styles.',
+    // The picker is a Base UI Select now; its disabled state is on the
+    // combobox trigger and the reason is its surrounding title, so the
+    // control keeps one name whatever state it is in.
+    const select = screen.getByRole('combobox', { name: 'Paragraph style' })
+    expect(select).toHaveProperty('disabled', true)
+    expect(select.closest('[title]')?.getAttribute('title')).toBe(
+      'This document has no paragraph styles.',
     )
-    if (!(select instanceof HTMLSelectElement)) {
-      throw new Error('expected a paragraph style select')
-    }
-    expect(select.disabled).toBe(true)
     // The old fallback advertised Normal/Heading 1/Quote as pending UI.
     expect(screen.queryByRole('button', { name: /Heading 1/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Quote/ })).toBeNull()
@@ -91,14 +93,12 @@ describe('the Styles gallery and list restart controls', () => {
     mountWorkspace({ models: { doc_1: styledModel() }, editAsync })
     clickParagraph('p1')
 
-    const quote = screen.getByRole('button', { name: 'Quote' })
+    const quote = command('Quote')
     fireEvent.click(quote)
-    expect(quote.getAttribute('aria-pressed')).toBe('true')
-    expect(
-      screen
-        .getByRole('button', { name: 'Heading 1' })
-        .getAttribute('aria-pressed'),
-    ).toBe('false')
+    // A style is a radio choice in the Format menu: the current style is
+    // checked, and the others in its group are not.
+    expect(quote.getAttribute('aria-checked')).toBe('true')
+    expect(command('Heading 1').getAttribute('aria-checked')).toBe('false')
 
     await save(editAsync)
     expect(operations(editAsync)).toContainEqual({
@@ -113,7 +113,7 @@ describe('the Styles gallery and list restart controls', () => {
     mountWorkspace({ models: { doc_1: numberedModel() }, editAsync })
     clickParagraph('p1')
 
-    const restart = screen.getByRole('button', { name: 'Restart numbering' })
+    const restart = command('Restart numbering')
     if (!(restart instanceof HTMLButtonElement)) {
       throw new Error('expected a restart button')
     }

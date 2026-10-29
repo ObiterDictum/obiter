@@ -7,7 +7,7 @@ import {
   DOCUMENT_COMPARISON_ENTRY_MAX_COUNT,
   DOCUMENT_COMPARISON_PREVIEW_MAX_LENGTH,
 } from '@obiter/contracts'
-import { alignParagraphs, paragraphText } from './document-compare-align'
+import { alignParagraphs } from './document-compare-align'
 import { wordDiff } from './document-compare-word-diff'
 
 export interface DocumentModelComparison {
@@ -36,6 +36,11 @@ export function compareDocumentModels(
   target: DocumentModelWire,
 ): DocumentModelComparison {
   const entries: DocumentComparisonEntry[] = []
+  // What each version reads as with its tracked insertions accepted. The
+  // stored runs hold neither inserted nor deleted text, so diffing them raw
+  // would report a replacement's deletion and lose the words that replaced it.
+  const baseText = versionReader(base)
+  const targetText = versionReader(target)
   let truncated = false
   // The entry list is capped by contract. Entries are built lazily: once the
   // bound is hit a push only records truncation, so a pair past the cap costs
@@ -67,11 +72,17 @@ export function compareDocumentModels(
     )) {
       if (truncated) break
       if (pairBase === undefined && pairTarget !== undefined) {
-        push(() => addedEntry(partName, pairTarget))
+        push(() => addedEntry(partName, pairTarget, targetText))
       } else if (pairTarget === undefined && pairBase !== undefined) {
-        push(() => removedEntry(partName, pairBase))
+        push(() => removedEntry(partName, pairBase, baseText))
       } else if (pairBase !== undefined && pairTarget !== undefined) {
-        diffPairedParagraphs(partName, pairBase, pairTarget, push)
+        diffPairedParagraphs(
+          partName,
+          pairBase,
+          pairTarget,
+          { base: baseText, target: targetText },
+          push,
+        )
       }
     }
     // Non-paragraph story content — tables, section properties, bookmarks —
@@ -139,14 +150,60 @@ export function compareDocumentModels(
   return { entries, truncated }
 }
 
+type ParagraphReader = (paragraph: DocumentParagraphWire) => string
+
+/**
+ * Each paragraph's text with this version's tracked insertions accepted: the
+ * stored runs, plus the text of every insert the change list anchors before a
+ * run, in source order. Deleted text is already absent from the runs, so this
+ * is the document as a reader of this version sees it.
+ */
+function versionReader(model: DocumentModelWire): ParagraphReader {
+  const inserts = new Map<
+    string,
+    Array<{ beforeRunId: string | null; text: string }>
+  >()
+  for (const change of model.changes) {
+    const paragraphId = change.paragraphId
+    const inserted =
+      change.kind === 'insert' ||
+      (change.kind === 'move' && change.direction === 'to')
+    if (paragraphId === undefined || !inserted) continue
+    const segments = change.inlinePosition?.segments ?? []
+    const text = segments
+      .filter((segment) => !segment.deleted)
+      .map((segment) => segment.text)
+      .join('')
+    const list = inserts.get(paragraphId) ?? []
+    list.push({
+      beforeRunId: change.inlinePosition?.beforeRunId ?? null,
+      text: text === '' ? change.text : text,
+    })
+    inserts.set(paragraphId, list)
+  }
+  return (paragraph) => {
+    const list = inserts.get(paragraph.id) ?? []
+    const before = (runId: string | null) =>
+      list
+        .filter((insert) => insert.beforeRunId === runId)
+        .map((insert) => insert.text)
+        .join('')
+    return paragraph.runs
+      .map((run) => before(run.id) + run.text)
+      .concat(before(null))
+      .join('')
+  }
+}
+
 function diffPairedParagraphs(
   partName: string,
   base: DocumentParagraphWire,
   target: DocumentParagraphWire,
+  read: { base: ParagraphReader; target: ParagraphReader },
   push: (build: () => DocumentComparisonEntry) => void,
 ) {
-  const baseText = paragraphText(base)
-  const targetText = paragraphText(target)
+  const baseText = read.base(base)
+  const targetText = read.target(target)
   if (baseText === targetText) {
     if (
       paragraphFormatFingerprint(base) !== paragraphFormatFingerprint(target)
@@ -204,21 +261,29 @@ function preview(text: string) {
       }
 }
 
-function addedEntry(partName: string, paragraph: DocumentParagraphWire) {
+function addedEntry(
+  partName: string,
+  paragraph: DocumentParagraphWire,
+  read: ParagraphReader,
+) {
   return {
     type: 'added' as const,
     storyPartName: partName,
     paragraphId: paragraph.id,
-    ...preview(paragraphText(paragraph)),
+    ...preview(read(paragraph)),
   }
 }
 
-function removedEntry(partName: string, paragraph: DocumentParagraphWire) {
+function removedEntry(
+  partName: string,
+  paragraph: DocumentParagraphWire,
+  read: ParagraphReader,
+) {
   return {
     type: 'removed' as const,
     storyPartName: partName,
     paragraphId: paragraph.id,
-    ...preview(paragraphText(paragraph)),
+    ...preview(read(paragraph)),
   }
 }
 

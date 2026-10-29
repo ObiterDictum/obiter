@@ -122,6 +122,19 @@
   --text-caption--letter-spacing: var(--obiter-text-caption-tracking);
 
   /* Redaction span categories — bg + fg per contract §2.3 */
+  --color-reviewer-1: var(--obiter-reviewer-1);
+  --color-reviewer-1-surface: var(--obiter-reviewer-1-surface);
+  --color-reviewer-2: var(--obiter-reviewer-2);
+  --color-reviewer-2-surface: var(--obiter-reviewer-2-surface);
+  --color-reviewer-3: var(--obiter-reviewer-3);
+  --color-reviewer-3-surface: var(--obiter-reviewer-3-surface);
+  --color-reviewer-4: var(--obiter-reviewer-4);
+  --color-reviewer-4-surface: var(--obiter-reviewer-4-surface);
+  --color-reviewer-5: var(--obiter-reviewer-5);
+  --color-reviewer-5-surface: var(--obiter-reviewer-5-surface);
+  --color-reviewer-6: var(--obiter-reviewer-6);
+  --color-reviewer-6-surface: var(--obiter-reviewer-6-surface);
+
   --color-span-person-name: var(--obiter-span-person-name-bg);
   --color-span-person-name-fg: var(--obiter-span-person-name-fg);
   --color-span-email: var(--obiter-span-email-bg);

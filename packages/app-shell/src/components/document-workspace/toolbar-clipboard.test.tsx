@@ -10,12 +10,18 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
+  commandDisabled,
+  commandReason,
+  openRibbonTab,
+} from './editor-test-commands'
+import {
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
   tabledBodyModel,
+  commandPrefix,
 } from './docx-workspace-harness'
+
 import {
   bodyField,
   clickParagraph,
@@ -46,7 +52,7 @@ function stubClipboard(
 }
 
 function control(prefix: string): HTMLButtonElement {
-  const button = screen.getByRole('button', { name: new RegExp(`^${prefix}`) })
+  const button = commandPrefix(prefix)
   if (!(button instanceof HTMLButtonElement)) throw new Error(`no ${prefix}`)
   return button
 }
@@ -82,22 +88,20 @@ describe('the clipboard ribbon controls', () => {
   it('enables Copy and Cut only with a document selection and Paste always', () => {
     mountWorkspace({ models: { doc_1: model() } })
 
-    expect(control('Copy')).toHaveProperty('disabled', true)
-    expect(control('Cut')).toHaveProperty('disabled', true)
-    expect(control('Paste')).toHaveProperty('disabled', false)
-    expect(control('Copy').getAttribute('aria-label')).toBe(
-      'Copy: Select text to copy',
-    )
-    expect(control('Cut').getAttribute('aria-label')).toBe(
-      'Cut: Select text to cut',
-    )
+    // The clipboard commands are Edit menu rows: unavailable rows carry
+    // `aria-disabled` and name their reason beside the row.
+    expect(commandDisabled(control('Copy'))).toBe(true)
+    expect(commandDisabled(control('Cut'))).toBe(true)
+    expect(commandDisabled(control('Paste'))).toBe(false)
+    expect(commandReason(control('Copy'))).toBe('Select text to copy')
+    expect(commandReason(control('Cut'))).toBe('Select text to cut')
 
     clickParagraph('p1')
     nativeSelect(1, 3)
-    expect(control('Copy')).toHaveProperty('disabled', false)
-    expect(control('Cut')).toHaveProperty('disabled', false)
-    expect(control('Copy').getAttribute('aria-label')).toBe('Copy')
-    expect(control('Cut').getAttribute('aria-label')).toBe('Cut')
+    expect(commandDisabled(control('Copy'))).toBe(false)
+    expect(commandDisabled(control('Cut'))).toBe(false)
+    expect(commandReason(control('Copy'))).toBe('')
+    expect(commandReason(control('Cut'))).toBe('')
   })
 
   it('copies the selection as plain text', async () => {

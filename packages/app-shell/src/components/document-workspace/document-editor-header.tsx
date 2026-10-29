@@ -1,7 +1,7 @@
 import {
   Button,
   StatusDot,
-  cn,
+  Switch,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -57,15 +57,13 @@ export function headerSaveState({
     case 'saving':
       return { label: 'Saving…', tone: null }
     case 'failed':
-      return {
-        label: 'Save failed: your work is not on the server',
-        tone: 'danger',
-      }
+      // One line: the header has room for a status, not a sentence, and a
+      // wrapped label read as a stray separator at the start of line two.
+      return { label: 'Save failed — not on the server', tone: 'danger' }
     case 'stale':
-      return {
-        label: 'The document has changed on the server',
-        tone: 'warning',
-      }
+      // The banner below the chrome already says this once, with Reload; the
+      // header only stops claiming the work is saved.
+      return { label: '', tone: null }
     case 'blocked':
       return {
         label: 'Saved, but the edit history needs a reload',
@@ -127,7 +125,7 @@ function DocumentEditorHeader({
         <h1 className="truncate text-item text-ink" title={filename}>
           {filename}
         </h1>
-        <div className="flex min-w-0 flex-wrap items-center gap-2 text-caption text-subtle">
+        <div className="flex min-w-0 items-center gap-2 text-caption text-subtle">
           <span
             className="inline-flex items-center gap-1.5 whitespace-nowrap"
             data-save-state={save?.state.status}
@@ -137,13 +135,19 @@ function DocumentEditorHeader({
             ) : headline.tone === null ? (
               <span>{headline.label}</span>
             ) : (
-              <StatusDot tone={headline.tone} className="text-caption">
+              <StatusDot
+                tone={headline.tone}
+                className="text-caption whitespace-nowrap"
+              >
                 {headline.label}
               </StatusDot>
             )}
           </span>
           {/* The top bar's breadcrumb already names the matter at compact
-              widths, so the header keeps one sub-line there. */}
+              widths, so the header keeps one sub-line there. The status and
+              the matter share one line: the matter truncates rather than
+              wrapping, because a wrapped line would start with the dot that
+              only separates it from the status. */}
           {matterLink ? (
             <span className="flex min-w-0 items-center gap-2 max-compact:hidden">
               <span aria-hidden>·</span>
@@ -176,45 +180,16 @@ function DocumentEditorHeader({
           </Tooltip>
         ) : null}
         {trackChanges === undefined || !onToggleTrackChanges ? null : (
-          // The switch, not a toggle button: the visible pill carries the
-          // state and the control is a real checkbox with switch semantics,
-          // so assistive technology reads on/off rather than a pressed button.
-          <label
-            className={cn(
-              'inline-flex cursor-pointer items-center gap-2 rounded-pill px-2 py-1 text-caption select-none',
-              'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring',
-              'pointer-coarse:min-h-11',
-              trackChanges
-                ? 'bg-brand-soft text-ink'
-                : 'text-muted hover:bg-hover hover:text-ink',
-            )}
+          // One tracking control, in the header: a real switch with the
+          // visible pill and wording inside it, so assistive technology reads
+          // on/off rather than a pressed button and the toolbar keeps no copy.
+          <Switch
+            label="Track changes"
+            checked={trackChanges}
+            onCheckedChange={onToggleTrackChanges}
           >
-            <input
-              type="checkbox"
-              role="switch"
-              aria-label="Track changes"
-              checked={trackChanges}
-              onChange={onToggleTrackChanges}
-              className="peer sr-only"
-            />
-            <span
-              aria-hidden
-              className={cn(
-                'relative h-4 w-7 shrink-0 rounded-pill transition-colors duration-150',
-                trackChanges ? 'bg-brand' : 'bg-line-strong',
-              )}
-            >
-              <span
-                className={cn(
-                  'absolute top-0.5 size-3 rounded-pill bg-surface-raised transition-[left] duration-150',
-                  trackChanges ? 'left-3.5' : 'left-0.5',
-                )}
-              />
-            </span>
-            <span>
-              {trackChanges ? 'Track changes on' : 'Track changes off'}
-            </span>
-          </label>
+            {trackChanges ? 'Track changes on' : 'Track changes off'}
+          </Switch>
         )}
         {verify}
         {saveButton}

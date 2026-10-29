@@ -21,8 +21,8 @@ import { VerificationDock } from '../verification/verification-dock'
 import { DocxWorkspace } from './docx-workspace'
 import { DocumentDesk } from './document-page'
 import { DocumentPdfPages } from './pdf-view'
-import { IconButton, ToolbarGroup } from './ribbon-primitives'
-import { PdfWorkspaceToolbar } from './toolbar'
+import { EditorIconButton } from './editor-controls'
+import { PdfWorkspaceToolbar } from './pdf-toolbar'
 import {
   LoadingBlock,
   QueryError,
@@ -145,7 +145,9 @@ function DocumentWorkspaceBody({
         <PdfWorkspace
           documentId={documentId}
           filename={version.filename}
+          versionNumber={version.versionNumber}
           layout={layout}
+          headerLinks={headerLinks}
         />
       </VerifiedViewer>
     )
@@ -225,13 +227,13 @@ function DownloadRibbon({
         role="toolbar"
         aria-label="Document tools"
       >
-        <ToolbarGroup label="File">
-          <IconButton
+        <div className="flex items-center gap-1">
+          <EditorIconButton
             label="Download"
             onClick={onDownload}
             icon={<FileArrowDown size={16} aria-hidden />}
           />
-        </ToolbarGroup>
+        </div>
         <span className="pl-2 text-xs text-muted">{note}</span>
       </div>
       {error ? (
@@ -311,11 +313,15 @@ function UnsupportedWorkspace({
 function PdfWorkspace({
   documentId,
   filename,
+  versionNumber,
   layout,
+  headerLinks,
 }: {
   documentId: string
   filename: string
+  versionNumber: number
   layout: DocumentWorkspaceLayout
+  headerLinks?: { back?: ReactNode; matter?: ReactNode }
 }) {
   const view = useDocumentPdfView(documentId)
   const [zoom, setZoom] = useState(100)
@@ -355,6 +361,18 @@ function PdfWorkspace({
       // simply have no source here.
       onKeyDown={documentWorkspaceKeyDown}
     >
+      {/* The same header contract as the Word workspace: where this document
+          sits and how to leave it, so a read-only PDF is not a dead end. */}
+      <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b border-line px-12 py-2 max-compact:px-8">
+        {headerLinks?.back}
+        <h1 className="truncate text-item text-ink" title={filename}>
+          {filename}
+        </h1>
+        <span className="text-caption text-subtle">
+          Read only · version {String(versionNumber)}
+        </span>
+        {headerLinks?.matter}
+      </header>
       <WorkspaceRibbon>
         <PdfWorkspaceToolbar
           find={find.toolbar(findHits, activeFindIndex, (hit) =>

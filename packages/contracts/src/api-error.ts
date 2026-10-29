@@ -53,6 +53,9 @@ export const apiErrorCodeSchema = z.enum([
   'verification_finding_not_dismissable',
   'verification_execution_failed',
   'extraction_coverage_incomplete',
+  // Identical text decided both ways: finalising would keep one occurrence in
+  // the copy that leaves the firm, so the run is refused, not warned.
+  'mixed_text_decisions',
   'payload_too_large',
   'ooxml_limits_exceeded',
   'hydration_budget_exceeded',

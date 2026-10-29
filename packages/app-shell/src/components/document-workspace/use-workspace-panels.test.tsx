@@ -65,4 +65,17 @@ describe('useWorkspacePanels', () => {
     expect(closesPanelOnEscape(paragraph)).toBe(false)
     expect(closesPanelOnEscape(document.body)).toBe(true)
   })
+
+  it('leaves Escape to an open menu', () => {
+    // Dismissing the menu the reader just used must not also close the panel
+    // they were reading; the menu owns the key while it is open.
+    render(
+      <div role="menu" aria-label="File">
+        <button type="button" role="menuitem">
+          Export
+        </button>
+      </div>,
+    )
+    expect(closesPanelOnEscape(screen.getByRole('menuitem'))).toBe(false)
+  })
 })

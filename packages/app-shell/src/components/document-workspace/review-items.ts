@@ -68,7 +68,40 @@ export function reviewItems(
         : { kind: 'change', id: change.id, change },
     )
   }
-  return items
+  return mergeUnpairedMoves(items)
+}
+
+/**
+ * The parser names a move's halves by a mutual `pairId`; without one, each
+ * half arrives as its own row and the panel showed the same words twice with
+ * no explanation. Two unpairable halves carrying the same text are one move
+ * the engine cannot decide here, so they read as one row that says why.
+ */
+function mergeUnpairedMoves(items: ReviewItem[]): ReviewItem[] {
+  const merged: ReviewItem[] = []
+  for (const item of items) {
+    if (
+      item.kind !== 'move' ||
+      item.members.length !== 1 ||
+      item.members[0]?.pairId !== undefined
+    ) {
+      merged.push(item)
+      continue
+    }
+    const twin = merged.find(
+      (candidate): candidate is Extract<ReviewItem, { kind: 'move' }> =>
+        candidate.kind === 'move' &&
+        candidate.members.length === 1 &&
+        candidate.members[0]?.pairId === undefined &&
+        candidate.lead.text === item.lead.text,
+    )
+    if (!twin) {
+      merged.push(item)
+      continue
+    }
+    twin.members.push(item.lead)
+  }
+  return merged
 }
 
 /** Every wire id a decision on this row has to name. */
@@ -78,11 +111,31 @@ export function itemChangeIds(item: ReviewItem) {
     : item.members.map((m) => m.id)
 }
 
-/** Whether the engine can decide this row at all. */
+/**
+ * A move whose halves the parser never paired — one half on its own, or two
+ * halves that carry the same text instead of a mutual `pairId`. No decision
+ * can run on it, so the row states that rather than offering Accept/Reject.
+ */
+export function itemUnpairable(item: ReviewItem) {
+  return (
+    item.kind === 'move' &&
+    item.members.every((member) => member.pairId === undefined)
+  )
+}
+
+/**
+ * Whether the engine can decide this row at all. A move whose halves the
+ * parser never paired is decided as a pair or not at all, so merging the two
+ * display rows must not make one decidable.
+ */
 export function itemDecidable(item: ReviewItem) {
-  return item.kind === 'change'
-    ? item.change.undecidable === undefined
-    : item.members.every((member) => member.undecidable === undefined)
+  if (item.kind === 'change') return item.change.undecidable === undefined
+  if (
+    item.members.length > 1 &&
+    item.members.every((m) => m.pairId === undefined)
+  )
+    return false
+  return item.members.every((member) => member.undecidable === undefined)
 }
 
 /** The revision the row is about, for its author, date and text. */
@@ -142,6 +195,7 @@ export function reviewCountsLabel(counts: ReviewCounts, comments: number) {
 export function itemKindLabel(item: ReviewItem) {
   if (item.kind === 'move') {
     const { lead } = item
+    if (itemUnpairable(item)) return "Move · can't be paired"
     if (item.members.length > 1) return 'Move'
     return lead.kind === 'move' && lead.direction === 'from'
       ? 'Move · moved from'

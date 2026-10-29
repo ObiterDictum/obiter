@@ -10,12 +10,77 @@ import {
   DialogTitle,
   StatusDot,
 } from '@obiter/ui'
+import { mixedTextGroups, type MixedTextGroup } from '@obiter/redaction-policy'
 import { DetectionModeWarning } from './detection-mode-warning'
 import { useFinalizeRun } from './hooks'
-import { decisionCounts } from './span-copy'
+import {
+  DETECTION_COVERAGE_CAVEAT,
+  categoryLabel,
+  decisionCounts,
+} from './span-copy'
 import type { RedactionRun } from './types'
 
 const outputModeOrder: OutputMode[] = ['redacted', 'pseudonymised']
+
+/**
+ * The repeated text a reviewer has decided both ways. Stated with the words
+ * that leak, because "2 spans disagree" is not something a reviewer can act on:
+ * the group names the text, its category and which occurrence decided what.
+ */
+function MixedTextBlock({
+  groups,
+  onShow,
+}: {
+  groups: MixedTextGroup[]
+  onShow: (spanId: string) => void
+}) {
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-lg bg-warning-soft p-4 text-meta text-ink"
+      role="alert"
+    >
+      <p className="flex items-start gap-2 text-item">
+        <Warning
+          className="mt-0.5 shrink-0 text-warning"
+          size={16}
+          aria-hidden="true"
+        />
+        {groups.length === 1
+          ? 'One piece of text has different decisions.'
+          : `${String(groups.length)} pieces of text have different decisions.`}
+      </p>
+      <p className="text-muted">
+        The same words are redacted in one place and kept visible in another, so
+        the copy would still show what you decided to remove. Decide each group
+        the same way before finalising.
+      </p>
+      <ul className="flex flex-col gap-2">
+        {groups.map((group) => (
+          <li
+            key={group.key}
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-surface px-3 py-2"
+          >
+            <span className="min-w-0 break-words">{group.text}</span>
+            <span className="text-caption text-subtle">
+              {categoryLabel[group.category]}
+            </span>
+            <span className="text-caption text-muted tabular-nums">
+              {group.removed.length} redacted · {group.kept.length} kept visible
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              onClick={() => onShow(group.kept[0] ?? group.removed[0] ?? '')}
+            >
+              Show them
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 const outputModes = {
   redacted: {
@@ -37,12 +102,12 @@ const outputModes = {
  */
 export function FinalizeDialog({
   run,
-  onShowUndecided,
+  onShowSpan,
 }: {
   run: RedactionRun
-  /** Moves the reviewer to the first undecided span; absent where the host
+  /** Selects one span in the document and the list; absent where the host
    * cannot select one. */
-  onShowUndecided?: () => void
+  onShowSpan?: (spanId: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const [outputMode, setOutputMode] = useState<OutputMode>('redacted')
@@ -54,10 +119,16 @@ export function FinalizeDialog({
     run.spans.length - counts.accepted - counts.rejected - counts.pseudonymised
   const limitedDetectionMode =
     run.detectionMode === 'model+supplement' ? null : run.detectionMode
+  // Identical text with different decisions leaks it in the copy that leaves:
+  // one "Priya" redacted, another kept. Both the server and this dialog refuse
+  // to finalise until each group decides the same way.
+  const mixed = mixedTextGroups(run.spans, run.decisions)
   const blocked =
     undecided > 0 ||
+    mixed.length > 0 ||
     Boolean(limitedDetectionMode && !detectionConfirmed) ||
     !pagesReviewed
+  const firstUndecided = run.spans.find((span) => !run.decisions[span.id])?.id
   const close = () => {
     setOpen(false)
     setDetectionConfirmed(false)
@@ -130,19 +201,29 @@ export function FinalizeDialog({
                 Obiter will not finalise a run with undecided spans: an
                 undecided span is not the same as a span you chose to keep.
               </p>
-              {onShowUndecided ? (
+              {onShowSpan && firstUndecided ? (
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => {
                     close()
-                    onShowUndecided()
+                    onShowSpan(firstUndecided)
                   }}
                 >
                   Show them
                 </Button>
               ) : null}
             </div>
+          ) : null}
+
+          {mixed.length > 0 ? (
+            <MixedTextBlock
+              groups={mixed}
+              onShow={(spanId) => {
+                close()
+                onShowSpan?.(spanId)
+              }}
+            />
           ) : null}
 
           {limitedDetectionMode ? (
@@ -222,9 +303,9 @@ export function FinalizeDialog({
                 <span className="block text-item text-ink">
                   I have reviewed every page
                 </span>
-                Detection finds candidates, not everything sensitive. I have
-                read the document myself and I will check every page of the
-                disclosure copy before it leaves the firm.
+                {DETECTION_COVERAGE_CAVEAT} I have read the document myself and
+                I will check every page of the disclosure copy before it leaves
+                the firm.
               </span>
             </label>
           </div>
@@ -239,9 +320,11 @@ export function FinalizeDialog({
             <p className="mr-auto text-caption text-subtle">
               {undecided > 0
                 ? `${undecided} still undecided.`
-                : pagesReviewed
-                  ? 'Ready to finalise.'
-                  : 'Confirm the page review to finalise.'}
+                : mixed.length > 0
+                  ? 'Make the repeated text consistent to finalise.'
+                  : pagesReviewed
+                    ? 'Ready to finalise.'
+                    : 'Confirm the page review to finalise.'}
             </p>
             <DialogClose render={<Button variant="secondary">Cancel</Button>} />
             <Button

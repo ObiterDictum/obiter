@@ -2,7 +2,11 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
+import { openRibbonTab } from './editor-chrome'
 import { verifyEmailInDb } from './support'
+
+/** The chrome's command surfaces, re-exported for the specs that used tabs. */
+export { openRibbonTab }
 
 /*
  * The helpers every E13 spec family shares: a synthetic account through the
@@ -136,16 +140,19 @@ export async function saveAndWait(page: Page) {
   await expect(saveButton(page)).toBeDisabled({ timeout: 30_000 })
 }
 
-export async function openRibbonTab(page: Page, name: string) {
-  const tab = page.getByRole('tab', { name, exact: true }).first()
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await tab.click()
-    const selected = await expect(tab)
-      .toHaveAttribute('aria-selected', 'true', { timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (selected) return
-  }
+/**
+ * Find moved into its own bar; Ctrl+F reveals it the way the product does.
+ * The chord is handled by the workspace, so the caret has to be in the
+ * document for it to arrive — the same thing a reader does before searching.
+ */
+export async function openFind(page: Page) {
+  const field = page.getByLabel('Find in document')
+  if (await field.isVisible().catch(() => false)) return field
+  const paragraph = page.locator('[data-paragraph-id]').first()
+  if ((await paragraph.count()) > 0) await paragraph.click()
+  await page.keyboard.press('Control+f')
+  await expect(field).toBeVisible()
+  return field
 }
 
 /** The draft scope a seeded payload must match: tab writer, org, user, doc. */

@@ -4,10 +4,15 @@ import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentChangeWire, DocumentComment } from '@obiter/contracts'
 import {
-  mountWorkspace,
+  commandDisabled,
+  menuItem,
   openRibbonTab,
+} from './editor-test-commands'
+import {
+  mountWorkspace,
   selectBodyParagraph,
   staleConflict,
+  command,
 } from './docx-workspace-harness'
 
 const inserted: DocumentChangeWire = {
@@ -91,7 +96,10 @@ const moveNote =
 
 function openReviewPanel() {
   openRibbonTab('Review')
-  fireEvent.click(screen.getByRole('button', { name: /^Changes/ }))
+  // The Changes row is a toggle in the Review menu: it keeps the menu open,
+  // so the menu is dismissed before the list is read.
+  fireEvent.click(menuItem(/^Changes/))
+  fireEvent.keyDown(document, { key: 'Escape' })
   return screen.getByRole('complementary', { name: 'Changes and comments' })
 }
 
@@ -116,9 +124,7 @@ describe('review panel', () => {
     })
     const panel = openReviewPanel()
 
-    expect(panel.textContent).toContain(
-      '2 changes · 1 comment · 1 move requiring manual review',
-    )
+    expect(panel.textContent).toContain('2 changes · 1 move · 1 comment')
     expect(panel.textContent).toContain(moveNote)
     // Selection reaches tracked changes only: the move has no checkbox, and a
     // comment is never a row in this list at all.
@@ -130,7 +136,7 @@ describe('review panel', () => {
       'Select the deletion by Review Author',
     ])
     const moveRow = row(panel, 'stranded move')
-    expect(moveRow.textContent).toContain('Move · moved from')
+    expect(moveRow.textContent).toContain("Move · can't be paired")
     expect(within(moveRow).queryByRole('checkbox')).toBeNull()
   })
 
@@ -214,7 +220,7 @@ describe('review panel', () => {
     expect(decide).not.toHaveBeenCalled()
     const confirm = within(panel).getByRole('alert')
     expect(confirm.textContent).toContain(
-      'Reject 2 changes? This writes a new version and cannot be undone.',
+      'Reject 2 changes? This saves version 2. Version 1 stays available.',
     )
     fireEvent.click(
       within(panel).getByRole('button', { name: 'Reject 2 changes' }),
@@ -267,7 +273,7 @@ describe('review panel', () => {
     const panel = openReviewPanel()
 
     expect(within(panel).getByRole('alert').textContent).toContain(
-      'The decision was not saved. The request failed.',
+      "Your decision wasn't saved. Try again.",
     )
   })
 
@@ -283,18 +289,21 @@ describe('review panel', () => {
       within(row(panel, 'added words')).getByRole('button', { name: 'Accept' }),
     )
 
+    // The sentence belongs to the banner above the document, once; the
+    // panel's disabled controls carry the short why as their tooltip rather
+    // than repeating the paragraph in the bar.
     await waitFor(() =>
-      expect(panel.textContent).toContain(
-        'The document changed on the server; reload before deciding changes.',
-      ),
+      expect(
+        within(row(panel, 'added words'))
+          .getByRole('button', { name: 'Accept' })
+          .getAttribute('title'),
+      ).toBe('Reload before deciding changes.'),
     )
-    // The reload route stays the banner's, and the panel's rows are disabled
-    // rather than offering a decision against a base the server has moved.
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
+    expect(command('Reload')).toBeTruthy()
     for (const accept of within(panel).getAllByRole('button', {
       name: 'Accept',
     })) {
-      expect(accept).toHaveProperty('disabled', true)
+      expect(commandDisabled(accept)).toBe(true)
     }
   })
 
@@ -310,11 +319,19 @@ describe('review panel', () => {
     const accept = within(row(panel, 'added words')).getByRole('button', {
       name: 'Accept',
     })
-    const describedBy = accept.getAttribute('aria-describedby')
-    expect(describedBy).toBeTruthy()
-    const note = describedBy ? document.getElementById(describedBy) : null
-    expect(note?.textContent).toBe(reason)
-    expect(within(panel).getByText(reason)).toBeTruthy()
+    // The row's control carries the short why as its tooltip; the decision bar
+    // does the same for its own Accept/Reject once the row is current, so the
+    // barrier is never a paragraph repeated in two places.
+    expect(accept.getAttribute('title')).toBe(reason)
+    fireEvent.click(
+      within(row(panel, 'added words')).getByRole('button', {
+        name: 'Show this change',
+      }),
+    )
+    const barButtons = within(panel).getAllByRole('button', {
+      name: 'Accept',
+    })
+    expect(barButtons.at(-1)?.getAttribute('title')).toBe(reason)
   })
 
   it('follows the row under review with the decision bar and its own navigation', () => {

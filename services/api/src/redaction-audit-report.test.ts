@@ -2,9 +2,8 @@ import { describe, expect, it } from 'bun:test'
 import {
   AUDIT_REPORT_VERSION,
   buildAuditReport,
-  renderAuditHtml,
-  renderAuditMarkdown,
 } from './redaction-audit-report'
+import { scheduleLines } from './redaction-schedule-export'
 import type { RedactionRunRecord } from './redaction-database'
 
 const run: RedactionRunRecord = {
@@ -29,6 +28,9 @@ const run: RedactionRunRecord = {
   replacesRunId: null,
   replacementRunId: null,
   returnedDocumentVersionId: null,
+  returnedMatterId: null,
+  returnedDocumentId: null,
+  returnedDocumentVersionNumber: null,
   createdBy: 'usr_1',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -82,15 +84,9 @@ describe('buildAuditReport', () => {
       userId: 'usr_1',
       reviewedAt: '2026-01-01T00:02:00.000Z',
     })
-    const markdown = renderAuditMarkdown(report)
-    expect(markdown).toContain('**Detection mode:** heuristics+supplement')
-    expect(markdown).toContain(
-      '2026-01-01T00:00:00.000Z \u2014 redaction.run_create \u2014 usr_1 \u2014 {}',
-    )
-    expect(markdown).toContain('redaction.span_decision')
-    expect(renderAuditHtml(report)).toContain('<!doctype html>')
-    expect(renderAuditHtml(report)).toContain(
-      '**Detection mode:** heuristics+supplement',
-    )
+    const schedule = scheduleLines(report).join('\n')
+    expect(schedule).toContain('Detection mode: heuristics+supplement')
+    expect(schedule).toContain('redaction.span_decision')
+    expect(schedule).toContain('usr_1')
   })
 })

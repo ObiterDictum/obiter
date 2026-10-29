@@ -1,12 +1,20 @@
 /**
  * The two letters a person is shown by: first name and last name, or the first
- * letter of a single-word name.
+ * letter of a single-word name. Only letters count — an organisation in
+ * brackets ("Brightwater (Legal)") still yields two letters, not "B(".
  */
 export function initialsOf(name: string) {
-  const words = name.split(/\s+/).filter(Boolean)
+  const words = name
+    .split(/\s+/)
+    .map((word) => lettersOnly(word))
+    .filter(Boolean)
   const first = words[0]?.[0] ?? '?'
   const last = words.length > 1 ? words[words.length - 1][0] : ''
   return `${first}${last}`.toUpperCase()
+}
+
+function lettersOnly(word: string) {
+  return [...word].filter((char) => /\p{L}/u.test(char)).join('')
 }
 
 /** One date style across the product: 24 Oct 2026. */

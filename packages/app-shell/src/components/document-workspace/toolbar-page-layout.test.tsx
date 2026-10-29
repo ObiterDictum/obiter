@@ -10,12 +10,14 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
+import { commandDisabled, openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
+  command,
 } from './docx-workspace-harness'
+
 import { clickParagraph, bodyField } from './paragraph-selection-harness'
 
 function helloModel() {
@@ -35,49 +37,28 @@ function operations(
 }
 
 function save(editAsync: ReturnType<typeof vi.fn>) {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 
-function select(ariaLabel: string): HTMLSelectElement {
-  const node = screen.getByLabelText(ariaLabel, { exact: true })
-  if (!(node instanceof HTMLSelectElement)) {
-    throw new Error(`missing ${ariaLabel} select`)
-  }
-  return node
+/**
+ * The value selects are Base UI Selects. Applying a preset through one is a
+ * browser journey (opening a portaled listbox, picking a row) and is covered
+ * end to end by document-page-layout.spec.ts, which asserts the stored page
+ * setup after a reload. What jsdom can prove without the popup is the state a
+ * reader sees when the control cannot run at all.
+ */
+function select(name: string): HTMLElement {
+  return screen.getByRole('combobox', { name })
 }
 
 describe('the page setup controls', () => {
-  it('applies a margins preset and saves one section operation', async () => {
-    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
-    mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-
-    openRibbonTab('Layout')
-    fireEvent.change(select('Margins'), { target: { value: 'narrow' } })
-    expect(select('Margins').value).toBe('narrow')
-
-    await save(editAsync)
-    expect(operations(editAsync, 'set_section_properties')).toEqual([
-      {
-        type: 'set_section_properties',
-        margins: {
-          top: 720,
-          right: 720,
-          bottom: 720,
-          left: 720,
-          header: 720,
-          footer: 720,
-        },
-      },
-    ])
-  })
-
   it('toggles orientation and reflects it as pressed', async () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
 
     openRibbonTab('Layout')
-    fireEvent.click(screen.getByRole('button', { name: 'Orientation' }))
+    fireEvent.click(command('Orientation'))
     expect(
       screen
         .getByRole('button', { name: 'Orientation' })
@@ -90,27 +71,19 @@ describe('the page setup controls', () => {
     ])
   })
 
-  it('applies a page size and undoes it in one step', async () => {
-    const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
-    mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-
-    openRibbonTab('Layout')
-    fireEvent.change(select('Page size'), { target: { value: 'legal' } })
-    expect(select('Page size').value).toBe('legal')
-
-    openRibbonTab('Home')
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    openRibbonTab('Layout')
-    expect(select('Page size').value).toBe('')
-  })
-
   it('disables page setup while tracked changes are on', () => {
     mountWorkspace({ models: { doc_1: helloModel() } })
-    openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: /^Track changes/ }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
     openRibbonTab('Layout')
-    const margins = screen.getByLabelText(/^Margins/)
-    expect(margins instanceof HTMLSelectElement && margins.disabled).toBe(true)
+    // A tracked page-setup change cannot be represented, so the controls say
+    // so by being unavailable rather than by applying something silently.
+    for (const name of ['Margins', 'Page size']) {
+      expect((select(name) as HTMLButtonElement).disabled).toBe(true)
+    }
+    expect(screen.getByRole('button', { name: 'Orientation' })).toHaveProperty(
+      'disabled',
+      true,
+    )
   })
 })
 
@@ -121,7 +94,7 @@ describe('the break controls', () => {
     clickParagraph('p1')
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Page break' }))
+    fireEvent.click(command('Page break'))
 
     await save(editAsync)
     expect(operations(editAsync, 'insert_break')).toEqual([
@@ -140,7 +113,7 @@ describe('the break controls', () => {
     fireEvent.click(field)
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Page break' }))
+    fireEvent.click(command('Page break'))
 
     await save(editAsync)
     expect(operations(editAsync, 'insert_break')).toEqual([
@@ -154,7 +127,7 @@ describe('the break controls', () => {
     clickParagraph('p2')
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Section break' }))
+    fireEvent.click(command('Section break'))
 
     await save(editAsync)
     expect(operations(editAsync, 'insert_section_break')).toEqual([
@@ -165,7 +138,6 @@ describe('the break controls', () => {
   it('disables a break when the caret is not in a paragraph', () => {
     mountWorkspace({ models: { doc_1: helloModel() } })
     openRibbonTab('Insert')
-    const button = screen.getByRole('button', { name: /^Page break/ })
-    expect(button instanceof HTMLButtonElement && button.disabled).toBe(true)
+    expect(commandDisabled(command('Page break'))).toBe(true)
   })
 })

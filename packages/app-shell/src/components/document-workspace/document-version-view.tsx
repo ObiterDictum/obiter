@@ -24,7 +24,7 @@ import type { DocumentVersionRecord } from '../../documents'
 import { DocumentDesk, DocumentPage } from './document-page'
 import { DocumentModelPage } from './model-view'
 import { DocumentPdfPages } from './pdf-view'
-import { IconButton, ToolbarGroup } from './ribbon-primitives'
+import { EditorIconButton } from './editor-controls'
 import {
   LoadingBlock,
   QueryError,
@@ -70,24 +70,24 @@ export function DocumentVersionView({
         <span className="text-xs text-muted">Read only</span>
         <span className="flex-1" />
         {kind !== 'other' ? (
-          <ToolbarGroup label="Zoom">
-            <IconButton
+          <div className="flex items-center gap-1">
+            <EditorIconButton
               label="Zoom out"
               disabled={zoom <= MIN_ZOOM}
               onClick={() => setZoom((value) => value - ZOOM_STEP)}
               icon={<MagnifyingGlassMinus size={16} aria-hidden />}
             />
             <span className="w-10 text-center text-xs text-muted">{zoom}%</span>
-            <IconButton
+            <EditorIconButton
               label="Zoom in"
               disabled={zoom >= MAX_ZOOM}
               onClick={() => setZoom((value) => value + ZOOM_STEP)}
               icon={<MagnifyingGlassPlus size={16} aria-hidden />}
             />
-          </ToolbarGroup>
+          </div>
         ) : null}
-        <ToolbarGroup label="File">
-          <IconButton
+        <div className="flex items-center gap-1">
+          <EditorIconButton
             label="Download this version"
             onClick={() => {
               setDownloadError(null)
@@ -103,7 +103,7 @@ export function DocumentVersionView({
             }}
             icon={<FileArrowDown size={16} aria-hidden />}
           />
-        </ToolbarGroup>
+        </div>
         <Button
           variant="secondary"
           size="sm"

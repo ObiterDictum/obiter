@@ -15,6 +15,7 @@ import {
   multiParagraphModel,
   paragraph,
   selectBodyParagraph,
+  command,
 } from './docx-workspace-harness'
 import {
   clickParagraph,
@@ -56,15 +57,15 @@ function textEditLineage() {
 }
 
 function undoButton() {
-  return screen.getByRole('button', { name: 'Undo' })
+  return command('Undo')
 }
 
 function redoButton() {
-  return screen.getByRole('button', { name: 'Redo' })
+  return command('Redo')
 }
 
 function saveButton() {
-  return screen.getByRole('button', { name: 'Save' })
+  return command('Save')
 }
 
 function paintedBold(paragraphId: string): boolean {
@@ -204,7 +205,7 @@ describe('DocxWorkspace redo', () => {
     mountWorkspace({ models: { doc_1: twoParagraphs() } })
     fireEvent.click(screen.getByText('Hello'))
     nativeSelect(0, 2)
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     expect(paintedBold('p1')).toBe(true)
 
     fireEvent.click(undoButton())
@@ -409,7 +410,7 @@ describe('DocxWorkspace redo and save boundaries', () => {
 
     // Insert a paragraph, then type into it so Undo has a text step while the
     // insert itself stays in the draft state.
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Second' },
     })

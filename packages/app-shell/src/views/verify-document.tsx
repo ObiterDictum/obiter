@@ -17,6 +17,7 @@ import {
 } from '../verification-copy'
 import {
   useCreateVerificationRun,
+  useUndismissVerificationFinding,
   useVerificationFindings,
   type RunDocumentIdentity,
 } from '../verification-runs'
@@ -24,6 +25,7 @@ import { VerifyDismissDialog } from '../components/verification/verify-dismiss-d
 import { VerifyFinding } from '../components/verification/verify-finding'
 import {
   findingMatchesFilter,
+  sortFindings,
   type VerifyDocumentGroup,
   type VerifyFilter,
 } from './verify-groups'
@@ -55,9 +57,14 @@ export function VerifyDocument({
   const { identity, run, findingsRun } = group
   const retry = useCreateVerificationRun(group.documentId)
   const findings = useVerificationFindings(findingsRun?.id ?? null)
+  const undismiss = useUndismissVerificationFinding(findingsRun?.id ?? '')
   const [dismissing, setDismissing] = useState<VerificationFindingView | null>(
     null,
   )
+  // Matches are the bulk of a healthy run and the least urgent to read, so they
+  // are folded behind one line rather than pushing the findings that need a
+  // person off the first screen.
+  const [matchesShown, setMatchesShown] = useState(false)
   const filename =
     identity.status === 'available'
       ? identity.filename
@@ -74,9 +81,17 @@ export function VerifyDocument({
     : null
   const documentLabel = `${filename}${checkedNumber === undefined ? '' : ` · version ${String(checkedNumber)}`}`
 
-  const shown = findings.findings.filter((finding) =>
-    findingMatchesFilter(finding, filter),
+  const shown = sortFindings(
+    findings.findings.filter((finding) =>
+      findingMatchesFilter(finding, filter),
+    ),
   )
+  const matches =
+    filter === 'all' || filter === 'match'
+      ? shown.filter((finding) => finding.state === 'clear')
+      : []
+  const openFindings = shown.filter((finding) => finding.state !== 'clear')
+  const matchCount = summary?.matched ?? matches.length
   const loadingFindings = findingsRun != null && findings.isPending
   const retryable =
     identity.status === 'available' &&
@@ -129,7 +144,7 @@ export function VerifyDocument({
             Open document
             <ArrowSquareOut size={12} aria-hidden="true" />
           </Link>
-          {run.status === 'failed' ? (
+          {run.status === 'failed' || run.stale ? (
             <Button
               variant="secondary"
               size="sm"
@@ -142,7 +157,7 @@ export function VerifyDocument({
                 }
               }}
             >
-              Retry Verify
+              {run.status === 'failed' ? 'Retry Verify' : 'Run again'}
             </Button>
           ) : null}
         </div>
@@ -151,6 +166,12 @@ export function VerifyDocument({
       {retry.error ? (
         <p className="px-6 pb-4 text-meta text-danger" role="alert">
           The run was not started. {retry.error.message}
+        </p>
+      ) : null}
+
+      {undismiss.error ? (
+        <p className="px-6 pb-4 text-meta text-danger" role="alert">
+          The finding was not reopened. {undismiss.error.message}
         </p>
       ) : null}
 
@@ -228,7 +249,7 @@ export function VerifyDocument({
           </div>
         ) : shown.length > 0 ? (
           <div className="flex flex-col">
-            {shown.map((finding) => (
+            {openFindings.map((finding) => (
               <VerifyFinding
                 key={finding.id}
                 finding={finding}
@@ -237,8 +258,36 @@ export function VerifyDocument({
                   findingsRun.completedAt ?? findingsRun.createdAt,
                 )}`}
                 onDismiss={() => setDismissing(finding)}
+                onUndismiss={() => undismiss.mutate(finding.id)}
               />
             ))}
+            {matches.length > 0 ? (
+              <div className="border-t border-line px-6 py-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={matchesShown}
+                  onClick={() => setMatchesShown((shown) => !shown)}
+                >
+                  {`${String(matchCount)} ${matchCount === 1 ? 'matches' : 'match'} the checked source`}{' '}
+                  <span aria-hidden="true">·</span>{' '}
+                  {matchesShown ? 'Hide' : 'Show'}
+                </Button>
+              </div>
+            ) : null}
+            {matchesShown
+              ? matches.map((finding) => (
+                  <VerifyFinding
+                    key={finding.id}
+                    finding={finding}
+                    currentUserId={currentUserId}
+                    checkedLabel={`Checked ${formatRunTime(
+                      findingsRun.completedAt ?? findingsRun.createdAt,
+                    )}`}
+                    onDismiss={() => setDismissing(finding)}
+                  />
+                ))
+              : null}
           </div>
         ) : (
           <p className="px-6 pb-4 text-meta text-muted">

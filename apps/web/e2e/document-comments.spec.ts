@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runMenuCommand } from './editor-chrome'
 
 /*
  * E8 browser journey: comments must survive the whole product path. A real
@@ -101,18 +102,21 @@ async function selectFirst(page: Page, text: string, units: number) {
 }
 
 async function openCommentsPanel(page: Page) {
-  // The ribbon mounts its tabs once the document model arrives, so a click
-  // that lands during that transition can revert to Home. Retry the whole
-  // selection instead of assuming the first click stuck.
+  // The chrome mounts once the document model arrives, so a click that lands
+  // during that transition can be lost. Retry the open. The toolbar's own
+  // Comments control carries the thread count; the review list's filter
+  // segment is also called "Comments 1", so match the toolbar's parentheses.
   const panel = page.getByRole('complementary', { name: 'Comments' })
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByRole('tab', { name: 'Review' }).click()
-    const button = page.getByRole('button', { name: /^Comments/u }).last()
-    const clicked = await button
-      .click({ timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (!clicked) continue
+    // The control toggles, so a second click while the panel is up would close
+    // it again: only click while it is hidden.
+    if (!(await panel.isVisible())) {
+      await page
+        .getByRole('button', { name: /^Comments( \(\d+\))?$/u })
+        .first()
+        .click({ timeout: 5_000 })
+        .catch(() => undefined)
+    }
     const shown = await expect(panel)
       .toBeVisible({ timeout: 5_000 })
       .then(() => true)
@@ -246,7 +250,7 @@ test('comments anchor, navigate, reply, resolve and export', async ({
   // Export produces a DOCX whose comments part carries the foreign comment,
   // the product comments, and the product reply.
   const downloadPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await runMenuCommand(page, 'File', 'Export')
   const download = await downloadPromise
   const exportPath = await download.path()
   const commentsXml = zipPart(exportPath, 'word/comments.xml')

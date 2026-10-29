@@ -1,5 +1,6 @@
 import type { Pool } from 'pg'
 import type { AuthenticatedOrgUser } from './authz'
+import { reviewerNames } from './reviewer-names'
 import { getVerificationRun } from './verification-database'
 
 export type DismissFindingOutcome =
@@ -8,6 +9,7 @@ export type DismissFindingOutcome =
       dismissal: {
         reason: string | null
         dismissedBy: string
+        dismissedByName: string | null
         dismissedAt: string
       }
     }
@@ -15,6 +17,18 @@ export type DismissFindingOutcome =
       ok: false
       reason: 'run_not_found' | 'finding_not_found' | 'finding_not_dismissable'
     }
+
+export type UndismissFindingOutcome =
+  { ok: true; removed: boolean } | { ok: false; reason: 'run_not_found' }
+
+/** Everyone in the matter may see who decided, by name rather than by id. */
+async function dismissalName(
+  queryable: Pick<Pool, 'query'>,
+  organisationId: string,
+  userId: string,
+) {
+  return (await reviewerNames(queryable, organisationId, [userId])).get(userId)
+}
 
 /**
  * Dismiss one stored finding, or replace an existing dismissal's reason. The
@@ -63,7 +77,35 @@ export async function dismissVerificationFinding(
     dismissal: {
       reason: row.reason,
       dismissedBy: row.dismissed_by,
+      dismissedByName:
+        (await dismissalName(
+          queryable,
+          user.organisationId,
+          row.dismissed_by,
+        )) ?? null,
       dismissedAt: row.dismissed_at,
     },
   }
+}
+
+/**
+ * Put a dismissed finding back in the queue. The dismissal row is the only
+ * record of the decision, so removing it is audited by the route: deleting a
+ * row leaves no trace of who reopened the finding or when. Reopening needs the
+ * same edit access as dismissing, because it changes what everyone in the
+ * matter sees as outstanding work.
+ */
+export async function undismissVerificationFinding(
+  queryable: Pick<Pool, 'query'>,
+  user: AuthenticatedOrgUser,
+  input: { runId: string; findingId: string },
+): Promise<UndismissFindingOutcome> {
+  const run = await getVerificationRun(queryable, user, input.runId, 'edit')
+  if (!run) return { ok: false, reason: 'run_not_found' }
+  const result = await queryable.query(
+    `delete from verification_finding_dismissals
+     where run_id = $1 and finding_id = $2 and organisation_id = $3`,
+    [input.runId, input.findingId, user.organisationId],
+  )
+  return { ok: true, removed: (result.rowCount ?? 0) > 0 }
 }

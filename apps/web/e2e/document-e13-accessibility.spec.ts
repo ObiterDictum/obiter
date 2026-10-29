@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { createAccount, openDocx, openRibbonTab } from './e13-support'
+import { closeMenu, menuItem } from './editor-chrome'
 
 /*
  * E13 browser coverage, accessibility family: reduced-motion and forced
@@ -24,16 +25,17 @@ test('reduced-motion and forced-colours keep the ribbon usable', async ({
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  // Ribbon tabs still drive panels under both platform modes.
+  // The View menu's toggles still drive panels under both platform modes.
   await openRibbonTab(page, 'View')
-  await page.getByRole('button', { name: 'Navigation pane' }).click()
+  await menuItem(page, 'Navigation pane').click()
   await expect(page.locator('[data-navigation-pane]')).toBeVisible()
-  await page.getByRole('button', { name: 'Ruler' }).click()
+  await menuItem(page, 'Ruler').click()
   await expect(page.locator('[data-document-ruler]')).toBeVisible()
-  // Focus stays visibly outlined: tab to a control and check the outline.
-  const tab = page.getByRole('tab', { name: 'Review', exact: true }).first()
-  await tab.focus()
-  const outlineWidth = await tab.evaluate(
+  await closeMenu(page)
+  // Focus stays visibly outlined: focus a chrome control and check the outline.
+  const menuTrigger = page.getByRole('button', { name: 'Review', exact: true })
+  await menuTrigger.focus()
+  const outlineWidth = await menuTrigger.evaluate(
     (node) => getComputedStyle(node).outlineWidth,
   )
   expect(Number.parseFloat(outlineWidth)).toBeGreaterThan(0)
@@ -57,9 +59,7 @@ test('the workspace holds together at tablet width with no horizontal overflow',
   expect(overflow).toBeLessThanOrEqual(4)
   // The ribbon wraps rather than clipping its controls off the edge.
   await openRibbonTab(page, 'View')
-  await expect(
-    page.getByRole('button', { name: 'Navigation pane' }),
-  ).toBeVisible()
+  await expect(menuItem(page, 'Navigation pane')).toBeVisible()
 })
 
 test.describe('coarse pointer and zoomed viewport', () => {
@@ -90,6 +90,7 @@ test.describe('coarse pointer and zoomed viewport', () => {
     ).toBe(true)
 
     const assertTargets = async () => {
+      await openRibbonTab(page, 'View')
       for (const name of [
         'Zoom out',
         'Zoom in',
@@ -98,16 +99,16 @@ test.describe('coarse pointer and zoomed viewport', () => {
         'Print layout',
         'Web layout',
       ]) {
-        const control = page.getByRole('button', { name })
+        const control = menuItem(page, name)
         await expect(control).toBeVisible()
         const box = await control.boundingBox()
         expect(box, `${name} has no box`).not.toBeNull()
         expect(box?.height ?? 0, `${name} height`).toBeGreaterThanOrEqual(44)
         expect(box?.width ?? 0, `${name} width`).toBeGreaterThanOrEqual(44)
       }
+      await closeMenu(page)
     }
 
-    await openRibbonTab(page, 'View')
     await assertTargets()
 
     // A ~200%-zoomed 820px window is a ~410px CSS viewport: controls must

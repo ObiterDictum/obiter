@@ -5,7 +5,12 @@ import type {
   Span as RampartSpan,
   TokenClassifier,
 } from '@obiter/rampart-inference'
-import { buildAuditReport, renderAuditHtml } from './redaction-audit-report'
+import { buildAuditReport } from './redaction-audit-report'
+import {
+  renderScheduleDocx,
+  renderSchedulePdf,
+  scheduleLines,
+} from './redaction-schedule-export'
 import { computeSummary, type RedactionRunRecord } from './redaction-database'
 import { createRedactionDetector } from './redaction-detection'
 import { extractDocumentText } from './document-extraction'
@@ -107,6 +112,9 @@ describe('Redact 3 delivered acceptance criteria', () => {
       replacesRunId: null,
       replacementRunId: null,
       returnedDocumentVersionId: null,
+      returnedMatterId: null,
+      returnedDocumentId: null,
+      returnedDocumentVersionNumber: null,
       createdBy: 'usr_demo',
       createdAt: decidedAt,
       updatedAt: decidedAt,
@@ -129,6 +137,19 @@ describe('Redact 3 delivered acceptance criteria', () => {
     ])
 
     expect(report.redactionRunSummary.totalSpans).toBe(detection.spans.length)
-    expect(renderAuditHtml(report)).toContain('<!doctype html>')
+    // The exported schedule is a file that leaves the firm's screens: it names
+    // what was decided, never the words that were removed.
+    const schedule = scheduleLines(report).join('\n')
+    expect(schedule).toContain('Obiter redaction schedule')
+    for (const span of detection.spans)
+      expect(schedule).not.toContain(span.text)
+    expect(Buffer.from(await renderSchedulePdf(report)).subarray(0, 4)).toEqual(
+      Buffer.from('%PDF'),
+    )
+    expect(
+      Buffer.from(await renderScheduleDocx(report))
+        .subarray(0, 2)
+        .toString(),
+    ).toBe('PK')
   })
 })

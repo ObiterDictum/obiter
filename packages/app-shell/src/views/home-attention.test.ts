@@ -88,6 +88,7 @@ describe('rankAttentionItems', () => {
       [
         verificationRun({
           id: 'verify_review',
+          documentId: 'doc_review',
           summary: {
             findingCount: 1,
             flaggedCount: 0,
@@ -98,11 +99,12 @@ describe('rankAttentionItems', () => {
         }),
         verificationRun({
           id: 'verify_failed',
+          documentId: 'doc_failed',
           status: 'failed',
           failureCode: 'execution_failed',
           completedAt: '2026-10-26T14:27:00.000Z',
         }),
-        verificationRun({ id: 'verify_flagged' }),
+        verificationRun({ id: 'verify_flagged', documentId: 'doc_flagged' }),
       ],
       [redactionRun({ id: 'redact_1' })],
     )
@@ -120,10 +122,12 @@ describe('rankAttentionItems', () => {
       [
         verificationRun({
           id: 'newer',
+          documentId: 'doc_newer',
           completedAt: '2026-10-26T09:00:00.000Z',
         }),
         verificationRun({
           id: 'older',
+          documentId: 'doc_older',
           completedAt: '2026-10-20T09:00:00.000Z',
         }),
       ],
@@ -141,10 +145,12 @@ describe('rankAttentionItems', () => {
       [
         verificationRun({
           id: 'run_b',
+          documentId: 'doc_b',
           completedAt: '2026-10-26T09:00:00.000Z',
         }),
         verificationRun({
           id: 'run_a',
+          documentId: 'doc_a',
           completedAt: '2026-10-26T09:00:00.000Z',
         }),
       ],
@@ -266,6 +272,7 @@ describe('attention copy', () => {
         verificationRun({ id: 'flagged' }),
         verificationRun({
           id: 'failed',
+          documentId: 'doc_failed',
           status: 'failed',
           completedAt: '2026-10-26T14:27:00.000Z',
         }),
@@ -274,7 +281,7 @@ describe('attention copy', () => {
     )
 
     expect(attentionSummaryText(summariseAttention(items))).toBe(
-      '2 items need your attention: 1 legal-accuracy risk and 1 failed run.',
+      '4 items need your attention: 1 legal-accuracy risk, 2 citations to review and 1 failed run.',
     )
     expect(attentionSummaryText(summariseAttention([]))).toBe(
       'Nothing needs your attention right now.',

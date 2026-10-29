@@ -21,11 +21,13 @@ import type {
   SpanDecision,
 } from '@obiter/contracts'
 import type { AuthenticatedOrgUser } from './authz'
-import type {
-  Decisions,
-  RedactionSpan,
-  RunSummary,
-  TokenMap,
+import { reviewerNames } from './reviewer-names'
+import {
+  sameTextOccurrences,
+  type Decisions,
+  type RedactionSpan,
+  type RunSummary,
+  type TokenMap,
 } from '@obiter/redaction-policy'
 
 const MAX_FINALIZE_AUDIT_SPAN_IDS = 100
@@ -63,6 +65,10 @@ export interface RedactionRunRecord {
    * idempotence marker, so a retried return resolves to this version.
    */
   returnedDocumentVersionId: string | null
+  /** Where that version lives, so the finalised page can offer to open it. */
+  returnedMatterId: string | null
+  returnedDocumentId: string | null
+  returnedDocumentVersionNumber: number | null
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -93,6 +99,9 @@ export interface RedactionRunRow {
   replaces_run_id: string | null
   replacement_run_id: string | null
   returned_document_version_id: string | null
+  returned_matter_id: string | null
+  returned_document_id: string | null
+  returned_document_version_number: number | null
   created_by: string
   created_at: Date | string
   updated_at: Date | string
@@ -110,11 +119,18 @@ export const redactionRunColumns = `run.id, run.organisation_id, run.matter_id, 
   run.document_version_id, run.source_filename, run.source_text_object_key, run.source_file_object_key,
   run.source_layout_object_key, run.source_mime_type, run.status, run.policy_mode,
   run.spans_json, run.decisions_json, run.output_id, run.summary_json, run.detector_version,
-  run.detection_mode, run.replaces_run_id, replacement.id as replacement_run_id, run.returned_document_version_id, run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
+  run.detection_mode, run.replaces_run_id, replacement.id as replacement_run_id, run.returned_document_version_id,
+  saved_document.matter_id as returned_matter_id, saved_document.id as returned_document_id,
+  saved_version.version_number as returned_document_version_number,
+  run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
 export const redactionRunsFrom = `from redaction_runs run
   left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id
   left join redaction_runs replacement on replacement.organisation_id = run.organisation_id
-    and replacement.replaces_run_id = run.id and replacement.deleted_at is null`
+    and replacement.replaces_run_id = run.id and replacement.deleted_at is null
+  left join document_versions saved_version on saved_version.id = run.returned_document_version_id
+    and saved_version.organisation_id = run.organisation_id
+  left join matter_documents saved_document on saved_document.id = saved_version.matter_document_id
+    and saved_document.organisation_id = run.organisation_id`
 const redactionRunLockColumns = redactionRunColumns.replace(
   'run.deleted_at,',
   'run.deleted_at::text as deleted_at,',
@@ -232,6 +248,9 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     replacesRunId: row.replaces_run_id ?? null,
     replacementRunId: row.replacement_run_id,
     returnedDocumentVersionId: row.returned_document_version_id ?? null,
+    returnedMatterId: row.returned_matter_id ?? null,
+    returnedDocumentId: row.returned_document_id ?? null,
+    returnedDocumentVersionNumber: row.returned_document_version_number ?? null,
     createdBy: row.created_by,
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),
@@ -283,6 +302,48 @@ export function computeSummary(
     reviewedCount,
     unreviewedCount: spans.length - reviewedCount,
   }
+}
+
+/**
+ * Decisions name the person who made them. The stored record holds the id, so
+ * the organisation's member names are joined in where a run is read for
+ * display; they are never written back, because a name inside `decisions_json`
+ * would freeze somebody's name into an audit record and drift from the account
+ * it names.
+ */
+export async function withDecisionNames(
+  queryable: Pick<Pool, 'query'>,
+  organisationId: string,
+  decisions: Decisions,
+): Promise<Decisions> {
+  const records = Object.values(decisions)
+  if (records.length === 0) return decisions
+  const names = await reviewerNames(
+    queryable,
+    organisationId,
+    records.map((record) => record.decidedBy),
+  )
+  const named: Decisions = {}
+  for (const [spanId, record] of Object.entries(decisions)) {
+    named[spanId] = {
+      ...record,
+      decidedByName: names.get(record.decidedBy) ?? null,
+    }
+  }
+  return named
+}
+
+/** The stored shape of a set of decisions: the id, never the joined name. */
+function storedDecisions(decisions: Decisions): Decisions {
+  const stored: Decisions = {}
+  for (const [spanId, record] of Object.entries(decisions)) {
+    stored[spanId] = {
+      decision: record.decision,
+      decidedBy: record.decidedBy,
+      decidedAt: record.decidedAt,
+    }
+  }
+  return stored
 }
 
 export function publicRun(run: RedactionRunRecord) {
@@ -616,6 +677,8 @@ export async function recordSpanDecision(input: {
   spanId: string
   decision: SpanDecision
   userId: string
+  /** Repeat the decision on every span reading the same text in this run. */
+  applyToSameText?: boolean
 }) {
   const client = await input.pool.connect()
   try {
@@ -650,14 +713,20 @@ export async function recordSpanDecision(input: {
       await client.query('rollback')
       return { kind: 'span_not_found' as const }
     }
-    const decisions: Decisions = {
-      ...run.decisions,
-      [span.id]: {
+    // Same text, same decision: keeping one "Priya" and redacting another
+    // leaves the name in the copy that leaves the firm. The repeat is recorded
+    // as one action against every occurrence so the audit names each span.
+    const spanIds = input.applyToSameText
+      ? sameTextOccurrences(run.spans, span.text).map((item) => item.id)
+      : [span.id]
+    const decidedAt = new Date().toISOString()
+    const decisions: Decisions = { ...storedDecisions(run.decisions) }
+    for (const id of spanIds)
+      decisions[id] = {
         decision: input.decision,
         decidedBy: input.userId,
-        decidedAt: new Date().toISOString(),
-      },
-    }
+        decidedAt,
+      }
     const summary = computeSummary(run.spans, decisions)
     await client.query(
       `update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2`,
@@ -680,7 +749,7 @@ export async function recordSpanDecision(input: {
     )
     if (!updatedRun) throw new Error('Updated redaction run could not be read.')
     await client.query('commit')
-    return { kind: 'updated' as const, run: updatedRun, span }
+    return { kind: 'updated' as const, run: updatedRun, span, spanIds }
   } catch (error) {
     await client.query('rollback')
     throw error
