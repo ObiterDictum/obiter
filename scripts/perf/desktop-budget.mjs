@@ -71,7 +71,9 @@ export const BUDGETS = {
   // 3,500,235 B after the Redact redesign (28 Oct 2026) moved the review desk
   // into a lazy chunk; lowered to keep the same 2% headroom, so the bytes that
   // left the entry cannot quietly come back.
-  rendererInitialJsBytes: 3_570_000,
+  // 3,559,963 B after the UI review fixes (29 Oct 2026), the search breadcrumb
+  // naming its source among them; raised to keep about 1% headroom.
+  rendererInitialJsBytes: 3_600_000,
   // 90,525 B, re-recorded after the editor programme grew it from the recorded
   // 83,069 B. 2.7% headroom rather than the usual 10%, which is what the JS
   // entry above settled on for the same reason: the previous ceiling carried

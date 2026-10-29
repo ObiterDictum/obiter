@@ -125,6 +125,9 @@ export function getLegalSearchEmptyFeedback(input: {
    * that names a paragraph but no schedule. The structured example and Act
    * context drive a corrective with a resubmission the parser accepts. */
   legislationScheduleGuidance?: LegislationScheduleGuidance
+  /** True when the search carried filters, so the empty copy can point at
+   * them as the thing to clear rather than blaming the query. */
+  filtersActive?: boolean
 }) {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
@@ -179,7 +182,7 @@ export function getLegalSearchEmptyFeedback(input: {
     return {
       eyebrow: 'Citation not held',
       title: 'No judgment held for this citation',
-      body: `No stored legal source holds "${input.query}" as a judgment. Providers were not consulted for this search. Check the citation or search party names instead.`,
+      body: `No stored legal source holds "${input.query}" as a judgment. Check the citation, or search by party name instead.`,
     }
   }
 
@@ -218,8 +221,30 @@ export function getLegalSearchEmptyFeedback(input: {
   return {
     eyebrow: 'No indexed match',
     title: 'No sources found',
-    body: `Stored legal sources did not match "${input.query}" with the selected filters. Providers were not consulted for this search.`,
+    body: input.filtersActive
+      ? `No stored source matches "${input.query}" with the selected filters. Clear them to search the whole corpus, or try the public sources below.`
+      : `No stored source matches "${input.query}". Try fewer or different words, or search the public sources below.`,
   }
+}
+
+/**
+ * The public sources a reader continues in when this corpus has nothing:
+ * legislation.gov.uk for statute, The National Archives' Find Case Law for
+ * judgments. The query travels with them so the next search is one click, not
+ * a retype.
+ */
+export function getLegalSearchElsewhereLinks(query: string) {
+  const encoded = encodeURIComponent(query.trim())
+  return [
+    {
+      label: 'Search legislation.gov.uk',
+      href: `https://www.legislation.gov.uk/search?title=${encoded}`,
+    },
+    {
+      label: 'Search The National Archives',
+      href: `https://caselaw.nationalarchives.gov.uk/search?query=${encoded}`,
+    },
+  ]
 }
 
 export function shouldRunLegalSearch(query: string) {

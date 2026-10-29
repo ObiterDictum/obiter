@@ -36,6 +36,9 @@ export interface CaseLawDocumentResponse {
   document: CaseLawDocument
   /** True only when each `paragraphNumber` is the court's own, never a count. */
   courtParagraphNumbers?: boolean
+  /** When the corpus read this judgment's metadata: the retrieval date the
+   * page shows. Absent when the record does not carry it. */
+  acquiredAt?: string | null
   withdrawn?: CaseLawWithdrawnNotice
 }
 

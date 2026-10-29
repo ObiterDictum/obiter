@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Input } from '@obiter/ui'
+import { Button, DatePicker } from '@obiter/ui'
 import { getReadableCourtLabel } from './searchTypes'
 import {
   filterSearchResultRows,
@@ -114,23 +114,17 @@ export function SearchFacets({
 
       <fieldset className="flex flex-col gap-2 border-0 p-0">
         <legend className="mb-1 text-meta text-subtle">Date decided</legend>
-        <Input
+        <DatePicker
           label="From"
-          type="date"
           value={filters.dateFrom}
           name="search-date-from"
-          onChange={(event) =>
-            onFiltersChange({ ...filters, dateFrom: event.target.value })
-          }
+          onChange={(dateFrom) => onFiltersChange({ ...filters, dateFrom })}
         />
-        <Input
+        <DatePicker
           label="To"
-          type="date"
           value={filters.dateTo}
           name="search-date-to"
-          onChange={(event) =>
-            onFiltersChange({ ...filters, dateTo: event.target.value })
-          }
+          onChange={(dateTo) => onFiltersChange({ ...filters, dateTo })}
         />
       </fieldset>
     </aside>
