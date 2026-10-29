@@ -4,7 +4,6 @@ import JSZip from 'jszip'
 import { buildOoxmlFixture } from '../fixtures/builder'
 import { ooxmlFixtureManifest } from '../fixtures/manifest'
 import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
-import { escapeXmlText } from './parts/overlay'
 
 for (const { name } of ooxmlFixtureManifest) {
   it(`keeps every unrelated package byte across Unicode edits: ${name}`, async () => {
@@ -40,7 +39,8 @@ for (const { name } of ooxmlFixtureManifest) {
         await part.async('uint8array'),
       )
     }
-    const expectedProbe = `<w:p><w:r><w:t>${escapeXmlText(text)}</w:t><w:t></w:t></w:r></w:p>`
+    const expectedProbe =
+      '<w:p><w:r><w:t>Cymru é — العربية 😀 &lt; &amp; &gt;</w:t><w:t></w:t></w:r></w:p>'
     expect(await output.file('word/document.xml')?.async('string')).toBe(
       originalXml.replace('<w:body>', `<w:body>${expectedProbe}`),
     )
