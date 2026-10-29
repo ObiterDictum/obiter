@@ -375,6 +375,44 @@ describe('detectNer', () => {
     expect(spans[0]).toMatchObject({ start: 0, end: 4, text: 'José' })
   })
 
+  it("keeps a name's raw offsets exact when an emoji follows it", async () => {
+    const classifier: TokenClassifier = async () => [
+      { entity: 'B-GIVEN_NAME', score: 0.9, start: 0, end: 0, word: 'jane' },
+      { entity: 'B-GIVEN_NAME', score: 0.9, start: 0, end: 0, word: 'smith' },
+    ]
+
+    const spans = await detectNer('Jane😀 Smith', classifier)
+
+    expect(spans.map(({ start, end, text }) => ({ start, end, text }))).toEqual([
+      { start: 0, end: 4, text: 'Jane' },
+      { start: 7, end: 12, text: 'Smith' },
+    ])
+  })
+
+  it("keeps a name's raw offsets exact when an emoji precedes it", async () => {
+    const classifier: TokenClassifier = async () => [
+      { entity: 'B-GIVEN_NAME', score: 0.9, start: 0, end: 0, word: 'jane' },
+    ]
+
+    const spans = await detectNer('😀 Jane', classifier)
+
+    expect(spans.map(({ start, end, text }) => ({ start, end, text }))).toEqual([
+      { start: 3, end: 7, text: 'Jane' },
+    ])
+  })
+
+  it("keeps an accented name's raw offsets exact when an emoji follows it", async () => {
+    const classifier: TokenClassifier = async () => [
+      { entity: 'B-GIVEN_NAME', score: 0.9, start: 0, end: 0, word: 'jose' },
+    ]
+
+    const spans = await detectNer('José😀', classifier)
+
+    expect(spans.map(({ start, end, text }) => ({ start, end, text }))).toEqual([
+      { start: 0, end: 4, text: 'José' },
+    ])
+  })
+
   it('resolves a repeated substring through the token index instead of the first match', async () => {
     const classifier: TokenClassifier = async () => [
       {
