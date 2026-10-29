@@ -8,7 +8,6 @@ import type {
   DocumentFormatToolbar,
   DocumentMarkingsToolbar,
   DocumentReviewToolbar,
-  DocumentStructureToolbar,
 } from './ribbon-types'
 import type { InsertRibbonProps } from './use-insert-ribbon'
 import { revealDocumentRedactionRuns } from './document-actions'
