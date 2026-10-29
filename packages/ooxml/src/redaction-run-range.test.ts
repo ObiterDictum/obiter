@@ -246,3 +246,19 @@ it('keeps a range replacement with duplicate run properties ineligible', async (
     saved.model.stories[0]?.paragraphs[0]?.runs[0]?.textRevisionEligible,
   ).toBe(false)
 })
+
+it('drops a range that starts inside the previous one', async () => {
+  const { document, paragraph } = await revisionFixture(
+    '<w:t>Alice Example overview</w:t>',
+  )
+  const anchor = document.paragraphAnchors.get(paragraph.id)
+  if (!anchor) throw new Error('Missing anchor')
+  applyRunTextReplacementRange(document, anchor, [
+    { from: 0, to: 5, text: 'XX' },
+    { from: 3, to: 8, text: 'YY' },
+  ])
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(
+    saved.model.stories[0]?.paragraphs[0]?.runs.map((run) => run.text).join(''),
+  ).toBe('XX Example overview')
+})

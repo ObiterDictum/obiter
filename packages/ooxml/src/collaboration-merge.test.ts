@@ -599,7 +599,7 @@ describe('bounded collaboration reconciliation', () => {
     expect(address?.run.runIndex).toBeGreaterThanOrEqual(0)
   })
 
-  it('rewrites base addresses to current before applying a merge batch', async () => {
+  it('rewrites legacy paragraph addresses to canonical current ids before applying a merge batch', async () => {
     const seededBytes = await createSyntheticDocx(['Alpha', 'Beta'])
     const base = await parseDocx(seededBytes)
     const currentDoc = await parseDocx(seededBytes)
@@ -630,6 +630,42 @@ describe('bounded collaboration reconciliation', () => {
     expect(
       merged.map((paragraph) => paragraph.runs.map((run) => run.text).join('')),
     ).toEqual(['Alpha revised', 'Beta'])
+  })
+
+  it('merges a section-properties edit whatever changed in the paragraphs', async () => {
+    const base = await parseDocx(source)
+    const [first] = firstTwoRuns(base)
+    const current = await editedSource([
+      {
+        type: 'replace_run_text',
+        runId: first.id,
+        text: 'Collaborator revision',
+      },
+    ])
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [{ type: 'set_section_properties', orientation: 'landscape' }],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+  })
+
+  it('refuses an operation whose address the alignment does not name', () => {
+    expect(() =>
+      remapMergeOperations(
+        [
+          {
+            type: 'set_paragraph_style',
+            paragraphId: 'para-missing',
+            styleId: null,
+          },
+        ],
+        { baseToCurrentParagraph: new Map(), baseToCurrentRun: new Map() },
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
   })
 
   it('merges a table of contents over an unchanged stale base', async () => {

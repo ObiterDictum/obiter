@@ -159,6 +159,25 @@ describe('document markings in docProps/custom.xml', () => {
     expect(rels?.match(/relationships\/custom-properties/gu)).toHaveLength(1)
   })
 
+  it('refuses to adopt a file at the custom-properties name that is not a Properties part', async () => {
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    zip.file('docProps/custom.xml', '<?xml version="1.0"?><NotProperties/>')
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+
+    expect(() =>
+      writeDocumentMarkings(document, {
+        documentKind: 'order',
+        draft: false,
+        privileged: false,
+        withoutPrejudice: false,
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
+
   it('does not duplicate the declaration on a second write', async () => {
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),

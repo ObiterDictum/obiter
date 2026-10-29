@@ -181,6 +181,34 @@ describe('footnote edits', () => {
     expect(notes).toMatch(/<w:footnote\b[^>]*w:id="2">/u)
   })
 
+  it('refuses an orphaned notes part that no document relationship names', async () => {
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const rels = await zip.file('word/_rels/document.xml.rels')?.async('string')
+    if (!rels) throw new Error('Fixture rels part is missing.')
+    zip.file(
+      'word/_rels/document.xml.rels',
+      rels.replace(/<Relationship [^>]*Type="[^"]*\/footnotes"[^>]*\/>/u, ''),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const anchor = mainParagraphs(document)[0]
+    if (!anchor) throw new Error('Fixture paragraph is missing.')
+
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'insert_footnote',
+          paragraphId: anchor.id,
+          offset: 0,
+          text: 'New note',
+        },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-package' }))
+  })
+
   it('escapes note text and keeps every other part byte for byte', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document)[0]
