@@ -28,7 +28,7 @@ interface RawEntity {
 }
 
 /** Counts the model tokens in a string, excluding the [CLS]/[SEP] specials. */
-export type TokenCounter = (text: string) => number
+type TokenCounter = (text: string) => number
 
 /**
  * The callable returned by a token-classification pipeline. `countTokens` is

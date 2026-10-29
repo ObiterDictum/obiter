@@ -197,5 +197,3 @@ export const WML_FORMAT_SETTINGS_ATTRIBUTE_BOUNDS: ReadonlyArray<
   ['text', new Map([['multiLine', ONOFF]])],
   ['tabIndex', new Map([['val', WML_INT]])],
 ]
-
-export default WML_FORMAT_SETTINGS_ATTRIBUTE_BOUNDS

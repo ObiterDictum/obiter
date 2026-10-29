@@ -143,7 +143,7 @@ function textElementXml(prefix: string, text: string) {
   return `<${prefix}:t${textElementXmlSpaceAttribute(text)}>${escapeXmlText(text)}</${prefix}:t>`
 }
 
-export function textElementXmlSpaceAttribute(text: string) {
+function textElementXmlSpaceAttribute(text: string) {
   return requiresPreservedXmlSpace(text) ? ' xml:space="preserve"' : ''
 }
 

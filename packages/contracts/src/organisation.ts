@@ -54,12 +54,6 @@ export type CreateOrganisationInput = z.infer<
   typeof createOrganisationInputSchema
 >
 
-export const updateOrganisationInputSchema = createOrganisationInputSchema
-
-export type UpdateOrganisationInput = z.infer<
-  typeof updateOrganisationInputSchema
->
-
 /**
  * A display name people read back: the account name and the organisation name.
  * One builder for both, because two name paths that strip different characters

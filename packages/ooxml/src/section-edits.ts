@@ -4,6 +4,7 @@ import { locateOffset, preserveTextOpeningTag } from './text-offsets'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { splitsSurrogate } from './model-run-range-edits'
+import { isBlankParagraph } from './table-of-contents-splice'
 import { writePropertyChildren } from './model-properties'
 import { insertPropertyChild, stripPropertyChild } from './property-xml'
 import {
@@ -329,17 +330,6 @@ function pageBreakInsertion(
 }
 
 const PAGE_BREAK = '<w:br w:type="page"/>'
-
-/**
- * A paragraph with no runs and no paragraph properties: the only shape where a
- * page break and a section break both claim the same node.
- */
-function isBlankParagraph(paragraph: ParagraphAnchor) {
-  return (
-    paragraph.runs.length === 0 &&
-    paragraph.paragraphPropertiesRange === undefined
-  )
-}
 
 /**
  * Appends a run into a blank paragraph, reusing the paragraph-owned `<w:pPr>`

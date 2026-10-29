@@ -107,7 +107,7 @@ export const SHARE_SAFE_WEB_POINTER_ELEMENTS = new Set([
  * refuses — hidden styling cannot be unwrapped to visible text without
  * guessing at intent.
  */
-export const SHARE_SAFE_HIDDEN_ELEMENTS = new Set([
+const SHARE_SAFE_HIDDEN_ELEMENTS = new Set([
   'vanish',
   'webHidden',
   'specVanish',

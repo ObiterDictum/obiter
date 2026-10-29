@@ -5,6 +5,7 @@ import type {
 } from '@obiter/contracts'
 
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
+import { splitsSurrogate } from './model-run-range-edits'
 import {
   editableTextNodes,
   locateOffset,
@@ -349,14 +350,5 @@ function sameSplit(
     left.run.wire.id === right.run.wire.id &&
     left.position === right.position &&
     left.textElement?.start === right.textElement?.start
-  )
-}
-
-function splitsSurrogate(value: string, offset: number) {
-  if (offset <= 0 || offset >= value.length) return false
-  const previous = value.charCodeAt(offset - 1)
-  const next = value.charCodeAt(offset)
-  return (
-    previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff
   )
 }

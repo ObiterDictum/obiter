@@ -12,6 +12,7 @@ import {
 import { recordSplitRun, type LineageRecorder } from './document-lineage'
 import { OoxmlError, type ParagraphAnchor, type TextRunAnchor } from './model'
 import { splitsSurrogate } from './model-run-range-edits'
+import { isBlankParagraph } from './table-of-contents-splice'
 import {
   applyFragmentReplacements,
   parseXmlElements,
@@ -181,13 +182,6 @@ function refuseInsideStoredHyperlink(
       throw new OoxmlError('invalid-document-edit')
     }
   }
-}
-
-function isBlankParagraph(paragraph: ParagraphAnchor) {
-  return (
-    paragraph.runs.length === 0 &&
-    paragraph.paragraphPropertiesRange === undefined
-  )
 }
 
 /**

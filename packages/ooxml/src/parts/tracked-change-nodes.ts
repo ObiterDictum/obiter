@@ -49,7 +49,7 @@ function trackedChangeName(
   return undefined
 }
 
-export function nearestTrackedChangeAncestor(element: XmlElement) {
+function nearestTrackedChangeAncestor(element: XmlElement) {
   let parent = element.parent
   while (parent) {
     if (isTrackedChange(parent)) return parent

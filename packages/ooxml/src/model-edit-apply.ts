@@ -39,7 +39,7 @@ import { insertTableOfContents } from './table-of-contents-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import type { createTrackedEditWriter } from './tracked-edits'
 
-export type TrackedEditWriter = ReturnType<typeof createTrackedEditWriter>
+type TrackedEditWriter = ReturnType<typeof createTrackedEditWriter>
 
 // Per-batch mutable state shared across the operations of one edit batch.
 export type EditApplyState = {

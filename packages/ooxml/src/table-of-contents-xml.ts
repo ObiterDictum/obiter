@@ -17,7 +17,7 @@ import { wordRunInnerTextXml } from './text-run-edit'
 /** A captured entry plus the `_Toc` bookmark its page reference names. */
 export type TocEntry = TableOfContentsEntry & { bookmark: string }
 
-export const TOC_INSTRUCTION = ' TOC \\o "1-3" \\u '
+const TOC_INSTRUCTION = ' TOC \\o "1-3" \\u '
 export const TOC_FIELD_END_RUN = '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
 export const FIELD_BEGIN_RUN = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
 export const FIELD_SEPARATE_RUN =
