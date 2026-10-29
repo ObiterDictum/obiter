@@ -209,23 +209,23 @@ describe('share-safe r4: binary payloads', () => {
   it('JPEG APPn and COM segments drop, scan survives', async () => {
     const jpeg = new Uint8Array([
       0xff,
-      0xd8, // SOI
+      0xd8,
       0xff,
       0xe1,
       0x00,
       0x0c,
-      ...new TextEncoder().encode('ExifSECRET').subarray(0, 10), // APP1
+      ...new TextEncoder().encode('ExifSECRET').subarray(0, 10),
       0xff,
       0xfe,
       0x00,
       0x08,
-      ...new TextEncoder().encode('COMSEC').subarray(0, 6), // COM
+      ...new TextEncoder().encode('COMSEC').subarray(0, 6),
       0xff,
       0xdb,
       0x00,
       0x04,
       0x00,
-      0x00, // DQT
+      0x00,
       0xff,
       0xc0,
       0x00,
@@ -238,13 +238,13 @@ describe('share-safe r4: binary payloads', () => {
       0x01,
       0x01,
       0x11,
-      0x00, // SOF0
+      0x00,
       0xff,
       0xc4,
       0x00,
       0x04,
       0x00,
-      0x00, // DHT
+      0x00,
       0xff,
       0xda,
       0x00,
@@ -254,12 +254,12 @@ describe('share-safe r4: binary payloads', () => {
       0x00,
       0x00,
       0x3f,
-      0x00, // SOS
+      0x00,
       0x11,
       0x22,
-      0x33, // scan entropy
+      0x33,
       0xff,
-      0xd9, // EOI
+      0xd9,
     ])
     const { binary } = await outputParts(
       imageSpec(

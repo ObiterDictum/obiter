@@ -18,10 +18,7 @@ type MoveContainer = {
 
 export type MoveMembership =
   | { kind: 'member'; key: string; markers: XmlElementRange[] }
-  // A wrapper inside a container that failed its shape rules, or an
-  // uncontainered wrapper whose decision would strand range markup.
   | { kind: 'blocked' }
-  // A clean wrapper outside any container: the shared-w:id legacy fallback.
   | { kind: 'uncontainered' }
 
 export type MoveRangeIndex = ReturnType<typeof resolveMoveRanges>

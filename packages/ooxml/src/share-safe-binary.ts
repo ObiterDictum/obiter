@@ -118,13 +118,7 @@ function stripPng(part: SourcePart, payload: Uint8Array) {
   return concatenate(kept)
 }
 
-const JPEG_KEPT_SEGMENTS = new Set([
-  0xe0, // APP0 — JFIF header
-  0xc4, // DHT
-  0xcc, // DAC
-  0xdb, // DQT
-  0xdd, // DRI
-])
+const JPEG_KEPT_SEGMENTS = new Set([0xe0, 0xc4, 0xcc, 0xdb, 0xdd])
 
 function stripJpeg(part: SourcePart, payload: Uint8Array) {
   if (!hasMagic(payload, [0xff, 0xd8])) {
