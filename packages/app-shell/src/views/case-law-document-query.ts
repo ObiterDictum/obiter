@@ -7,6 +7,7 @@
  * two dynamic routes and hoisted it into the entry chunk every route preloads.
  */
 import { queryOptions } from '@tanstack/react-query'
+import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import { apiUrl } from '../lib/api-url'
 
 export interface CaseLawParagraph {
@@ -39,6 +40,11 @@ export interface CaseLawDocumentResponse {
   /** When the corpus read this judgment's metadata: the retrieval date the
    * page shows. Absent when the record does not carry it. */
   acquiredAt?: string | null
+  /** The bench, from the source's published metadata. Empty when the source
+   * publishes none; the page then shows no panel. */
+  judges?: string[]
+  /** The court's own published summary, quoted. Null when there is none. */
+  summary?: CaseLawSummaryResponse | null
   withdrawn?: CaseLawWithdrawnNotice
 }
 

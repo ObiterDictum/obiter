@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, MagnifyingGlass } from '@phosphor-icons/react'
+import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import {
   Button,
   Card,
@@ -103,16 +104,25 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   }
   const courtLabel = getReadableCourtLabel(data.court)
   const sourceName = sourceNameForUrl(data.sourceUrl)
+  const judges = response.judges ?? []
+  const summary = response.summary ?? null
 
   return (
     <PageScaffold
       eyebrow={`${courtLabel} · Judgment`}
       title={<em>{data.title}</em>}
       description={
-        <span className="flex flex-wrap items-center gap-2">
-          <span>{formatNeutralCitation(data.neutralCitation)}</span>
-          <span aria-hidden>·</span>
-          <span className="tabular-nums">{formatDate(data.dateDecided)}</span>
+        <span className="flex flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span>{formatNeutralCitation(data.neutralCitation)}</span>
+            <span aria-hidden>·</span>
+            <span className="tabular-nums">{formatDate(data.dateDecided)}</span>
+          </span>
+          {judges.length > 0 ? (
+            <span className="text-meta text-subtle">
+              Coram: {judges.join(' · ')}
+            </span>
+          ) : null}
         </span>
       }
       actions={
@@ -166,6 +176,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
 
       <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
         <section className="flex min-w-0 flex-col gap-4">
+          {summary ? (
+            <PublishedSummaryCard summary={summary} courtLabel={courtLabel} />
+          ) : null}
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex items-center gap-2">
               <MagnifyingGlass aria-hidden size={14} className="text-subtle" />
@@ -286,13 +299,56 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
 
           <p className="text-caption text-subtle">
             The text is the stored source. Paragraph numbers and anchors are the
-            court’s own where the record carries them; no judge, party or
-            pinpoint is inferred when the source omits it.
+            court’s own where the record carries them; judges and the summary
+            are the source’s published metadata, and nothing is inferred when
+            the source omits them.
           </p>
         </aside>
       </div>
     </PageScaffold>
   )
+}
+
+/**
+ * The court's own published summary, quoted whole. Labelled with what was
+ * published and where, so it cannot be mistaken for an Obiter headnote.
+ */
+function PublishedSummaryCard({
+  summary,
+  courtLabel,
+}: {
+  summary: CaseLawSummaryResponse
+  courtLabel: string
+}) {
+  return (
+    <Card aria-label="Summary">
+      <CardHead title="Summary" />
+      <CardBody className="flex flex-col gap-3">
+        <p className="text-meta text-subtle">
+          {publishedSummaryLabels[summary.kind]}, {courtLabel}
+          {' · '}
+          <a
+            href={summary.sourceUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-ink underline-offset-2 hover:underline"
+          >
+            Open original
+          </a>
+        </p>
+        {summary.paragraphs.map((paragraph, index) => (
+          <p key={index} className="text-body leading-relaxed text-ink">
+            {paragraph}
+          </p>
+        ))}
+      </CardBody>
+    </Card>
+  )
+}
+
+/** Exhaustive by type: a new published summary kind cannot ship unlabelled. */
+const publishedSummaryLabels: Record<CaseLawSummaryResponse['kind'], string> = {
+  press_summary: 'Press summary',
 }
 
 function formatNeutralCitation(neutralCitation: string | null) {
