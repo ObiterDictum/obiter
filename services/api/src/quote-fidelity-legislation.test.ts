@@ -1,7 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 
-
 const obiterVerificationCoreModule = {
   ...(await import('@obiter/verification-core')),
 }
@@ -49,7 +48,6 @@ const {
 } = await import('./quote-fidelity.test-support')
 
 describe('quote fidelity legislation retrieval', () => {
-
   it('evidences the resolved canonical path for every quotation against it', async () => {
     const scheduleAct: ActFixture = {
       ...act,
@@ -79,9 +77,6 @@ describe('quote fidelity legislation retrieval', () => {
     })
   })
 
-
-
-
   it('reports a citation for another schedule as unavailable, never a clear', async () => {
     const scheduleAct: ActFixture = {
       ...act,
@@ -109,7 +104,6 @@ describe('quote fidelity legislation retrieval', () => {
     })
     expect(finding.evidence).toEqual([])
   })
-
 
   it('reads one provision once for every quotation that cites it', async () => {
     const fake = fakeQuotePool({ acts: [act] })
@@ -159,7 +153,6 @@ describe('quote fidelity legislation source integrity', () => {
     ],
     mislabelledProvision: { asked: 'section/40', returned: 'section/41' },
   }
-
 
   it('fails closed when the store returns another Act for the citation', async () => {
     const { pool } = fakeQuotePool({

@@ -13,7 +13,6 @@ import {
   createResolutionPipeline,
 } from './citation-resolution.test-support'
 
-
 const subject: VerificationSubject = { documentId: 'd-v3-db', versionId: 'v-1' }
 
 interface Fixture {

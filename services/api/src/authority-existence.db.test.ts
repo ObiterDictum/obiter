@@ -12,7 +12,6 @@ import type {
   VerificationSubject,
 } from '@obiter/verification-core'
 
-
 const subject: VerificationSubject = { documentId: 'd-v2-db', versionId: 'v-1' }
 
 function citation(rawText: string): CitationInput {
@@ -745,11 +744,6 @@ async function insertCorruptAuthority(
        (document_id, summary_json, document_json, provider_json,
         content_hash, source_uri)
      values ($1, $2::jsonb, null, '{}'::jsonb, $3, $4)`,
-    [
-      id,
-      JSON.stringify({ id, neutralCitation }),
-      `dbtest-v2-${id}`,
-      `/${id}`,
-    ],
+    [id, JSON.stringify({ id, neutralCitation }), `dbtest-v2-${id}`, `/${id}`],
   )
 }

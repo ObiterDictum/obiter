@@ -566,7 +566,6 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(legislationServeMock.resolveLegislationFetch).not.toHaveBeenCalled()
   })
 
-
   const directoryActs = [
     {
       identity: 'ukpga/2010/15',

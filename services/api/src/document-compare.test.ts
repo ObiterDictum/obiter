@@ -12,7 +12,6 @@ import type {
 } from '@obiter/contracts'
 import { compareDocumentModels } from './document-compare'
 
-
 function paragraph(
   id: string,
   text: string,

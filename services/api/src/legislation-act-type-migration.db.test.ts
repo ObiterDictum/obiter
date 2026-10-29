@@ -3,7 +3,6 @@ import type { PoolClient } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createTestPool } from './test-database.test-support'
 
-
 const migration = readFileSync(
   new URL(
     '../../../packages/database/migrations/0025_legislation_act_type_check.sql',

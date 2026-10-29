@@ -6,7 +6,6 @@ import {
   findStoredAuthorityIdsByNeutralCitations,
 } from '../source-store'
 
-
 interface QueryCall {
   text: string
   values: unknown[] | undefined

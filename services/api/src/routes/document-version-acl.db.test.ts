@@ -23,7 +23,6 @@ import {
   storageFor,
 } from './document-write-share-revocation.test-support'
 
-
 const plainSourceBytes = await readFile(
   '../../data/evals/redact/demo-fixture.docx',
 )

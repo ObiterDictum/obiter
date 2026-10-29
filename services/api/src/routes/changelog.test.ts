@@ -12,7 +12,6 @@ import {
   releaseEntry,
 } from './changelog-test-helpers'
 
-
 afterEach(() => {
   vi.unstubAllGlobals()
 })

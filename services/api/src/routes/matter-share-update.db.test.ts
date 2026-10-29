@@ -9,7 +9,6 @@ import {
   shareApp,
 } from './document-write-share-revocation.test-support'
 
-
 const pool: Pool = createTestPool()
 
 afterAll(async () => {

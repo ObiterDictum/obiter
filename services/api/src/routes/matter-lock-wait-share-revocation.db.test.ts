@@ -21,7 +21,6 @@ import {
   waitForLockWait,
 } from './matter-lock-race.test-support'
 
-
 type WriteSpec = (typeof specs)[number]
 
 const pool = createTestPool()

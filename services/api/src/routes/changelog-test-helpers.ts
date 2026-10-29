@@ -1,6 +1,5 @@
 import { vi } from '../../../../scripts/test/vitest-compat'
 
-
 export const START = 1_000_000
 
 export const release = {

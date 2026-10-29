@@ -27,7 +27,6 @@ import {
   uploadRequest,
 } from './p0-13-residual-write-authorization.test-support'
 
-
 type Seed = Awaited<ReturnType<typeof seedMatter>>
 interface PreparedSeed extends Seed {
   bystanderShareId: string

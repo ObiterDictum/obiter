@@ -14,7 +14,6 @@ import {
   storageFor,
 } from './routes/document-write-share-revocation.test-support'
 
-
 const pool = createTestPool()
 
 type Seed = Awaited<ReturnType<typeof seedMatter>>

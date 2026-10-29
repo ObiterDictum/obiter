@@ -7,7 +7,6 @@ import type { AuthzUser, AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
 import { createOrganisationsRoutes } from './organisations'
 
-
 const REQUEST_ID = 'req_invite_share_transition'
 
 interface RouteUser extends AuthzUser {

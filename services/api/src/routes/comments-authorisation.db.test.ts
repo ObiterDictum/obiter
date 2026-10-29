@@ -14,7 +14,6 @@ import {
   storageFor,
 } from './document-write-share-revocation.test-support'
 
-
 const pool = createTestPool()
 
 const importedHead: DocumentImportedComment = {

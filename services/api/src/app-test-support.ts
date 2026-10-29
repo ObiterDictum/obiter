@@ -3,7 +3,6 @@ import type { createAuth } from './auth'
 import type { ApiEnv } from './env'
 import { createTestApiEnv } from './test-api-env'
 
-
 export type Auth = ReturnType<typeof createAuth>
 export type QueryMock = (...args: unknown[]) => Promise<{ rows: unknown[] }>
 

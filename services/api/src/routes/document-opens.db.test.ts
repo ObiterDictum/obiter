@@ -10,7 +10,6 @@ import {
   seedMatter,
 } from './document-write-share-revocation.test-support'
 
-
 const pool: Pool = createTestPool()
 
 function documentsApp(user: AuthzUser, requestId = 'req_opens') {

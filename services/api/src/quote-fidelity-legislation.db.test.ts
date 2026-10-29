@@ -3,7 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { checkQuoteFidelity } from './quote-fidelity'
 import { acts, insertAct, request } from './quote-fidelity.test-support'
 
-
 const identity = 'ukpga/2077/1'
 
 describe('quote fidelity legislation against the stored record', () => {

@@ -7,7 +7,6 @@ import {
 } from '@obiter/redaction-policy'
 import { createRedactionDetector } from './redaction-detection'
 
-
 const classifier = (async () => []) as never
 
 const filler = 'alpha bravo charlie delta echo foxtrot'

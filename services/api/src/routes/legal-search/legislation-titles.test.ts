@@ -6,7 +6,6 @@ import {
 } from './legislation-citations'
 import { legislationTitleJoiningWords } from './legislation-titles'
 
-
 function entry(
   year: number,
   number: number,

@@ -12,7 +12,6 @@ import {
   release,
 } from './changelog-test-helpers'
 
-
 afterEach(() => {
   vi.unstubAllGlobals()
 })
@@ -170,7 +169,7 @@ describe('GET /api/changelog throttle, budget and payload bounds', () => {
     const clock = clockFrom(START)
     let cancelled = false
     let streamed = 0
-    let remaining = 40 
+    let remaining = 40
     const oversized = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (remaining <= 0) {

@@ -25,7 +25,6 @@ import {
   transactionPauseGate,
 } from './matter-lock-race.test-support'
 
-
 type Seed = Awaited<ReturnType<typeof seedMatter>>
 
 const pool = createTestPool()

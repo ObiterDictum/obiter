@@ -1,7 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 
-
 const prepareCalls = vi.hoisted(() => ({ count: 0 }))
 
 const obiterVerificationCoreModule = {
@@ -48,8 +47,6 @@ const {
 } = await import('./quote-fidelity.test-support')
 
 describe('quote fidelity judgment retrieval', () => {
-
-
   it('reads one judgment once for every quotation that cites it', async () => {
     const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
 
@@ -69,9 +66,6 @@ describe('quote fidelity judgment retrieval', () => {
     expect(await checkQuoteFidelities(fake.pool, [])).toEqual([])
     expect(fake.queryCount()).toBe(0)
   })
-
-
-
 
   it('refuses a quote longer than the boundary accepts', async () => {
     const { pool } = fakeQuotePool({ authorities: [judgmentAuthority] })
@@ -135,7 +129,6 @@ describe('quote fidelity judgment retrieval', () => {
 })
 
 describe('quote fidelity candidate isolation', () => {
-
   it.each([
     ['spaces', '   '],
     ['tabs and newlines', '\t\r\n'],

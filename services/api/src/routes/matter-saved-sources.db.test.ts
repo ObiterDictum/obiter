@@ -7,7 +7,6 @@ import { createTestPool } from '../test-database.test-support'
 import { createMatterSavedSourcesRoutes } from './matter-saved-sources'
 import { waitForLockWait } from './matter-lock-race.test-support'
 
-
 const pool = createTestPool()
 
 afterAll(async () => {

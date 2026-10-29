@@ -1,6 +1,5 @@
 import type { Pool } from 'pg'
 
-
 export function isMatterLockStatement(sql: string) {
   return sql.includes('for update') && sql.includes('matters')
 }

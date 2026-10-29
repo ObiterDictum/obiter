@@ -8,7 +8,6 @@ import { createTestApiEnv } from '../test-api-env'
 import { createDocumentAccessRoutes } from './document-access'
 import { createOrganisationsRoutes } from './organisations'
 
-
 const REQUEST_ID = 'req_member_removal_shares'
 
 function app(pool: Pool, userId: string, organisationId: string) {

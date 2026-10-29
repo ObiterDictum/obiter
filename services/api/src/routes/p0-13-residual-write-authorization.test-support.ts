@@ -7,7 +7,6 @@ import { createDocumentsRoutes } from './documents'
 import { createMattersRoutes } from './matters'
 import type { UserRole } from '@obiter/contracts'
 
-
 export function sessionUser(
   seed: { orgId: string; ownerId: string; editorId: string },
   which: 'owner' | 'editor',

@@ -9,7 +9,6 @@ import {
   type VerificationSubject,
 } from '@obiter/verification-core'
 
-
 const subject: VerificationSubject = { documentId: 'd-v2', versionId: 'v-1' }
 
 function citation(rawText: string): CitationInput {

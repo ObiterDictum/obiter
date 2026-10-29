@@ -7,7 +7,6 @@ import {
 } from './citation-resolution.test-support'
 import { resolveCitationCandidates } from './citation-resolution'
 
-
 const subject = { documentId: 'd-contract', versionId: 'v-1' }
 
 async function findingsFor(rawTexts: string[]) {

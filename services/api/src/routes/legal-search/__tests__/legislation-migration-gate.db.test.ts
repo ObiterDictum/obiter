@@ -2,7 +2,6 @@ import { createTestPool } from '../../../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { resolveLegislationActPage } from '../legislation-act'
 
-
 const identity = 'ukpga/2024/99'
 const title = 'Migration Gate Test Act 2024'
 

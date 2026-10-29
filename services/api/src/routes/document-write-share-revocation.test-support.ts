@@ -15,7 +15,6 @@ import { createDocumentCollaborationRoutes } from './document-collaboration'
 import { createDocumentEditRoutes } from './document-edit'
 import { createTrackedChangeRoutes } from './tracked-changes'
 
-
 const plainSourceBytes = await readFile(
   '../../data/evals/redact/demo-fixture.docx',
 )

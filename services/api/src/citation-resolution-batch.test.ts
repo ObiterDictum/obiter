@@ -20,7 +20,6 @@ import {
   type CitationCandidate,
 } from './citation-resolution'
 
-
 const authorities: AuthorityRow[] = Array.from({ length: 6 }, (_, index) => ({
   documentId: `uksc-2066-${index + 1}`,
   neutralCitation: `[2066] UKSC ${index + 1}`,

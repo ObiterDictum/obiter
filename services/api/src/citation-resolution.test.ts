@@ -8,7 +8,6 @@ import {
 } from './citation-resolution.test-support'
 import { resolveCitationCandidates } from './citation-resolution'
 
-
 const held: AuthorityRow[] = [
   { documentId: 'uksc-2066-1', neutralCitation: '[2066] UKSC 1' },
   { documentId: 'ewca-civ-2066-7', neutralCitation: '[2066] EWCA Civ 7' },
@@ -16,7 +15,6 @@ const held: AuthorityRow[] = [
 ]
 
 describe('case law resolution', () => {
-
   it.each(['[2066]  uksc   1', '[2066] UKSC 1', '[2066]\tUKSC\t1'])(
     'resolves the harmless variants of %j',
     async (rawText) => {
@@ -26,7 +24,6 @@ describe('case law resolution', () => {
       })
     },
   )
-
 
   it.each([
     '[2065] UKSC 1',
@@ -51,7 +48,6 @@ describe('case law resolution', () => {
       ).toEqual({ kind: 'unresolved', reason: 'ambiguous' })
     }
   })
-
 
   it('stays ambiguous for two live carriers, in either row order', async () => {
     const live: AuthorityRow[] = [

@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'bun:test'
 
-
 const apiSourceRoot = fileURLToPath(new URL('../../..', import.meta.url))
 const apiPackageRoot = fileURLToPath(new URL('../../../../', import.meta.url))
 

@@ -5,7 +5,6 @@ import {
   type StoredLegislationProvision,
 } from '../legislation-store'
 
-
 function provision(
   identity: string,
   labelPath: string,

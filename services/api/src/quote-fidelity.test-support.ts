@@ -7,7 +7,6 @@ import type {
 } from '@obiter/verification-core'
 import type { QuoteCheckResult, QuoteFidelityRequest } from './quote-fidelity'
 
-
 const subject: VerificationSubject = {
   documentId: 'd-4',
   versionId: 'v-1',
@@ -274,7 +273,6 @@ export function fakeQuotePool(options: {
     queryCount: () => calls.length,
   }
 }
-
 
 export interface JudgmentFixture {
   id: string

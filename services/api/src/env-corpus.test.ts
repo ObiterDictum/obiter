@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { readApiEnv } from './env'
 
-
 const originalEnv = { ...process.env }
 
 const TEST_AUTH_SECRET = '0123456789abcdef0123456789abcdef'

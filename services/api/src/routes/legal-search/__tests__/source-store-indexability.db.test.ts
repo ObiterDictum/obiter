@@ -2,7 +2,6 @@ import { createTestPool } from '../../../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createPostgresLegalAuthoritySourceStore } from '../source-store'
 
-
 const documentId = 'db-test-indexability-2026-1'
 
 const authority = {

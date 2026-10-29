@@ -11,7 +11,6 @@ import {
   request,
 } from './quote-fidelity.test-support'
 
-
 describe('quote fidelity judgments against the stored record', () => {
   const pool = createTestPool()
 

@@ -13,7 +13,6 @@ import {
   type CitationCandidate,
 } from './citation-resolution'
 
-
 export function citationOf(rawText: string): CitationInput {
   return {
     rawText,

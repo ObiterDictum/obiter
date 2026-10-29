@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import type { StorageService } from './storage'
 
-
 const mocks = vi.hoisted(() => ({
   collectVerificationFindings: vi.fn(
     async (_pool: unknown, ..._rest: unknown[]) => [] as unknown[],

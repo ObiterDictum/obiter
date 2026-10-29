@@ -3,7 +3,6 @@ import type { PoolClient } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createTestPool } from './test-database.test-support'
 
-
 const threadsMigration = readFileSync(
   new URL(
     '../../../packages/database/migrations/0030_document_comment_threads.sql',
