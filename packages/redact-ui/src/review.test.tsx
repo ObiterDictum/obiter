@@ -13,7 +13,17 @@ const hooks = vi.hoisted(() => ({
     data: undefined,
     error: null,
   })),
-  useRedactionSchedule: vi.fn(() => ({ isPending: false, data: undefined })),
+  useRedactionScheduleExport: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+    variables: undefined,
+  })),
+  useCreateUploadedRedactionRun: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  })),
   useSpanDecision: vi.fn(
     (): {
       mutate: ReturnType<typeof vi.fn>
@@ -194,30 +204,39 @@ describe('redaction review', () => {
     ).toBeTruthy()
     expect(screen.getByText('2 of 2 detected spans decided')).toBeTruthy()
 
-    // The document mark names the category and the detector, and the confidence
-    // wording is about detection, not about whether disclosure is safe.
-    const mark = screen.getByRole('button', { name: 'Jane' })
+    // The document mark states its category in words for a screen reader, so
+    // the category colour is never the only cue.
+    const mark = screen.getByRole('button', { name: /Jane/u })
     expect(mark.className).toContain('bg-span-person-name')
-    expect(mark.title).toBe(
-      'Person name — Rampart model — detection confidence high',
-    )
+    expect(mark.textContent).toContain('Person name')
+    // The legend names every colour in use on the page.
+    const legend = screen.getByRole('list', {
+      name: 'Category colours in this document',
+    })
+    expect(within(legend).getByText('Person name')).toBeTruthy()
+    expect(within(legend).getByText('Date')).toBeTruthy()
 
     const bar = screen.getByRole('region', {
       name: 'Decide the selected span',
     })
     expect(
+      within(bar).getByText(/Found automatically · high confidence/u),
+    ).toBeTruthy()
+    expect(
+      within(bar).getByText(/the text matches what was looked for/u),
+    ).toBeTruthy()
+    expect(
       within(bar).getByText(
         /Detection confidence is not a disclosure decision/u,
       ),
     ).toBeTruthy()
+    // Detector internals say nothing a reviewer can act on.
+    expect(screen.queryByText(/Rampart|UK supplement|model ·/u)).toBeNull()
+    // The coverage caveat belongs on the start page and the finalise dialog,
+    // not a third time beside the progress bar.
     expect(
-      within(bar).getByText(/found by the Rampart model reading the text/u),
-    ).toBeTruthy()
-    expect(
-      screen.getAllByText(
-        /Detection finds candidates, not everything sensitive/u,
-      ).length,
-    ).toBeGreaterThan(0)
+      screen.queryByText(/Detection finds candidates, not everything/u),
+    ).toBeNull()
     // Nothing in the screen claims undetected text is safe.
     expect(screen.queryByText(/safe to disclose/iu)).toBeNull()
   })
@@ -362,10 +381,75 @@ describe('redaction review', () => {
     ).toHaveProperty('disabled', true)
 
     fireEvent.click(screen.getByRole('button', { name: 'Show them' }))
-    const options = screen.getAllByRole('option')
-    expect(options).toHaveLength(1)
-    expect(options[0]?.textContent).toContain('9 May 1988')
-    expect(options[0]?.getAttribute('aria-selected')).toBe('true')
+    const undecided = screen
+      .getAllByRole('option')
+      .find((option) => option.textContent?.includes('9 May 1988'))
+    expect(undecided?.getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('repeats one decision on every occurrence of the same text', () => {
+    const mutate = vi.fn()
+    hooks.useSpanDecision.mockReturnValue({ mutate, isPending: false })
+    const repeated = [
+      { ...spans[0]!, start: 0, end: 4 },
+      { ...spans[0]!, id: 'span_3', start: 21, end: 25 },
+    ]
+    renderRun({
+      spans: repeated,
+      decisions: {
+        span_1: {
+          decision: 'accept',
+          decidedBy: 'usr_me',
+          decidedAt: '2026-10-26T14:42:00.000Z',
+        },
+      },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Apply to all 2 occurrences' }),
+    )
+    expect(mutate).toHaveBeenCalledWith({
+      spanId: 'span_1',
+      decision: 'accept',
+      applyToSameText: true,
+    })
+  })
+
+  it('refuses to finalise while the same text is decided both ways', () => {
+    const repeated = [
+      { ...spans[0]!, start: 0, end: 4 },
+      { ...spans[0]!, id: 'span_3', start: 21, end: 25 },
+    ]
+    renderRun({
+      spans: repeated,
+      decisions: {
+        span_1: {
+          decision: 'accept',
+          decidedBy: 'usr_me',
+          decidedAt: '2026-10-26T14:42:00.000Z',
+        },
+        span_3: {
+          decision: 'reject',
+          decidedBy: 'usr_me',
+          decidedAt: '2026-10-26T14:43:00.000Z',
+        },
+      },
+      summary: {
+        ...decidedRun.summary,
+        totalSpans: 2,
+        reviewedCount: 2,
+        unreviewedCount: 0,
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Finalise' }))
+    // The words that would leak are named, not counted anonymously.
+    expect(
+      screen.getByText(/One piece of text has different decisions/u),
+    ).toBeTruthy()
+    expect(screen.getByText('1 redacted · 1 kept visible')).toBeTruthy()
+    fireEvent.click(screen.getByLabelText(/I have reviewed every page/u))
+    expect(
+      screen.getByRole('button', { name: /Finalise redacted PDF/u }),
+    ).toHaveProperty('disabled', true)
   })
 
   it('requires both the detection acknowledgement and the page review to finalise', () => {
@@ -434,8 +518,48 @@ describe('redaction review', () => {
       },
     })
     expect(screen.getByText('Detection failed')).toBeTruthy()
-    expect(screen.getByText('Text extraction failed.')).toBeTruthy()
+    expect(screen.getByText(/Text extraction failed\./u)).toBeTruthy()
     expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('gives a failed detection the two ways out of it', () => {
+    const onBack = vi.fn()
+    const run: RedactionRun = {
+      ...decidedRun,
+      status: 'failed',
+      sourceFilename: 'witness-statement.docx',
+      sourceMimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      spans: [],
+      decisions: {},
+      summary: {
+        ...decidedRun.summary,
+        totalSpans: 0,
+        reviewedCount: 0,
+        unreviewedCount: 0,
+        failureReason: 'No text layer was found in this PDF.',
+      },
+    }
+    hooks.useRedactionRun.mockReturnValue({ isPending: false, data: run })
+    hooks.useRedactionDocumentText.mockReturnValue({
+      isPending: false,
+      data: { text: '' },
+    })
+    render(
+      <RedactionReviewView
+        runId={run.id}
+        onOpenRun={onOpenRun}
+        onBack={onBack}
+      />,
+    )
+    // The stored reason names a PDF; the file is a .docx, so it is not shown.
+    expect(screen.queryByText(/text layer/iu)).toBeNull()
+    expect(screen.getByText(/could not read this Word document/u)).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Try another file' }),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Redact' }))
+    expect(onBack).toHaveBeenCalled()
   })
 
   it('keeps the zero-span copy honest about what detection cannot see', () => {
@@ -453,12 +577,7 @@ describe('redaction review', () => {
       },
     })
     expect(screen.getByText('Model detection did not run')).toBeTruthy()
-    expect(
-      screen.getByText(/The deterministic detectors did not find/u),
-    ).toBeTruthy()
-    expect(
-      screen.queryByText(/Rampart and the UK supplement did not find/u),
-    ).toBeNull()
+    expect(screen.getByText(/Only the fixed patterns ran/u)).toBeTruthy()
   })
 
   it('keeps rendering when a background refetch errors but cached data remains', () => {

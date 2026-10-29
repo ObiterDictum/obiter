@@ -72,7 +72,8 @@ export function DocumentDetailLayoutView({
     <Link
       to="/matters/$matterId"
       params={{ matterId: String(matterId) }}
-      className="truncate text-subtle hover:text-ink"
+      className="min-w-0 truncate text-subtle hover:text-ink"
+      title={matter.data?.name}
     >
       {matter.data?.name ?? 'Matter'}
     </Link>

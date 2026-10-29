@@ -78,11 +78,11 @@ export const BUDGETS = {
   // 0.5%, 475 B, so any addition larger than that would have failed the build for
   // a reason unrelated to its own change.
   rendererInitialCssBytes: 93_000,
-  // 877,756 B, re-recorded for the Redact redesign (28 Oct 2026): the PDF
-  // viewer (774,344 B) plus the lazy Redact review desk. The old ceiling left
-  // 75,656 B beside the PDF viewer, less than the unchanged review desk alone
-  // (96,938 B), so moving it out of the entry could never pass. 2% headroom.
-  lazyChunksBytes: 895_000,
+  // 907,699 B, re-recorded after the UI review fixes (29 Oct 2026): the editor
+  // menu bar and docked panels, Redact's legend and schedule export, and
+  // Verify's reviewer names together. Room left for the search fixes' date
+  // picker; the PDF viewer is still 774,344 B of it.
+  lazyChunksBytes: 935_000,
   largestLazyChunkBytes: 850_000,
   // 1,046,214 B (pdf.worker.min).
   workerPayloadBytes: 1_150_000,

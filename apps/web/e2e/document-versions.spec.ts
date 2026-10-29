@@ -1,5 +1,6 @@
 import { createAccount, openFixtureDocument } from './document-journey'
 import { focusParagraph } from './e13-support'
+import { runMenuCommand } from './editor-chrome'
 import { expect, test, type Page } from '@playwright/test'
 
 import path from 'node:path'
@@ -82,29 +83,29 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   expect(await editor(page).count()).toBe(0)
   expect(await saveButton.count()).toBe(0)
 
-  // Compare v1 (base) against v2 (target) from the current version's panel:
-  // the picker defaults to exactly that pair, so Compare alone proves the
-  // entries render, and its heading states the direction in words.
+  // Compare v1 (base) against v2 (target) from the live editor: File ▸
+  // Compare versions opens the redline, whose picker defaults to exactly that
+  // pair, so Compare alone proves the whole document renders with the change
+  // marked and its heading states the direction in words.
   await page.getByRole('button', { name: 'Back to current version' }).click()
-  await page.getByRole('button', { name: 'Document information' }).click()
-  const comparePanel = page.getByRole('complementary', {
-    name: 'Document information',
+  await runMenuCommand(page, 'File', 'Compare versions')
+  await expect(page.getByText('Comparing versions · read only')).toBeVisible({
+    timeout: 15_000,
   })
   await expect(
-    comparePanel.getByText('Changes from version 1 to version 2'),
-  ).toBeVisible({ timeout: 15_000 })
-  await comparePanel
-    .getByRole('button', { name: 'Compare', exact: true })
-    .click()
-  const comparison = page.locator('[data-version-comparison]')
+    page.getByText('Changes from version 1 to version 2'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Compare', exact: true }).click()
+  const comparison = page.locator('[data-compare-redline]')
   await expect(comparison).toBeVisible({ timeout: 30_000 })
-  await expect(comparison.getByText('Paragraph modified')).toBeVisible()
-  await expect(comparison.getByText(MARKER)).toBeVisible()
-  // Close the panel before returning to the live editor.
-  await page
-    .getByRole('complementary', { name: 'Document information' })
-    .getByRole('button', { name: 'Close Document information' })
-    .click()
+  // The whole document, not only the changed paragraph: the untouched
+  // heading is there, and so is the edited marker.
+  await expect(comparison).toContainText(HEADING)
+  await expect(comparison).toContainText(MARKER)
+  const differences = page.getByRole('complementary', { name: 'Differences' })
+  await expect(differences.getByText('Wording changed')).toBeVisible()
+  // Close the comparison before returning to the live editor.
+  await page.getByRole('button', { name: 'Close comparison' }).click()
 
   // Back on the current version, the saved edit is painted and the unsaved
   // draft came back with the remounted workspace.

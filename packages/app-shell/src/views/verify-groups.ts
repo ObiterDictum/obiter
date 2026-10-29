@@ -87,6 +87,29 @@ export function isVerifyFilter(value: string | null): value is VerifyFilter {
 }
 
 /**
+ * What a reader must see first: a finding that may make the document wrong,
+ * then a citation only a person can judge, then a check that did not run, then
+ * the matches. Within one group the document's own order is kept, so a reader
+ * moving down a document does not jump around while the states stay ranked.
+ */
+const stateOrder = {
+  flagged: 0,
+  review_required: 1,
+  not_checked: 2,
+  clear: 3,
+} satisfies Record<VerificationFindingView['state'], number>
+
+export function sortFindings(
+  findings: readonly VerificationFindingView[],
+): VerificationFindingView[] {
+  return [...findings].sort(
+    (a, b) =>
+      stateOrder[a.state] - stateOrder[b.state] ||
+      a.location.start - b.location.start,
+  )
+}
+
+/**
  * A state filter shows open work of that state, so a finding a person has
  * already dismissed is listed only under All. Its outcome is unchanged: it keeps
  * its flagged or review-required state, and the counts keep it apart.

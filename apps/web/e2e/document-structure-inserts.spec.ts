@@ -3,6 +3,7 @@ import { createAccount, openFixtureDocument } from './document-journey'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { openRibbonTab } from './editor-chrome'
 
 /*
  * E6a browser journey: the Insert ribbon's table and picture controls must
@@ -39,11 +40,9 @@ function shot(page: Page, name: string) {
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
-const tabs = (page: Page) =>
-  page.getByRole('tab', { name: /Home|Insert|Layout/ })
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Layout') {
-  await tabs(page).filter({ hasText: name }).first().click()
+  await openRibbonTab(page, name)
 }
 
 async function focusHeading(page: Page) {
@@ -111,7 +110,9 @@ test('table and picture insertions paint, save and reload', async ({
   // A table anchors to the caret paragraph and paints its grid before save.
   await focusHeading(page)
   await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Insert table' }).click()
+  await page
+    .getByRole('menuitem', { name: 'Insert table', exact: true })
+    .click()
   await page.getByLabel('Rows', { exact: true }).fill('3')
   await page.getByLabel('Columns', { exact: true }).fill('4')
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()

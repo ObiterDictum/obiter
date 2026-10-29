@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
@@ -7,13 +7,19 @@ import {
   type DocumentChangeWire,
 } from '@obiter/contracts'
 import {
+  command,
+  commandDisabled,
+  commandReason,
+  openRibbonTab,
+} from './editor-test-commands'
+import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
-  openRibbonTab,
   selectBodyParagraph,
 } from './docx-workspace-harness'
-import { ReviewRibbon } from './ribbon-review'
+
+import { editorMenus } from './editor-commands'
 
 const inserted: DocumentChangeWire = {
   id: 'chg_1',
@@ -74,40 +80,30 @@ describe('DocxWorkspace change review', () => {
   it('navigates the list and reveals the active change', () => {
     mountWorkspace({ changes: [inserted, format] })
     openRibbonTab('Review')
+    fireEvent.click(command('Changes (2)'))
+    const panel = screen.getByRole('complementary', {
+      name: 'Changes and comments',
+    })
+    const next = () => within(panel).getByRole('button', { name: /^Next/ })
+    const previous = () =>
+      within(panel).getByRole('button', { name: /^Previous/ })
 
-    // No target yet: the single-change controls say so instead of guessing.
-    expect(
-      screen.getByRole('button', {
-        name: 'Accept change: Go to a change first — use Previous, Next or the Changes list.',
-      }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', {
-        name: 'Previous change: There is no earlier change.',
-      }),
-    ).toHaveProperty('disabled', true)
+    // Nothing is current yet, so the bar offers navigation only and says so.
+    expect(panel.textContent).toContain('No change selected')
+    expect(previous()).toHaveProperty('disabled', true)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
-    // The reveal lands the caret on the change's paragraph.
+    fireEvent.click(next())
+    // The reveal lands the caret on the change's paragraph and the row is
+    // current, so its Accept can run and the bar names it.
     expect(screen.getByLabelText('Paragraph text')).toBeTruthy()
-    expect(
-      screen.getByRole('button', { name: 'Accept change' }),
-    ).toHaveProperty('disabled', false)
-    expect(
-      screen.getByRole('button', {
-        name: 'Previous change: There is no earlier change.',
-      }),
-    ).toHaveProperty('disabled', true)
+    expect(panel.textContent).toContain('1 of 2')
+    // The first row has nothing before it, so Previous stays unavailable.
+    expect(previous()).toHaveProperty('disabled', true)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
-    expect(
-      screen.getByRole('button', {
-        name: 'Next change: There is no later change.',
-      }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', { name: 'Previous change' }),
-    ).toHaveProperty('disabled', false)
+    fireEvent.click(next())
+    expect(panel.textContent).toContain('2 of 2')
+    expect(next()).toHaveProperty('disabled', true)
+    expect(previous()).toHaveProperty('disabled', false)
   })
 
   it('reveals a missing inline anchor at the paragraph end', () => {
@@ -115,7 +111,7 @@ describe('DocxWorkspace change review', () => {
       changes: [{ ...inserted, inlinePosition: { beforeRunId: 'missing' } }],
     })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
+    fireEvent.click(command('Next change'))
     const field = screen.getByLabelText<HTMLTextAreaElement>('Paragraph text')
     expect(field.selectionStart).toBe(field.value.length)
     expect(field.selectionStart).toBeGreaterThan(0)
@@ -168,8 +164,8 @@ describe('DocxWorkspace change review', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted, format], decideAsync: decide })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Next change' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Accept change' }))
+    fireEvent.click(command('Next change'))
+    fireEvent.click(command('Accept change'))
 
     expect(decide).toHaveBeenCalledWith(
       {
@@ -185,7 +181,7 @@ describe('DocxWorkspace change review', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted, format], decideAsync: decide })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }))
+    fireEvent.click(command('Accept all changes'))
 
     expect(decide).toHaveBeenCalledWith(
       {
@@ -201,8 +197,8 @@ describe('DocxWorkspace change review', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted], decideAsync: decide })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Accept all changes' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
+    fireEvent.click(command('Accept all changes'))
 
     // A pending flip is unsaved state the decision commits with the version,
     // so the request carries it; without one the field stays absent.
@@ -227,15 +223,13 @@ describe('DocxWorkspace change review', () => {
     openRibbonTab('Review')
 
     const reason = 'Save or discard unsaved edits before deciding changes.'
-    expect(
-      screen.getByRole('button', { name: `Accept all changes: ${reason}` }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', { name: `Accept change: ${reason}` }),
-    ).toHaveProperty('disabled', true)
-    fireEvent.click(
-      screen.getByRole('button', { name: `Accept change: ${reason}` }),
-    )
+    const acceptAll = command('Accept all changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe(reason)
+    const accept = command('Accept change')
+    expect(commandDisabled(accept)).toBe(true)
+    expect(commandReason(accept)).toBe(reason)
+    fireEvent.click(accept)
     expect(decide).not.toHaveBeenCalled()
   })
 
@@ -250,39 +244,99 @@ describe('DocxWorkspace change review', () => {
     openRibbonTab('Review')
 
     const reason = 'Save or discard unsaved edits before deciding changes.'
-    expect(
-      screen.getByRole('button', { name: `Accept all changes: ${reason}` }),
-    ).toHaveProperty('disabled', true)
+    const acceptAll = command('Accept all changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe(reason)
   })
 
   it('names the cap when the supported set alone exceeds it', () => {
     mountWorkspace({ changes: overCap })
     openRibbonTab('Review')
 
-    expect(
-      screen.getByRole('button', {
-        name: `Accept all changes: More than ${TRACKED_DECISION_MAX_IDS} supported changes must be decided in smaller groups.`,
-      }),
-    ).toHaveProperty('disabled', true)
+    const acceptAll = command('Accept all changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe(
+      `More than ${TRACKED_DECISION_MAX_IDS} supported changes must be decided in smaller groups.`,
+    )
   })
 
   it('names the absent review surface instead of a boundary reason', () => {
-    render(
-      <ReviewRibbon
-        canEdit
-        trackChanges={false}
-        commentsOpen={false}
-        changesOpen={false}
-        commentCount={0}
-        changeCount={0}
-        onToggleComments={() => undefined}
-        onToggleChanges={() => undefined}
-        onToggleTrackChanges={() => undefined}
-        onExportText={() => undefined}
-      />,
-    )
-
+    // A surface with no review state at all (a read-only document) must say so
+    // rather than borrow one of the save barriers.
     const absent = 'Change review is not available for this document.'
+    const menus = editorMenus(
+      {
+        canEdit: false,
+        trackChanges: false,
+        zoom: 100,
+        commentsOpen: false,
+        changesOpen: false,
+        authoritiesOpen: false,
+        infoOpen: false,
+        commentCount: 0,
+        changeCount: 0,
+        onToggleComments: () => undefined,
+        onToggleChanges: () => undefined,
+        onToggleAuthorities: () => undefined,
+        onInsertAuthority: () => undefined,
+        citationStyle: 'oscola',
+        onToggleTrackChanges: () => undefined,
+        onZoom: () => undefined,
+        onExportText: () => undefined,
+        onExportShareSafe: () => undefined,
+        onPrint: () => undefined,
+        onUndo: () => undefined,
+        onRedo: () => undefined,
+        onInsertParagraph: () => undefined,
+        onDeleteParagraph: () => undefined,
+        onSave: () => undefined,
+        canSave: false,
+        onPageBreak: () => undefined,
+        onSectionBreak: () => undefined,
+        structure: {
+          crossReferenceTargets: [],
+          onOpenStory: () => undefined,
+          onCloseStory: () => undefined,
+          onInsertTable: () => undefined,
+          onInsertLink: () => ({
+            inserted: false,
+            reason: 'not available',
+          }),
+          onInsertCrossReference: () => ({
+            inserted: false,
+            reason: 'not available',
+          }),
+          onMarkDefinedTerm: () => undefined,
+          onInsertPageNumber: () => undefined,
+          onInsertTableOfContents: () => undefined,
+          onInsertTableOfAuthorities: () => undefined,
+          onUpdateTableOfAuthorities: () => undefined,
+          onInsertFootnote: () => undefined,
+          onInsertPicture: () => undefined,
+          picturePicker: null,
+        },
+        view: 'print',
+        onView: () => undefined,
+        rulerOn: false,
+        onToggleRuler: () => undefined,
+        navOpen: false,
+        onToggleNavPane: () => undefined,
+        spelling: false,
+        onToggleSpelling: () => undefined,
+      },
+      {
+        openFormatting: () => undefined,
+        openFind: () => undefined,
+        openPalette: () => undefined,
+        openTable: () => undefined,
+        openLink: () => undefined,
+        openCrossReference: () => undefined,
+        closeStory: () => undefined,
+      },
+    )
+    const rows = menus
+      .flatMap((menu) => menu.groups)
+      .flatMap((group) => group.commands)
     for (const label of [
       'Previous change',
       'Next change',
@@ -291,9 +345,9 @@ describe('DocxWorkspace change review', () => {
       'Accept all changes',
       'Reject all changes',
     ]) {
-      expect(
-        screen.getByRole('button', { name: `${label}: ${absent}` }),
-      ).toHaveProperty('disabled', true)
+      const row = rows.find((command) => command.label === label)
+      expect(row?.disabled).toBe(true)
+      expect(row?.disabledReason).toBe(absent)
     }
   })
 
@@ -304,7 +358,7 @@ describe('DocxWorkspace change review', () => {
       decideAsync: decide,
     })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Changes (2)' }))
+    fireEvent.click(command('Changes (2)'))
     const panel = screen.getByRole('complementary', {
       name: 'Changes and comments',
     })
@@ -313,16 +367,17 @@ describe('DocxWorkspace change review', () => {
       within(panel).getAllByRole('button', { name: 'Show this change' })[0]!,
     )
 
+    // The merged move row is the one current target, so the panel states why
+    // it cannot be decided and its Accept cannot run.
+    for (const accept of within(panel).getAllByRole('button', {
+      name: 'Accept',
+    })) {
+      if (accept.closest('li')?.textContent?.includes('cannot be paired'))
+        expect(accept).toHaveProperty('disabled', true)
+    }
     expect(
-      screen.getByRole('button', {
-        name: `Accept change: ${unsupportedMoveReason}`,
-      }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', {
-        name: `Reject change: ${unsupportedMoveReason}`,
-      }),
-    ).toHaveProperty('disabled', true)
+      within(panel).getAllByText(unsupportedMoveReason).length,
+    ).toBeGreaterThan(0)
     expect(decide).not.toHaveBeenCalled()
   })
 
@@ -363,7 +418,7 @@ describe('DocxWorkspace change review', () => {
       decideAsync: decide,
     })
     openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('button', { name: 'Reject all changes' }))
+    fireEvent.click(command('Reject all changes'))
 
     expect(decide).toHaveBeenCalledWith(
       {
@@ -383,9 +438,7 @@ describe('DocxWorkspace change review', () => {
       decideAsync: decide,
     })
     openRibbonTab('Review')
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Accept all supported changes' }),
-    )
+    fireEvent.click(command('Accept all supported changes'))
 
     // The undecidable change is never put on the wire — the request is one
     // atomic decision over the supported ids only.
@@ -406,31 +459,21 @@ describe('DocxWorkspace change review', () => {
 
     const reason =
       'None of the listed changes can be decided here; they stay listed and unchanged in the document.'
-    expect(
-      screen.getByRole('button', {
-        name: `Accept all supported changes: ${reason}`,
-      }),
-    ).toHaveProperty('disabled', true)
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: `Accept all supported changes: ${reason}`,
-      }),
-    )
+    const acceptAll = command('Accept all supported changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe(reason)
+    fireEvent.click(acceptAll)
     expect(decide).not.toHaveBeenCalled()
   })
 
   it('reports an empty review honestly', () => {
     mountWorkspace({})
     openRibbonTab('Review')
-    expect(
-      screen.getByRole('button', {
-        name: 'Accept change: There are no tracked changes.',
-      }),
-    ).toHaveProperty('disabled', true)
-    expect(
-      screen.getByRole('button', {
-        name: 'Accept all changes: There are no tracked changes.',
-      }),
-    ).toHaveProperty('disabled', true)
+    const accept = command('Accept change')
+    expect(commandDisabled(accept)).toBe(true)
+    expect(commandReason(accept)).toBe('There are no tracked changes.')
+    const acceptAll = command('Accept all changes')
+    expect(commandDisabled(acceptAll)).toBe(true)
+    expect(commandReason(acceptAll)).toBe('There are no tracked changes.')
   })
 })

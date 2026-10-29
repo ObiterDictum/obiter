@@ -5,6 +5,7 @@ import {
   itemDecidable,
   itemKindLabel,
   itemLead,
+  itemUnpairable,
   reviewCounts,
   reviewCountsLabel,
   reviewItems,
@@ -82,16 +83,18 @@ describe('reviewItems', () => {
 
   it('keeps an unpairable move half a move, never an insert or a delete', () => {
     // The parser only resolves `pairId` for a pair it can decide, so a half it
-    // could not pair carries no link. The row is still a move, named by its
-    // direction, rather than borrowed copy from an insertion or a deletion.
+    // could not pair carries no link. The row is still a move, and it says it
+    // cannot be paired rather than claiming a direction the panel cannot
+    // place against the other half.
     const items = reviewItems([insertion('chg_ins'), moveFrom('chg_stray')])
     expect(items.map((item) => item.kind)).toEqual(['change', 'move'])
-    expect(itemKindLabel(items[1]!)).toBe('Move · moved from')
+    expect(itemKindLabel(items[1]!)).toBe("Move · can't be paired")
+    expect(itemUnpairable(items[1]!)).toBe(true)
     expect(itemDecidable(items[1]!)).toBe(false)
     expect(itemLead(items[1]!).id).toBe('chg_stray')
     expect(reviewItems([moveTo('chg_stray')])[0]?.kind).toBe('move')
     expect(itemKindLabel(reviewItems([moveTo('chg_stray')])[0]!)).toBe(
-      'Move · moved to',
+      "Move · can't be paired",
     )
   })
 

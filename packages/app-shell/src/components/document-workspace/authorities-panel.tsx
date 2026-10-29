@@ -3,13 +3,21 @@ import type { VerificationFindingView } from '@obiter/contracts'
 import type { AuthorityHit } from '../../document-authorities'
 import { useVerificationWorkspace } from '../verification/verification-context'
 
+type AuthorityGroup = {
+  citation: string
+  /** The stored source's own name, when a check or the store holds one. */
+  name: string | null
+  hits: AuthorityHit[]
+  finding: VerificationFindingView | undefined
+}
+
 /**
- * The list of authorities: distinct citations in the document, each with its
- * citing paragraphs and — where the latest verification run covered it —
- * the finding it produced. The join is strict: a finding only counts for a
- * citation it names, in the paragraph the citation sits in, so a covered
- * entry is never mistaken for checked work it was not. A citation the run
- * did not cover says so rather than borrowing a clean state.
+ * The list of authorities: distinct citations in the document, each once,
+ * with its case name where the stored source carries one, how often it is
+ * cited, and the Verify state of its finding. The join is strict: a finding
+ * only counts for a citation it names, in the paragraph the citation sits in,
+ * so a covered entry is never mistaken for checked work it was not. A
+ * citation the run did not cover says so rather than borrowing a clean state.
  */
 export function DocumentAuthoritiesPanel({
   citations,
@@ -21,19 +29,38 @@ export function DocumentAuthoritiesPanel({
   const verification = useVerificationWorkspace()
   // First occurrence order keeps the list stable while the document is
   // edited; grouping is by the citation text itself.
-  const groups: Array<{ citation: string; hits: AuthorityHit[] }> = []
+  const groups: AuthorityGroup[] = []
   for (const hit of citations) {
     const group = groups.find((item) => item.citation === hit.citation)
     if (group) group.hits.push(hit)
-    else groups.push({ citation: hit.citation, hits: [hit] })
+    else
+      groups.push({
+        citation: hit.citation,
+        name: null,
+        hits: [hit],
+        finding: undefined,
+      })
   }
   const findings = verification?.findings ?? []
-  const findingFor = (hit: AuthorityHit) =>
-    findings.find(
+  for (const group of groups) {
+    group.finding = findings.find(
       (finding) =>
-        finding.location.paragraphId === hit.paragraphId &&
-        excerptNamesCitation(finding.excerpt, hit.citation),
+        group.hits.some(
+          (hit) =>
+            finding.location.paragraphId === hit.paragraphId &&
+            excerptNamesCitation(finding.excerpt, group.citation),
+        ) &&
+        (finding.authorityLabel === group.citation ||
+          excerptNamesCitation(finding.excerpt, group.citation)),
     )
+    group.name =
+      group.finding?.authorityName ??
+      findings.find(
+        (finding) =>
+          finding.authorityLabel === group.citation && finding.authorityName,
+      )?.authorityName ??
+      null
+  }
   const runState = !verification
     ? null
     : verification.findingsPending
@@ -46,14 +73,14 @@ export function DocumentAuthoritiesPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-caption text-muted">
-        Citations in this document, grouped by authority.{' '}
+        Citations in this document, one row per authority.{' '}
         {runState === 'current'
           ? 'States come from the latest verification run.'
           : runState === 'stale'
-            ? 'States come from a run over an earlier version — save and verify again to refresh them.'
+            ? 'States come from a run over an earlier version — save and check citations again to refresh them.'
             : runState === 'loading'
               ? 'Verification findings are still loading.'
-              : 'Run Verify citations to check these against the stored sources.'}
+              : 'Check citations to compare these against the stored sources.'}
       </p>
       {groups.length === 0 ? (
         <EmptyState
@@ -61,25 +88,14 @@ export function DocumentAuthoritiesPanel({
           body="UK and E&W neutral citations in the draft appear here."
         />
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="flex flex-col">
           {groups.map((group) => (
-            <li key={group.citation} className="flex flex-col gap-0.5">
-              <span className="text-xs font-medium text-ink">
-                {group.citation}
-                {group.hits.length > 1
-                  ? ` — cited ${String(group.hits.length)} times`
-                  : ''}
-              </span>
-              {group.hits.map((hit, index) => (
-                <AuthorityRow
-                  key={`${hit.paragraphId}-${String(index)}`}
-                  hit={hit}
-                  finding={findingFor(hit)}
-                  onSelect={onSelect}
-                  onShowFinding={verification?.openFinding}
-                />
-              ))}
-            </li>
+            <AuthorityRow
+              key={group.citation}
+              group={group}
+              onSelect={onSelect}
+              onShowFinding={verification?.openFinding}
+            />
           ))}
         </ul>
       )}
@@ -115,37 +131,56 @@ const STATE_LABELS = {
   review_required: 'Needs review',
 } satisfies Record<VerificationFindingView['state'], string>
 
+/**
+ * One authority: its name with the citation, the count, and one Verify state
+ * for the whole entry — never the citation repeated once per occurrence.
+ */
 function AuthorityRow({
-  hit,
-  finding,
+  group,
   onSelect,
   onShowFinding,
 }: {
-  hit: AuthorityHit
-  finding: VerificationFindingView | undefined
+  group: AuthorityGroup
   onSelect: (paragraphId: string) => void
   onShowFinding?: (findingId: string) => void
 }) {
+  const first = group.hits[0]
+  const title = group.name ? `${group.name} ${group.citation}` : group.citation
   return (
-    <span className="flex items-center gap-1">
+    <li className="flex flex-col gap-1 border-t border-line py-3 first:border-t-0">
       <Button
         variant="ghost"
         size="sm"
-        className="justify-start"
-        onClick={() => onSelect(hit.paragraphId)}
+        className="h-auto justify-start py-0 text-left whitespace-normal"
+        onClick={() => first && onSelect(first.paragraphId)}
       >
-        {hit.citation}
+        <span className="text-body text-ink">{title}</span>
       </Button>
-      {finding ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="justify-start text-caption"
-          onClick={() => onShowFinding?.(finding.id)}
-        >
-          {STATE_LABELS[finding.state]}
-        </Button>
-      ) : null}
-    </span>
+      <span className="flex flex-wrap items-center gap-2 text-caption text-subtle">
+        <span>
+          {group.hits.length === 1
+            ? 'Cited once'
+            : `Cited ${String(group.hits.length)} times`}
+        </span>
+        {group.finding ? (
+          <>
+            <span aria-hidden>·</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto px-0 py-0 text-caption"
+              onClick={() => onShowFinding?.(group.finding!.id)}
+            >
+              {STATE_LABELS[group.finding.state]}
+            </Button>
+          </>
+        ) : (
+          <>
+            <span aria-hidden>·</span>
+            <span>Not checked</span>
+          </>
+        )}
+      </span>
+    </li>
   )
 }

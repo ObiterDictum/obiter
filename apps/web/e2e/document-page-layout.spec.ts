@@ -3,6 +3,8 @@ import { createAccount, openFixtureDocument } from './document-journey'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { openRibbonTab, runMenuCommand } from './editor-chrome'
+import { choose, selectedValue } from './editor-chrome'
 
 /*
  * E5 browser journey: the Layout ribbon's Margins, Orientation and Page size
@@ -32,11 +34,9 @@ function shot(page: Page, name: string) {
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
-const tabs = (page: Page) =>
-  page.getByRole('tab', { name: /Home|Insert|Layout/ })
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Layout') {
-  await tabs(page).filter({ hasText: name }).first().click()
+  await openRibbonTab(page, name)
 }
 
 async function focusHeading(page: Page) {
@@ -85,19 +85,19 @@ test('page setup and breaks save and reload', async ({
   })
 
   await openRibbon(page, 'Layout')
-  await page.getByLabel('Margins', { exact: true }).selectOption('narrow')
+  await choose(page, 'Margins', 'Narrow')
   await page.getByRole('button', { name: 'Orientation' }).click()
   await expect(
     page.getByRole('button', { name: 'Orientation' }),
   ).toHaveAttribute('aria-pressed', 'true')
-  await page.getByLabel('Page size', { exact: true }).selectOption('legal')
+  await choose(page, 'Page size', 'Legal')
   await shot(page, '01-page-setup')
 
   const sheetsBefore = await page.getByLabel('Document page').count()
   await focusHeading(page)
   await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Page break' }).click()
-  await page.getByRole('button', { name: 'Section break' }).click()
+  await runMenuCommand(page, 'Insert', 'Page break')
+  await runMenuCommand(page, 'Insert', 'Section break')
   await expect
     .poll(() => page.getByLabel('Document page').count())
     .toBeGreaterThan(sheetsBefore)
@@ -141,15 +141,11 @@ test('page setup and breaks save and reload', async ({
   try {
     await openFixtureDocument(reloaded, email, password, matter, FIXTURE)
     await openRibbon(reloaded, 'Layout')
-    await expect(reloaded.getByLabel('Margins', { exact: true })).toHaveValue(
-      'narrow',
-    )
+    await expect(selectedValue(reloaded, 'Margins')).toHaveText('Narrow')
     await expect(
       reloaded.getByRole('button', { name: 'Orientation' }),
     ).toHaveAttribute('aria-pressed', 'true')
-    await expect(reloaded.getByLabel('Page size', { exact: true })).toHaveValue(
-      'legal',
-    )
+    await expect(selectedValue(reloaded, 'Page size')).toHaveText('Legal')
     await expect
       .poll(() => reloaded.getByLabel('Document page').count())
       .toBeGreaterThan(1)

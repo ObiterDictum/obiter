@@ -190,6 +190,24 @@ export function useDismissVerificationFinding(runId: string) {
   })
 }
 
+/**
+ * Put a dismissed finding back in the queue. The dismissal was the only record
+ * of the decision, so the server audits the reopening; every verification read
+ * is invalidated so the run's counts and the queued work agree again.
+ */
+export function useUndismissVerificationFinding(runId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (findingId: string) =>
+      apiFetch<void>(
+        `/api/verification-runs/${runId}/findings/${encodeURIComponent(findingId)}/dismiss`,
+        { method: 'DELETE' },
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: verificationRunsQueryKey }),
+  })
+}
+
 export function latestVerificationRun(runs: VerificationRun[]) {
   return runs[0] ?? null
 }

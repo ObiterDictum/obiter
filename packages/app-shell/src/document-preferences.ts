@@ -15,7 +15,7 @@ import type { DraftStorage } from './document-draft-identity'
  * convenience, not a record — an unreadable or unwritable store degrades to
  * the default without error, matching the draft store's posture.
  */
-export const citationStyleSchema = z.enum(['oscola', 'house'])
+const citationStyleSchema = z.enum(['oscola', 'house'])
 export type CitationStyle = z.infer<typeof citationStyleSchema>
 
 const KEY_PREFIX = 'obiter.citation-style.v1.'

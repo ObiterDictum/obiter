@@ -4,7 +4,11 @@ import type {
   SpanDecision,
   SpanSource,
 } from '@obiter/contracts'
-import type { RedactionSpan, Decisions } from '@obiter/redaction-policy'
+import type {
+  Decisions,
+  DecisionRecord,
+  RedactionSpan,
+} from '@obiter/redaction-policy'
 
 /**
  * What a reviewer is told about one detected span. Kept in one place so the
@@ -32,16 +36,9 @@ export const categoryLabel = {
 } satisfies Record<SpanCategory, string>
 
 export const sourceLabel = {
-  rampart_model: 'Rampart model',
-  rampart_deterministic: 'Pattern match',
-  uk_supplement: 'UK supplement',
-} satisfies Record<SpanSource, string>
-
-/** How each detector works, so a reviewer can calibrate what a hit means. */
-export const sourceExplanation = {
-  rampart_model: 'found by the Rampart model reading the text',
-  rampart_deterministic: 'matched a fixed pattern such as an email address',
-  uk_supplement: 'matched a UK-specific pattern',
+  rampart_model: 'Found automatically',
+  rampart_deterministic: 'Known pattern',
+  uk_supplement: 'UK pattern',
 } satisfies Record<SpanSource, string>
 
 export const confidenceLabel = {
@@ -51,8 +48,8 @@ export const confidenceLabel = {
 } satisfies Record<SpanConfidence, string>
 
 export const confidenceExplanation = {
-  high: 'the shape of the match is unambiguous',
-  medium: 'the match partly fits the pattern, so read the surrounding text',
+  high: 'the text matches what was looked for',
+  medium: 'it partly matches, so read the surrounding text',
   low: 'a weak match — check it before deciding',
 } satisfies Record<SpanConfidence, string>
 
@@ -94,6 +91,30 @@ export function spanDecisionState(
   if (decision === 'accept' || decision === 'override_redact') return 'accepted'
   if (decision === 'pseudonymise') return 'pseudonymised'
   return 'rejected'
+}
+
+/**
+ * What detection did, in plain words: how many spans were found automatically
+ * and how many matched a pattern. The detector split behind it (model, fixed
+ * patterns, UK supplement) is provenance, not something a reviewer can act on.
+ */
+export function detectionSummary(bySource: {
+  rampartModel: number
+  rampartDeterministic: number
+  ukSupplement: number
+}) {
+  const parts = [
+    bySource.rampartModel > 0
+      ? `${bySource.rampartModel} found automatically`
+      : null,
+    bySource.rampartDeterministic > 0
+      ? `${bySource.rampartDeterministic} matched a known pattern`
+      : null,
+    bySource.ukSupplement > 0
+      ? `${bySource.ukSupplement} matched a UK pattern`
+      : null,
+  ].filter((part): part is string => part !== null)
+  return parts.length ? `Detection: ${parts.join(' · ')}.` : null
 }
 
 export const decisionStateLabel = {
@@ -150,32 +171,31 @@ export function formatDateTime(value: string) {
 }
 
 /**
- * The decisions table stores the deciding user's id, not their name, and the
- * run payload carries no directory to resolve it against. Naming the deciding
- * user we can identify and falling back to "another reviewer" is the honest
- * option until the API returns a display name; showing the raw id would leak an
+ * The decision stores the deciding user's id and the API resolves the member
+ * name beside it. A name that does not resolve (the account is no longer a
+ * member) falls back to "another reviewer": showing the raw id would leak an
  * internal identifier, and inventing a name would falsify an audit record.
  */
-function reviewerName(decidedBy: string, currentUserId: string | undefined) {
-  return currentUserId && decidedBy === currentUserId
-    ? 'you'
-    : 'another reviewer'
+function reviewerName(
+  record: DecisionRecord,
+  currentUserId: string | undefined,
+) {
+  if (currentUserId && record.decidedBy === currentUserId) return 'you'
+  return record.decidedByName ?? 'another reviewer'
 }
 
-/** "Redacted by you · 26 Oct 2026, 14:42", for one stored decision. */
+/** "Redacted by Priya Shah · 26 Oct 2026, 14:42", for one stored decision. */
 export function decisionRecord(
-  decision: SpanDecision,
-  decidedBy: string,
-  decidedAt: string,
+  record: DecisionRecord,
   currentUserId: string | undefined,
 ) {
   const verb =
-    decision === 'accept' || decision === 'override_redact'
+    record.decision === 'accept' || record.decision === 'override_redact'
       ? 'Redacted'
-      : decision === 'pseudonymise'
+      : record.decision === 'pseudonymise'
         ? 'Pseudonymised'
         : 'Kept visible'
-  return `${verb} by ${reviewerName(decidedBy, currentUserId)} · ${formatDateTime(decidedAt)}`
+  return `${verb} by ${reviewerName(record, currentUserId)} · ${formatDateTime(record.decidedAt)}`
 }
 
 /** Counts per decision state, used by the filter tabs and the finalise gate. */

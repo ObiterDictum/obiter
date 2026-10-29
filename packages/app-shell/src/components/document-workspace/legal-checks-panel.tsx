@@ -34,8 +34,7 @@ export function LegalChecksPanel({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-caption text-muted">
-        Stored fields and defined-term marks, including pending edits. Findings
-        name things to review; they are not a verdict on the document.
+        Checks defined terms and cross-references in this document.
       </p>
       {checks === null ? (
         <EmptyState

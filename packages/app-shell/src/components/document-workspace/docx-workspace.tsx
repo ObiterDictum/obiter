@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
 import { documentStory } from '../../document-model-text'
-import { documentWorkspaceKeyDown } from '../../document-workspace-keys'
 import type {
   DocumentVersionRecord,
   MatterDocumentRecord,
@@ -17,14 +16,21 @@ import {
 } from '../../document-workspace-api'
 import { revealParagraph, withCaretRefocus } from './document-actions'
 import { DocxWorkspaceDesk } from './docx-workspace-desk'
-import { docxWorkspaceRibbon } from './docx-workspace-ribbon'
+import {
+  DocxWorkspaceChrome,
+  docxWorkspaceChrome,
+} from './docx-workspace-chrome'
 import { DocxEditorHeader } from './document-editor-header'
 import {
-  closesPanelOnEscape,
   useWorkspacePanels,
+  workspaceKeyDown,
   type WorkspacePanel,
 } from './use-workspace-panels'
-import { useWorkspaceSurface, useWorkspaceView } from './use-workspace-view'
+import {
+  pageZoomFor,
+  useWorkspaceSurface,
+  useWorkspaceView,
+} from './use-workspace-view'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { useChangeReview } from './use-change-review'
 import { usePublishDocumentDirty } from './document-draft-status'
@@ -78,8 +84,6 @@ export function DocxWorkspace({
 }) {
   const { data: me } = useCurrentUser()
   const modelQuery = useDocumentModel(documentId)
-  const commentsQuery = useDocumentComments(documentId)
-  const changesQuery = useDocumentTrackedChanges(documentId)
   const [savedVersion, setSavedVersion] = useState<{
     documentId: string
     versionId: string
@@ -88,6 +92,8 @@ export function DocxWorkspace({
     savedVersion?.documentId === documentId
       ? savedVersion.versionId
       : (modelQuery.data?.versionId ?? versionId)
+  const commentsQuery = useDocumentComments(documentId)
+  const changesQuery = useDocumentTrackedChanges(documentId)
   const syncQuery = useDocumentCollaborationSync(documentId, baseVersionId)
   const decideChange = useTrackedChangeDecision(documentId, matterId)
   const model = modelQuery.data?.model
@@ -105,11 +111,8 @@ export function DocxWorkspace({
   const panels = useWorkspacePanels()
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const legalTools = useLegalToolsState(documentId)
-  // The toggle follows the version's `w:trackRevisions`. An unsaved flip is
-  // the user's intent until a version persists it: it lives in the draft
-  // bundle, so it survives a remount the way every other unsaved edit does,
-  // and a version write — save, merge, decision or markings — carries it. A
-  // reload discards it with the drafts it stood beside.
+  // An unsaved flip lives in the draft bundle: a remount keeps it, a version
+  // write (save, decision or markings) carries it, a reload drops it.
   const trackChanges =
     drafts.trackChangesFlip !== undefined &&
     drafts.trackChangesFlip !== (model?.trackRevisions ?? false)
@@ -120,6 +123,11 @@ export function DocxWorkspace({
   const {
     view,
     setView,
+    columnWidth,
+    compareOpen,
+    setCompareOpen,
+    requests,
+    request,
     forPrint,
     rulerOn,
     toggleRuler,
@@ -129,7 +137,7 @@ export function DocxWorkspace({
     columnRef,
     flow,
     toggleSpelling,
-  } = useWorkspaceView()
+  } = useWorkspaceView(Boolean(model))
 
   const presence = syncQuery.data?.participants ?? []
   const remoteChange = syncQuery.data?.changed === true
@@ -149,23 +157,9 @@ export function DocxWorkspace({
     onSaved: handleSaved,
   })
 
-  // Verification reads the stored version, so it must stay disabled while any
-  // work is off-server: editable operations, a blocked or held change, or a
-  // recoverable draft. `useDocumentSave` owns that truth as `saveState`; the
-  // E45 recovery paths keep it unsaved until the work is actually covered.
+  // Verification reads the stored version, so unsaved work keeps it disabled.
   usePublishDocumentDirty(save.saveState.status !== 'saved')
 
-  // The ribbon's quiet meta names the stored version, not the unsaved state.
-  const storedVersionId = modelQuery.data?.versionId ?? versionId
-  const storedVersion = versions.find(
-    (version) => version.id === storedVersionId,
-  )
-  const versionMeta = storedVersion
-    ? {
-        number: modelQuery.data?.versionNumber ?? versionNumber ?? 1,
-        editedAt: storedVersion.createdAt,
-      }
-    : undefined
   const caret = useWorkspaceCaret({ documentId, model, drafts })
   const {
     selectedParagraphId,
@@ -197,8 +191,7 @@ export function DocxWorkspace({
     redoDocument,
   } = caret
 
-  // One review derivation feeds the ribbon's controls and the Changes panel,
-  // so both surfaces share the active target, the barriers and the dispatch.
+  // One review derivation feeds the chrome and the panel: one active target.
   const changeReview = useChangeReview({
     documentId,
     model,
@@ -220,8 +213,7 @@ export function DocxWorkspace({
   })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
-  // Markings commit an immutable version like a decision does, so the hook
-  // shares the save machine's barriers and advances the base on success.
+  // Markings commit an immutable version, so they share the save barriers.
   const markings = useDocumentMarkings({
     documentId,
     matterId,
@@ -232,8 +224,7 @@ export function DocxWorkspace({
     onSaved: (version) => setSavedVersion({ documentId, versionId: version }),
     onNotice: setBanner,
   })
-  // The toolbar acts on the document selection's ranges, or on the caret's
-  // own paragraph when there is none.
+  // The toolbar acts on the selection's ranges, else the caret's paragraph.
   const formatTarget: FormatTarget = selectionActive
     ? { kind: 'selection', ranges: [...selectionSegments.values()] }
     : {
@@ -296,21 +287,18 @@ export function DocxWorkspace({
     canModerate: me?.user.role === 'owner' || me?.user.role === 'admin',
     revealCommentAnchor,
   })
-  // Print reports only refusal or absence; printing itself saves nothing.
   const transientBanner = printBanner ?? save.notice ?? banner
   const { format, outline, ruler, onView, onSelectOutline } = surface
-  // These flights can each disable or unmount the focused control mid-step,
-  // so the ribbon controls and the keyboard chords share the caret-refocus
-  // wrapper — focus lands on the caret's field before the step can drop it.
+  const pageZoom = pageZoomFor(zoom, columnWidth, printBox?.widthPx ?? 794)
+  // Each of these can disable or unmount the focused control mid-step, so they
+  // share the caret-refocus wrapper: focus lands on the caret's field first.
   const undo = withCaretRefocus(undoDocument)
   const redo = withCaretRefocus(redoDocument)
-  // forPrint repaginates to paper sheets first, so printing from web layout
-  // produces paginated output rather than the continuous frame.
+  // forPrint repaginates first, so printing from web layout uses paper sheets.
   const print = withCaretRefocus(() => void forPrint(printDocument))
   const reload = withCaretRefocus(save.reload)
   const exports = documentExportHandlers(documentId, filename, setBanner)
-  // A panel and the navigation pane both narrow the canvas: opening either
-  // closes the other rather than squeezing the page twice.
+  // Either narrows the canvas, so opening one closes the other.
   function togglePanel(panel: WorkspacePanel) {
     if (navOpen) toggleNavPane()
     panels.toggle(panel)
@@ -319,14 +307,9 @@ export function DocxWorkspace({
     if (!navOpen) panels.dismiss()
     toggleNavPane()
   }
-  const ribbon = docxWorkspaceRibbon({
+  const chrome = docxWorkspaceChrome({
     save,
     drafts,
-    remoteChange,
-    transientNotice: transientBanner,
-    selectionNotice:
-      selectionNotice ?? selectionAnnouncement(selectionSegments.size),
-    onReload: reload,
     trackChanges,
     zoom,
     panels,
@@ -360,8 +343,15 @@ export function DocxWorkspace({
     onToggleNavPane: toggleNavigation,
     spelling,
     onToggleSpelling: () => toggleSpelling(setBanner),
-    versionMeta,
     onOpenVerify: () => panels.open('verify'),
+    infoOpen: panels.active === 'info',
+    onToggleInfo: documentRecord ? () => togglePanel('info') : undefined,
+    onOpenCompare:
+      versions.filter(
+        (item) => item.documentStatus === 'ready' && item.fileType === 'docx',
+      ).length >= 2
+        ? () => setCompareOpen(true)
+        : undefined,
   })
 
   return (
@@ -370,27 +360,18 @@ export function DocxWorkspace({
     >
       <WorkspaceShell
         layout={layout}
-        onKeyDown={(event) => {
-          // Escape closes the docked panel and hands focus back to the control
-          // that opened it. It never claims the key from a dialog, the
-          // document text or a field outside the panel.
-          if (
-            event.key === 'Escape' &&
-            panels.active !== null &&
-            closesPanelOnEscape(event.target)
-          ) {
-            event.preventDefault()
-            panels.close()
-            return
-          }
-          documentWorkspaceKeyDown(event, {
+        onKeyDown={(event) =>
+          workspaceKeyDown(event, {
+            panels,
             save: save.save,
             undo,
             redo,
             print,
             format,
+            request,
+            review: changeReview,
           })
-        }}
+        }
       >
         <DocxEditorHeader
           filename={filename}
@@ -419,15 +400,32 @@ export function DocxWorkspace({
         ) : model ? (
           <>
             <DocumentPrintStyle box={printBox} />
-            {ribbon}
+            <DocxWorkspaceChrome
+              props={chrome}
+              save={save}
+              drafts={drafts}
+              remoteChange={remoteChange}
+              transientNotice={transientBanner}
+              selectionNotice={
+                selectionNotice ?? selectionAnnouncement(selectionSegments.size)
+              }
+              onReload={reload}
+              requests={requests}
+              selectionActive={selectionActive}
+              onCommentSelection={() => togglePanel('comments')}
+            />
             <DocxWorkspaceDesk
+              compareOpen={compareOpen}
+              onCloseCompare={() => setCompareOpen(false)}
+              documentId={documentId}
+              zoom={pageZoom}
               pages={{
+                zoom: pageZoom,
                 view,
                 model,
                 painted,
                 pendingRedlines,
                 pages,
-                zoom,
                 editingKind,
                 selectedParagraphId,
                 restoreCaret,
@@ -446,7 +444,6 @@ export function DocxWorkspace({
                 moveCaret,
                 reportJoinRefusal,
               }}
-              zoom={zoom}
               navOpen={navOpen}
               outline={outline}
               activeParagraphId={selectedParagraphId}
@@ -462,6 +459,7 @@ export function DocxWorkspace({
               }
               panel={panels.active}
               onClosePanel={panels.close}
+              popout={panels.popout}
               legalChecksFocus={panels.legalChecksFocus}
               documentRecord={documentRecord}
               versions={versions}
@@ -469,12 +467,12 @@ export function DocxWorkspace({
               onViewVersion={onViewVersion}
               comments={commentsPanel.props}
               changeReview={changeReview}
+              currentVersionNumber={
+                modelQuery.data?.versionNumber ?? versionNumber
+              }
               authorities={authorities}
               legalChecks={legalChecks}
-              // An authority always names a body paragraph, so selecting one
-              // leaves margin editing the way a body click does before the
-              // caret lands — otherwise the caret parks on an inert body
-              // paragraph the format controls still target.
+              // Leave margin editing first, or the caret parks in the body.
               onSelectAuthority={(paragraphId) => {
                 closeEditingStory()
                 selectParagraph(paragraphId)

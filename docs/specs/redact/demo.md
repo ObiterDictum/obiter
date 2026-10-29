@@ -13,7 +13,7 @@ Run the API and web app locally. Register through the sign-up screen, create an 
 3. Open `/redact/:runId`; verify detected spans, including NI number, case reference and contact details.
 4. Accept private PII. Reject the public-record names Mr Justice Holroyd and Ms Priya Sharma.
 5. Finalize in redacted mode. Confirm `/api/redaction-runs/:runId/output` contains replacements.
-6. Download `GET /api/redaction-runs/:runId/audit`; the versioned report contains source reference, summary, decision history, reviewer and output reference. Try `?format=html` and `?format=markdown`.
+6. Download `GET /api/redaction-runs/:runId/audit`; the JSON report contains source reference, summary, decision history, reviewer and output reference. Try `?format=pdf` and `?format=docx` for the redaction schedule: it lists decisions without reproducing the removed words.
 7. Create a second run and finalize pseudonymised output to demonstrate consistent tokens.
 
 ## Known edge-case outcomes

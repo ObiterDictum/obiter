@@ -18,6 +18,24 @@ function isForeignFormField(target: EventTarget | null | undefined) {
   return !target.closest('[data-paragraph-id]')
 }
 
+/**
+ * Whether a keystroke is going into text somewhere: the document's own fields,
+ * a comment box, a search input. Review letters must not fire there — an "a"
+ * typed into a comment is an "a".
+ */
+function isTyping(target: EventTarget | null | undefined) {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.closest('[data-paragraph-id]')) return true
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  ) {
+    return true
+  }
+  return target.isContentEditable
+}
+
 export function handleDocumentWorkspaceKeys(
   event: WorkspaceKeyEvent,
   handlers: {
@@ -27,13 +45,37 @@ export function handleDocumentWorkspaceKeys(
     undo?: () => void
     redo?: () => void
     focusFind?: () => void
+    openPalette?: () => void
     print?: () => void
+    /** Review navigation and decisions while the review panel is open. */
+    review?: {
+      onAccept: () => void
+      onReject: () => void
+      onNext: () => void
+      onPrevious: () => void
+    }
     toggleBold?: () => void
     toggleItalic?: () => void
     toggleUnderline?: () => void
   },
 ) {
   const key = event.key.toLowerCase()
+  // Review letters are bare keys, so they are read before the modifier guard
+  // and only when the focus is not already text.
+  if (
+    handlers.review &&
+    !(event.metaKey || event.ctrlKey || event.altKey) &&
+    !isTyping(event.target)
+  ) {
+    const act = (run: () => void) => {
+      event.preventDefault()
+      run()
+    }
+    if (key === 'a') return act(handlers.review.onAccept)
+    if (key === 'r') return act(handlers.review.onReject)
+    if (key === 'j' || key === 'arrowdown') return act(handlers.review.onNext)
+    if (key === 'k' || key === 'arrowup') return act(handlers.review.onPrevious)
+  }
   if (!(event.metaKey || event.ctrlKey)) return
   // AltGr reports as Ctrl+Alt on Windows, so any Alt-combined chord is a
   // character shortcut for the layout, never a document command. One guard
@@ -69,6 +111,7 @@ export function handleDocumentWorkspaceKeys(
     return
   }
   if (key === 'f' && run(handlers.focusFind)) return
+  if (key === 'k' && !event.shiftKey && run(handlers.openPalette)) return
   // Ctrl/Cmd+B/I/U mirror the ribbon character controls. The caller wires these
   // only while the matching control is available, so a tracked partial range
   // that refuses the ribbon button also refuses the shortcut rather than
@@ -93,6 +136,15 @@ export type WorkspaceKeySources = {
   undo?: () => void
   redo?: () => void
   print?: () => void
+  openFind?: () => void
+  openPalette?: () => void
+  openFormatting?: () => void
+  review?: {
+    onAccept: () => void
+    onReject: () => void
+    onNext: () => void
+    onPrevious: () => void
+  }
   format?: {
     emphasisUnavailable?: string
     onToggleBold: () => void
@@ -101,13 +153,23 @@ export type WorkspaceKeySources = {
   }
 }
 
+/** The read-only viewers keep a find field always mounted beside the page. */
 const focusDocumentFind = () =>
   document.getElementById('document-find')?.focus()
 
 /** Binds the workspace's command sources to the key handler table. */
 export function documentWorkspaceKeyDown(
   event: WorkspaceKeyEvent,
-  { save, undo, redo, print, format }: WorkspaceKeySources = {},
+  {
+    save,
+    undo,
+    redo,
+    print,
+    openFind,
+    openPalette,
+    review,
+    format,
+  }: WorkspaceKeySources = {},
 ) {
   const emphasis = format && !format.emphasisUnavailable ? format : undefined
   handleDocumentWorkspaceKeys(event, {
@@ -115,7 +177,9 @@ export function documentWorkspaceKeyDown(
     undo,
     redo,
     print,
-    focusFind: focusDocumentFind,
+    review,
+    focusFind: openFind ?? focusDocumentFind,
+    openPalette,
     toggleBold: emphasis?.onToggleBold,
     toggleItalic: emphasis?.onToggleItalic,
     toggleUnderline: emphasis?.onToggleUnderline,
