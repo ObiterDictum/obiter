@@ -184,3 +184,18 @@ Renders the approved page heading on the frame's content column: title at 28/600
 - Password change is verified server-side; the client-side checks are a courtesy the API repeats.
 - A permission refusal is not an error to retry: the shell chooses its surface from the typed `ApiError` code.
 - Verification findings and the legal checks are presented as things a person should look at, never as a verdict; honest uncertainty is surfaced, not passed silently.
+
+## 8. Rules no unit test can reach
+
+These rules were in code comments until the no-comments rule (29 Oct 2026). A unit test cannot observe them, so they are stated here; change them only deliberately.
+
+- Restoring the last draft unmounts the save banner, so focus moves back to the document rather than being stranded on a removed node (`save-banners.tsx`).
+- Focus returns to the caret's field at the only point a save can begin (`use-document-save.ts`).
+- Save containment probes the most recent slots first (`use-document-save.ts`).
+- Find caches the folded text and its maps per text and fold flag, maps hits to spans in one forward walk, and searches only the story open for editing (`document-find.ts`).
+- Local paint descriptors for pending redlines never enter model storage or review decisions (`document-pending-redlines.ts`).
+- A range edit whose head is revision-only has no run to join into and is refused before paint shows it (`document-range-edits.ts`).
+- For downloads, `filename*` is authoritative for a non-ASCII name and `filename` is the fallback (`document-workspace-downloads.ts`).
+- A surface with no save leaves the platform's own Ctrl/Cmd+S unclaimed (`document-workspace-keys.ts`).
+- Local recovery acknowledges a commit before any refetch can delay it (`document-workspace-mutations.ts`).
+- A paired read is fetched only once both sides are picked (`document-workspace-queries.ts`).
