@@ -70,10 +70,12 @@ it('requires an explicit choice when a draft cannot be stored', async () => {
   await screen.findByText('Other page')
 })
 
-it('removes the guard after save and keeps recoverable navigation prompt-free', async () => {
+it('continues a blocked navigation when an in-flight save completes', async () => {
   openEditor(true)
-  fireEvent.click(await screen.findByRole('button', { name: 'Saved' }))
-  fireEvent.click(screen.getByRole('link', { name: 'Other' }))
+  const saved = await screen.findByRole('button', { name: 'Saved' })
+  fireEvent.click(await screen.findByRole('link', { name: 'Other' }))
+  await screen.findByRole('heading', { name: 'Leave without saving?' })
+  fireEvent.click(saved)
   await screen.findByText('Other page')
   expect(screen.queryByRole('dialog')).toBeNull()
 })
