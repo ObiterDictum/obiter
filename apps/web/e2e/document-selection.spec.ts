@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
+import { setTrackChanges } from './editor-chrome'
 
 /*
  * Browser-only coverage for the cross-paragraph selection. Real selection,
@@ -254,9 +255,7 @@ test.describe('the document selection in a browser', () => {
   }) => {
     await openFixtureDocument(page)
 
-    await page.getByRole('tab', { name: 'Review' }).click()
-    await page.getByRole('button', { name: 'Track changes off' }).click()
-    await page.getByRole('tab', { name: 'Home' }).click()
+    await setTrackChanges(page, true)
 
     // A selection with text in it, so the tracked-change limitation is the
     // one that applies.
@@ -264,9 +263,11 @@ test.describe('the document selection in a browser', () => {
     await pressMany(page, 'Shift+ArrowDown', 3)
     await check(status(page)).toContainText('3 paragraphs selected')
 
-    const bold = page.getByRole('button', {
-      name: 'Bold: Partial formatting is not yet recorded as a tracked change',
-    })
+    const bold = page.getByRole('button', { name: 'Bold', exact: true })
+    await expect(bold).toHaveAttribute(
+      'title',
+      'Partial formatting is not yet recorded as a tracked change',
+    )
     await shot(page, '06-unsupported-formatting-disabled')
     await check(bold).toBeDisabled()
   })

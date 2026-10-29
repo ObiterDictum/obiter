@@ -6,6 +6,7 @@ import {
 } from '@playwright/test'
 import path from 'node:path'
 import { resolveJourneyTargets } from '../journey-target.mjs'
+import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
 import { fixturePath, verifyEmailInDb } from './support'
 
 /*
@@ -128,10 +129,22 @@ async function openFixtureDocument(
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const copyButton = (page: Page) => page.getByRole('button', { name: /^Copy/ })
-const cutButton = (page: Page) => page.getByRole('button', { name: /^Cut/ })
-const pasteButton = (page: Page) =>
-  page.getByRole('button', { name: 'Paste', exact: true })
+/**
+ * The clipboard commands live in the Edit menu. A row's reason is a
+ * description beside it, not part of its name, so a disabled Copy still reads
+ * "Copy" to a screen reader.
+ */
+async function clipboardRow(page: Page, name: 'Copy' | 'Cut' | 'Paste') {
+  await openMenu(page, 'Edit')
+  return menuItem(page, name)
+}
+
+async function clipboardDescription(page: Page, name: 'Copy' | 'Cut') {
+  const row = await clipboardRow(page, name)
+  const id = await row.getAttribute('aria-describedby')
+  if (!id) return ''
+  return (await page.locator(`[id="${id}"]`).textContent()) ?? ''
+}
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 
@@ -169,29 +182,26 @@ test('enables the clipboard controls from the document selection', async ({
   const matter = `E1 clipboard ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  await expect(copyButton(page)).toBeDisabled()
-  await expect(cutButton(page)).toBeDisabled()
-  await expect(pasteButton(page)).toBeEnabled()
-  await expect(copyButton(page)).toHaveAttribute(
-    'aria-label',
-    'Copy: Select text to copy',
-  )
-  await expect(cutButton(page)).toHaveAttribute(
-    'aria-label',
-    'Cut: Select text to cut',
-  )
+  await openMenu(page, 'Edit')
+  await expect(menuItem(page, 'Copy')).toBeDisabled()
+  await expect(menuItem(page, 'Cut')).toBeDisabled()
+  await expect(menuItem(page, 'Paste')).toBeEnabled()
+  expect(await clipboardDescription(page, 'Copy')).toBe('Select text to copy')
+  expect(await clipboardDescription(page, 'Cut')).toBe('Select text to cut')
+  await closeMenu(page)
   await shot(page, '01-clipboard-disabled-without-a-selection')
 
   await focusParagraph(page, HEADING)
   await selectFirst(page, 6)
-  await expect(copyButton(page)).toBeEnabled()
-  await expect(cutButton(page)).toBeEnabled()
-  await expect(copyButton(page)).toHaveAttribute('aria-label', 'Copy')
+  await openMenu(page, 'Edit')
+  await expect(menuItem(page, 'Copy')).toBeEnabled()
+  await expect(menuItem(page, 'Cut')).toBeEnabled()
+  await closeMenu(page)
   await shot(page, '02-clipboard-enabled-with-a-selection')
 
   // Copy writes the selection and leaves the document alone.
   const before = await page.locator('[data-paragraph-id]').count()
-  await copyButton(page).click()
+  await runMenuCommand(page, 'Edit', 'Copy')
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before)
   await shot(page, '03-copied-without-mutating')
 })
@@ -211,7 +221,7 @@ test('pastes multiple paragraphs and undoes it in one step', async ({
   await page.evaluate(() =>
     navigator.clipboard.writeText('Alpha paragraph\nBeta paragraph'),
   )
-  await pasteButton(page).click()
+  await runMenuCommand(page, 'Edit', 'Paste')
   // Two pasted lines split into one extra paragraph, not a hard break inside
   // one; the ribbon read the clipboard and applied the same splitter the native
   // paste event uses.

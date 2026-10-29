@@ -147,6 +147,77 @@ describe('compareDocumentModels', () => {
     expect(removed).toMatchObject({ paragraphId: 'p2', text: 'Drop me.' })
   })
 
+  it('reads a replacement recorded as a tracked delete and insert in place', () => {
+    // A stored version's runs hold neither the deleted text nor the inserted
+    // text: the revision lives in `changes`. Comparing the runs alone would
+    // report the figure that went and lose the figure that replaced it.
+    const base = model([
+      paragraph('p1', 'Pay not less than 60,000 units.', {
+        sourceParaId: 'aa01',
+      }),
+    ])
+    const target = model(
+      [
+        {
+          id: 'p1',
+          sourceParaId: 'aa01',
+          runs: [
+            {
+              id: 'p1-r1',
+              text: 'Pay not less than ',
+              preservedXmlFragments: [],
+            },
+            { id: 'p1-r2', text: ' units.', preservedXmlFragments: [] },
+          ],
+          preservedXmlFragments: [],
+        },
+      ],
+      {
+        changes: [
+          {
+            id: 'c1',
+            kind: 'delete',
+            elementName: 'del',
+            storyPartName: 'word/document.xml',
+            paragraphId: 'p1',
+            inlinePosition: {
+              beforeRunId: 'p1-r2',
+              segments: [{ text: '60,000', deleted: true }],
+            },
+            text: '60,000',
+          },
+          {
+            id: 'c2',
+            kind: 'insert',
+            elementName: 'ins',
+            storyPartName: 'word/document.xml',
+            paragraphId: 'p1',
+            inlinePosition: {
+              beforeRunId: 'p1-r2',
+              segments: [{ text: '45,000', deleted: false }],
+            },
+            text: '45,000',
+          },
+        ],
+      },
+    )
+    const entries = compareDocumentModels(base, target).entries
+    expect(entries[0]).toEqual({
+      type: 'modified',
+      storyPartName: 'word/document.xml',
+      paragraphId: 'p1',
+      segments: [
+        { kind: 'same', text: 'Pay not less than ' },
+        { kind: 'removed', text: '60,000' },
+        { kind: 'added', text: '45,000' },
+        { kind: 'same', text: ' units.' },
+      ],
+    })
+    // The revision records differ too, which the package entry states on its
+    // own; the paragraph redline above is what a reader reads.
+    expect(entries[1]).toEqual({ type: 'package', area: 'revisions' })
+  })
+
   it('reports a reorder as remove plus add, not fabricated modifications', () => {
     const base = model([
       paragraph('p1', 'Alpha.', { sourceParaId: 'aa01' }),

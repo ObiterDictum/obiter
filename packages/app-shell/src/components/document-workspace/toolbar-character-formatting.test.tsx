@@ -15,6 +15,8 @@ import {
   multiParagraphModel,
   paragraph,
   rerenderWorkspace,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
 import {
   bodyField,
@@ -30,7 +32,7 @@ function helloModel() {
 }
 
 function control(name: string): HTMLButtonElement {
-  const button = screen.queryByRole('button', { name })
+  const button = commandOrNull(name)
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`missing ${name} control`)
   }
@@ -75,7 +77,7 @@ function typeHelloBang() {
 }
 
 function save(editAsync: ReturnType<typeof vi.fn>) {
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  fireEvent.click(command('Save'))
   return waitFor(() => expect(editAsync).toHaveBeenCalled())
 }
 

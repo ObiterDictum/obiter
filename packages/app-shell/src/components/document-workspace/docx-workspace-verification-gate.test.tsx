@@ -1,3 +1,5 @@
+import { command, commandOrNull } from './editor-test-commands'
+
 import '@obiter/test-dom'
 // The E45 recovery save owner and the V5 verification gate meet at one
 // boundary: `DocxWorkspace` publishes its unsaved state, `VerificationRunPanel`
@@ -83,12 +85,12 @@ function mountGate(options: {
 }
 
 function verifyButton() {
-  // The header's Run control; the panel's own control is inside the dock.
-  return screen.getByRole('button', { name: 'Run' }) as HTMLButtonElement
+  // The header's check control; the panel's own control is inside the dock.
+  return command('Check citations') as HTMLButtonElement
 }
 
 function saveButton() {
-  return screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement
+  return command('Save') as HTMLButtonElement
 }
 
 function edit(text: string) {
@@ -163,7 +165,7 @@ describe('V5 verification gate against the E45 save owner', () => {
     editor.setSelectionRange(0, 2)
     fireEvent.select(editor)
     fireEvent.mouseUp(editor)
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     await waitFor(() => expect(verifyButton().disabled).toBe(true))
 
     fireEvent.click(saveButton())
@@ -205,7 +207,7 @@ describe('V5 verification gate against the E45 save owner', () => {
     mountGate({ editAsync, paragraphs: ['Hello', 'Second'] })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     await waitFor(() => expect(verifyButton().disabled).toBe(true))
 
     fireEvent.click(saveButton())
@@ -254,59 +256,42 @@ describe('V5 verification gate against the E45 save owner', () => {
     expect(screen.getByText(/Save before verification/)).toBeTruthy()
   })
 
-  it('connects the ribbon Verify citations entry to the real dock control', async () => {
+  it('opens the dock from the menu entry without starting a second run', async () => {
     mountGate({ editAsync: vi.fn() })
     await waitFor(() => expect(verifyButton().disabled).toBe(false))
 
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
-    const ribbonVerify = screen.getByRole('button', {
-      name: 'Verify citations',
-    })
-    expect(ribbonVerify).toHaveProperty('disabled', false)
-
-    fireEvent.click(ribbonVerify)
-    // The one real control owns the action; the ribbon entry opens the dock
-    // that holds it and hands it focus rather than starting a second run.
+    fireEvent.click(command('Verify citations'))
+    // The entry only reveals the one control that owns the action, so it stays
+    // enabled with nothing to decide and cannot start a duplicate run.
     expect(
       await screen.findByRole('region', { name: 'Verification' }),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run Verify' })).toBe(
-      document.activeElement,
-    )
   })
 
-  it('carries the unsaved gate and its reason onto the ribbon entry', async () => {
+  it('carries the unsaved gate and its reason onto the header control', async () => {
     mountGate({ editAsync: vi.fn() })
     await waitFor(() => expect(verifyButton().disabled).toBe(false))
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
 
     edit('Hello world')
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', {
-          name: 'Verify citations: save before verification',
-        }),
-      ).toHaveProperty('disabled', true),
-    )
+    await waitFor(() => expect(verifyButton().disabled).toBe(true))
+    expect(screen.getByText(/Save before verification/)).toBeTruthy()
   })
 
-  it('disables the ribbon entry while verification status is still loading', () => {
+  it('disables the header control while verification status is still loading', () => {
     runsHook.useDocumentVerificationRuns.mockReturnValue({
       isPending: true,
       isError: false,
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
-    expect(
-      screen.getByRole('button', {
-        name: 'Verify citations: verification status is still loading',
-      }),
-    ).toHaveProperty('disabled', true)
+    // While the status itself loads there is nothing to start: the header
+    // says so instead of offering a control it cannot honour.
+    expect(commandOrNull('Check citations')).toBeNull()
+    expect(screen.getAllByText(/Checking…/).length).toBeGreaterThan(0)
   })
 
-  it('disables the ribbon entry when verification runs are unavailable', () => {
+  it('disables the header control when verification runs are unavailable', () => {
     runsHook.useDocumentVerificationRuns.mockReturnValue({
       isPending: false,
       isError: true,
@@ -314,41 +299,31 @@ describe('V5 verification gate against the E45 save owner', () => {
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
-    expect(
-      screen.getByRole('button', {
-        name: 'Verify citations: verification runs are unavailable',
-      }),
-    ).toHaveProperty('disabled', true)
+    expect(verifyButton()).toHaveProperty('disabled', true)
+    expect(screen.getByText(/Verification runs are unavailable/i)).toBeTruthy()
   })
 
-  it('disables the ribbon entry when the document is unavailable', () => {
+  it('disables the header control when the document is unavailable', () => {
     documentHook.useDocument.mockReturnValue({
       isPending: false,
       isError: true,
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
-    expect(
-      screen.getByRole('button', {
-        name: 'Verify citations: this document is unavailable',
-      }),
-    ).toHaveProperty('disabled', true)
+    expect(verifyButton()).toHaveProperty('disabled', true)
+    expect(screen.getByText(/This document is unavailable/i)).toBeTruthy()
   })
 
-  it('disables the ribbon entry while a run start is already pending', () => {
+  it('disables the header control while a run start is already pending', () => {
     runsHook.useCreateVerificationRun.mockReturnValue({
       isPending: true,
       mutate: vi.fn(),
       error: null,
     })
     mountGate({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByRole('tab', { name: 'References' }))
+    expect(verifyButton()).toHaveProperty('disabled', true)
     expect(
-      screen.getByRole('button', {
-        name: 'Verify citations: a verification run is already starting',
-      }),
-    ).toHaveProperty('disabled', true)
+      screen.getByText(/A verification run is already starting/i),
+    ).toBeTruthy()
   })
 })

@@ -1,3 +1,5 @@
+/* The Picture control's file picker cannot be driven from jsdom through the menu
+ * host; document-structure-inserts.spec.ts covers the insertion end to end. */
 import '@obiter/test-dom'
 /*
  * E50: Undo across a successful save. A save commits the covered slots and
@@ -29,12 +31,15 @@ import {
 import { ApiError } from '../../api'
 import { emptyDraftState } from '../../document-save-plan'
 import { writeDocumentDraft } from '../../document-draft-store'
+import { openRibbonTab, setTrackChanges } from './editor-test-commands'
 import {
   mountWorkspace,
   rerenderWorkspace,
-  openRibbonTab,
   selectBodyParagraph,
+  command,
+  commandOrNull,
 } from './docx-workspace-harness'
+
 import { clickParagraph, nativeSelect } from './paragraph-selection-harness'
 
 type PersistedParagraph = { runs: Array<{ text: string }> }
@@ -182,9 +187,9 @@ function field(): HTMLTextAreaElement {
   return editor
 }
 
-const undoButton = () => screen.getByRole('button', { name: 'Undo' })
-const redoButton = () => screen.getByRole('button', { name: 'Redo' })
-const saveButton = () => screen.getByRole('button', { name: 'Save' })
+const undoButton = () => command('Undo')
+const redoButton = () => command('Redo')
+const saveButton = () => command('Save')
 
 function saveState() {
   return document
@@ -247,7 +252,7 @@ async function clickDecisionSave(
 
 function enableTracking() {
   openRibbonTab('Review')
-  fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+  setTrackChanges(true)
   openRibbonTab('Home')
 }
 
@@ -283,7 +288,7 @@ describe('undo across a successful save', () => {
 
     // Insert, then type into it: the history now holds a snapshot taken while
     // the insert was live, which is what undo-after-save used to resurrect.
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Second' },
     })
@@ -309,7 +314,7 @@ describe('undo across a successful save', () => {
     })
     fireEvent.click(screen.getByText('Alpha'))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Inserted' },
     })
@@ -365,7 +370,7 @@ describe('undo across a successful save', () => {
       modelFor: document.modelFor,
     })
     clickParagraph('para-000002')
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     await clickSaveAndSettle(document, 1)
     expect(persistedText(document.paragraphs)).toEqual(['Hello'])
 
@@ -505,7 +510,7 @@ describe('undo across a successful save', () => {
     mountWorkspace({ editAsync })
     selectBodyParagraph()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Second' },
     })
@@ -532,7 +537,7 @@ describe('undo across a successful save', () => {
     })
     fireEvent.click(screen.getByText('Hello'))
     nativeSelect(0, 2)
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     expect(paintedBold('Hello')).toBe(true)
     await clickSaveAndSettle(document, 1)
 
@@ -554,9 +559,9 @@ describe('undo across a successful save', () => {
     })
     fireEvent.click(screen.getByText('Hello'))
     nativeSelect(0, 2)
-    fireEvent.click(screen.getByRole('button', { name: 'Strikethrough' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Highlight' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Superscript' }))
+    fireEvent.click(command('Strikethrough'))
+    fireEvent.click(command('Highlight'))
+    fireEvent.click(command('Superscript'))
     expect(
       paintedDecorations().some((style) => style.verticalAlign === 'super'),
     ).toBe(true)
@@ -582,7 +587,7 @@ describe('undo across a successful save', () => {
       modelFor: document.modelFor,
     })
     clickParagraph('para-000001')
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     await clickSaveAndSettle(document, 1)
     expect(persistedText(document.paragraphs)).toEqual(['Beta'])
 
@@ -598,7 +603,7 @@ describe('undo across a successful save', () => {
       modelFor: document.modelFor,
     })
     clickParagraph('para-000002')
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     await clickSaveAndSettle(document, 1)
     expect(persistedText(document.paragraphs)).toEqual(['Alpha'])
 
@@ -652,7 +657,7 @@ describe('undo across a successful save', () => {
     clickParagraph('para-000003')
     fireEvent.change(field(), { target: { value: 'GAMMA' } })
     clickParagraph('para-000001')
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Inserted' },
     })
@@ -686,7 +691,7 @@ describe('undo across a successful save', () => {
     })
     clickParagraph('para-000001')
     nativeSelect(0, 2)
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     clickParagraph('para-000002')
     fireEvent.change(field(), { target: { value: 'BETA' } })
     await clickSaveAndSettle(document, 1)
@@ -724,7 +729,7 @@ describe('undo across a successful save', () => {
       modelFor: document.modelFor,
     })
     clickParagraph('para-000001')
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Inserted' },
     })
@@ -821,7 +826,7 @@ describe('undo across a successful save', () => {
     })
     enableTracking()
     fireEvent.click(screen.getByText('Beta'))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
+    fireEvent.click(command('Delete paragraph'))
     await clickSaveAndSettle(document, 1)
 
     // A tracked deletion leaves the paragraph in the model with no runs.
@@ -845,7 +850,7 @@ describe('undo across a successful save', () => {
     })
     enableTracking()
     fireEvent.click(screen.getByText('Alpha'))
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Mid' },
     })
@@ -884,7 +889,7 @@ describe('undo across a successful save', () => {
     })
     enableTracking()
     selectBodyParagraph()
-    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.click(command('Bold'))
     await clickSaveAndSettle(document, 1)
     await waitFor(() => expect(saveState()).toBe('saved'))
     expect(document.modelFor().model.changes[0]?.elementName).toBe('rPrChange')
@@ -1222,7 +1227,7 @@ describe('saving a margin story', () => {
     })
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Header' }))
+    fireEvent.click(command('Header'))
     clickParagraph(marginParagraphId())
     // Two edits leave an undo snapshot holding a margin draft across the
     // boundary: the save must reconcile it against the reloaded model's
@@ -1236,7 +1241,7 @@ describe('saving a margin story', () => {
     // lineageUnresolved banner, and the workspace keeps saving without the
     // reload the unresolved state used to force between margin saves.
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
 
     // Undo restores the first edit. The reversal is only sendable when the
     // boundary keyed it to the reloaded header paragraph's run — the stale
@@ -1245,7 +1250,7 @@ describe('saving a margin story', () => {
     fireEvent.click(undoButton())
     await clickSaveAndSettle(document, 2)
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
   })
 
   it('reconciles a body save that inserts a page number so a second save runs', async () => {
@@ -1257,15 +1262,15 @@ describe('saving a margin story', () => {
     })
     clickParagraph('para-000001', 'Page body'.length)
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Page number' }))
+    fireEvent.click(command('Page number'))
     await clickSaveAndSettle(document, 1)
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
 
     fireEvent.change(field(), { target: { value: 'Page body edited' } })
     await clickSaveAndSettle(document, 2)
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
   })
 
   it('reconciles a margin save that inserts a page number so a second save runs', async () => {
@@ -1277,9 +1282,9 @@ describe('saving a margin story', () => {
     })
 
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Header' }))
+    fireEvent.click(command('Header'))
     clickParagraph(marginParagraphId(), 'Page header'.length)
-    fireEvent.click(screen.getByRole('button', { name: 'Page number' }))
+    fireEvent.click(command('Page number'))
     await clickSaveAndSettle(document, 1)
 
     // A snapshot predating the saved field used to block the whole boundary.
@@ -1287,13 +1292,13 @@ describe('saving a margin story', () => {
     // the page number is baseline content, so the boundary reconciles and
     // the save settles without a reload.
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
 
     // A second margin save without reloading must reach the server.
     fireEvent.change(field(), { target: { value: 'Page header edited' } })
     await clickSaveAndSettle(document, 2)
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
     expect(document.editAsync).toHaveBeenCalledTimes(2)
   })
 })
@@ -1308,7 +1313,7 @@ describe('saving a footnote', () => {
     })
     clickParagraph('para-000001', 'Page body'.length)
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Footnote' }))
+    fireEvent.click(command('Footnote'))
 
     // The insertion opens the notes story with the caret in the folded
     // note body, so the field now edits that pending paragraph.
@@ -1321,16 +1326,16 @@ describe('saving a footnote', () => {
     // reference and its note entry are baseline content and the boundary
     // must reconcile and the save settle.
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
 
     // A second save on the body, after the story closes, must reach the
     // server without a reload.
-    fireEvent.click(screen.getByRole('button', { name: 'Close footnotes' }))
+    fireEvent.click(command('Close footnotes'))
     selectBodyParagraph('Page body')
     fireEvent.change(field(), { target: { value: 'Page body edited' } })
     await clickSaveAndSettle(document, 2)
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
     expect(document.editAsync).toHaveBeenCalledTimes(2)
   })
 })
@@ -1347,7 +1352,7 @@ describe('saving an inserted structure', () => {
       })
       clickParagraph('para-000001', 'Page body'.length)
       openRibbonTab('Insert')
-      fireEvent.click(screen.getByRole('button', { name: 'Picture' }))
+      fireEvent.click(command('Picture'))
       insertPictureFile()
       await waitFor(() => expect(saveState()).toBe('unsaved'))
 
@@ -1357,7 +1362,7 @@ describe('saving an inserted structure', () => {
       // stored drawing, so the picture is baseline content and the boundary
       // must reconcile instead.
       await waitFor(() => expect(saveState()).toBe('saved'))
-      expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+      expect(commandOrNull('Reload')).toBeNull()
       expect(document.editAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           operations: expect.arrayContaining([
@@ -1370,7 +1375,7 @@ describe('saving an inserted structure', () => {
       fireEvent.change(field(), { target: { value: 'Page body edited' } })
       await clickSaveAndSettle(document, 2)
       await waitFor(() => expect(saveState()).toBe('saved'))
-      expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+      expect(commandOrNull('Reload')).toBeNull()
       expect(document.editAsync).toHaveBeenCalledTimes(2)
     } finally {
       restorePicker()
@@ -1386,9 +1391,9 @@ describe('saving an inserted structure', () => {
     })
     clickParagraph('para-000001', 'Page body'.length)
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Cross-reference' }))
+    fireEvent.click(command('Cross-reference'))
     fireEvent.click(screen.getByRole('option', { name: 'Cited paragraph' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+    fireEvent.click(command('Insert'))
     await waitFor(() => expect(saveState()).toBe('unsaved'))
 
     await clickSaveAndSettle(document, 1)
@@ -1396,7 +1401,7 @@ describe('saving an inserted structure', () => {
     // predating snapshot survives and the boundary settles saved rather
     // than demanding a reload.
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
     expect(document.editAsync).toHaveBeenCalledWith(
       expect.objectContaining({
         operations: expect.arrayContaining([
@@ -1409,7 +1414,7 @@ describe('saving an inserted structure', () => {
     fireEvent.change(field(), { target: { value: 'Page body edited' } })
     await clickSaveAndSettle(document, 2)
     await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(commandOrNull('Reload')).toBeNull()
     expect(document.editAsync).toHaveBeenCalledTimes(2)
   })
 })
@@ -1434,7 +1439,7 @@ describe('undo across a saved mid-run structure', () => {
       fireEvent.change(field(), { target: { value: 'Hello world typed' } })
       clickParagraph('para-000001', 5)
       openRibbonTab('Insert')
-      fireEvent.click(screen.getByRole('button', { name: 'Picture' }))
+      fireEvent.click(command('Picture'))
       insertPictureFile()
       await waitFor(() => expect(saveState()).toBe('unsaved'))
       fireEvent.change(field(), { target: { value: 'Hello world typed more' } })
@@ -1473,9 +1478,9 @@ describe('undo across a saved mid-run structure', () => {
     fireEvent.change(field(), { target: { value: 'Hello world typed' } })
     clickParagraph('para-000001', 5)
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Cross-reference' }))
+    fireEvent.click(command('Cross-reference'))
     fireEvent.click(screen.getByRole('option', { name: 'Cited paragraph' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Insert' }))
+    fireEvent.click(command('Insert'))
     await waitFor(() => expect(saveState()).toBe('unsaved'))
     fireEvent.change(field(), { target: { value: 'Hello world typed more' } })
     await clickSaveAndSettle(document, 1)
@@ -1515,7 +1520,7 @@ describe('undo across a saved mid-run structure', () => {
     fireEvent.change(field(), { target: { value: 'Hello world typed' } })
     clickParagraph('para-000001', 5)
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Page number' }))
+    fireEvent.click(command('Page number'))
     await waitFor(() => expect(saveState()).toBe('unsaved'))
     fireEvent.change(field(), { target: { value: 'Hello world typed more' } })
     await clickSaveAndSettle(document, 1)
@@ -1555,11 +1560,11 @@ describe('undo across a saved mid-run structure', () => {
     fireEvent.change(field(), { target: { value: 'Hello world typed' } })
     clickParagraph('para-000001', 5)
     openRibbonTab('Insert')
-    fireEvent.click(screen.getByRole('button', { name: 'Footnote' }))
+    fireEvent.click(command('Footnote'))
     // The insertion opens the notes story with the caret in the folded note
     // body; the note text is part of the same pending batch.
     fireEvent.change(field(), { target: { value: 'A note' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Close footnotes' }))
+    fireEvent.click(command('Close footnotes'))
     clickParagraph('para-000001')
     fireEvent.change(field(), { target: { value: 'Hello world typed more' } })
     await clickSaveAndSettle(document, 1)
@@ -1645,6 +1650,7 @@ function stubImagePicker() {
 
 /** Feeds one real PNG through the ribbon's hidden file input. */
 function insertPictureFile() {
+  fireEvent.click(command('Picture'))
   const input = screen.getByLabelText('Insert picture')
   const bytes = Uint8Array.from(atob(PNG_BASE64), (char) => char.charCodeAt(0))
   const file = new File([bytes], 'figure.png', { type: 'image/png' })

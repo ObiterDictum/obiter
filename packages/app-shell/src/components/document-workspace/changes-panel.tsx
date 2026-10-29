@@ -1,9 +1,17 @@
 import { useState } from 'react'
-import { Check, X } from '@phosphor-icons/react'
-import { Button, DockedPanel, EmptyState, cn } from '@obiter/ui'
+import { Check, ChatText, X } from '@phosphor-icons/react'
+import {
+  Button,
+  DockedPanel,
+  EmptyState,
+  cn,
+  type PanelPopout,
+} from '@obiter/ui'
 import {
   TRACKED_DECISION_MAX_IDS,
-  type DocumentChangeWire,
+  type DocumentComment,
+  type DocumentImportedCommentThread,
+  type DocumentModelWire,
 } from '@obiter/contracts'
 import { formatDateTime } from '../../format'
 import { SegmentedControl } from '../../segmented-control'
@@ -14,140 +22,193 @@ import {
   itemDecidable,
   itemKindLabel,
   itemLead,
+  itemUnpairable,
   reviewCounts,
-  reviewCountsLabel,
-  reviewItems,
   type ReviewItem,
 } from './review-items'
+import {
+  changedWords,
+  reviewRows,
+  rowMatchesFilter,
+  type ReviewFilter,
+  type ReviewRow,
+} from './review-list'
+import { reviewerStyle } from './reviewer-identity'
 import { ReviewBulkBar, ReviewDecisionBar } from './review-bars'
 
-type Filter = 'all' | 'change' | 'move'
-
 /**
- * The review panel: tracked changes and the moves no decision can run on, with
- * the decision bar fixed beneath them. It is presentation and wiring over
- * `useChangeReview` — deciding, the save barriers and the request are the
- * existing review state's, so the panel and the ribbon can never disagree
- * about what a decision means right now.
+ * The review panel: tracked changes, moves and comment threads in one list, in
+ * document order, with the decision bar for the row under review. It is
+ * presentation and wiring over `useChangeReview` — deciding, the save barriers
+ * and the request are that state's, so the panel and the chrome cannot
+ * disagree about what a decision means right now.
  *
- * Selection lives here and nowhere else: it holds row ids, never comment ids,
- * and a bulk decision sends the wire ids of the decidable rows it names.
+ * Selection lives here and nowhere else: it holds row ids of decidable rows,
+ * and a bulk decision sends the wire ids of the rows it names.
  */
 export function DocumentReviewPanel({
   review,
-  commentCount,
+  comments,
+  importedComments,
+  model,
+  currentVersionNumber,
+  onRevealComment,
   onClose,
+  popout,
 }: {
   review: ChangeReview
-  /** Threads in the document; the panel reports them, it does not decide them. */
-  commentCount: number
+  comments: DocumentComment[]
+  importedComments: DocumentImportedCommentThread[]
+  /** The model the locations and context lines are read from. */
+  model?: DocumentModelWire
+  /** The version on screen, named by the bulk rejection's warning. */
+  currentVersionNumber?: number
+  onRevealComment: (comment: DocumentComment) => void
   onClose: () => void
+  popout?: PanelPopout
 }) {
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<ReviewFilter>('all')
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
-  const items = reviewItems(review.changes)
-  const counts = reviewCounts(items)
-  // An undecidable move is pinned above the list: it is the one row a reader
-  // must look at by hand, and burying it among the changes hides the work.
-  const pinned = items.filter(
-    (item) => item.kind === 'move' && !itemDecidable(item),
+  const rows = reviewRows({
+    model,
+    changes: review.changes,
+    comments,
+    importedComments,
+  })
+  const counts = reviewCounts(
+    rows.filter((row) => row.kind === 'change').map((row) => row.item),
   )
-  const ordered = [...pinned, ...items.filter((item) => !pinned.includes(item))]
-  const visible = ordered
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => filter === 'all' || item.kind === filter)
-  const activeIndex = ordered.findIndex((item) =>
-    itemChangeIds(item).includes(review.activeChangeId ?? ''),
+  const commentCount = rows.filter((row) => row.kind === 'comment').length
+  const visible = rows.filter((row) => rowMatchesFilter(row, filter))
+  const activeIndex = rows.findIndex(
+    (row) =>
+      row.kind === 'change' &&
+      itemChangeIds(row.item).includes(review.activeChangeId ?? ''),
   )
-  // Decided rows leave `items`, so a stale id in the selection can no longer
+  const active = activeIndex >= 0 ? rows[activeIndex] : undefined
+  // Decided rows leave the list, so a stale id in the selection can no longer
   // reach a decision: the selection is read through the rows that still exist.
-  const selectedItems = ordered.filter(
-    (item) => selected.has(item.id) && itemDecidable(item),
+  const selectedItems = rows.filter(
+    (row) =>
+      row.kind === 'change' &&
+      row.item &&
+      selected.has(row.id) &&
+      itemDecidable(row.item),
   )
-  const selectedIds = selectedItems.flatMap(itemChangeIds)
+  const selectedIds = selectedItems.flatMap((row) =>
+    row.kind === 'change' ? itemChangeIds(row.item) : [],
+  )
   const selectionReason =
     review.unavailable ??
     (selectedIds.length > TRACKED_DECISION_MAX_IDS
       ? `More than ${String(TRACKED_DECISION_MAX_IDS)} changes must be decided in smaller groups.`
       : null)
   const decideBlocked = review.pending || Boolean(review.unavailable)
-  const barrierNoteId = 'changes-review-unavailable'
-  const lead = activeIndex >= 0 ? ordered[activeIndex] : undefined
+  const bulkActive = selectedItems.length > 0
 
-  function toggle(item: ReviewItem) {
+  function toggle(row: ReviewRow) {
     setSelected((current) => {
       const next = new Set(current)
-      if (next.has(item.id)) next.delete(item.id)
-      else next.add(item.id)
+      if (next.has(row.id)) next.delete(row.id)
+      else next.add(row.id)
       return next
     })
   }
 
-  // Item indexes and change indexes diverge — one row can hold several wire ids
-  // — so navigation goes through the row's leading revision.
-  function goToItem(index: number) {
-    const item = ordered[index]
-    if (!item) return
-    const id = itemLead(item).id
-    review.goTo(review.changes.findIndex((change) => change.id === id))
+  /** Selecting a row reveals it in the document. */
+  function goToRow(row: ReviewRow) {
+    if (row.kind === 'comment') {
+      if (row.imported) return
+      const comment = row.comment
+      // SAFETY: reviewRows sets `imported` false only for product comments,
+      // which are the only ones with an anchor the workspace can reveal.
+      onRevealComment(comment as DocumentComment)
+      return
+    }
+    const id = itemLead(row.item).id
+    const index = review.changes.findIndex((change) => change.id === id)
+    if (index >= 0) review.goTo(index)
   }
 
-  function decideSelected(action: 'accept' | 'reject') {
-    review.decideSelected(action, selectedIds)
+  /** Moves the review to the next row that can be decided or read. */
+  function step(direction: -1 | 1) {
+    const from =
+      activeIndex >= 0 ? activeIndex : direction === 1 ? -1 : rows.length
+    for (
+      let index = from + direction;
+      index >= 0 && index < rows.length;
+      index += direction
+    ) {
+      const row = rows[index]
+      if (!row) continue
+      if (row.kind === 'change' && !itemDecidable(row.item)) continue
+      goToRow(row)
+      return
+    }
   }
 
-  function decideCurrent(action: 'accept' | 'reject') {
-    if (!lead) return
-    review.decideChange(action, itemLead(lead))
+  function decide(action: 'accept' | 'reject') {
+    if (!active || active.kind !== 'change') return
+    review.decideChange(action, itemLead(active.item))
   }
 
   return (
     <DockedPanel
       title="Changes and comments"
       onClose={onClose}
+      popout={popout}
       footer={
-        <div className="flex flex-col gap-3">
-          {selectedItems.length > 0 ? (
-            <ReviewBulkBar
-              // The count is rows — what the reader selected. A paired move is
-              // one change there, though the request names both its halves.
-              count={selectedItems.length}
-              reason={selectionReason}
-              onAccept={() => decideSelected('accept')}
-              onReject={() => decideSelected('reject')}
-              onClear={() => setSelected(new Set())}
-            />
-          ) : null}
+        // One bar at a time: a selection says what the bulk action will do,
+        // and hides the per-change bar that would otherwise sit beside an
+        // enabled-looking Accept for a change the reader did not select.
+        bulkActive ? (
+          <ReviewBulkBar
+            count={selectedItems.length}
+            versionNumber={currentVersionNumber}
+            reason={selectionReason}
+            onAccept={() => review.decideSelected('accept', selectedIds)}
+            onReject={() => review.decideSelected('reject', selectedIds)}
+            onClear={() => setSelected(new Set())}
+          />
+        ) : (
           <ReviewDecisionBar
-            item={lead}
+            item={active?.kind === 'change' ? active.item : undefined}
+            location={active?.location}
             position={activeIndex + 1}
-            total={ordered.length}
-            // The bar carries the shared single-change reason, so a control
-            // that cannot run shows why rather than sitting there disabled.
-            reason={lead ? review.targetUnavailable : null}
+            total={rows.length}
+            reason={
+              review.unavailable ??
+              (active?.kind === 'change' ? review.targetUnavailable : undefined)
+            }
             pending={review.pending}
             canPrevious={activeIndex > 0}
             canNext={
-              activeIndex < 0
-                ? ordered.length > 0
-                : activeIndex < ordered.length - 1
+              activeIndex < 0 ? rows.length > 0 : activeIndex < rows.length - 1
             }
-            onPrevious={() => goToItem(activeIndex - 1)}
-            onNext={() => goToItem(activeIndex + 1)}
-            onAccept={() => decideCurrent('accept')}
-            onReject={() => decideCurrent('reject')}
+            onPrevious={() => step(-1)}
+            onNext={() => step(1)}
+            onAccept={() => decide('accept')}
+            onReject={() => decide('reject')}
           />
-        </div>
+        )
       }
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <p className="text-caption text-muted">
-            {reviewCountsLabel(counts, commentCount)}
+            {counts.changes === 1
+              ? '1 change'
+              : `${String(counts.changes)} changes`}
+            {counts.moves > 0
+              ? ` · ${counts.moves === 1 ? '1 move' : `${String(counts.moves)} moves`}`
+              : ''}
+            {commentCount > 0
+              ? ` · ${commentCount === 1 ? '1 comment' : `${String(commentCount)} comments`}`
+              : ''}
           </p>
-          {counts.moves > 0 || counts.changes > 0 ? (
-            <SegmentedControl<Filter>
-              label="Filter changes and moves"
+          {rows.length > 0 ? (
+            <SegmentedControl<ReviewFilter>
+              label="Filter changes and comments"
               value={filter}
               // A filter that hid a selected row would let a bulk decision run
               // on something the reader cannot see, so changing it clears the
@@ -157,12 +218,20 @@ export function DocumentReviewPanel({
                 setSelected(new Set())
               }}
               options={[
-                { value: 'all', label: `All ${String(ordered.length)}` },
+                { value: 'all', label: `All ${String(rows.length)}` },
                 ...(counts.changes > 0
                   ? [
                       {
                         value: 'change' as const,
                         label: `Changes ${String(counts.changes)}`,
+                      },
+                    ]
+                  : []),
+                ...(commentCount > 0
+                  ? [
+                      {
+                        value: 'comment' as const,
+                        label: `Comments ${String(commentCount)}`,
                       },
                     ]
                   : []),
@@ -178,153 +247,143 @@ export function DocumentReviewPanel({
             />
           ) : null}
         </div>
-        {review.unavailable ? (
-          <p
-            id={barrierNoteId}
-            className="text-caption text-muted"
-            role="status"
-          >
-            {review.unavailable}
-          </p>
-        ) : null}
         {review.error ? (
           <p className="text-caption text-danger" role="alert">
-            The decision was not saved. {review.error}
+            {review.error}
           </p>
         ) : null}
-        {counts.undecidable > counts.manualMoves ? (
-          <p className="text-caption text-muted" role="note">
-            {counts.undecidable - counts.manualMoves === 1
-              ? 'One listed change cannot be decided here; it stays listed and unchanged in the document.'
-              : `${String(counts.undecidable - counts.manualMoves)} listed changes cannot be decided here; they stay listed and unchanged in the document.`}
-          </p>
-        ) : null}
-        {commentCount > 0 ? (
-          <p className="text-caption text-muted max-compact:hidden">
-            {commentCount === 1
-              ? 'One comment thread is read and resolved in the Comments panel.'
-              : `${String(commentCount)} comment threads are read and resolved in the Comments panel.`}
-          </p>
-        ) : null}
-        {review.changes.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState
-            title="No tracked changes"
-            body="Edits saved with tracking on appear here with their author and date."
+            title="Nothing to review"
+            body="Tracked changes and comments appear here in document order."
           />
         ) : visible.length === 0 ? (
           <p className="text-caption text-muted">No rows match this filter.</p>
         ) : (
           <ul className="flex flex-col">
-            {visible.map(({ item, index }) => {
-              const isActive = index === activeIndex
-              const change = item.kind === 'change' ? item.change : undefined
-              const undecidableReason = change
-                ? review.undecidableReason(change)
-                : itemDecidable(item)
-                  ? undefined
-                  : 'This move cannot be decided here; it stays listed and unchanged in the document.'
-              const noteId = `review-item-${item.id}`
-              const describedBy =
-                [
-                  undecidableReason ? noteId : null,
-                  decideBlocked ? barrierNoteId : null,
-                ]
-                  .filter((id): id is string => id !== null)
-                  .join(' ') || undefined
+            {visible.map((row) => {
+              const isActive = row === active
+              const noteId = `review-row-${row.id}`
+              if (row.kind === 'comment') {
+                return (
+                  <CommentRow
+                    key={row.id}
+                    row={row}
+                    active={isActive}
+                    onOpen={() => goToRow(row)}
+                  />
+                )
+              }
+              const undecidable = !itemDecidable(row.item)
+              // A move no decision can run on is one row that says who, what
+              // moved and why it cannot be decided here — not a move row with
+              // a second "moved from" line and a pair of dead buttons.
+              const unpairable = itemUnpairable(row.item)
+              const leadChange = itemLead(row.item)
+              const reason = undecidable
+                ? (review.undecidableReason(leadChange) ??
+                  (leadChange.kind === 'move'
+                    ? "This move's two halves could not be paired here, so it cannot be decided. It stays listed and unchanged in the document."
+                    : 'This change cannot be decided here; it stays listed and unchanged in the document.'))
+                : undefined
+              const barrierReason =
+                (decideBlocked ? review.unavailable : null) ?? undefined
+              const lead = itemLead(row.item)
+              const style = reviewerStyle(lead.author)
               return (
                 <li
-                  key={item.id}
+                  key={row.id}
                   aria-current={isActive ? 'true' : undefined}
                   className={cn(
                     'flex gap-2 border-t border-line py-3 first:border-t-0',
                     isActive && 'rounded-md bg-raised px-2',
-                    item.kind === 'move' &&
-                      !itemDecidable(item) &&
-                      'bg-warning-soft px-2',
+                    undecidable && 'bg-warning-soft px-2',
                   )}
                 >
                   <div className="flex w-5 shrink-0 items-start justify-center pt-0.5">
-                    {itemDecidable(item) ? (
+                    {undecidable ? null : (
                       <input
                         type="checkbox"
                         className="size-3.5 accent-brand"
-                        checked={selected.has(item.id)}
-                        aria-label={`Select the ${itemKindLabel(item).toLowerCase()} by ${itemLead(item).author ?? 'an unknown author'}`}
-                        onChange={() => toggle(item)}
+                        checked={selected.has(row.id)}
+                        aria-label={`Select the ${itemKindLabel(row.item).toLowerCase()} by ${lead.author ?? 'an unknown author'}`}
+                        onChange={() => toggle(row)}
                       />
-                    ) : null}
+                    )}
                   </div>
-                  <span
-                    aria-hidden="true"
-                    className="w-4 shrink-0 text-caption tabular-nums text-subtle"
-                  >
-                    {index + 1}
-                  </span>
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <button
                       type="button"
-                      className="flex flex-col gap-1 text-left"
+                      className="flex min-w-0 flex-col gap-1 text-left"
                       aria-label={
                         isActive ? 'Current change' : 'Show this change'
                       }
-                      onClick={() => goToItem(index)}
+                      onClick={() => goToRow(row)}
                     >
-                      <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-item text-ink">
-                          {itemLead(item).author ?? 'Unknown author'}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          data-reviewer={style.slot}
+                          className={cn(
+                            'inline-flex size-5 shrink-0 items-center justify-center rounded-full text-caption font-medium',
+                            style.surface,
+                            style.text,
+                          )}
+                          aria-hidden
+                        >
+                          {style.initials}
                         </span>
-                        <span className="shrink-0 text-caption text-subtle">
-                          {itemDate(item)}
+                        <span className="min-w-0 truncate text-item text-ink">
+                          {lead.author ?? 'Unknown author'}
+                        </span>
+                        <span className="ms-auto shrink-0 text-caption text-subtle">
+                          {lead.date ? formatDateTime(lead.date) : 'No date'}
                         </span>
                       </span>
                       <span className="text-caption text-subtle">
-                        {itemKindLabel(item)}
+                        {unpairable
+                          ? itemKindLabel(row.item)
+                          : `${row.location} · ${itemKindLabel(row.item)}`}
                       </span>
-                      <ReviewText item={item} />
+                      <ChangeText item={row.item} />
+                      {row.context && !unpairable ? (
+                        <span className="truncate text-caption text-muted">
+                          {row.context}
+                        </span>
+                      ) : null}
                     </button>
-                    {undecidableReason ? (
+                    {reason ? (
                       <p
                         id={noteId}
                         className="text-caption text-muted"
                         role="note"
                       >
-                        {/* At 1024 the pinned explanation, the list and the two
-                            bars share 768px of height, so the note keeps its
-                            first sentence there and the full one above. */}
-                        <span className="max-compact:hidden">
-                          {undecidableReason}
-                        </span>
-                        <span className="hidden max-compact:inline">
-                          {compactNote(undecidableReason)}
-                        </span>
+                        {reason}
                       </p>
                     ) : null}
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={decideBlocked || Boolean(undecidableReason)}
-                        aria-describedby={describedBy}
-                        onClick={() =>
-                          review.decideChange('reject', itemLead(item))
-                        }
-                        iconStart={<X size={12} aria-hidden />}
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={decideBlocked || Boolean(undecidableReason)}
-                        aria-describedby={describedBy}
-                        onClick={() =>
-                          review.decideChange('accept', itemLead(item))
-                        }
-                        iconStart={<Check size={12} aria-hidden />}
-                      >
-                        Accept
-                      </Button>
-                    </div>
+                    {unpairable ? null : (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={decideBlocked || Boolean(reason)}
+                          title={reason ?? barrierReason}
+                          onClick={() => review.decideChange('reject', lead)}
+                          iconStart={<X size={12} aria-hidden />}
+                        >
+                          Reject
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={decideBlocked || Boolean(reason)}
+                          title={reason ?? barrierReason}
+                          onClick={() => review.decideChange('accept', lead)}
+                          iconStart={<Check size={12} aria-hidden />}
+                        >
+                          Accept
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </li>
               )
@@ -336,47 +395,95 @@ export function DocumentReviewPanel({
   )
 }
 
-/** The note's first clause: at 1024 the rail has room for one line. */
-function compactNote(reason: string) {
-  const [first = reason] = reason.split(/[.;]/u)
-  return `${first}.`
-}
-
-function itemDate(item: ReviewItem) {
-  const date = itemLead(item).date
-  return date ? formatDateTime(date) : 'No date'
-}
-
-/** The change itself, marked the way the page marks it: a deletion struck, an
- * insertion underlined, a move by the side it came from or arrived at. */
-function ReviewText({ item }: { item: ReviewItem }) {
-  const change: DocumentChangeWire = itemLead(item)
-  if (item.kind === 'move' && item.members.length > 1)
-    return <MoveText change={change} />
-  if (!change.text) {
-    return <span className="text-body text-muted">Property change</span>
-  }
-  const deleted =
-    change.kind === 'delete' ||
-    (change.kind === 'move' && change.direction === 'from')
+function CommentRow({
+  row,
+  active,
+  onOpen,
+}: {
+  row: Extract<ReviewRow, { kind: 'comment' }>
+  active: boolean
+  onOpen: () => void
+}) {
+  const comment = row.comment
+  const resolved =
+    'resolvedAt' in comment ? comment.resolvedAt !== null : comment.resolved
+  const author =
+    typeof comment.author === 'string'
+      ? comment.author
+      : (comment.author?.name ?? 'Unknown author')
+  const style = reviewerStyle(author)
+  const body = 'body' in comment ? comment.body : ''
   return (
-    <span
+    <li
+      aria-current={active ? 'true' : undefined}
       className={cn(
-        'text-body break-words whitespace-pre-wrap',
-        deleted ? 'text-danger line-through' : 'text-success underline',
+        'flex flex-col gap-1 border-t border-line py-3 first:border-t-0',
+        resolved && 'opacity-70',
       )}
     >
-      {labelledBreaks(change.text)}
-    </span>
+      <button
+        type="button"
+        className="flex min-w-0 flex-col gap-1 text-left"
+        aria-label={
+          row.imported ? 'Comment from the Word file' : 'Show this comment'
+        }
+        onClick={row.imported ? undefined : onOpen}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span
+            data-reviewer={style.slot}
+            className={cn(
+              'inline-flex size-5 shrink-0 items-center justify-center rounded-full text-caption font-medium',
+              style.surface,
+              style.text,
+            )}
+            aria-hidden
+          >
+            {style.initials}
+          </span>
+          <span className="min-w-0 truncate text-item text-ink">{author}</span>
+          <span className="ms-auto shrink-0 text-caption text-subtle">
+            <ChatText size={12} aria-hidden /> Comment
+          </span>
+        </span>
+        <span className="text-caption text-subtle">
+          {row.location}
+          {resolved ? ' · resolved' : ''}
+          {row.imported ? ' · from the Word file' : ''}
+        </span>
+        <span className="whitespace-pre-wrap text-body text-ink">
+          {changedWords(body, 160)}
+        </span>
+        {row.context ? (
+          <span className="truncate text-caption text-muted">
+            {row.context}
+          </span>
+        ) : null}
+      </button>
+    </li>
   )
 }
 
-/** A paired move reads as one line: the text that travelled. */
-function MoveText({ change }: { change: DocumentChangeWire }) {
+/** The changed words themselves, marked the way the page marks them. */
+function ChangeText({ item }: { item: ReviewItem }) {
+  const lead = itemLead(item)
+  if (!lead.text) {
+    return <span className="text-body text-muted">Formatting</span>
+  }
+  const deleted =
+    lead.kind === 'delete' ||
+    (lead.kind === 'move' && lead.direction === 'from')
+  const style = reviewerStyle(lead.author)
   return (
-    <span className="text-body break-words whitespace-pre-wrap text-ink">
-      <span className="text-muted">Moved: </span>
-      {labelledBreaks(change.text)}
+    <span
+      data-reviewer={style.slot}
+      className={cn(
+        'text-body break-words whitespace-pre-wrap',
+        style.text,
+        deleted ? 'line-through' : 'underline',
+      )}
+    >
+      {labelledBreaks(changedWords(lead.text))}
     </span>
   )
 }

@@ -28,6 +28,8 @@ export interface ButtonProps {
   'aria-label'?: string
   'aria-pressed'?: boolean
   'aria-describedby'?: string
+  /** Native tooltip text: a short reason a control is disabled, and the like. */
+  title?: string
   'data-testid'?: string
 }
 

@@ -8,13 +8,18 @@ export const documentRedactionRunsId = 'document-redaction-runs'
 
 export function revealDocumentRedactionRuns(): void {
   if (typeof document === 'undefined') return
-  const region = document.getElementById(documentRedactionRunsId)
-  if (!region) return
-  // jsdom, the test DOM, has no layout and does not implement scrollIntoView.
-  if (typeof region.scrollIntoView === 'function') {
-    region.scrollIntoView({ block: 'center' })
-  }
-  region.focus({ preventScroll: true })
+  // The command is a menu row: the menu closes after it runs and hands focus
+  // back to its trigger, so the reveal lands on the next frame — after that
+  // restoration, not before it.
+  requestAnimationFrame(() => {
+    const region = document.getElementById(documentRedactionRunsId)
+    if (!region) return
+    // jsdom, the test DOM, has no layout and does not implement scrollIntoView.
+    if (typeof region.scrollIntoView === 'function') {
+      region.scrollIntoView({ block: 'center' })
+    }
+    region.focus({ preventScroll: true })
+  })
 }
 
 /**
@@ -37,11 +42,15 @@ const TYPED_TEXT_FIELD =
  */
 export function refocusCaret(): void {
   if (typeof document === 'undefined') return
-  document
-    .querySelector<HTMLElement>(
+  // The caret's own paragraph first. An edit that replaced that paragraph
+  // (a deletion selecting its neighbour, a footnote opening its story) marks
+  // the new one on the next commit, so fall back to the paragraph on screen
+  // rather than leaving focus on the control that ran the command.
+  const field =
+    document.querySelector<HTMLElement>(
       '[data-paragraph-id][aria-current="true"] textarea',
-    )
-    ?.focus({ preventScroll: true })
+    ) ?? document.querySelector<HTMLElement>('[data-paragraph-id] textarea')
+  field?.focus({ preventScroll: true })
 }
 
 /**

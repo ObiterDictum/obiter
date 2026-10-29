@@ -432,11 +432,7 @@ beforeEach(() => {
   window.sessionStorage.clear()
 })
 
-export function openRibbonTab(
-  name: 'Home' | 'Insert' | 'Layout' | 'References' | 'Review' | 'View',
-) {
-  fireEvent.click(screen.getByRole('tab', { name }))
-}
+export { command, commandOrNull, commandPrefix } from './editor-test-commands'
 
 export function selectBodyParagraph(text = 'Hello') {
   fireEvent.click(screen.getByText(text))

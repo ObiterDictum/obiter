@@ -3,6 +3,13 @@ import { focusParagraph, saveAndWait } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  closeMenu,
+  menuItem,
+  openMenu,
+  openRibbonTab,
+  runMenuCommand,
+} from './editor-chrome'
 
 /*
  * E7c regression journey: a save that stores a page break and a table of
@@ -29,12 +36,12 @@ function shot(page: Page, name: string) {
 const save = (page: Page) =>
   page.getByRole('button', { name: 'Save', exact: true })
 const tocButton = (page: Page) =>
-  page.getByRole('button', { name: /Table of contents/ })
+  page.getByRole('menuitem', { name: 'Table of contents', exact: true })
 const headingParagraphs = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: HEADING })
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'References') {
-  await page.getByRole('tab', { name, exact: true }).first().click()
+  await openRibbonTab(page, name)
 }
 
 test.use({ viewport: { width: 1440, height: 900 } })
@@ -50,14 +57,15 @@ test('a typed edit beside a stored table of contents and page break saves and re
 
   // Two headings so the field lists real entries, and a page break so the
   // body paginates onto a second sheet.
-  await openRibbon(page, 'Home')
-  await focusParagraph(page, HEADING)
-  await page.getByRole('button', { name: 'Heading 1' }).click()
-  await focusParagraph(page, 'Beta paragraph')
-  await page.getByRole('button', { name: 'Heading 1' }).click()
+  for (const text of [HEADING, 'Beta paragraph']) {
+    await focusParagraph(page, text)
+    await openMenu(page, 'Format')
+    await menuItem(page, 'Heading 1').click()
+    await closeMenu(page)
+  }
   await focusParagraph(page, 'Delta paragraph')
   await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Page break' }).click()
+  await runMenuCommand(page, 'Insert', 'Page break')
 
   // Place the field in the first sheet's flow; the break and the field
   // store in one save.

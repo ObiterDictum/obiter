@@ -3,6 +3,7 @@ import { focusParagraph, saveAndWait } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fixturePath } from './support'
+import { choose, openFormatting, selectedValue } from './editor-chrome'
 
 /*
  * E3 browser journey: Align, Line spacing and Indent must agree end to end.
@@ -28,9 +29,8 @@ function shot(page: Page, name: string) {
 
 const alignCentre = (page: Page) =>
   page.getByRole('button', { name: 'Align centre' })
-const lineSpacing = (page: Page) =>
-  page.getByLabel('Line spacing', { exact: true })
-const indent = (page: Page) => page.getByLabel('Indent', { exact: true })
+const lineSpacing = (page: Page) => selectedValue(page, 'Line spacing')
+const indent = (page: Page) => selectedValue(page, 'Indent')
 
 /** The inline paragraph layout the browser paints on the target block. */
 async function paragraphStyle(page: Page, text: string) {
@@ -76,12 +76,12 @@ test('align, line spacing and indent paint, save, and reload from a fresh contex
 
   await alignCentre(page).click()
   await expect(alignCentre(page)).toHaveAttribute('aria-pressed', 'true')
-  await lineSpacing(page).selectOption('1.5')
-  await expect(lineSpacing(page)).toHaveValue('1.5')
+  await choose(page, 'Line spacing', '1.5')
+  await expect(lineSpacing(page)).toHaveText('1.5')
 
-  await page.getByRole('tab', { name: 'Layout' }).click()
-  await indent(page).selectOption('first')
-  await expect(indent(page)).toHaveValue('first')
+  await openFormatting(page)
+  await choose(page, 'Indent', 'First line')
+  await expect(indent(page)).toHaveText('First line')
 
   // The chosen options and the painted paragraph agree: centred text, a 1.5
   // line box, and Word's half-inch first-line indent (720 twips = 48px).
@@ -114,9 +114,9 @@ test('align, line spacing and indent paint, save, and reload from a fresh contex
     await openFixtureDocument(reloaded, email, password, matter, fixturePath())
     await focusParagraph(reloaded, HEADING)
     await expect(alignCentre(reloaded)).toHaveAttribute('aria-pressed', 'true')
-    await expect(lineSpacing(reloaded)).toHaveValue('1.5')
-    await reloaded.getByRole('tab', { name: 'Layout' }).click()
-    await expect(indent(reloaded)).toHaveValue('first')
+    await openFormatting(reloaded)
+    await expect(lineSpacing(reloaded)).toHaveText('1.5')
+    await expect(indent(reloaded)).toHaveText('First line')
 
     const reloadedStyle = await paragraphStyle(reloaded, HEADING)
     expect(reloadedStyle?.textAlign).toBe('center')

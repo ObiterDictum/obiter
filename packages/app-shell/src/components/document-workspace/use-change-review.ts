@@ -16,7 +16,6 @@ import { refocusCaretBeforeFlight } from './document-actions'
 import type { useDocumentSave } from './use-document-save'
 import type { useEditingStory } from './use-editing-story'
 import type { WorkspaceDrafts } from './use-workspace-drafts'
-import { mutationError } from './workspace-chrome'
 
 type DecisionMutation = Pick<
   ReturnType<typeof useTrackedChangeDecision>,
@@ -131,7 +130,7 @@ export function useChangeReview({
       : status === 'blocked'
         ? 'The edit history is blocked; resolve it before deciding changes.'
         : status === 'stale'
-          ? 'The document changed on the server; reload before deciding changes.'
+          ? 'Reload before deciding changes.'
           : status === 'failed'
             ? 'The last save failed; resolve it before deciding changes.'
             : save.editsPending
@@ -276,7 +275,10 @@ export function useChangeReview({
     )?.id,
     activeIndex,
     pending: decision.isPending,
-    error: mutationError(decision.error),
+    // The server's wording ("unexpected error response") names the transport,
+    // not what the reader can do; the banner and the retry are the same either
+    // way, so the panel says the one thing that is actionable.
+    error: decision.error ? "Your decision wasn't saved. Try again." : null,
     /** Why no decision can run right now, or null when one can. */
     unavailable,
     /** Why a bulk decision is unavailable (barrier or the request cap). */

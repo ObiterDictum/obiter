@@ -6,6 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { mockSession } from './shell-harness'
+import { openFormatting, setTrackChanges } from './editor-chrome'
 
 /*
  * E53 browser journey: Strikethrough, Highlight, Superscript and Subscript
@@ -78,9 +79,7 @@ async function expectPressedAgreesWithPaint(page: Page, text: string) {
 }
 
 async function enableTracking(page: Page) {
-  await page.getByRole('tab', { name: 'Review' }).click()
-  await page.getByRole('button', { name: 'Track changes off' }).click()
-  await page.getByRole('tab', { name: 'Home' }).click()
+  await setTrackChanges(page, true)
 }
 
 type EditBody = {
@@ -113,6 +112,7 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
 
   await selectFirst(page, HEADING, SELECTED.length)
 
+  await openFormatting(page)
   await page.getByRole('button', { name: 'Strikethrough' }).click()
   await page.getByRole('button', { name: 'Highlight' }).click()
   await page.getByRole('button', { name: 'Superscript' }).click()
@@ -174,6 +174,7 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter, fixturePath())
+    await openFormatting(reloaded)
     await selectFirst(reloaded, HEADING, SELECTED.length)
     await expect(
       reloaded.getByRole('button', { name: 'Strikethrough' }),
@@ -216,6 +217,7 @@ test('queues partial character formatting under track changes and saves it', asy
 
   await enableTracking(page)
   await selectFirst(page, HEADING, SELECTED.length)
+  await openFormatting(page)
 
   // A tracked range split is recorded as a w:rPrChange, so every character
   // control stays available and queues a draft instead of refusing.
@@ -545,6 +547,7 @@ test('tracked property history never paints, presses or saves as current', async
   expect(before?.fontWeight).toBe('700')
 
   await selectFirst(page, TRACKED_TEXT, TRACKED_SELECTED.length)
+  await openFormatting(page)
   for (const label of [
     'Bold',
     'Strikethrough',
@@ -610,6 +613,7 @@ test('tracked property history never paints, presses or saves as current', async
   // carry exactly 'Plain'.
   await openTrackedDocument(page)
   await selectFirst(page, TRACKED_TEXT, TRACKED_SELECTED.length)
+  await openFormatting(page)
   const reopened = await paintedStyle(page, TRACKED_SELECTED)
   expect(reopened?.textDecoration).toContain('line-through')
   expect(reopened?.fontWeight).toBe('700')

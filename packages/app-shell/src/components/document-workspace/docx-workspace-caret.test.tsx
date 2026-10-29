@@ -1,12 +1,13 @@
 import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
+import { openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
-  openRibbonTab,
   paragraph,
   rerenderWorkspace,
+  command,
 } from './docx-workspace-harness'
 
 describe('DocxWorkspace vertical caret delivery', () => {
@@ -33,7 +34,7 @@ describe('DocxWorkspace vertical caret delivery', () => {
     fireEvent.click(screen.getByText('A'.repeat(40)))
     // A pending insert sits between p1 and p2; the vertical move crosses into
     // a destination that never mounts a ParagraphEditor.
-    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.click(command('Insert paragraph'))
     fireEvent.click(screen.getByText('A'.repeat(40)))
     const editor = field()
     editor.focus()
@@ -46,7 +47,7 @@ describe('DocxWorkspace vertical caret delivery', () => {
     fireEvent.change(screen.getByLabelText('Find in document'), {
       target: { value: marker },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Next match' }))
+    fireEvent.click(command('Next match'))
     const found = field()
     expect(found.selectionStart).toBe(5)
 
