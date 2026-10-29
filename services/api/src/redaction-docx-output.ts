@@ -1,23 +1,33 @@
+import { assertNoSpanTextSurvives } from './redaction-docx-residual'
+import { mapDocxText } from './redaction-docx-map'
+import { RedactionDocxBurnError } from './redaction-docx-error'
+import { prepareDocxForBurn } from './redaction-docx-xml'
 import JSZip from 'jszip'
 import {
-  applyRunTextReplacementRange,
   loadOoxmlZipEntries,
   parseDocx,
+  parseXmlElements,
   serialiseDocx,
-  type RunEmphasis,
-  type RunTextReplacement,
+  type OoxmlPackageLimits,
 } from '@obiter/ooxml'
+import {
+  burnMappedNodes,
+  normaliseRenderCharacters,
+  scrubBurnedFields,
+  scrubAcceptedMetadata,
+  type BurnRange,
+} from './redaction-docx-burn'
 import {
   affectsOutput,
   coalesceRanges,
   RedactionSpanIntegrityError,
   type Decisions,
-  type RedactionRange,
   type RedactionSpan,
   type TokenMap,
 } from '@obiter/redaction-policy'
 
 export interface RedactedDocxInput {
+  ooxmlLimits?: OoxmlPackageLimits
   docxBytes: Buffer
   text: string
   spans: RedactionSpan[]
@@ -26,63 +36,40 @@ export interface RedactedDocxInput {
   tokenMap: TokenMap
 }
 
-/**
- * Thrown when a .docx cannot be burned safely. Finalize catches this and
- * falls back to text output (which carries no OOXML container, so delText,
- * metadata, comments, and embedded parts cannot leak through it).
- */
-export class RedactionDocxBurnError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'RedactionDocxBurnError'
-  }
-}
-
-const REDACTABLE_STORY_KINDS = new Set([
-  'document',
-  'header',
-  'footer',
-  'footnotes',
-  'endnotes',
-])
-
-/**
- * The harmless marker is written first, then styled as a solid black bar at
- * run level. Because the source text is already gone, removing this styling
- * (or copying the content) can only ever reveal `[REDACTED]`.
- */
-const BLACK_BAR_EMPHASIS: RunEmphasis = { highlight: 'black', colour: '000000' }
+export { RedactionDocxBurnError } from './redaction-docx-error'
 
 function replacementForSpan(
   span: RedactionSpan,
   outputMode: RedactedDocxInput['outputMode'],
-  tokenMap: TokenMap,
+  tokensByEntity: ReadonlyMap<string, string>,
 ) {
   if (outputMode === 'redacted') return '[REDACTED]'
-  const tokensByEntity = new Map(
-    Object.entries(tokenMap).map(([token, value]) => [
-      `${token.slice(0, token.lastIndexOf('_'))?.toLowerCase()}:${value}`,
-      token,
-    ]),
-  )
   const token = tokensByEntity.get(`${span.category}:${span.text}`)
   if (!token)
     throw new RedactionDocxBurnError(`Missing pseudonym token for redaction.`)
   return `[${token}]`
 }
 
-/**
- * Burn accepted redaction spans into a .docx, keeping styles and structure
- * intact: covered w:t content is replaced with [REDACTED] / [TOKEN] inside
- * the existing runs (split at span boundaries via the editor's
- * applyRunTextReplacementRange, which shares the locateOffset / runPieceXml
- * split machinery of range formatting), while document metadata authorship
- * fields are emptied. Fails closed (throws RedactionDocxBurnError) when any
- * accepted span text survives anywhere in the package.
- */
+/** Burn with Redact-owned XML replacements, then refuse any residual span text. */
 export async function buildRedactedDocx(
   input: RedactedDocxInput,
 ): Promise<Uint8Array> {
+  try {
+    return await burnRedactedDocx(input)
+  } catch (error) {
+    if (
+      error instanceof RedactionDocxBurnError ||
+      error instanceof RedactionSpanIntegrityError
+    )
+      throw error
+    // Never return uncertain bytes or expose parser/provider internals to callers.
+    throw new RedactionDocxBurnError(
+      'The document could not be redacted safely.',
+    )
+  }
+}
+
+async function burnRedactedDocx(input: RedactedDocxInput): Promise<Uint8Array> {
   const affected = input.spans.filter((span) =>
     affectsOutput(input.decisions[span.id]),
   )
@@ -91,110 +78,126 @@ export async function buildRedactedDocx(
       throw new RedactionSpanIntegrityError(span.id)
     }
   }
+  const tokensByEntity = new Map(
+    Object.entries(input.tokenMap).map(([token, value]) => [
+      `${token.slice(0, token.lastIndexOf('_'))?.toLowerCase()}:${value}`,
+      token,
+    ]),
+  )
   const replacements = new Map(
     affected.map((span) => [
       span.id,
-      replacementForSpan(span, input.outputMode, input.tokenMap),
+      replacementForSpan(span, input.outputMode, tokensByEntity),
     ]),
   )
 
   let document
+  const prepared = await prepareDocxForBurn(input.docxBytes, input.ooxmlLimits)
   try {
-    document = await parseDocx(Uint8Array.from(input.docxBytes))
+    document = await parseDocx(prepared, { limits: input.ooxmlLimits })
   } catch {
     throw new RedactionDocxBurnError('The source document could not be read.')
   }
 
-  for (const story of document.model.stories) {
-    if (
-      story.kind === 'comments' &&
-      story.paragraphs.some((p) => p.runs.some((r) => r.text.trim() !== ''))
-    ) {
-      throw new RedactionDocxBurnError(
-        'The source contains comments, which redaction does not cover.',
-      )
-    }
-  }
-
-  // Tracked-change content (w:delText, deleted/moved w:t) is excluded from
-  // the document model and from extracted text, so spans can never address
-  // it. Refuse when it carries redacted text, in either direction: the
-  // change holding the whole span (residual copy survives the burn), or the
-  // change holding part of an accepted span ("Alice" in a w:del while
-  // "Alice Smith" burns to [REDACTED] still discloses the first name).
-  // The partial direction needs a floor — single characters of revision
-  // residue disclose nothing — so only subsumed changes of at least a few
-  // non-whitespace characters refuse. The text fallback carries no tracked
-  // changes, so refusing here cannot leak.
-  // Minimum subsumed revision text that still discloses something worth
-  // refusing over (first names and longer); shorter residue is noise.
-  const MIN_PARTIAL_TRACKED_CHARS = 4
-  for (const change of document.trackedChanges.values()) {
-    if (!change.wire.text) continue
-    const hit = affected.find((span) => {
-      if (!span.text) return false
-      if (change.wire.text.includes(span.text)) return true
-      return (
-        change.wire.text.replace(/\s+/gu, '').length >=
-          MIN_PARTIAL_TRACKED_CHARS && span.text.includes(change.wire.text)
-      )
-    })
-    if (hit) {
-      throw new RedactionDocxBurnError(
-        `The source holds redacted text inside a tracked change (${change.wire.elementName}), which redaction does not cover.`,
-      )
-    }
-  }
-
-  for (const story of document.model.stories) {
-    if (!REDACTABLE_STORY_KINDS.has(story.kind)) continue
-    for (const paragraph of story.paragraphs) {
-      const anchor = document.paragraphAnchors.get(paragraph.id)
-      if (!anchor) continue
-      const paragraphText = anchor.runs.map((run) => run.wire.text).join('')
-      if (!paragraphText) continue
-      const occurrences: Array<RedactionRange & { replacement: string }> = []
-      for (const span of affected) {
-        if (!span.text) continue
-        const replacement = replacements.get(span.id) ?? '[REDACTED]'
-        let cursor = 0
-        for (;;) {
-          const index = paragraphText.indexOf(span.text, cursor)
-          if (index === -1) break
-          occurrences.push({
-            start: index,
-            end: index + span.text.length,
-            spanId: span.id,
-            replacement,
-          })
-          cursor = index + span.text.length
-        }
+  const sourceEntries = await loadOoxmlZipEntries(
+    Buffer.from(prepared),
+    input.ooxmlLimits,
+  )
+  const mapped = mapDocxText(sourceEntries)
+  for (const partName of new Set(mapped.nodes.map((node) => node.partName))) {
+    const part = document.sourceParts.get(partName)
+    if (part && !part.overlay)
+      part.overlay = {
+        source: new TextDecoder('utf-8', { fatal: true }).decode(
+          part.originalPayload,
+        ),
+        replacements: new Map(),
       }
-      // Redacted output coalesces adjacent occurrences into one bar per
-      // paragraph. Pseudonymised output keeps one token per span so distinct
-      // tokens are never absorbed into a shared bar.
-      const hits: RunTextReplacement[] =
-        input.outputMode === 'redacted'
-          ? coalesceRanges(paragraphText, occurrences).map((region) => ({
-              from: region.start,
-              to: region.end,
-              text: '[REDACTED]',
-              emphasis: BLACK_BAR_EMPHASIS,
-            }))
-          : occurrences.map((occurrence) => ({
-              from: occurrence.start,
-              to: occurrence.end,
-              text: occurrence.replacement,
-            }))
-      if (hits.length > 0) {
-        applyRunTextReplacementRange(document, anchor, hits)
-      }
-    }
   }
-
+  // Legacy Mammoth runs are usable only when their complete stored text agrees.
+  // Never realign by searching: duplicates make that intrinsically ambiguous.
+  if (mapped.text !== input.text.trim())
+    throw new RedactionDocxBurnError(
+      'Stored extraction coordinates differ from the Word document; create a new redaction run from a fresh upload.',
+      'legacy_coordinates',
+    )
+  const leading = input.text.length - input.text.trimStart().length
+  for (const node of mapped.nodes) {
+    node.start += leading
+    node.end += leading
+  }
+  const ranges = affected.map((span) => ({
+    start: span.start,
+    end: span.end,
+    spanId: span.id,
+  }))
+  const hits: BurnRange[] =
+    input.outputMode === 'redacted'
+      ? coalesceRanges(input.text, ranges).map((range) => ({
+          from: range.start,
+          to: range.end,
+          text: '[REDACTED]',
+          black: true,
+        }))
+      : affected.map((span) => ({
+          from: span.start,
+          to: span.end,
+          text: replacements.get(span.id) ?? '[REDACTED]',
+        }))
+  const union: BurnRange[] = []
+  for (const hit of hits.sort((a, b) => a.from - b.from || b.to - a.to)) {
+    const previous = union.at(-1)
+    if (previous && hit.from < previous.to)
+      previous.to = Math.max(previous.to, hit.to)
+    else union.push({ ...hit })
+  }
+  const burned = burnMappedNodes(document, mapped.nodes, union)
+  scrubBurnedFields(
+    document,
+    burned,
+    affected.map((span) => span.text),
+  )
+  scrubAcceptedMetadata(
+    document,
+    affected.map((span) => span.text),
+  )
+  if (input.outputMode === 'redacted')
+    normaliseRenderCharacters(document, mapped.nodes)
   const serialised = await serialiseDocx(document)
+  const writtenParts = await loadOoxmlZipEntries(
+    Buffer.from(serialised),
+    input.ooxmlLimits,
+  )
+  // Independent output proof: rebuild reviewed text from the emitted package
+  // and compare it to offset edits, including preserved synthetic separators.
+  const edits: Array<{ start: number; end: number; value: string }> = []
+  const emitted = new Set<BurnRange>()
+  let firstSpan = 0
+  for (const node of mapped.nodes) {
+    while ((union[firstSpan]?.to ?? Infinity) <= node.start) firstSpan++
+    for (let i = firstSpan; i < union.length; i++) {
+      const span = union[i]
+      if (!span || span.from >= node.end) break
+      const start = Math.max(node.start, span.from)
+      const end = Math.min(node.end, span.to)
+      if (start >= end) continue
+      edits.push({ start, end, value: emitted.has(span) ? '' : span.text })
+      emitted.add(span)
+    }
+  }
+  let expected = ''
+  let cursor = 0
+  for (const edit of edits) {
+    expected += input.text.slice(cursor, edit.start) + edit.value
+    cursor = edit.end
+  }
+  expected += input.text.slice(cursor)
+  if (mapDocxText(writtenParts).text !== expected.trim())
+    throw new RedactionDocxBurnError(
+      'The emitted document does not match the accepted redaction coordinates.',
+    )
   const stripped = await stripDocumentAuthorship(serialised)
-  assertNoSpanTextSurvives(stripped, affected)
+  await assertNoSpanTextSurvives(stripped, affected, input.ooxmlLimits)
   return stripped
 }
 
@@ -214,23 +217,37 @@ export async function buildRedactedDocx(
  */
 async function stripDocumentAuthorship(input: Uint8Array) {
   const zip = await JSZip.loadAsync(input)
-  const scrubs: Array<[RegExp, string]> = [
-    [/(<[^>]*\bcreator[^>]*>)[\s\S]*?(<\/[^>]*>)/i, 'docProps/core.xml'],
-    [/(<[^>]*\blastModifiedBy[^>]*>)[\s\S]*?(<\/[^>]*>)/i, 'docProps/core.xml'],
+  const scrubs = new Map([
     [
-      /(<[^>]*\b(?:title|subject|keywords|description|category|contentStatus)[^>]*>)[\s\S]*?(<\/[^>]*>)/gi,
       'docProps/core.xml',
+      new Set([
+        'creator',
+        'lastModifiedBy',
+        'title',
+        'subject',
+        'keywords',
+        'description',
+        'category',
+        'contentStatus',
+      ]),
     ],
-    [/(<Company[^>]*>)[\s\S]*?(<\/Company[^>]*>)/, 'docProps/app.xml'],
-    [/(<Manager[^>]*>)[\s\S]*?(<\/Manager[^>]*>)/, 'docProps/app.xml'],
-    [/(<Template[^>]*>)[\s\S]*?(<\/Template[^>]*>)/, 'docProps/app.xml'],
-  ]
-  for (const [pattern, partName] of scrubs) {
+    ['docProps/app.xml', new Set(['Company', 'Manager', 'Template'])],
+  ])
+  for (const [partName, names] of scrubs) {
     const file = zip.file(partName)
     if (!file) continue
-    const xml = await file.async('string')
-    if (!pattern.test(xml)) continue
-    zip.file(partName, xml.replace(pattern, '$1$2'))
+    const source = await file.async('string')
+    const ranges = parseXmlElements(source).filter(
+      (element) => names.has(element.localName) && !element.selfClosing,
+    )
+    let result = ''
+    let cursor = 0
+    for (const element of ranges) {
+      if (element.startTagEnd < cursor) continue
+      result += source.slice(cursor, element.startTagEnd)
+      cursor = element.endTagStart
+    }
+    zip.file(partName, result + source.slice(cursor))
   }
   if (zip.file('docProps/custom.xml')) {
     zip.file(
@@ -260,31 +277,6 @@ async function stripDocumentAuthorship(input: Uint8Array) {
     if (stripped !== xml) zip.file('[Content_Types].xml', stripped)
   }
   return zip.generateAsync({ type: 'uint8array' })
-}
-
-/**
- * Fail-closed gate over the whole container: every part's raw bytes must be
- * free of every accepted span text. Covers custom XML, embedded objects,
- * comments residue, field codes, altChunks, and anything else the container
- * carries. rsids are hex run ids and cannot contain span text, so they need
- * no handling beyond this gate.
- */
-async function assertNoSpanTextSurvives(
-  bytes: Uint8Array,
-  affected: RedactionSpan[],
-) {
-  const entries = await loadOoxmlZipEntries(Buffer.from(bytes))
-  for (const span of affected) {
-    if (!span.text) continue
-    const needle = Buffer.from(span.text, 'utf8')
-    for (const [name, payload] of entries) {
-      if (Buffer.from(payload).includes(needle)) {
-        throw new RedactionDocxBurnError(
-          `Redacted text survives in ${name}; refusing .docx output.`,
-        )
-      }
-    }
-  }
 }
 
 export function redactedDocxFilename(sourceFilename: string) {

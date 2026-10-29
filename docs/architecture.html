@@ -2736,7 +2736,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>38 migrations, 0001 to 0039, 0008 withdrawn</dd>
+                <dd>39 migrations, 0001 to 0040, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -5645,6 +5645,19 @@
 
         <section id="redact-flow">
           <h2>Redaction flow</h2>
+          <p>
+            DOCX review coordinates and output bytes belong to Redact's XML
+            walker and burner, never editor edit operations. Only accepted
+            source ranges change; rejected duplicates and substrings remain.
+            Migration 0040 permits scoped Redact extraction text for matter DOCX
+            runs, leaving matter Search extraction untouched. Re-detection
+            preserves that coordinate source. Editable output and the private
+            hard-PDF render input share the burn and residual gates; Return and
+            Save transfer the hash-verified final bytes. Legacy coordinate
+            mismatches require a new upload/run. See
+            <a href="specs/redact/implementation.md">DOCX output ownership</a>.
+          </p>
+
           <figure class="diagram">
             <div class="frame">
               <svg

@@ -1,3 +1,7 @@
+import {
+  DEFAULT_API_REQUEST_LIMITS,
+  type ApiRequestLimits,
+} from '../request-limits'
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import {
@@ -217,6 +221,7 @@ export function createRedactReviewRoutes(
   pool: Pool,
   storage: StorageService,
   renderer: RedactionRenderer | null = null,
+  limits: ApiRequestLimits = DEFAULT_API_REQUEST_LIMITS,
 ) {
   /**
    * A run read for a reviewer names the person behind each decision. The read is
@@ -492,12 +497,12 @@ export function createRedactReviewRoutes(
         'Acknowledge that the detection mode was not recorded before finalising.',
         400,
       )
-    // Refuse before any output write: identical text decided both ways leaves
-    // one occurrence of the same words in the copy that leaves the firm. The
-    // client lists the groups; the server refuses regardless of what the UI
-    // claims, because a missing check here is a disclosure, not a missed style.
+    // DOCX output honours individual reviewed coordinates, including kept duplicates.
     const mixedGroups = mixedTextGroups(run.spans, run.decisions)
-    if (mixedGroups.length > 0)
+    if (
+      mixedGroups.length > 0 &&
+      !isDocxMimeOrFilename(run.sourceFilename, run.sourceMimeType)
+    )
       return errorResponse(
         c,
         'mixed_text_decisions',
@@ -552,6 +557,7 @@ export function createRedactReviewRoutes(
       mimeType: source?.mimeType ?? run.sourceMimeType ?? null,
       sourceBytes,
       extractedText: text,
+      ooxmlLimits: limits.ooxmlLimits,
     })
     if (uncoveredRegions.length > 0)
       return errorResponse(
@@ -606,6 +612,7 @@ export function createRedactReviewRoutes(
           )
         const secure = await buildHardRedactionPdf({
           run,
+          ooxmlLimits: limits.ooxmlLimits,
           sourceText: text,
           redactedText: output,
           source,
@@ -657,6 +664,7 @@ export function createRedactReviewRoutes(
           const docxBytes = await storage.readBinary!(source.objectKey)
           const redactedDocx = await buildRedactedDocx({
             docxBytes: Buffer.from(docxBytes),
+            ooxmlLimits: limits.ooxmlLimits,
             text,
             spans: run.spans,
             decisions: run.decisions,
@@ -680,17 +688,12 @@ export function createRedactReviewRoutes(
         // through it.
         // Do not log span ids, filenames, or document content (cover-geometry
         // errors name span ids in their message).
-        const reason =
-          error instanceof Error && error.name === 'RedactionCoverGeometryError'
-            ? 'cover geometry missing for one or more spans'
-            : error instanceof Error
-              ? error.message
-              : 'unknown failure'
         console.error('redaction_burn_failed', {
           requestId: c.get('requestId'),
           runId: run.id,
-          reason,
+          reason: burnFallbackReason(error),
         })
+        await storage.delete(objectKey)
         if (attemptedBurn) downgradeReason = burnFallbackReason(error)
         await storage.writeText(objectKey, output)
         outputMimeType = 'text/plain'

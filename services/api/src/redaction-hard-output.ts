@@ -1,3 +1,4 @@
+import type { OoxmlPackageLimits } from '@obiter/ooxml'
 import type { DocumentTextLayout } from './document-layout'
 import { documentTextLayoutSchema } from '@obiter/contracts'
 import type {
@@ -75,6 +76,7 @@ export interface HardRedactionSource {
 }
 
 export interface BuildHardRedactionPdfInput {
+  ooxmlLimits?: OoxmlPackageLimits
   run: RedactionRunRecord
   /** Extracted source text the span offsets address, unmodified. */
   sourceText: string
@@ -165,6 +167,7 @@ async function buildSecurePdfFromSourceDocx(input: BuildHardRedactionPdfInput) {
   try {
     redactedDocx = await buildRedactedDocx({
       docxBytes: Buffer.from(docxBytes),
+      ooxmlLimits: input.ooxmlLimits,
       text: input.sourceText,
       spans: input.run.spans,
       decisions: input.run.decisions,

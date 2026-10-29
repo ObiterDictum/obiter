@@ -2881,7 +2881,8 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(refused.outputWrites()).toBe(0)
 
     // Fresh extraction carries the note bodies, so the same source finalizes.
-    const { extractDocumentContent } = await import('./document-extraction')
+    const { extractRedactionContent: extractDocumentContent } =
+      await import('./redaction-extraction')
     const footnotesSource = await readFile(
       'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
     )
@@ -2906,7 +2907,8 @@ describe('createApiApp degraded finalization acknowledgement', () => {
   })
 
   it('renders a sanitized docx through the renderer and rasterizes a secure PDF', async () => {
-    const { extractDocumentContent } = await import('./document-extraction')
+    const { extractRedactionContent: extractDocumentContent } =
+      await import('./redaction-extraction')
     const { default: JSZip } = await import('jszip')
     const sourceBytes = await readFile(
       'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
@@ -2914,7 +2916,18 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     const text = (await extractDocumentContent('docx', sourceBytes)).text
     const target = 'Cartwright'
     expect(text).toContain(target)
-    const start = text.indexOf(target)
+    const acceptedSpans = [...text.matchAll(/Cartwright/gu)].map(
+      (match, index) => ({
+        id: `span_${index + 1}`,
+        start: match.index,
+        end: match.index + target.length,
+        text: target,
+        category: 'person_name',
+        source: 'rampart_model',
+        confidence: 'high',
+        suggestion: 'redact',
+      }),
+    )
     const readyRun = finalizedRunRow({
       status: 'ready_for_review',
       output_id: null,
@@ -2922,25 +2935,17 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       source_mime_type:
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
-      spans_json: [
-        {
-          id: 'span_1',
-          start,
-          end: start + target.length,
-          text: target,
-          category: 'person_name',
-          source: 'rampart_model',
-          confidence: 'high',
-          suggestion: 'redact',
-        },
-      ],
-      decisions_json: {
-        span_1: {
-          decision: 'accept',
-          decidedBy: 'usr_1',
-          decidedAt: '2026-07-30T00:00:00.000Z',
-        },
-      },
+      spans_json: acceptedSpans,
+      decisions_json: Object.fromEntries(
+        acceptedSpans.map((span) => [
+          span.id,
+          {
+            decision: 'accept',
+            decidedBy: 'usr_1',
+            decidedAt: '2026-07-30T00:00:00.000Z',
+          },
+        ]),
+      ),
     })
     const finalizedRow = () =>
       finalizedRunRow({

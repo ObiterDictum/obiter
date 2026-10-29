@@ -54,10 +54,10 @@ API rule. The confirmation itself is not stored.
 ## Repeated text
 
 Identical text can appear many times in one run. A decision can be repeated on
-every occurrence (`applyToSameText`), and finalising is refused with
-`mixed_text_decisions` while the same text is redacted in one place and kept
-visible in another: the output would otherwise carry the words the reviewer
-decided to remove.
+every detected occurrence (`applyToSameText`). DOCX output changes only accepted
+source coordinates; a rejected duplicate or a matching substring in another word
+or number stays intact. Other source formats retain the `mixed_text_decisions`
+finalisation guard.
 
 ## Redaction schedule export
 
@@ -106,3 +106,38 @@ It is derived from data the run already records: `returned_document_version_id`
 links the run to the version it created, and the run's finalise audit row names
 the reviewer. No column was added. A reader who may see the filed copy but not
 the standalone run behind it still sees the mark, without the link.
+
+## DOCX coordinate and output ownership
+
+Redact owns DOCX extraction and burning. The same XML walker supplies UTF-16
+review offsets and immutable per-carrier source ranges for body text, headers,
+footers, notes, comments and tracked text. Paragraphs contribute two newlines;
+tabs and breaks contribute one character. Modern alternate content is canonical;
+its duplicate fallback is removed. No editor edit operation produces Redact bytes.
+Matter ingestion keeps its existing extraction for Search. Migration 0040 lets
+matter DOCX runs store Redact's own extracted text under their scoped run key;
+re-detection carries that text forward without changing the matter version.
+
+Before burning, the complete stored extraction and accepted slices must match
+the source. Legacy runs with different coordinates require a fresh upload/run;
+there is no occurrence search or heuristic realignment. The emitted package is
+extracted again and compared with the expected coordinate edits. This gate proves
+preservation of all unaccepted mapped text, including duplicates.
+
+Selected fields lose their own instructions and selected hyperlinks lose their
+targets, including shared references. Accepted identity text is scrubbed from
+image descriptions, titles, filenames and comment/revision authors. Document
+properties and stale thumbnails are stripped. A residual gate examines unmapped
+XML text, attributes, annotations, encoded targets, UTF-8/UTF-16 binary content
+and recursively expanded embedded packages. It refuses unsupported residuals;
+it never returns uncertain bytes. Verified mapped character data is exempt from
+string matching because it may contain deliberately kept occurrences.
+
+The editable pseudonymised DOCX, Return to document, Save to matter, and private
+sanitised DOCX passed to hard-PDF rendering use these bytes. Hard renderer input
+normalises otherwise omitted tab/hyphen carriers to equivalent Unicode text.
+Symbol-font carriers require a PDF upload rather than guessing glyphs; this adds
+no font-mapping dependency. Package limits, malformed content, Unicode-splitting
+selections and coordinate mismatches refuse. Pseudonymised refusal retains the
+visible text fallback and recorded downgrade; hard output stays unfinalised with
+no output or substitute. Return and Save transfer the hash-verified final bytes.
