@@ -217,6 +217,25 @@ describe('document comparison rules', () => {
 })
 
 describe('word diff', () => {
+  it('preserves whitespace when diff segments are rejoined on either side', () => {
+    const base = 'First  line\nBefore'
+    const target = 'First\tline\nAfter'
+    const segments = wordDiff(base, target)
+
+    expect(
+      segments
+        .filter(({ kind }) => kind !== 'added')
+        .map(({ text }) => text)
+        .join(''),
+    ).toBe(base)
+    expect(
+      segments
+        .filter(({ kind }) => kind !== 'removed')
+        .map(({ text }) => text)
+        .join(''),
+    ).toBe(target)
+  })
+
   it('keeps the common edges while collapsing an oversized changed middle', () => {
     const baseMiddle = `${'old '.repeat(260)}shared ${'before '.repeat(260)}`
     const targetMiddle = `${'new  '.repeat(260)}shared  ${'after  '.repeat(260)}`
