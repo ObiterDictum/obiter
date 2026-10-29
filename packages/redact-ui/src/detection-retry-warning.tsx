@@ -4,11 +4,6 @@ import { DetectionModeWarning } from './detection-mode-warning'
 import { useRedetectRun } from './hooks'
 import type { RedactionRun } from './types'
 
-/**
- * The retry path for a run whose model detection did not run: a replacement run
- * is created from the stored source text, and this run and its decisions are
- * left exactly as they were.
- */
 export function DetectionRetryWarning({
   run,
   onOpenRun,

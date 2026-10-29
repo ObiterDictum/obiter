@@ -3,17 +3,12 @@ import type { ReactNode } from 'react'
 import { cn } from './lib/cn'
 
 export interface ProgressBarProps {
-  /** 0–100. Omit for an indeterminate bar. */
   value?: number
   label?: ReactNode
   helperText?: ReactNode
   className?: string
 }
 
-/**
- * ProgressBar — a calm indicator of a known or indeterminate operation.
- * Built on Base UI Progress; pass `value` for determinate, omit for indeterminate.
- */
 export function ProgressBar({
   value,
   label,

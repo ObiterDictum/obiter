@@ -11,37 +11,19 @@ import {
   partitionByUtf8JsonPayload,
 } from './document-payload-batches'
 
-/**
- * Meilisearch access for the legislation_provisions index. Never the
- * legal_authorities index: provisions are a second corpus with their own
- * searchable, filterable, and ranking configuration, and sharing the
- * judgment index would let provision boilerplate move judgment rankings.
- */
-
 export interface LegislationProvisionDocument {
-  /**
-   * Meilisearch-safe primary key: the identity path with slashes as
-   * hyphens, e.g. ukpga-2020-1-section-13-2. The engine rejects slashes in
-   * document ids, so the full path lives in provisionRef instead.
-   */
   id: string
-  /** Full identity path, e.g. ukpga/2020/1/section/13/2. */
   provisionRef: string
   documentIdentity: string
   actType: string
   year: number
   number: number
-  /** Short title of the parent Act, e.g. Equality Act 2010. */
   title: string
-  /** Display label, e.g. s. 13(2). */
   label: string
   labelPath: string
   extent: string
   text: string
   hasUnappliedEffects: boolean
-  /** Successful-effects-check timestamp (ISO string), null for rows never
-   * checked. Carried so the serve gate can fail closed on legacy/false-
-   * only index rows. */
   effectsCheckedAt: string | null
   sourceUrl: string
 }
@@ -52,7 +34,6 @@ export interface LegislationSearchHit extends LegislationProvisionDocument {
 
 export interface AppliedLegislationSearchParameters {
   matchingStrategy: 'all' | 'frequency'
-  /** Null when no floor was applied (an empty query). */
   rankingScoreThreshold: number | null
 }
 
@@ -61,13 +42,6 @@ export interface LegislationSearchResult {
   query: string
   estimatedTotalHits: number
   processingTimeMs: number
-  /**
-   * The search-time parameters this call sent to the engine. Reported here so
-   * a caller measuring relevance can record the conditions its result was
-   * produced under. Its own configured constants are not evidence: the server
-   * that answered may be running a different checkout, and matchingStrategy
-   * is a request-time parameter that no index setting reveals.
-   */
   appliedSearchParameters: AppliedLegislationSearchParameters
 }
 
@@ -75,36 +49,12 @@ export interface LegislationSearchOptions {
   limit?: number
   rankingScoreThreshold?: number | null
   exactPhrase?: string
-  /**
-   * Cancels the engine request. The Meilisearch client forwards this to
-   * `fetch`, so an aborted search cancels the socket rather than only
-   * abandoning the response. The serve layer passes a deadline so a hung
-   * legislation index cannot hold a search response open.
-   */
   signal?: AbortSignal
 }
 
-/**
- * Provisional relevance floor 0.35: deliberately not the judgment 0.25 and
- * not derived from the judgment tiers. Provision texts share heavy
- * boilerplate ("a person", "the Secretary of State", "regulations may"),
- * which inflates keyword scores relative to judgment prose, so the judgment
- * floor would admit boilerplate neighbours for short identifier queries.
- * 0.35 is a starting point, not a measurement: re-sweep it against a real
- * provisions corpus the way 0.25 was swept for judgments before trusting it.
- */
 export const legislationSearchIndexSettings = {
   minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
   prefixSearch: 'disabled',
-  // Every term the caller typed must be present. The engine's own default
-  // drops trailing terms until something matches, which answered
-  // "Human Rights Act 1998 proportionality" with Human Rights Act Schedule 1
-  // paragraph 1 — a provision that does not contain "proportionality", and
-  // no provision of that Act does. The judgment index requires every term for
-  // the same reason: a result the engine had to ignore the query to find is a
-  // worse answer than no result. The relevance floor below is not the same
-  // kind of value — it is a starting point awaiting a provisions corpus, while
-  // term coverage is the query, not a tuning choice.
   matchingStrategy: 'all',
   rankingScoreThreshold: 0.35,
 } as const
@@ -167,10 +117,6 @@ export function isLegislationProvisionDocument(
   if (typeof value !== 'object' || value === null) return false
   // SAFETY: the non-null object check above makes string-keyed reads sound; every field is individually type-checked below, so the record view grants no unchecked trust.
   const record = value as Record<string, unknown>
-  // hasUnappliedEffects is required boolean, fail-closed: a row without it
-  // is withheld/dropped, never served as current text. effectsCheckedAt is
-  // required present (string or null): an index doc predating check
-  // provenance is malformed and dropped, not served.
   return (
     typeof record.id === 'string' &&
     typeof record.provisionRef === 'string' &&
@@ -342,7 +288,6 @@ type ProvisionReadClient = {
   }
 }
 
-/** Direct provision read for exact citation resolution. Throws when absent. */
 export async function getLegislationProvision(
   client: ProvisionReadClient,
   indexName: string,

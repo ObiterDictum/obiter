@@ -14,17 +14,10 @@ export interface InputProps extends Omit<
   helperText?: ReactNode
   error?: ReactNode
   invalid?: boolean
-  /** Right-aligned affordance slot (e.g. a show/hide toggle). */
   trailing?: ReactNode
-  /** React 19 passes `ref` as a prop; declared so a form can focus the field. */
   ref?: Ref<HTMLInputElement>
 }
 
-/**
- * Input — a labeled text field. Label above, helper/error below (form rule).
- * Uses a native input; accessibility comes from label association, aria-invalid,
- * and aria-describedby wiring.
- */
 export function Input({
   label,
   helperText,

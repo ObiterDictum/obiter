@@ -11,19 +11,6 @@ const sizeClasses = {
   lg: 'max-w-2xl',
 } satisfies Record<Size, string>
 
-/**
- * Dialog — a styled compound over Base UI Dialog. Focus trap, escape, and
- * backdrop behaviour come from Base UI; we own the visual layer.
- *
- *   <Dialog>
- *     <DialogTrigger render={<Button>Open</Button>} />
- *     <DialogContent size="md">
- *       <DialogTitle>Title</DialogTitle>
- *       <DialogDescription>Body copy.</DialogDescription>
- *       <DialogClose render={<Button>Close</Button>} />
- *     </DialogContent>
- *   </Dialog>
- */
 export function Dialog(
   props: ComponentPropsWithoutRef<typeof BaseDialog.Root>,
 ) {
@@ -106,7 +93,6 @@ export function DialogClose(
   return <BaseDialog.Close {...props} />
 }
 
-/** A header-affordance close button for dialog corners. */
 export function DialogCloseButton() {
   return (
     <BaseDialog.Close

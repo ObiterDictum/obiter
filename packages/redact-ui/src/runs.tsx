@@ -181,12 +181,6 @@ function RunRow({
   )
 }
 
-/**
- * Start a redaction. Upload leads, because that is what the work is; pasted
- * text is for a short extract and says what it loses. The run list states what
- * each run is doing and what is still undecided, and a failed run says why
- * rather than sitting under a status word.
- */
 export function RedactionRunsView({
   onOpenRun,
 }: {

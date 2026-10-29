@@ -61,8 +61,6 @@ const legislationDocumentEvidence: EvidenceReference[] = [
 
 type FindingInput = Record<string, unknown>
 
-/** A coherent finding, so each table row differs from an accepted finding in
- * exactly the way its name says. */
 function finding(overrides: FindingInput = {}): FindingInput {
   const type =
     (overrides.type as FindingType | undefined) ?? 'authority_existence'

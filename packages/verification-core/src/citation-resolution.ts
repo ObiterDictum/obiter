@@ -9,43 +9,11 @@ import {
 } from './finding'
 import type { VerificationSubject } from './subject'
 
-/**
- * The resolved arms of `NormalizedCitation`: exactly the identity the
- * authority-existence check accepts as its input. A resolved citation is not a
- * search hit, a title or a display string; it is the canonical source identity
- * a check can act on, and it keeps its authority family so a judgment can never
- * be consumed as an Act or the reverse.
- */
 export type ResolvedCitation = Extract<
   NormalizedCitation,
   { kind: 'case_law' | 'legislation' }
 >
 
-/**
- * What citation resolution established for one raw citation candidate, before
- * anything is looked up in a store. It is the resolution layer's own result
- * model, deliberately separate from the V1 finding: a failure here is a
- * statement about resolving raw text, never about whether an authority is held.
- *
- * - `resolved`: exactly one canonical authority identity. It is what V2 needs
- *   and all V2 gets.
- * - `unresolved`: the candidate is citation-shaped and inside the accepted
- *   grammar, but no canonical identity could be established for it. Zero
- *   candidates is this, and it is never a claim that the authority does not
- *   exist.
- * - `ambiguous`: more than one canonical identity remains possible. There is no
- *   winner, and resolution never falls back to the first match.
- * - `malformed`: the candidate is outside the accepted citation grammar (a
- *   malformed bracket, a missing year, court or number, appended prose, a
- *   hidden character).
- * - `unsupported`: the candidate is a citation of a source family this layer
- *   does not resolve.
- * - `inconclusive`: an operational dependency failed. It is not a negative
- *   result and must not be reported as one; `reason` keeps the failure
- *   category for an operational caller.
- * - `not_checked`: resolution did not run. It is not a pass and it claims
- *   nothing.
- */
 export type CitationResolution =
   | { outcome: 'resolved'; citation: ResolvedCitation }
   | { outcome: 'unresolved' }
@@ -55,16 +23,6 @@ export type CitationResolution =
   | { outcome: 'inconclusive'; reason: 'store_error' }
   | { outcome: 'not_checked' }
 
-/**
- * The V1 citation state a resolution maps onto, so the resolution can be
- * persisted as a finding and handed to V2.
- *
- * This mapping is the safety boundary: every non-resolved outcome becomes an
- * `unresolved` or `not_checked` citation, which the authority-existence check
- * can only skip. A malformed, ambiguous, unresolved or inconclusive result
- * therefore cannot enter V2 as a resolved identity, and no branch invents an
- * identity for a candidate that has none.
- */
 export function normalizedCitationFromResolution(
   resolution: CitationResolution,
 ): NormalizedCitation {
@@ -90,13 +48,6 @@ export function normalizedCitationFromResolution(
   }
 }
 
-/**
- * The evidence a resolved citation rests on, at the granularity its identity
- * has: the stored judgment document for case law, the Act or its provision for
- * legislation. Resolution names the source it resolved to and nothing inside a
- * source it did not read, so a provision citation evidences the provision and a
- * whole Act evidences the Act.
- */
 function resolutionEvidence(citation: ResolvedCitation): EvidenceReference {
   switch (citation.kind) {
     case 'case_law':
@@ -139,13 +90,6 @@ interface DecidedResolution {
   explanation: string
 }
 
-/**
- * The citation-resolution truth table. Every branch fails closed: an uncertain
- * resolution is review-required rather than a pass, and only one canonical
- * identity can ever produce a clear. Nothing here claims an authority is held
- * or absent, and no branch quotes the candidate, so the explanation stays free
- * of matter text.
- */
 function decide(input: CitationResolutionDecisionInput): DecidedResolution {
   const resolution = input.resolution
   if (resolution.outcome === 'resolved') {
@@ -208,13 +152,6 @@ function decide(input: CitationResolutionDecisionInput): DecidedResolution {
   }
 }
 
-/**
- * One citation-resolution finding for a raw candidate and its resolution. The
- * returned value is an accepted finding state, so a caller cannot wrap the
- * decision in a status the truth table refuses: a non-resolved citation can
- * never be cleared, and `authority_not_held` is unreachable here because it
- * belongs to the authority-existence check.
- */
 export function decideCitationResolution(
   input: CitationResolutionDecisionInput,
 ): VerificationFinding {

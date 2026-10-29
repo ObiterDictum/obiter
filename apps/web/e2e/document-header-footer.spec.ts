@@ -8,20 +8,6 @@ import { fileURLToPath } from 'node:url'
 import { openRibbonTab } from './editor-chrome'
 import { runMenuCommand } from './editor-chrome'
 
-/*
- * E7a browser journey: the Insert ribbon's Header, Footer and Page number
- * controls must survive the full loop — an edit typed into the final
- * section's header, and a PAGE field inserted at the header caret, must
- * persist through save, a fresh context reading the stored version back,
- * and the exported DOCX. Only a real browser decides the editable margin
- * band, the inert body while a margin story is open, and the re-parsed
- * identities; the mounted suites cover the story plumbing and the writer.
- *
- * The fixture is docx-edge-cases-fixture.docx — the repo's only synthetic
- * document carrying header1.xml ("Header: Alice Example") and footer1.xml
- * ("Footer: Bob Example") referenced by a single section.
- */
-
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
   HERE,
@@ -71,11 +57,6 @@ async function openFixtureDocument(
   await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
 
   const fixtureName = path.basename(FIXTURE)
-  // The fixture name appears twice: the document row in the main region and
-  // the mode-rail "In this matter" link. An unscoped locator picks whichever
-  // has painted first, and the row only selects the matter page's embedded
-  // pane — the readiness check passes there too, so the journey would
-  // silently exercise the details surface instead of the workspace.
   const main = page.getByRole('main')
   if ((await main.getByText(fixtureName).count()) === 0) {
     const fileInput = page.locator('input[aria-label="Upload document"]')
@@ -85,10 +66,6 @@ async function openFixtureDocument(
   const documentRow = main.getByText(fixtureName).first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
 
-  // The standalone workspace lives under the documents route; the document
-  // row itself is the link that opens it. The row's name is ambiguous with
-  // the rail's own copy, so the first link wins as it does for the shared
-  // journey helper.
   await page.getByRole('link', { name: fixtureName }).first().click()
   await expect(page).toHaveURL(/\/documents\//, { timeout: 20_000 })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
@@ -99,14 +76,11 @@ async function openFixtureDocument(
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 
-/** The painted margin band — read-only, plain text until editing opens. */
 const paintedHeader = (page: Page) => page.getByText(HEADER_TEXT).first()
 
-/** The editable band paragraph — carries data-paragraph-id once opened. */
 const headerParagraph = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: 'Header' }).first()
 
-/** The painted body paragraph — inert while a margin story is open. */
 const bodyParagraph = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: BODY_TEXT }).first()
 
@@ -114,11 +88,6 @@ async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Review') {
   await openRibbonTab(page, name)
 }
 
-/**
- * Unzips the exported DOCX and asserts the header part carries both the
- * typed marker and the PAGE field instruction. python3 matches how
- * verifyEmailInDb shells out for a tool Node lacks.
- */
 function expectExportedDocx(docxPath: string) {
   const script = [
     'import sys, zipfile',
@@ -143,11 +112,9 @@ test('header text and page number survive save, reload and export', async ({
   const matter = `E7a margins ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  // The header paints read-only before editing is opened.
   await expect(paintedHeader(page)).toBeVisible()
   await shot(page, '01-header-painted-readonly')
 
-  // Insert ribbon → Header opens the final section's header story.
   await openRibbon(page, 'Insert')
   await page
     .getByRole('menuitemcheckbox', { name: 'Header', exact: true })
@@ -156,35 +123,26 @@ test('header text and page number survive save, reload and export', async ({
     page.getByRole('menuitemcheckbox', { name: 'Close header' }),
   ).toBeVisible()
 
-  // Clicking the band paragraph focuses the shared paragraph editor.
   await headerParagraph(page).click()
   await expect(editor(page)).toBeFocused()
   await expect(editor(page)).toHaveValue(new RegExp(HEADER_TEXT))
 
-  // While the header story is open the body stays inert: a body click
-  // returns editing to the body instead of stealing the caret silently.
   await page.keyboard.press('End')
   await page.keyboard.type(` ${MARKER}`)
   await expect(editor(page)).toHaveValue(new RegExp(`${MARKER}$`))
   await shot(page, '02-header-typed')
 
-  // Page number inserts a PAGE field at the header caret — the editable
-  // text stream keeps exactly the typed text (the field is zero-width).
   await openRibbon(page, 'Insert')
   await page.getByRole('menuitem', { name: 'Page number', exact: true }).click()
   await expect(editor(page)).toHaveValue(new RegExp(`${MARKER}$`))
   await shot(page, '03-page-number-inserted')
 
   await saveAndWait(page)
-  // A save whose edit history could not be reconciled surfaces a
-  // reload-required banner; the spec must fail while that defect is live.
   await expect(page.getByText('Reloading is required to continue')).toHaveCount(
     0,
   )
   await shot(page, '04-saved')
 
-  // A fresh context reads the stored version: the header band still shows
-  // the typed marker, and reopening the story shows it as editable text.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
@@ -199,7 +157,6 @@ test('header text and page number survive save, reload and export', async ({
     await headerParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(MARKER))
 
-    // Closing the story restores normal body editing.
     await openRibbon(reloaded, 'Insert')
     await reloaded
       .getByRole('menuitemcheckbox', { name: 'Close header' })
@@ -211,8 +168,6 @@ test('header text and page number survive save, reload and export', async ({
     await fresh.close()
   }
 
-  // The exported DOCX carries both the edited header text and the PAGE
-  // field instruction in word/header1.xml.
   await openRibbon(page, 'Review')
   const downloadPromise = page.waitForEvent('download', { timeout: 20_000 })
   await runMenuCommand(page, 'File', 'Export')

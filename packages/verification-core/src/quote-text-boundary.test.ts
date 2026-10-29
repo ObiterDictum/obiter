@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { compareQuoteText, type QuoteTextOutcome } from './index'
 
-/**
- * Boundary-qualified containment and mismatch classification: a clipped
- * quotation must not clear, and a proven wording difference must name its
- * kind rather than pass as a match.
- */
-
 function outcome(quote: string, ...fragments: string[]): QuoteTextOutcome {
   return compareQuoteText(quote, fragments)
 }
@@ -170,8 +164,6 @@ describe('word-boundary containment', () => {
   })
 
   it('treats an apostrophe inside a word as part of that word', () => {
-    // A quotation that stops inside a contraction or possessive is a
-    // partial-word match, so it cannot clear.
     expect(outcome('the court', "the court's view")).toEqual({
       outcome: 'no_match',
     })
@@ -227,9 +219,6 @@ describe('word-boundary containment', () => {
   })
 
   it('falls to review rather than clear inside single quotation marks', () => {
-    // An apostrophe mark touching a word joins that word, and the comparison
-    // does not guess whether it opens a quotation. Inconclusive is the safe
-    // direction, and double quotation marks are unaffected above.
     expect(
       outcome(
         'the court must consider',
@@ -299,10 +288,6 @@ describe('boundary invariant', () => {
   const source =
     "The court must consider the point (and the court's view of the points) under section 40."
 
-  /** An independent restatement of the boundary contract, so the sweep below
-   * checks the engine against the rule rather than against itself. A quotation
-   * edge that is punctuation or whitespace has nothing to glue to, so only a
-   * word-character edge is checked against its neighbour. */
   function hasCleanOccurrence(needle: string): boolean {
     const wordish = (character: string) =>
       character.length > 0 &&

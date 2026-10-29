@@ -11,14 +11,6 @@ import {
 } from './e13-support'
 import { choose, closeMenu, menuItem, toggleCommand } from './editor-chrome'
 
-/*
- * E13 browser coverage, view family: the View ribbon's real controls (web
- * layout, ruler, navigation pane, spelling), DOCX zoom, and the PDF viewer's
- * controls with its bounded per-page mounting. Draft-recovery, save-state
- * and accessibility coverage live in the sibling spec files this family's
- * shared helpers in e13-support.ts serve.
- */
-
 function escapePdfText(value: string) {
   return value
     .replaceAll('\\', '\\\\')
@@ -26,7 +18,6 @@ function escapePdfText(value: string) {
     .replaceAll(')', '\\)')
 }
 
-/** A minimal text-layer PDF, the shape the upload pipeline extracts. */
 function buildPdf(pages: string[][]) {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -74,7 +65,6 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
   const { email, password } = await createAccount(request)
   await openDocx(page, email, password, `E13 view ${Date.now()}`)
 
-  // A stored heading gives the navigation pane a real outline entry.
   await focusParagraph(page, HEADING)
   await choose(page, 'Paragraph style', 'Heading 1')
 
@@ -84,7 +74,6 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
   const sheets = page.locator('[data-document-sheet]')
   await expect(sheets.first()).toBeVisible({ timeout: 10_000 })
   await expect(sheets.first()).toHaveClass(/bg-transparent/)
-  // Every sheet the web flow mounts dropped the paper chrome.
   const sheetCount = await sheets.count()
   for (let index = 0; index < sheetCount; index += 1) {
     await expect(sheets.nth(index)).toHaveClass(/bg-transparent/)
@@ -108,7 +97,6 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
   await target.click()
   await expect(editor(page)).toHaveValue(new RegExp(HEADING))
 
-  // Zoom renders a real transform on the sheet, and resets honestly.
   const sheet = page.locator('[data-document-sheet]').first()
   await openRibbonTab(page, 'View')
   await menuItem(page, 'Zoom out').click()
@@ -163,7 +151,6 @@ test('the PDF viewer pages a generated multi-page document with bounded mounting
     timeout: 60_000,
   })
 
-  // Bounded mounting: only the current page's spans exist in the DOM.
   await expect(page.getByText('page 2 line 1 token-1')).toHaveCount(0)
 
   const previous = page.getByRole('button', { name: 'Previous page' })
@@ -181,8 +168,6 @@ test('the PDF viewer pages a generated multi-page document with bounded mounting
   await expect(next).toBeDisabled()
   await expect(previous).toBeEnabled()
 
-  // Out-of-range jumps are refused, not clamped silently, and the field
-  // returns to the page actually being shown.
   await jump.fill('99')
   await jump.press('Enter')
   await expect(page.getByText('page 24 line 1 token-23')).toBeVisible()
@@ -192,8 +177,6 @@ test('the PDF viewer pages a generated multi-page document with bounded mounting
   const widthBefore = await sheet.evaluate(
     (node) => node.firstElementChild?.getBoundingClientRect().width ?? 0,
   )
-  // The PDF surface has its own zoom controls; the editor's View menu does
-  // not exist on a read-only viewer.
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click()
   const widthAfter = await sheet.evaluate(
     (node) => node.firstElementChild?.getBoundingClientRect().width ?? 0,

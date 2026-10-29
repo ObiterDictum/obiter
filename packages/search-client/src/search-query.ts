@@ -41,9 +41,6 @@ export async function search(
   filters: LegalSearchFilters = {},
   options: LegalSearchOptions = {},
 ): Promise<LegalSearchResult> {
-  // Built before the try: a malformed filter is the caller's input error, and
-  // wrapping it as a provider failure would hide which filter was wrong behind
-  // a generic "Search failed."
   const filter = toMeiliFilters(filters)
 
   try {
@@ -66,8 +63,6 @@ export async function search(
     }
 
     const providerSearchStartedAt = performance.now()
-    // A recognised citation searches as a phrase: the caller already knows
-    // what it is looking for, so keyword neighbours are noise, not recall.
     const trimmedPhrase = options.exactPhrase?.trim()
     const engineQuery = trimmedPhrase
       ? toExactPhraseQuery(trimmedPhrase)
@@ -104,7 +99,6 @@ export async function search(
 
     return {
       hits: rankedHits,
-      // Echo the caller's query, not the engine phrase form of it.
       query: trimmedPhrase ? query : (result.query ?? query),
       estimatedTotalHits: result.estimatedTotalHits ?? rankedHits.length,
       processingTimeMs: result.processingTimeMs ?? 0,
@@ -138,11 +132,6 @@ function toMeiliFilters(filters: LegalSearchFilters): string[] | undefined {
   return clauses.length > 0 ? clauses : undefined
 }
 
-/**
- * A malformed bound is rejected rather than dropped. Dropping it would widen the
- * result set past what the caller asked for and return dates outside the
- * requested range as though they belonged.
- */
 function toFilterTimestamp(
   field: 'dateFrom' | 'dateTo',
   value: string,

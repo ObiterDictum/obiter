@@ -6,18 +6,6 @@ import { fileURLToPath } from 'node:url'
 import { openRibbonTab, runMenuCommand } from './editor-chrome'
 import { choose, selectedValue } from './editor-chrome'
 
-/*
- * E5 browser journey: the Layout ribbon's Margins, Orientation and Page size
- * controls must write the body section, and the Insert ribbon's Page break and
- * Section break must split the document. Only a real browser decides the
- * painted sheets and a fresh context reading the stored `w:sectPr` and breaks
- * back; the mounted suites cover the save plan and the writer round-trip.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; verification is marked directly in the task-owned test database,
- * never the shared one. The fixture is the repo's synthetic demo document.
- */
-
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
   HERE,
@@ -133,9 +121,6 @@ test('page setup and breaks save and reload', async ({
     expect.objectContaining({ type: 'insert_section_break' }),
   )
 
-  // A fresh context reads the stored section and breaks back: the margins,
-  // orientation and page size come only from the saved document, and the
-  // breaks make it paginate onto more than one sheet.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {

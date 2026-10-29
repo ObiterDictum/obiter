@@ -3,7 +3,6 @@ import { useRef, type ReactNode } from 'react'
 import { Button } from './button'
 import { cn } from './lib/cn'
 
-/** Where a floated panel sits, its top-left corner in viewport pixels. */
 export type PanelPosition = { x: number; y: number }
 
 export interface PanelPopout {
@@ -11,31 +10,21 @@ export interface PanelPopout {
   position: PanelPosition
   onToggle: () => void
   onMove: (position: PanelPosition) => void
-  /** False when the viewport is too narrow to float; the control is hidden. */
   canFloat: boolean
-  /**
-   * The viewport edge a floated panel must stay below, in pixels — the bottom
-   * of the chrome the panel must never cover. Defaults to the 8px margin.
-   */
   minTop?: number
 }
 
 export interface DockedPanelProps {
-  /** Becomes the region's accessible name; a string is used verbatim. */
   title: ReactNode
-  /** Accessible name of the close control, when the title is not a string. */
   titleText?: string
   onClose: () => void
-  /** Header affordance beside the close control, such as a count. */
   action?: ReactNode
   footer?: ReactNode
   children: ReactNode
   className?: string
-  /** Pop-out behaviour. Absent where the panel is always docked. */
   popout?: PanelPopout
 }
 
-/** Keeps a floated panel inside the viewport whatever the pointer or key did. */
 export function clampPanelPosition(
   position: PanelPosition,
   viewport: { width: number; height: number },
@@ -50,20 +39,6 @@ export function clampPanelPosition(
   }
 }
 
-/**
- * DockedPanel — a beside-the-paper panel for the document workspace.
- *
- * Unlike `SidePanel` it is not modal: the page stays visible and editable, so
- * there is no backdrop, no focus trap and no portal. Escape and returning focus
- * to the trigger belong to the screen that owns the trigger, because a
- * non-modal panel must not move focus on open. The region is labelled so it is
- * reachable by landmark, and every close path routes through `onClose`.
- *
- * With `popout` the panel can leave the desk's flow and float above the paper:
- * the document keeps its full width and the reader drags the panel by its
- * header, or focuses the header and moves it with the arrow keys. A floated
- * panel is still a non-modal landmark; it only changes where it paints.
- */
 export function DockedPanel({
   title,
   titleText,
@@ -125,9 +100,7 @@ export function DockedPanel({
         {...(floating
           ? {
               onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
-                // A press on a control in the header is not a drag.
                 // SAFETY: pointer events from this header always target an
-                // Element; a text node cannot start a pointer event.
                 if ((event.target as HTMLElement).closest('button')) return
                 drag.current = {
                   pointerId: event.pointerId,

@@ -2,20 +2,6 @@ import { Menu as BaseMenu } from '@base-ui-components/react/menu'
 import type { ComponentPropsWithoutRef } from 'react'
 import { cn } from './lib/cn'
 
-/**
- * Menu — a styled compound over Base UI Menu. The menu/menuitem roles, focus
- * movement, typeahead, and Escape-returns-focus-to-the-trigger contract come
- * from Base UI; we own the visual layer. It portals the popup so a menu inside
- * clipped chrome (the shell's top bar) is positioned and stacked by the
- * positioner rather than by its ancestor's overflow.
- *
- *   <Menu>
- *     <MenuTrigger render={<Button aria-label="Account menu">AM</Button>} />
- *     <MenuContent aria-label="Account">
- *       <MenuItem onClick={signOut}>Sign out</MenuItem>
- *     </MenuContent>
- *   </Menu>
- */
 export function Menu(props: ComponentPropsWithoutRef<typeof BaseMenu.Root>) {
   return <BaseMenu.Root {...props} />
 }
@@ -31,7 +17,6 @@ export function MenuContent({
   align = 'end',
   ...props
 }: ComponentPropsWithoutRef<typeof BaseMenu.Popup> & {
-  /** Which trigger edge the popup lines up with; a menu bar uses `start`. */
   align?: 'start' | 'center' | 'end'
 }) {
   return (
@@ -81,14 +66,12 @@ export function MenuSeparator({
   )
 }
 
-/** A group of mutually exclusive menu items, such as the paragraph styles. */
 export function MenuRadioGroup(
   props: ComponentPropsWithoutRef<typeof BaseMenu.RadioGroup>,
 ) {
   return <BaseMenu.RadioGroup {...props} />
 }
 
-/** A menu row that flips a setting on or off: `menuitemcheckbox`. */
 export function MenuCheckboxItem({
   className,
   ...props

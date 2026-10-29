@@ -35,12 +35,6 @@ function isSpanFilter(value: string | null): value is SpanFilter {
   return value !== null && spanFilters.includes(value)
 }
 
-/**
- * The review queue. Every row states the category the detector assigned, the
- * decision state in words, the detection confidence with what it means, and —
- * when it has one — who decided it and when. The filters count what they would
- * show, so "3 unreviewed" is a claim the reviewer can check before finalising.
- */
 export function ReviewPanel({
   spans,
   decisions,
@@ -61,7 +55,6 @@ export function ReviewPanel({
   pageFor,
   pageCount,
 }: {
-  /** The spans the current filter shows, in document order. */
   spans: RedactionSpan[]
   decisions: Decisions
   counts: Record<'accepted' | 'rejected' | 'pseudonymised' | 'pending', number>

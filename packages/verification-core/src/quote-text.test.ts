@@ -7,12 +7,6 @@ import {
   type QuoteTextOutcome,
 } from './index'
 
-/**
- * The comparison engine and its normalisation policy. These are behavioural:
- * each case states what a quotation does to a stored fragment and what the
- * check is allowed to conclude.
- */
-
 function outcome(quote: string, ...fragments: string[]): QuoteTextOutcome {
   return compareQuoteText(quote, fragments)
 }
@@ -59,9 +53,6 @@ describe('quote text normalisation', () => {
   })
 
   it('does not fold marks that are not apostrophes', () => {
-    // The okina is a letter, U+02B9 is a transliteration prime, and the single
-    // guillemets are quotation marks. NFC is not NFKC, so nothing compatibility
-    // form is folded in either.
     for (const mark of ['\u02bb', '\u02b9', '\u2039', '\u203a']) {
       expect(normalizeQuoteText(`court${mark}s`)).toBe(`court${mark}s`)
     }

@@ -67,8 +67,6 @@ const sourcePreviewKeys = Object.fromEntries(
 mock.module('./source-preview-hooks', () =>
   Object.assign({ ...sourcePreviewKeys }, sourcePreviewHooks),
 )
-// The page scaffold and the signed-in user come from the shell. Mocked at the
-// package boundary so the screen renders without booting the shell's auth.
 mock.module('@obiter/app-shell', () => ({
   useCurrentUser: () => ({ data: { user: { id: appShell.currentUserId } } }),
   PageScaffold: ({
@@ -95,9 +93,6 @@ const { RedactionReviewView } = await import('./review')
 
 const onOpenRun = vi.fn()
 
-// jsdom does not implement CSS.escape, which the review's selection effect uses
-// to find the selected span by id. Provide the browser boundary so row
-// activation can be exercised; this is not the behaviour under test.
 if (typeof globalThis.CSS === 'undefined') {
   Object.assign(globalThis, { CSS: { escape: (value: string) => value } })
 }
@@ -204,12 +199,9 @@ describe('redaction review', () => {
     ).toBeTruthy()
     expect(screen.getByText('2 of 2 detected spans decided')).toBeTruthy()
 
-    // The document mark states its category in words for a screen reader, so
-    // the category colour is never the only cue.
     const mark = screen.getByRole('button', { name: /Jane/u })
     expect(mark.className).toContain('bg-span-person-name')
     expect(mark.textContent).toContain('Person name')
-    // The legend names every colour in use on the page.
     const legend = screen.getByRole('list', {
       name: 'Category colours in this document',
     })
@@ -230,14 +222,10 @@ describe('redaction review', () => {
         /Detection confidence is not a disclosure decision/u,
       ),
     ).toBeTruthy()
-    // Detector internals say nothing a reviewer can act on.
     expect(screen.queryByText(/Rampart|UK supplement|model ·/u)).toBeNull()
-    // The coverage caveat belongs on the start page and the finalise dialog,
-    // not a third time beside the progress bar.
     expect(
       screen.queryByText(/Detection finds candidates, not everything/u),
     ).toBeNull()
-    // Nothing in the screen claims undetected text is safe.
     expect(screen.queryByText(/safe to disclose/iu)).toBeNull()
   })
 
@@ -250,7 +238,6 @@ describe('redaction review', () => {
       'Kept visible by another reviewer',
     )
     expect(options[1]?.textContent).toContain('26 Oct 2026, 15:02')
-    // A span with no decision says so rather than borrowing a time.
     renderRun({
       ...decidedRun,
       decisions: {},
@@ -277,7 +264,6 @@ describe('redaction review', () => {
     const options = screen.getAllByRole('option')
     expect(options).toHaveLength(1)
     expect(options[0]?.textContent).toContain('9 May 1988')
-    // The decision bar follows the filter rather than keeping a hidden span.
     const bar = screen.getByRole('region', {
       name: 'Decide the selected span',
     })
@@ -297,8 +283,6 @@ describe('redaction review', () => {
     })
 
     mutate.mockClear()
-    // Ctrl+K opens app search and Ctrl+R reloads the browser; Meta is the macOS
-    // equivalent. None may record a redaction decision.
     for (const chord of [
       { key: 'k', ctrlKey: true },
       { key: 'r', ctrlKey: true },
@@ -441,7 +425,6 @@ describe('redaction review', () => {
       },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Finalise' }))
-    // The words that would leak are named, not counted anonymously.
     expect(
       screen.getByText(/One piece of text has different decisions/u),
     ).toBeTruthy()
@@ -589,7 +572,6 @@ describe('redaction review', () => {
         onBack={onBack}
       />,
     )
-    // The stored reason names a PDF; the file is a .docx, so it is not shown.
     expect(screen.queryByText(/text layer/iu)).toBeNull()
     expect(screen.getByText(/could not read this Word document/u)).toBeTruthy()
     expect(

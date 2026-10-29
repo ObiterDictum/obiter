@@ -6,24 +6,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runMenuCommand, setTrackChanges } from './editor-chrome'
 
-/*
- * E50 browser journey: undo across a successful save must persist the reversal
- * exactly once, and a saved structural edit must never be replayed as a fresh
- * insertion. The mounted suites cover the state machine; this journey exists
- * for what only a real browser and a real API decide: the saved model reloading
- * with re-parsed identities, and a fresh context reading the stored version
- * back.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; email verification is marked directly in the task-owned test
- * database, never the shared one. The fixture is the repo's synthetic DOCX.
- */
-
 const FIXTURE_REL = '../../../data/evals/redact/demo-fixture.docx'
-/** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
-// Set to a directory to capture the repaired behaviour stage by stage (the PR
-// evidence column); a normal run writes nothing.
 const shots = process.env.E50_E2E_SHOTS
 
 function shot(page: Page, name: string) {
@@ -57,7 +41,6 @@ function uniqueParagraphCount(page: Page) {
   )
 }
 
-/** The count once two consecutive reads agree, so a late render is not read mid-flight. */
 async function settledParagraphCount(page: Page) {
   let previous = -1
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -74,7 +57,6 @@ async function saveAndWait(page: Page) {
   await expect(save(page)).toBeDisabled({ timeout: 30_000 })
 }
 
-/** Saves a pending tracked rejection and waits for the decision version. */
 async function saveAndWaitForDecision(page: Page) {
   const decision = page.waitForResponse(
     (response) => response.url().includes('/tracked-changes/decision'),
@@ -107,9 +89,6 @@ test('undo after a save persists the reverted text once', async ({
   await saveAndWait(page)
   await shot(page, '02-text-saved')
 
-  // Undo the saved typing against the saved document, then persist it. Typing
-  // coalesces into one undo run, so the number of steps is not the character
-  // count; undo until the marker is gone (bounded).
   for (let step = 0; step < 12; step += 1) {
     if (!(await editor(page).inputValue()).includes('E50TEXT')) break
     await undo(page).click()
@@ -118,8 +97,6 @@ test('undo after a save persists the reverted text once', async ({
   await shot(page, '03-text-undone-after-save')
   await saveAndWait(page)
 
-  // A fresh context reads the stored version back: the reversal must be what
-  // was persisted, not the text the first save wrote.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
@@ -147,14 +124,10 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
   await runMenuCommand(page, 'Edit', 'Insert paragraph')
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
-  // The typed character is one step and the insert itself another, so two
-  // undos remove the text and then the insert.
   await pending.pressSequentially('X')
   await shot(page, '05-insert-typed')
   await saveAndWait(page)
 
-  // Undo the typing, then the insert itself: the paragraph is removed against
-  // the saved document, not queued for a second insertion.
   await undo(page).click()
   await undo(page).click()
   await expect
@@ -167,8 +140,6 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter, fixturePath())
-    // Exactly one paragraph was removed, and the saved insert was not replayed:
-    // the count is the original, never before + 1 or before + 2.
     await expect
       .poll(() => uniqueParagraphCount(reloaded), {
         message: 'no duplicate paragraph after save-undo-save',
@@ -195,16 +166,10 @@ test('undo of a saved tracked edit rejects the change and persists the reversal'
   await shot(page, '07-tracked-typed')
   await saveAndWait(page)
   await shot(page, '08-tracked-saved')
-  // Wait for the save to settle before undoing: an undo that races the in-flight
-  // request is a different interaction, and the tracked rejection this test is
-  // about needs the translated history.
   await expect
     .poll(() => saveState(page), { message: 'tracked save settled' })
     .toBe('saved')
 
-  // Undo the saved tracked edit; the reversal is a tracked-change rejection.
-  // Typing coalesces into undo runs, so undo until the control is exhausted
-  // rather than once per character.
   for (let step = 0; step < 12; step += 1) {
     if (await undo(page).isDisabled()) break
     await undo(page).click()
@@ -243,20 +208,14 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   await expect(pending).toBeVisible({ timeout: 10_000 })
   await pending.pressSequentially('X')
   await saveAndWait(page)
-  // Wait for the tracked save to settle before the undo/redo cycle: a cycle
-  // that races the in-flight request is a different interaction.
   await expect
     .poll(() => saveState(page), { message: 'tracked save settled' })
     .toBe('saved')
 
-  // The saved tracked insertion leaves the editor usable: the workspace does
-  // not block, and Undo is offered before it is pressed.
   await expect(save(page)).toBeDisabled()
   await expect(undo(page)).toBeEnabled()
   await shot(page, '12-tracked-insert-saved')
 
-  // Undo turns the insertion into one pending decision; Redo cancels it back
-  // to the saved state.
   await undo(page).click()
   await expect(save(page)).toBeEnabled()
   await page.getByRole('button', { name: 'Redo' }).click()
@@ -264,8 +223,6 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   await undo(page).click()
   await expect(save(page)).toBeEnabled()
   await shot(page, '13-tracked-insert-undone')
-  // Saving the decision rejects the change and removes the shell in one
-  // version, so the rendered paragraph count drops back to the original.
   await saveAndWaitForDecision(page)
   await expect
     .poll(() => uniqueParagraphCount(page), { message: 'shell removed' })
@@ -275,7 +232,6 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter, fixturePath())
-    // The shell paragraph is gone and no empty paragraph remains.
     await expect.poll(() => uniqueParagraphCount(reloaded)).toBe(before)
     await shot(reloaded, '14-tracked-insert-reopened')
   } finally {
@@ -292,8 +248,6 @@ test('undo after a reconciled merge save keeps the history usable', async ({
   const matter = `E50 merge ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter, fixturePath())
 
-  // A colleague commits a newer version first, so this page's save must be
-  // reconciled onto it instead of overwriting it.
   const colleagueContext = await browser.newContext()
   const colleague = await colleagueContext.newPage()
   try {
@@ -313,8 +267,6 @@ test('undo after a reconciled merge save keeps the history usable', async ({
   })
   await shot(page, '15-merge-saved')
 
-  // Undo the local typing against the merged document, Redo it, then undo it
-  // again and persist. The reconciled merge must not have ended the session.
   await undo(page).click()
   await expect(editor(page)).not.toHaveValue(/Z/)
   await page.getByRole('button', { name: 'Redo' }).click()

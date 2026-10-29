@@ -1,18 +1,3 @@
-/**
- * Find Case Law provider primitives: request validation, Atom and HTML parsing,
- * court code mapping, and the provider rate limiter.
- *
- * This package holds the parts of the integration that are pure with respect to
- * how the caller intends to use them. `services/api` uses them for the search
- * request path; bulk ingestion uses the same code for collection walks. There
- * must be exactly one implementation of how a Find Case Law judgment is read,
- * because a second one drifts and then two callers disagree about what a
- * judgment is.
- *
- * Nothing here performs storage or indexing, and nothing depends on the API's
- * environment or database.
- */
-
 export type { AtomEntry } from './atom-parser'
 export {
   parseFindCaseLawAtom,

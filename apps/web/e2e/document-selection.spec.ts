@@ -28,11 +28,6 @@ const fixture = process.env.E52_E2E_DOCX
 const shots = process.env.E52_E2E_SHOTS ?? '/tmp/e52-shots'
 const matterName = 'E52 Selection Matter'
 const ready = Boolean(email && password && fixture)
-/*
- * Before-capture mode runs the same journey against a checkout where the
- * feature is absent: every stage assertion is soft and every screenshot is
- * still taken, so the Before column shows the same stages as the After one.
- */
 const capturing = process.env.E52_E2E_CAPTURE === '1'
 const check = capturing
   ? expect.configure({ soft: true, timeout: 1_000 })
@@ -49,9 +44,6 @@ function shot(page: Page, name: string) {
 
 async function signIn(page: Page) {
   await page.goto('/sign-in', { waitUntil: 'networkidle' })
-  // The form is hydrated after load, and a hydration pass can reset a value
-  // typed before it; refilling until the values stick is what makes this
-  // deterministic.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await page.getByLabel('Email').click()
     await page.getByLabel('Email').pressSequentially(email ?? '', { delay: 10 })
@@ -82,7 +74,6 @@ async function signIn(page: Page) {
   throw new Error('sign-in did not leave the sign-in route')
 }
 
-/** Opens the synthetic fixture through the product's own navigation. */
 async function openFixtureDocument(page: Page) {
   await signIn(page)
 
@@ -119,8 +110,6 @@ async function openFixtureDocument(page: Page) {
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
   await documentRow.click()
 
-  // The workspace renders the body without a caret; a paragraph click is what
-  // focuses one.
   await check(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
@@ -133,17 +122,11 @@ const marks = (page: Page) => page.locator('[data-selected-text]')
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 
-/**
- * Presses a key once the editor that owns the focus has it. A crossing
- * remounts the focused paragraph's textarea, so a press that races the
- * remount would land on the body instead.
- */
 async function press(page: Page, key: string) {
   await check(editor(page)).toBeFocused()
   await page.keyboard.press(key)
 }
 
-/** Clicks a paragraph until its editor holds the focus. */
 async function focusParagraph(page: Page, text: string) {
   const target = paragraph(page, text)
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -162,14 +145,12 @@ async function pressMany(page: Page, key: string, times: number) {
   for (let step = 0; step < times; step += 1) await press(page, key)
 }
 
-/** Clicks into a paragraph and leaves the caret at a known offset. */
 async function caretAfter(page: Page, text: string, offset: number) {
   await focusParagraph(page, text)
   await page.keyboard.press('Home')
   await pressMany(page, 'ArrowRight', offset)
 }
 
-/** Clicks into a paragraph and jumps the caret to the end of its text. */
 async function caretAtEnd(page: Page, text: string) {
   await focusParagraph(page, text)
   await page.keyboard.press('Control+End')
@@ -180,8 +161,6 @@ test.describe('the document selection in a browser', () => {
     page,
   }) => {
     await openFixtureDocument(page)
-    // The synthetic fixture parses to four paragraphs, one empty and one with
-    // a hard break in it.
     await check(page.locator('[data-paragraph-id]')).toHaveCount(4)
 
     const editRequests: string[] = []
@@ -191,16 +170,11 @@ test.describe('the document selection in a browser', () => {
       }
     })
 
-    // From mid-way through the first paragraph, Shift+ArrowDown walks its
-    // remaining visual line, the paragraph break, the empty paragraph and into
-    // the hard-break paragraph: a selection with text on both sides of the
-    // boundary.
     await caretAfter(page, 'Northgate Holdings', 40)
     await pressMany(page, 'Shift+ArrowDown', 3)
     await shot(page, '01-extends-across-a-paragraph-boundary')
     await check(status(page)).toContainText('3 paragraphs selected')
 
-    // Every paragraph in the body, then contraction from the end.
     await press(page, 'Control+a')
     await shot(page, '02-selection-across-every-paragraph')
     await check(status(page)).toContainText('4 paragraphs selected')
@@ -209,17 +183,10 @@ test.describe('the document selection in a browser', () => {
     await shot(page, '03-backwards-selection-contracting')
     await check(status(page)).toContainText('paragraphs selected')
 
-    // Ctrl/Alt/Meta modified arrows are native for the platform shortcut, but
-    // not while a document selection is live: the first modified arrow
-    // collapses the model to the matching edge, so the DOM caret and the model
-    // agree. The keystroke that follows then lands at the visible caret
-    // instead of replacing the range that was selected a moment ago.
     await check(status(page)).toContainText('paragraphs selected')
     await press(page, 'Control+ArrowLeft')
     await check(status(page)).toBeEmpty()
     await check(marks(page)).toHaveCount(0)
-    // Control+ArrowLeft collapsed to the ordered start, the head of the first
-    // paragraph: typing there inserts and the old range survives.
     await page.keyboard.type('!')
     await check(editor(page)).toHaveValue(/^!/)
     await check(paragraph(page, 'Northgate Holdings')).toContainText(
@@ -228,13 +195,11 @@ test.describe('the document selection in a browser', () => {
     await press(page, 'Backspace')
     await check(editor(page)).toHaveValue(/^Northgate Holdings/)
 
-    // Escape leaves a collapsed caret at the focus end and no selection.
     await press(page, 'Escape')
     await shot(page, '04-escape-collapses-at-the-focus-end')
     await check(status(page)).toBeEmpty()
     await check(marks(page)).toHaveCount(0)
 
-    // A backwards selection into the paragraph above, in a narrow viewport.
     await caretAtEnd(page, 'Rowan v Aster')
     await pressMany(page, 'Shift+ArrowUp', 2)
     await page.setViewportSize({ width: 480, height: 900 })
@@ -242,7 +207,6 @@ test.describe('the document selection in a browser', () => {
     await check(status(page)).toContainText('paragraphs selected')
     await page.setViewportSize({ width: 1440, height: 900 })
 
-    // Selecting must not mutate the document or call the edit endpoint.
     expect(editRequests).toEqual([])
     await check(page.locator('[data-paragraph-id]')).toHaveCount(4)
     await check(paragraph(page, 'Northgate Holdings')).toContainText(
@@ -257,8 +221,6 @@ test.describe('the document selection in a browser', () => {
 
     await setTrackChanges(page, true)
 
-    // A selection with text in it, so the tracked-change limitation is the
-    // one that applies.
     await caretAfter(page, 'Northgate Holdings', 40)
     await pressMany(page, 'Shift+ArrowDown', 3)
     await check(status(page)).toContainText('3 paragraphs selected')
@@ -297,7 +259,6 @@ test.describe('the document selection in a browser', () => {
       }
     })
 
-    // A range with text on both sides of two paragraph breaks.
     await caretAfter(page, 'Northgate Holdings', 40)
     await pressMany(page, 'Shift+ArrowDown', 3)
     await shot(page, '08-supported-edit-selection')
@@ -314,8 +275,6 @@ test.describe('the document selection in a browser', () => {
     })
     expect(edited.length).toBeGreaterThan(0)
 
-    // A fresh context with a fresh sign-in reads the stored version back:
-    // nothing but the saved model can produce this text.
     const fresh = await browser.newContext()
     const reloaded = await fresh.newPage()
     try {
@@ -323,8 +282,6 @@ test.describe('the document selection in a browser', () => {
       await paragraph(reloaded, 'Northgate Holdings').click()
       await check(editor(reloaded)).toHaveValue(/^Northgate Holdings/)
       await check(editor(reloaded)).not.toHaveValue(/^Rowan v Aster/)
-      // The range deleted one paragraph break and merged two paragraphs, so
-      // the stored version holds two.
       await check(reloaded.locator('[data-paragraph-id]')).toHaveCount(2)
       await shot(reloaded, '10-supported-edit-after-reload')
     } finally {

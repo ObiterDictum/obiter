@@ -29,9 +29,6 @@ const labelMap: RampartLabelMap = {
   PHONE: { category: 'phone', source: 'rampart_model' },
   PASSPORT: { category: 'passport', source: 'rampart_model' },
   DRIVERS_LICENSE: { category: 'drivers_license', source: 'rampart_model' },
-  // DATE/DOB are not in qarlus/rampart@c3221c5 id2label (re-verified 2 Sep 2026
-  // against the cached model config). Kept so a later checkpoint that emits
-  // them maps; v1 DOB detection is the cue-gated UK supplement.
   DATE: { category: 'date', source: 'rampart_model' },
   DOB: { category: 'date', source: 'rampart_model', dateOfBirth: true },
   BUILDING_NUMBER: { category: 'address', source: 'rampart_model' },
@@ -57,10 +54,6 @@ function confidence(score: number | undefined): RedactionSpan['confidence'] {
   return 'low'
 }
 
-/**
- * Model / product names the NER frequently tags as people. Exact token match
- * only — never drop multi-word person spans.
- */
 const PERSON_NAME_DENYLIST = new Set([
   'kimi',
   'gpt',
@@ -77,26 +70,6 @@ const PERSON_NAME_DENYLIST = new Set([
   'copilot',
 ])
 
-/**
- * Honorifics and salutation words that sit immediately before a name and are
- * not themselves identifying.
- *
- * The NER does not tag these — verified against the model directly, which
- * returns only "Amara" for "Dear Ms Amara Okonkwo". They arrive because the
- * vendored classifier's `rescueCapitalizedParticles` widens person spans
- * outward across short capitalised tokens to recover genuine name particles
- * ("van", "de", "O'", initials). A title is short and capitalised and sits
- * exactly where a particle would, so it is swept in too.
- *
- * The trim lives here rather than in that denylist because
- * `@obiter/rampart-inference` is kept byte-faithful to the upstream tarball so
- * re-vendors produce reviewable diffs; a fix applied there would be lost on the
- * next re-vendor.
- *
- * Over-capture is the safe direction (it hides nothing that should be visible),
- * so this is a precision fix: a reviewer seeing "Dear Ms Amara" boxed as a name
- * has less reason to trust the spans that matter.
- */
 const PERSON_NAME_TITLES = new Set([
   'dear',
   'mr',
@@ -118,14 +91,6 @@ const PERSON_NAME_TITLES = new Set([
   'justice',
 ])
 
-/**
- * The subset that is never itself a name, so a span consisting of nothing but
- * this word can be discarded outright.
- *
- * `judge`, `justice`, `lord`, `lady` and `dame` are deliberately absent: they
- * are real surnames. Dropping a lone "Judge" would *under*-redact, which is the
- * unsafe direction, so those are only ever trimmed when a name follows them.
- */
 const STANDALONE_TITLES = new Set([
   'dear',
   'mr',
@@ -142,17 +107,9 @@ const STANDALONE_TITLES = new Set([
   'hon',
 ])
 
-/** A leading word plus the connector the classifier extended across. */
 const LEADING_WORD_RE = /^(\p{L}[\p{L}\p{M}]*)(\.?)([ \t'’.-]+)/u
-/** The whole remainder as a single word, with optional trailing punctuation. */
 const SOLE_WORD_RE = /^(\p{L}[\p{L}\p{M}]*)[.,]?$/u
 
-/**
- * Advance `start` past any leading honorifics or salutations, leaving the name
- * itself. Returns the original offset when nothing is trimmed, and never
- * advances past `end` — a span that is *only* a title collapses to empty and is
- * dropped by the caller rather than silently becoming a zero-width span.
- */
 function trimLeadingTitles(text: string, start: number, end: number): number {
   let offset = start
   while (offset < end) {
@@ -163,8 +120,6 @@ function trimLeadingTitles(text: string, start: number, end: number): number {
       offset += match[0].length
       continue
     }
-    // No connector left, so this is the final word of the span. Only collapse
-    // it when the word is never a name in its own right ("Dear Sir").
     const sole = SOLE_WORD_RE.exec(remainder)
     if (sole && STANDALONE_TITLES.has(sole[1].toLowerCase())) offset = end
     break
@@ -174,34 +129,12 @@ function trimLeadingTitles(text: string, start: number, end: number): number {
 
 function isDeniedPersonName(text: string) {
   const normalized = text.trim().toLowerCase()
-  // A span that was nothing but a title trims to empty and identifies no one.
   if (normalized.length === 0) return true
   if (PERSON_NAME_DENYLIST.has(normalized)) return true
-  // Heading-boundary glue that slipped past NER repair ("Jones\nLaw").
   if (/\n/.test(text)) return true
   return false
 }
 
-/**
- * Apply the person-name heuristics to each contributing detection *before* the
- * partial-overlap union, so a heuristic can only ever discard bytes from the
- * detection it judged.
- *
- * `trimLeadingTitles` and `isDeniedPersonName` are written for a span the model
- * returned as one detection. Once `mergeSpans` has unioned two detections, the
- * merged span covers bytes from both and either heuristic can discard the
- * other detection's characters:
- *
- *  - a title-shaped prefix can belong to a losing non-person detection (an
- *    address that starts "Dr"), and trimming the union advances past it;
- *  - a line break in one contributor makes the wider union trip the denial,
- *    dropping the contributor that does not contain it.
- *
- * Both losses are silent now that finalize derives span text from the source
- * instead of rejecting a mismatch (P2.39). Normalising first keeps every
- * heuristic's input a single detection, and the union then covers the bytes
- * each detection kept.
- */
 export function normalizePersonDetections<T extends RampartSpanInput>(
   text: string,
   spans: readonly T[],
@@ -222,15 +155,6 @@ export function normalizePersonDetections<T extends RampartSpanInput>(
   return kept
 }
 
-/**
- * Map a Rampart detection to an Obiter category. One detection in, one span
- * out; {@link reconcileRampartSpans} is what decides between detections.
- *
- * Person spans must already have been through {@link normalizePersonDetections};
- * applying the person heuristics to a merged span is P0.30. Direct callers
- * pass already-reconciled spans and normalise their contributing detections
- * first.
- */
 export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
   return output.spans
     .filter((span) => span.start < span.end)
@@ -240,11 +164,6 @@ export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
     .sort((left, right) => left.start - right.start || left.end - right.end)
 }
 
-/**
- * Map one Rampart detection to one Obiter span. The pair is kept together by
- * {@link reconcileRampartSpans}, which never has to assume that two separately
- * filtered and sorted arrays still line up index for index.
- */
 function mapRampartSpan(
   text: string,
   span: RampartSpanInput,
@@ -255,12 +174,6 @@ function mapRampartSpan(
     throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
   }
   const mapping = labelMap[label]
-  // Always slice the source rather than trusting `span.text`. Upstream's
-  // offset-changing merges (partial-overlap union in policy.mergeSpans) widen
-  // start/end but keep the winner's text, so a carried `text` can disagree with
-  // the offsets. `RedactionSpan.text` is a contract finalize and the .docx
-  // burner enforce with text.slice(start, end) === text; the source is
-  // authoritative here, so derive it instead of inheriting it.
   const sliced = text.slice(span.start, span.end)
   return {
     id,
@@ -274,38 +187,10 @@ function mapRampartSpan(
   }
 }
 
-/**
- * Reconcile overlapping Rampart detections into the disjoint set the product
- * stores.
- *
- * {@link normalizePersonDetections} fixes per-detection heuristics and
- * {@link mapRampartSpans} maps one detection; this owns the decision *between*
- * detections.
- *
- * Upstream's `policy.mergeSpans` is deliberately not used here. It inherits the
- * preferred detection's label for the whole union, so a `keep`-category winner
- * can disposition bytes a `redact` detection contributed (P0.31), and full
- * containment collapses to the winner and can silently drop a redact loser's
- * exclusive bytes. The vendored package is re-vendored wholesale, so the
- * product owns its overlap policy at this boundary: every overlap emits the
- * byte-union, and a union containing any `redact`-required detection is
- * redacted. Category, source and confidence still come from one real
- * contributing detection, chosen by score, then length, then a deterministic
- * source (upstream's heuristic tiebreak, made order-independent), so a
- * disposition disagreement can only change the outcome toward over-redaction.
- *
- * Category names the detection that won preference, matching the
- * rampart/supplement union in `merge.ts`; it is not a claim that every byte in
- * the union is of that category.
- */
 export function reconcileRampartSpans(
   text: string,
   spans: readonly RampartSpanInput[],
 ): RedactionSpan[] {
-  // Map each detection to its span first, then sort the pairs. A contributor
-  // and its mapped output are one value, so no later step can read a mapping
-  // that belongs to a different detection (the previous shape relied on two
-  // arrays filtered and sorted by identical comparators staying aligned).
   const contributors = spans
     .filter((span) => span.start < span.end)
     .map((span, index) => ({
@@ -351,20 +236,11 @@ export function reconcileRampartSpans(
     .sort((left, right) => left.start - right.start || left.end - right.end)
 }
 
-/** A detection and the span it mapped to, carried together as one unit. */
 interface Contributor {
   readonly span: RampartSpanInput
   readonly mapped: RedactionSpan
 }
 
-/**
- * Preference order for which contributing detection names the union: highest
- * score, then longest, then a deterministic (validator-backed) source, then
- * category. Upstream's heuristic tiebreak is reproduced without its
- * input-order dependence, and a non-finite score is treated as 0 so the result
- * is a total order. The trailing comparisons only order detections that map to
- * identical output, so the result does not depend on input order.
- */
 function comparesAbove(candidate: Contributor, incumbent: Contributor): number {
   const candidateScore = normalizedScore(candidate.span.score)
   const incumbentScore = normalizedScore(incumbent.span.score)
@@ -383,7 +259,6 @@ function comparesAbove(candidate: Contributor, incumbent: Contributor): number {
       : 0
 }
 
-/** A missing or non-finite score ranks below any real detection. */
 function normalizedScore(score: number | undefined): number {
   return typeof score === 'number' && Number.isFinite(score) ? score : 0
 }

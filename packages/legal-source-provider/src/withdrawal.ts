@@ -1,17 +1,3 @@
-/**
- * Withdrawal state stored in `legal_source_documents.provider_json`.
- *
- * Postgres is the record and Meilisearch is derived, so a judgment withdrawn
- * upstream is marked here, never deleted. `withdrawn` present means withdrawn;
- * every reader uses `provider_json->>'withdrawn' is null` for "not withdrawn".
- * `withdrawalCandidate` is the first of the two required observations (a
- * definitive 404 on the document's own URIs, confirmed on a later run at
- * least 24h apart). Camel case matches the provider metadata sharing the
- * column. One definition here because the checker writes it and the API
- * reads it — a second one drifts and the two disagree about what withdrawn
- * means.
- */
-
 export interface WithdrawalCandidate {
   firstSeenAt: string
   runId: string
@@ -34,9 +20,6 @@ function isStringArray(value: unknown): value is string[] {
 export function readWithdrawalCandidate(
   providerJson: unknown,
 ): WithdrawalCandidate | null {
-  // Malformed candidate state restarts the two-run clock rather than
-  // confirming: the safe direction is to wait for fresh evidence, and the
-  // audit rows still record what was observed.
   if (typeof providerJson !== 'object' || providerJson === null) return null
   const raw =
     'withdrawalCandidate' in providerJson

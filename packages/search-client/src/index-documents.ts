@@ -21,12 +21,6 @@ export interface SearchIndexDeleteResult {
   deletedCount: number
 }
 
-/**
- * Removes documents from the derived product index. Postgres stays the
- * record: callers mark the row withdrawn there first and call this to drop
- * the derived copy, never the reverse. A no-op for an empty id list so
- * callers need no length guard.
- */
 export async function deleteDocuments(
   client: DocumentDeleteClient,
   indexName: string,
@@ -62,9 +56,6 @@ export async function deleteDocuments(
 
 export type DocumentListClient = {
   index(indexName: string): {
-    // fields is the literal this helper ever fetches, not a general string:
-    // the engine client is generic over the document shape, and a wide
-    // string[] does not satisfy its per-shape field union.
     getDocuments(params?: {
       limit?: number
       offset?: number
@@ -73,11 +64,6 @@ export type DocumentListClient = {
   }
 }
 
-/**
- * Lists every document id in the index, oldest first, for the parity
- * reconciler. Only the primary key is fetched; the record of what should be
- * indexed lives in Postgres, so the index is never asked for content here.
- */
 export async function listDocumentIds(
   client: DocumentListClient,
   indexName: string,

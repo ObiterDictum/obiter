@@ -22,8 +22,6 @@ describe('document edit contracts', () => {
   }
 
   it('accepts the typed operation surface and exact response', () => {
-    // An omitted trackChanges leaves the stored setting unchanged, so the
-    // parsed request must not invent a value for it.
     expect(
       documentEditRequestSchema.parse({
         baseVersionId: 'ver_1',
@@ -79,8 +77,6 @@ describe('document edit contracts', () => {
   })
 
   it('accepts a settings-only save and rejects an empty one', () => {
-    // `{ operations: [] }` alone carries nothing; with the toggle it is the
-    // request shape a lone flip sends.
     expect(
       documentEditRequestSchema.parse({
         baseVersionId: 'ver_1',
@@ -488,7 +484,6 @@ describe('document edit contracts', () => {
     expect(parse(0)).toBe(false)
     expect(parse(DOCUMENT_EDIT_NUMBERING_START_MAX + 1)).toBe(false)
     expect(parse(1.5)).toBe(false)
-    // An override without an instance has nothing to attach to.
     expect(
       documentEditRequestSchema.safeParse({
         baseVersionId: 'ver_1',

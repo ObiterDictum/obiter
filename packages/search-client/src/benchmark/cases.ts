@@ -125,11 +125,6 @@ const objectiveCases: SearchBenchmarkCase[] = [
     query: 'Potanina',
     expectedTopId: 'uksc-2024-3',
   },
-  // party-potanina and party-paul are re-ranking-decisive: the
-  // *-costs-2025-1 decoys match the single party token in their id, which the
-  // engine's attribute rule ranks above the title match, so only the exact-
-  // match tier re-rank restores the right judgment. Deleting that stage flips
-  // both to top_1_miss.
   {
     id: 'party-paul',
     category: 'party_names',
@@ -328,29 +323,15 @@ const shortWordCases: SearchBenchmarkCase[] = shortWordFixtures.map(
 
 export const searchBenchmarkCases = [...objectiveCases, ...shortWordCases]
 
-/**
- * Recall benchmark: queries a solicitor would run, each with the set of docs
- * that SHOULD be returned, judged independently of the index. Unlike the
- * gate-1 cases above (every expected id is indexed, so the ceiling is 1.0 by
- * construction), relevantIds may name authorities not yet ingested. Those
- * queries score honestly below 1 today and rise as the ingest campaign lands
- * them, which is what makes this a recall measure rather than a pass/fail.
- */
 export interface SearchRecallQuery {
   id: string
   query: string
   filters?: LegalSearchFilters
   relevantIds: string[]
-  /**
-   * Plausible-but-nonexistent citation: must return zero results. The
-   * precision half of the benchmark; a citation-decoy returning a near-miss
-   * judgment is the precision failure recall-only scoring would reward.
-   */
   expectNoResults?: boolean
 }
 
 export const searchRecallQueries: SearchRecallQuery[] = [
-  // Neutral citations: exact, partial, malformed.
   {
     id: 'recall-cite-uksc-2024-3',
     query: '[2024] UKSC 3',
@@ -371,7 +352,6 @@ export const searchRecallQueries: SearchRecallQuery[] = [
     query: '[2022 EWCA Civ 159',
     relevantIds: ['ewca-civ-2022-159'],
   },
-  // Party names, including a one-typo misspelling and ambiguous names.
   {
     id: 'recall-party-potanina',
     query: 'Potanina',
@@ -393,9 +373,6 @@ export const searchRecallQueries: SearchRecallQuery[] = [
     query: 'R v Brown',
     relevantIds: ['ewca-crim-1994-2', 'ewca-crim-1993-1'],
   },
-  // Subject matter. donoghue-v-stevenson-1932, cobbe-v-yeomans-row-2008 and
-  // carlill-v-carbolic-1893 are real authorities not yet ingested: recall on
-  // those queries is legitimately below 1 until the ingest campaign lands them.
   {
     id: 'recall-subject-psychiatric',
     query: 'psychiatric harm negligence',
@@ -426,7 +403,6 @@ export const searchRecallQueries: SearchRecallQuery[] = [
     query: 'unilateral contract advertisement',
     relevantIds: ['carlill-v-carbolic-1893'],
   },
-  // Citation decoys: plausible references to judgments that do not exist.
   {
     id: 'recall-decoy-uksc-999',
     query: '[2024] UKSC 999',

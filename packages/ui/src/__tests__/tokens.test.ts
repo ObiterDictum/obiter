@@ -3,27 +3,15 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'bun:test'
 
-/**
- * Enforces the contrast guarantee from contract §2.3: every `-fg` token must
- * reach WCAG AA (>= 4.5:1) over its matching base token, in BOTH light and dark
- * themes. Parses tokens.css directly so it verifies the real artifact, not a
- * parallel data structure.
- */
-
 type RGB = [number, number, number]
 
 const tokensCss = readFileSync(resolve(__dirname, '../tokens.css'), 'utf8')
 
 function extractBlock(source: string, selector: string): string {
-  // Prettier normalizes CSS attribute-selector quotes to single quotes; match
-  // either quote style so this raw-source assertion survives reformatting.
-  // Escape the selector for RegExp, then loosen each `"` into `["']`.
   const re = new RegExp(
     selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/"/g, '[\'"]'),
   )
   let from = 0
-  // The selector may also appear in comments; only accept an occurrence that is
-  // followed (ignoring whitespace) by a `{`.
   for (;;) {
     const match = re.exec(source.slice(from))
     expect(match, `theme block ${selector} must exist`).toBeTruthy()
@@ -38,7 +26,6 @@ function extractBlock(source: string, selector: string): string {
   }
 }
 
-/* Verify the shipped defaults and the explicit dark override. */
 const darkBlock = extractBlock(tokensCss, '[data-theme="dark"]')
 const lightBlock = extractBlock(tokensCss, ':root')
 
@@ -133,7 +120,7 @@ function contrastCases(block: string): Array<{ name: string; ratio: number }> {
     if (!baseValue) continue
     const fg = parseColor(value)
     const bg = parseColor(baseValue)
-    if (!fg || !bg) continue // skip rgba overlays that have no opaque base
+    if (!fg || !bg) continue
     cases.push({ name: baseKey, ratio: contrastRatio(fg, bg) })
   }
   return cases

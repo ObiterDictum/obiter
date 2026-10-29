@@ -183,11 +183,6 @@ const objectiveDocuments = [
       'A satellite issue concerned costs only.',
     ],
   ),
-  // Re-ranking decoys: the document id carries a party token, but nothing
-  // else does. The engine's attribute rule prefers the id-field match, so a
-  // party-name query ranks the decoy above the judgment whose title holds the
-  // name; only the exact-match tier re-rank restores the right document.
-  // Deleting that stage flips party-potanina and party-paul to top_1_miss.
   judgment(
     'potanina-costs-2025-1',
     'Costs assessment after overseas divorce',

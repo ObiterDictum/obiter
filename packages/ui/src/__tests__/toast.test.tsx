@@ -57,7 +57,6 @@ describe('Toast', () => {
   })
 
   it('throws when useToast is used outside the provider', () => {
-    // Suppress the expected console.error from React's error boundary logging.
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(() => render(<NoProviderConsumer />)).toThrow(
       /useToast must be used within/,

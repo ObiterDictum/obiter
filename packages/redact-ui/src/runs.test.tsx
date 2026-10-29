@@ -96,10 +96,8 @@ describe('RedactionRunsView', () => {
     expect(screen.getByText('Drop the document here')).toBeTruthy()
     expect(screen.getByText(/Up to 25 MB/u)).toBeTruthy()
     expect(screen.getByText(/The original is never changed/u)).toBeTruthy()
-    // Pasted text is behind a disclosure, and says what it costs.
     expect(screen.queryByLabelText('Document text')).toBeNull()
     expect(screen.getByText(/For a short extract/u)).toBeTruthy()
-    // A secondary action, not a heading: the upload stays the primary path.
     const paste = screen.getByRole('button', { name: 'Paste text instead' })
     expect(paste.className).not.toContain('ghost')
     fireEvent.click(paste)
@@ -114,7 +112,6 @@ describe('RedactionRunsView', () => {
       data: { runs: [run({ status: 'reviewing' })] },
     })
     render(<RedactionRunsView onOpenRun={vi.fn()} />)
-    // The row's neighbour of Continue is not a destructive control.
     expect(
       screen.queryByRole('button', { name: /^Delete run for/u }),
     ).toBeNull()
@@ -126,7 +123,6 @@ describe('RedactionRunsView', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Delete run/u }))
     expect(screen.getByText('Delete redaction run')).toBeTruthy()
     expect(screen.getByText(/Removals are soft/u)).toBeTruthy()
-    // Nothing is deleted until the dialog is confirmed.
     expect(mutateAsync).not.toHaveBeenCalled()
   })
 
@@ -176,7 +172,6 @@ describe('RedactionRunsView', () => {
       screen.getByText('No text layer was found in this PDF.'),
     ).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy()
-    // No run calls itself a "standalone run".
     expect(screen.queryByText(/Standalone run/u)).toBeNull()
     expect(screen.getByRole('button', { name: 'View' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Details' })).toBeTruthy()

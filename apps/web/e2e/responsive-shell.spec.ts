@@ -13,22 +13,10 @@ import {
   workspaceNav,
 } from './shell-harness'
 
-/**
- * Shell chrome layout regression.
- *
- * The sidebar replaced the top mode bar and the hover-expand icon rail. This
- * measures the real rendered layout at every supported width and fails if the
- * document widens beyond the viewport, if a module is covered by other chrome,
- * if a module cannot be activated, if collapsing the sidebar strands a module,
- * or if a floating surface leaves the viewport.
- */
 test('the shell fits every supported width and every module stays reachable', async ({
   page,
 }) => {
   await mockSession(page)
-  // Entry is /search because a client route's loader runs against the mocked
-  // API; a full load of / or /matters is server-rendered and would sign in for
-  // real before any route mock applies.
   await page.goto('/search')
   await expect(workspaceNav(page)).toBeVisible()
 
@@ -53,9 +41,6 @@ test('the shell fits every supported width and every module stays reachable', as
       await link.focus()
       await expect(link).toBeFocused()
 
-      // A focused module must be on-screen, not covered by the top bar, and
-      // able to activate. Covering is what made the last modes unreachable in
-      // the old rail, so hit-test rather than trust CSS.
       const state = await link.evaluate((element) => {
         const rect = element.getBoundingClientRect()
         const top = document.elementFromPoint(
@@ -114,8 +99,6 @@ test('the sidebar collapses to an icon rail and remembers the choice', async ({
     .poll(async () => asideWidth(sidebar(page)))
     .toBeLessThanOrEqual(64)
 
-  // The rail keeps every module as a labelled control, including the ones the
-  // expanded sidebar shows with a count.
   for (const module of MODULES) {
     await expect(
       workspaceNav(page).getByRole('link', {
@@ -177,13 +160,11 @@ test('the account menu is opened and driven from the keyboard', async ({
   const settings = menu.getByRole('menuitem', { name: 'Account settings' })
   const signOut = menu.getByRole('menuitem', { name: 'Sign out' })
 
-  // Enter on the trigger opens the menu and moves focus into it.
   await trigger.focus()
   await page.keyboard.press('Enter')
   await expect(menu).toBeVisible()
   await expect(settings).toBeFocused()
 
-  // Arrows and Home/End move between the items the menu owns.
   await page.keyboard.press('ArrowDown')
   await expect(signOut).toBeFocused()
   await page.keyboard.press('Home')
@@ -191,12 +172,10 @@ test('the account menu is opened and driven from the keyboard', async ({
   await page.keyboard.press('End')
   await expect(signOut).toBeFocused()
 
-  // Escape closes it and returns focus to the avatar.
   await page.keyboard.press('Escape')
   await expect(menu).toBeHidden()
   await expect(trigger).toBeFocused()
 
-  // ArrowDown opens it as well, and Tab closes it without trapping focus.
   await page.keyboard.press('ArrowDown')
   await expect(menu).toBeVisible()
   await page.keyboard.press('Tab')
@@ -212,8 +191,6 @@ test('the collapsed rail keeps accessible names and labels its icons', async ({
   await page.goto('/search')
   await expect(workspaceNav(page)).toBeVisible()
 
-  // A rail row is still a link with its module name, not a button: the label
-  // tooltip is supplementary, so the icon has to stay a link for navigation.
   const matters = workspaceNav(page).getByRole('link', { name: 'Matters' })
   await expect(matters).toHaveCount(1)
   await matters.hover()
@@ -229,8 +206,6 @@ test('the expanded search panel stays inside the viewport', async ({
     await page.setViewportSize({ width, height: 800 })
     await page.goto('/search')
 
-    // At 1024 and below the field is an icon-only control that opens the
-    // composer; above that, the field itself takes the query.
     const field = page.getByRole('textbox', { name: 'Search Obiter' })
     if (await field.isVisible()) {
       await field.click()

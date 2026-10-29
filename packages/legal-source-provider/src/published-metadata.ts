@@ -11,28 +11,12 @@ import {
 } from './legaldocml-parser'
 import type { MojRequestBudget } from './rate-limiter'
 
-/**
- * The two things a judgment page shows that Obiter may not derive from the
- * judgment itself: the bench and the court's summary.
- *
- * The Open Justice Licence covers storing and republishing a judgment; it does
- * not cover computational analysis of the text, which The National Archives
- * licenses separately. So every value here is read from a field Find Case Law
- * already publishes as structured metadata, and the field is recorded beside
- * the value. A judgment that carries no such field yields nothing — no regex
- * over the cover page, no model over the paragraphs.
- *
- * The `source` is `fcl_metadata` for everything this module can produce. A
- * later licensed extractor writes `extracted` into the same shape, so a reader
- * can always tell which rows were read and which were derived.
- */
-
+// Legal: The Open Justice Licence covers storing and republishing a judgment, not computational analysis of its text. The bench and the court's summary are read only from structured metadata Find Case Law publishes, never derived by regex or model, and a judgment without the field yields nothing.
 export interface PublishedCaseLawMetadata {
   judges: CaseLawJudge[]
   summary: CaseLawSummary | null
 }
 
-/** A stored row, narrowed to what reading these fields needs. */
 export interface PublishedMetadataSourceRecord {
   court: string
   xmlUri: string | null
@@ -48,12 +32,6 @@ export type PublishedMetadataResult =
   | { status: 'ok'; metadata: PublishedCaseLawMetadata }
   | PublishedMetadataFailure
 
-/**
- * Courts whose Find Case Law pages link a press summary. The UK Supreme Court
- * is the only publisher observed: sixteen sampled pages across EWCA Civ, EWCA
- * Crim, EWHC, UKUT, EAT and UKPC carried no such link. Adding a court here
- * costs one page fetch per judgment, so it needs evidence its pages link one.
- */
 const pressSummaryCourts: ReadonlySet<string> = new Set(['uksc'])
 
 export async function fetchPublishedCaseLawMetadata(
@@ -91,11 +69,6 @@ export async function fetchPublishedCaseLawMetadata(
   return { status: 'ok', metadata: { judges, summary: summary.summary } }
 }
 
-/**
- * The press summary is a separate published document. The judgment page links
- * it, and the summary's own `<uk:summaryOf>` names the judgment it belongs to;
- * both are checked, so a link to another case's summary is never stored.
- */
 async function fetchPressSummary(
   env: FindCaseLawEnv,
   record: PublishedMetadataSourceRecord,
@@ -130,7 +103,6 @@ async function fetchPressSummary(
 
   const summary = extractLegalDocMlPressSummary(xml.text)
   if (!summary) return { status: 'skipped', reason: 'unparsable' }
-  // A summary that does not name this judgment is not this judgment's summary.
   const summaryPath = documentPath(summary.summaryOf)
   const judgmentPath = documentPath(record.sourceUri)
   if (!summaryPath || !judgmentPath || summaryPath !== `/id${judgmentPath}`)
@@ -147,7 +119,6 @@ async function fetchPressSummary(
   }
 }
 
-/** The judgment page's own link to its press summary, if it publishes one. */
 function readPressSummaryHref(html: string): string | null {
   for (const match of html.matchAll(/href="([^"]+)"/gi)) {
     if (match[1].endsWith('/press-summary')) return match[1]

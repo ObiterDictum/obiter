@@ -9,11 +9,8 @@ export interface RecallQueryResult {
   id: string
   query: string
   returnedIds: string[]
-  /** Relevant ids absent from the indexed fixtures: recall lost to coverage, not ranking. */
   unindexedRelevantIds: string[]
-  /** Null for decoy (precision) queries. */
   recall: number | null
-  /** True when a decoy query correctly returned nothing. Null for recall queries. */
   decoyNoResults: boolean | null
 }
 
@@ -66,9 +63,7 @@ export async function runRecallQuery(
 
 export interface RecallMetrics {
   queryCount: number
-  /** Mean per-query recall@10 over non-decoy queries. */
   recall: number | null
-  /** Fraction of decoy queries returning zero results. */
   precision: number | null
 }
 
@@ -98,11 +93,6 @@ export function scoreRecallQueries(
   }
 }
 
-/**
- * Regression guard for the recall benchmark. Aggregate drops fail, and every
- * per-query drop names its query, so a regression points at the query that
- * regressed rather than a bare number.
- */
 export function recallRegressionFailures(
   metrics: RecallMetrics,
   results: RecallQueryResult[],

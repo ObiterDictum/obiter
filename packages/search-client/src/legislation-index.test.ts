@@ -26,11 +26,6 @@ const provision: LegislationProvisionDocument = {
   sourceUrl: 'https://www.legislation.gov.uk/ukpga/2020/1',
 }
 
-/**
- * The engine client returns the task promise itself with waitTask attached,
- * not a promise of a task object: awaiting resolves the EnqueuedTask while
- * .waitTask stays available on the promise. Mocks repeat that shape.
- */
 function enqueuedTask(
   result: { status?: string; error?: { code?: string } },
   taskUid = 1,
@@ -179,8 +174,6 @@ describe('legislation provision index', () => {
   })
 
   it('forwards a cancellation signal to the engine request', async () => {
-    // The serve layer bounds the keyword call with a deadline. The signal must
-    // reach the client so the transport is aborted, not merely abandoned.
     const requestInits: Array<{ signal?: AbortSignal | null } | undefined> = []
     const client = {
       index: () => ({
@@ -208,8 +201,6 @@ describe('legislation provision index', () => {
     )
     expect(requestInits[0]?.signal).toBe(controller.signal)
 
-    // No signal: no fabricated extra request init, so any client-level
-    // transport default still applies.
     await searchLegislation(
       client as unknown as Parameters<typeof searchLegislation>[0],
       'legislation_provisions',
@@ -219,9 +210,6 @@ describe('legislation provision index', () => {
   })
 
   it('aborts a hung engine request when the signal fires', async () => {
-    // Task-owned fake engine: accepts the request and never answers. With the
-    // signal forwarded to fetch the search rejects at the deadline; without it
-    // the promise would never settle.
     const server = Bun.serve({
       port: 0,
       fetch: () => new Promise<Response>(() => undefined),
@@ -239,10 +227,6 @@ describe('legislation provision index', () => {
   })
 
   it('reports the search-time parameters it actually sent', async () => {
-    // A caller measuring relevance records these instead of its own
-    // configured constants: the server that answered may be running a
-    // different checkout, and matchingStrategy is request-time, so no index
-    // setting reveals it.
     const queries: Array<Record<string, unknown>> = []
     const client = {
       index: () => ({
@@ -268,8 +252,6 @@ describe('legislation provision index', () => {
     })
     expect(queries[0]?.rankingScoreThreshold).toBe(0.35)
 
-    // An empty query sends no floor, and the report says so rather than
-    // repeating the configured value.
     const bare = await searchLegislation(
       client as unknown as Parameters<typeof searchLegislation>[0],
       'legislation_provisions',

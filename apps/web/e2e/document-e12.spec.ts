@@ -20,33 +20,11 @@ import {
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { fixturePath, verifyEmailInDb } from './support'
 
-/*
- * E12 browser journey: the Layout ribbon's classification controls must
- * commit immutable versions through the real API, the committed markings must
- * survive a reload and ride the DOCX export inside docProps/custom.xml, the
- * share-safe export must strip comments, signatures, identifying metadata and
- * foreign custom properties while keeping the product's own markings, and a
- * document-bound redaction run must return its finalized DOCX as a new linked
- * version. Filenames cross the wire non-ASCII so the RFC 5987 disposition and
- * the browser's download name are asserted, not assumed.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; verification is marked directly in the task-owned test database,
- * never the shared one. Fixtures are generated into /tmp, never committed.
- */
-
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..')
 const RICH_FIXTURE = path.join('/tmp', 'e12-rich.docx')
 
-/**
- * A DOCX that exercises the share-safe removal half: comments, a signature,
- * identifying core properties and a foreign custom property, but no tracked
- * changes (which the policy must refuse, not silently accept or reject). The
- * tracked-change paragraphs are lifted straight out so the rest of the
- * fixture stays byte-identical to the ooxml suite's.
- */
 const FIXTURE_SCRIPT = `
   const { buildOoxmlFixture } = await import('${REPO_ROOT}/packages/ooxml/fixtures/builder.ts')
   const { default: JSZip } = await import('jszip')
@@ -61,7 +39,6 @@ const FIXTURE_SCRIPT = `
   await Bun.write('${RICH_FIXTURE}', await zip.generateAsync({ type: 'uint8array' }))
 `
 
-/** A non-ASCII upload name — the export dispositions must carry it exactly. */
 const UNICODE_NAME = 'état des lieux — mémo.docx'
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -69,13 +46,11 @@ const DOCX_MIME =
 function buildRichFixture() {
   rmSync(RICH_FIXTURE, { force: true })
   execFileSync('bun', ['-e', FIXTURE_SCRIPT], {
-    // jszip is an @obiter/ooxml dependency — resolve it from there.
     cwd: `${REPO_ROOT}/packages/ooxml`,
     stdio: 'pipe',
   })
 }
 
-/** Unzip downloaded DOCX bytes to JSON of { part: xml } via the ooxml deps. */
 function inspectDocx(filePath: string) {
   const stdout = execFileSync(
     'bun',
@@ -114,7 +89,6 @@ async function createAccount(request: APIRequestContext, prefix: string) {
   return { email, password }
 }
 
-/** Uploads the named DOCX into a fresh matter and opens it in the workspace. */
 async function openUploadedDocument(
   page: Page,
   email: string,
@@ -137,8 +111,6 @@ async function openUploadedDocument(
     .getByRole('button', { name: 'Create matter', exact: true })
     .last()
     .click()
-  // The dialog stays open after a successful create; dismiss it so the new
-  // matter's link is clickable.
   await page
     .getByRole('button', { name: 'Cancel' })
     .click({ timeout: 5_000 })
@@ -171,12 +143,6 @@ type MarkingsBody = {
   }
 }
 
-/**
- * Opens the surface that holds a former tab's commands and proves it is up
- * before the caller touches its controls: a click that lands while the
- * workspace re-renders its chrome (post-load, post-reload) can hit a detached
- * trigger and silently lose the activation.
- */
 async function openTab(page: Page, name: 'Layout' | 'Review') {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const opened = await openRibbonTab(page, name)
@@ -220,8 +186,6 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   await openTab(page, 'Layout')
   await expect(kind).toBeVisible()
 
-  // Each change is its own immutable commit; the control must carry the
-  // committed state back rather than a local paint.
   await choose(page, 'Document type', 'Particulars of claim')
   await expect(kind).toHaveText('Particulars of claim')
   await expect(kind).toBeEnabled()
@@ -231,8 +195,6 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   await expect(privileged).toHaveAttribute('aria-pressed', 'true')
   await expect(withoutPrejudice).toHaveAttribute('aria-pressed', 'false')
 
-  // Three commits, each named against the head it replaced — the wire shape
-  // the stale-base rule depends on.
   expect(markingsRequests).toHaveLength(3)
   expect(markingsRequests[0]?.markings?.documentKind).toBe('particulars')
   expect(markingsRequests[1]?.markings?.draft).toBe(true)
@@ -241,8 +203,6 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
     3,
   )
 
-  // Stored, not painted: a reload reads the same markings back out of the
-  // committed DOCX's custom properties.
   await page.reload({ waitUntil: 'networkidle' })
   await openTab(page, 'Layout')
   await expect(kind).toHaveText('Particulars of claim', { timeout: 30_000 })
@@ -250,8 +210,6 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   await expect(privileged).toHaveAttribute('aria-pressed', 'true')
   await expect(withoutPrejudice).toHaveAttribute('aria-pressed', 'false')
 
-  // The standard export keeps the package's properties — the markings and
-  // the foreign dms property alike — and names the file as uploaded.
   const [standardDownload] = await Promise.all([
     page.waitForEvent('download'),
     runMenuCommand(page, 'File', 'Export'),
@@ -266,13 +224,10 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   expect(standardCustom).toContain('obiter.draft')
   expect(standardCustom).toContain('obiter.privileged')
   expect(standardCustom).toContain('dms.matterRef')
-  // The untouched export still carries what the upload carried.
   expect(standard['word/comments.xml']).toBeTruthy()
   expect(standard['word/document.xml']).toContain('commentReference')
   expect(standard['_xmlsignatures/sig1.xml']).toBeTruthy()
 
-  // The share-safe export: the file is named for what it is, the markings
-  // survive, and everything the policy strips is verifiably gone.
   const [shareDownload] = await Promise.all([
     page.waitForEvent('download'),
     runMenuCommand(page, 'File', 'Share-safe export'),
@@ -307,22 +262,16 @@ test('a document redaction run returns its finalized copy as a new version', asy
     buffer: readFileSync(fixturePath()),
   })
 
-  // The File menu's entry reveals the document-level control rather than
-  // starting a shadow run; the region's own button creates it.
   await runMenuCommand(page, 'File', 'Redact this document')
   const region = page.getByRole('region', { name: 'Redaction runs' })
   await expect(region).toBeFocused()
   await region.getByRole('button', { name: 'Redact this document' }).click()
 
-  // Run creation opens the review screen; detection completes into a
-  // reviewable state.
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
   await expect(
     page.getByRole('button', { name: 'Finalise', exact: true }),
   ).toBeVisible({ timeout: 60_000 })
 
-  // Finalising is blocked until every detected span has a decision. Decide them
-  // from the listbox: Enter accepts the selected span, ArrowDown moves on.
   const listbox = page.getByRole('listbox', { name: 'Detected spans' })
   await listbox.focus()
   const unreviewed = page.getByRole('tab', { name: /^Unreviewed/u })
@@ -345,7 +294,6 @@ test('a document redaction run returns its finalized copy as a new version', asy
   }
   await expect(unreviewed).toHaveText('Unreviewed 0', { timeout: 20_000 })
 
-  // A returnable output is the editable DOCX, not the secure PDF.
   await page.getByRole('button', { name: 'Finalise', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Finalise this redaction?' }),
@@ -359,8 +307,6 @@ test('a document redaction run returns its finalized copy as a new version', asy
     .getByRole('button', { name: 'Finalise pseudonymised copy' })
     .click()
 
-  // The finalized screen offers the return; committing it reports the new
-  // version number against the source document.
   const returnButton = page.getByRole('button', {
     name: 'Return to document',
   })
@@ -371,8 +317,6 @@ test('a document redaction run returns its finalized copy as a new version', asy
   })
   await expect(page.getByText(/Saved as version \d+ of the/)).toBeVisible()
 
-  // The document link leads back; the new version sits on the document's
-  // version list and the run no longer offers a second return.
   await page.getByRole('button', { name: 'Open document' }).click()
   await expect(page).toHaveURL(/\/documents\/doc_/, { timeout: 20_000 })
   await openMenu(page, 'File')

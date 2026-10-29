@@ -1,11 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 
-/**
- * Shared harness for the shell chrome specs. The sidebar and the top bar are
- * measured through the real rendered layout, so every helper here reads boxes
- * and real input effects rather than class strings. Auth is mocked at the
- * network boundary so no account, database or email is needed.
- */
 export const WIDTHS = [320, 390, 768, 1024, 1440]
 export const MODULES = [
   { name: 'Home', path: '/' },
@@ -49,8 +43,6 @@ export async function mockSession(
       },
     }),
   )
-  // The sidebar reads the workspace's counts; empty lists keep the chrome
-  // deterministic without inventing data.
   await page.route('**/api/matters', (route) =>
     route.fulfill({ json: { matters: [] } }),
   )
@@ -62,7 +54,6 @@ export async function mockSession(
   )
 }
 
-/** The labelled module list inside the sidebar. */
 export function workspaceNav(page: Page) {
   return page.getByRole('navigation', { name: 'Workspace' })
 }
@@ -88,8 +79,6 @@ export async function sidebarToggle(page: Page) {
   })
 }
 
-/** Settings is reached through the account menu: its loader runs during SSR,
- * where the mocked session does not apply, so a full page load cannot do it. */
 export async function gotoOtherMode(page: Page) {
   await page.goto('/search')
   await expect(workspaceNav(page)).toBeVisible()

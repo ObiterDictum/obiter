@@ -13,31 +13,6 @@ import {
 } from './finding'
 import type { VerificationSubject } from './subject'
 
-/**
- * What a lookup found for a citation that resolved to an identity. The shape
- * is source-independent: the only public source material it names is the
- * evidence a finding rests on, so a store boundary can build it without this
- * package importing a database or a provider.
- *
- * - `held`: a trustworthy stored source matches. `evidence` names the stored
- *   source: the document identity itself for a whole-authority match, or the
- *   provision for a provision-level one. The decision withholds the clear if a
- *   caller reports a held source with no evidence at all rather than inventing
- *   an anchor.
- * - `not_held`: no trustworthy stored source matches. `missing` separates an
- *   absent authority from an absent provision of a held Act, because the two
- *   read differently to a reviewer. Neither claims the authority is fictitious.
- * - `ambiguous`: more than one stored source matches. There is no winner.
- * - `unavailable`: the lookup could not answer, because the store failed, a
- *   stored row failed its schema, the only matching source is withdrawn
- *   upstream, the citation's stored identity disagrees with the record, or a
- *   schedule citation is underspecified. This is not an absence. The `reason`
- *   is the operational category: a database that is down and a schema-invalid
- *   row both make the check inconclusive, but they are different failures and
- *   a caller must be able to tell them apart without reading the explanation.
- * - `skipped`: no lookup ran, because the citation never resolved to an
- *   identity.
- */
 export type AuthorityExistenceOutcome =
   | { outcome: 'held'; evidence: EvidenceReference[] }
   | { outcome: 'not_held'; missing: 'authority' | 'provision' }
@@ -57,7 +32,6 @@ export interface AuthorityExistenceDecisionInput {
   subject: VerificationSubject
   citation: CitationInput
   normalizedCitation: NormalizedCitation
-  /** Required for a resolved citation, `skipped` otherwise. */
   outcome: AuthorityExistenceOutcome
 }
 
@@ -69,13 +43,6 @@ interface DecidedOutcome {
   explanation: string
 }
 
-/**
- * Why the check could not act on the citation, in a reviewer's terms. A
- * citation-shaped candidate that matched no stored source reads differently
- * from one this check cannot parse, so the reasons do not share one message.
- * Every wording is a statement about the sources Obiter holds, never about
- * whether the authority exists.
- */
 function unresolvedExplanation(
   reason: Exclude<CitationUnresolvedReason, 'ambiguous'>,
 ) {
@@ -104,13 +71,6 @@ function isResolved(
   return citation.kind === 'case_law' || citation.kind === 'legislation'
 }
 
-/**
- * The authority-existence truth table. It answers one question, and every
- * branch fails closed: a citation that did not resolve is never cleared, a
- * store that could not answer is never read as absent, and a held source with
- * no evidence is reviewed rather than cleared. Nothing here writes, and the
- * only public source named is the evidence the caller already looked up.
- */
 function decide(input: AuthorityExistenceDecisionInput): DecidedOutcome {
   const citation = input.normalizedCitation
   const resolved = isResolved(citation)
@@ -180,9 +140,6 @@ function decide(input: AuthorityExistenceDecisionInput): DecidedOutcome {
         citation.kind === 'case_law' &&
         input.outcome.missing === 'provision'
       ) {
-        // Case law has no provisions, so a "missing provision of a held case"
-        // is a contradiction, not an outcome. Reject it here rather than emit
-        // the Act-worded explanation for a judgment citation.
         throw new Error(
           'A case-law citation cannot be missing a provision; only a held Act has provisions.',
         )
@@ -258,14 +215,6 @@ function decide(input: AuthorityExistenceDecisionInput): DecidedOutcome {
   }
 }
 
-/**
- * One authority-existence finding for a cited authority and a lookup outcome.
- * The returned value is an accepted finding state, so a caller cannot wrap the
- * decision in a status the truth table refuses. Evidence is validated against
- * the resolved citation by the finding schema: a lookup that reports a held
- * source but hands over another source's evidence fails loudly rather than
- * producing a clear finding it cannot support.
- */
 export function decideAuthorityExistence(
   input: AuthorityExistenceDecisionInput,
 ): VerificationFinding {

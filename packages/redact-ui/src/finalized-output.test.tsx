@@ -43,8 +43,6 @@ const sourcePreviewHooks = vi.hoisted(() => ({
   })),
 }))
 
-// Capture the Blob handed to the preview so a test can prove the download used
-// the exact same output bytes rather than refetching different ones.
 const preview = vi.hoisted(() => ({
   file: null as Blob | null,
   onStatusChange: null as ((status: PdfPreviewStatus) => void) | null,
@@ -225,7 +223,6 @@ describe('finalised disclosure copy', () => {
       ),
     ).toBeTruthy()
     expect(screen.getByText('21 of 21')).toBeTruthy()
-    // The size comes from the fetched bytes, not a guess.
     expect(screen.getByText('17 B')).toBeTruthy()
     expect(screen.getByText('Last updated')).toBeTruthy()
     expect(
@@ -422,7 +419,6 @@ describe('finalised output variants', () => {
         'Accepted text is replaced and the document keeps its formatting. Do not treat a Word copy as disclosure-safe: check every page before serving it.',
       ),
     ).toBeTruthy()
-    // No in-app preview for a Word copy, and the copy says so.
     expect(
       screen.getByText(
         'There is no in-app preview for this format. Open the downloaded file and check every page before you share it.',
@@ -576,8 +572,7 @@ describe('redaction schedule', () => {
     expect(mutate).toHaveBeenCalledWith('docx', expect.anything())
     expect(downloaded).toBe('redaction-schedule.docx')
 
-    // The shareable audit leaves the firm, so its name never carries the
-    // source filename the schedule's own name does.
+    // Legal: the shareable audit leaves the firm, so its filename never carries the source document's name.
     fireEvent.click(
       screen.getByRole('button', { name: 'Export shareable JSON' }),
     )
@@ -627,8 +622,6 @@ describe('return to document', () => {
     hooks.useRedactionOutput.mockReturnValue({
       isPending: false,
       data: {
-        // mimeType intentionally absent: the view falls back to
-        // summary.outputMimeType, which each case controls.
         filename: 'brief-redacted.docx',
         text: null,
         outputId: 'out_1',
@@ -720,8 +713,6 @@ describe('return to document', () => {
   })
 
   it('offers saving to a matter only for a run that belongs to none', () => {
-    // A standalone run has no version to return to, so it is filed into a
-    // matter instead; a run already linked to a document never is.
     for (const data of [
       { ...baseRun, summary: summary(docxOutput) },
       {
@@ -770,7 +761,6 @@ describe('return to document', () => {
       screen.getByRole('heading', { name: 'Save this copy to a matter' }),
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Save to matter' }))
-    // No matter chosen yet, so the confirm stays disabled.
     expect(mutate).not.toHaveBeenCalled()
   })
 })

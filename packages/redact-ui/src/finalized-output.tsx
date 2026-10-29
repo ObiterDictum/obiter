@@ -39,7 +39,6 @@ const downgradeCopy = {
     'The formatted document could not be produced, so a plain-text file was provided instead. Do not serve this file without checking it first.',
 } satisfies Record<string, string>
 
-/** What the file is, from the type the output actually carries. */
 function formatLabel(mimeType: string, securePdf: boolean) {
   if (mimeType === DOCX_MIME) return 'Word document (.docx)'
   if (mimeType === 'application/pdf')
@@ -47,7 +46,6 @@ function formatLabel(mimeType: string, securePdf: boolean) {
   return 'Plain text (.txt)'
 }
 
-/** The export contents, stated from the fields the output actually carries. */
 function exportContents(
   run: RedactionRun,
   mimeType: string,
@@ -100,12 +98,6 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-/**
- * The finalise page. The disclosure copy and the redaction schedule are shown
- * as two separate files with different audiences: the copy leaves the firm, the
- * schedule never does. REVIEW-professional found the two blurred together when
- * a single card carried both.
- */
 export function FinalizedOutput({
   run,
   outputQuery,
@@ -113,8 +105,6 @@ export function FinalizedOutput({
 }: {
   run: RedactionRun
   outputQuery: ReturnType<typeof useRedactionOutput>
-  /** Opens the document this copy became; absent where the host cannot route
-   * there. */
   onOpenDocument?: (target: { matterId: string; documentId: string }) => void
 }) {
   const output = outputQuery.data
@@ -123,7 +113,6 @@ export function FinalizedOutput({
   const securePdf = output?.securePdf ?? run.summary.securePdf ?? false
   const isPdf = mimeType === 'application/pdf'
   const isDocx = mimeType === DOCX_MIME
-  // Both burned outputs download as files; only the PDF previews inline.
   const isFile = isPdf || isDocx
   const filename =
     output?.filename ?? run.summary.outputFilename ?? run.sourceFilename
@@ -136,12 +125,7 @@ export function FinalizedOutput({
     status: PdfPreviewStatus
   }>({ blob: null, status: { kind: 'loading' } })
   const copy = exportContents(run, mimeType, securePdf)
-  // Preview and download read the same immutable Blob fetched once here. The
-  // disclosure download stays disabled until its preview has rendered at least
-  // the first page, so a broken preview cannot push an unchecked file.
   const outputFile = fileQuery.data
-  // Trust a preview status only for the Blob it described: a refetched or new
-  // output must render again before the download is enabled.
   const previewStatus: PdfPreviewStatus =
     outputFile !== undefined && preview.blob === outputFile
       ? preview.status
@@ -159,11 +143,6 @@ export function FinalizedOutput({
   const outputBlob = () =>
     isFile && outputFile ? outputFile : output?.text != null ? textBlob() : null
 
-  // The E12 handoff back to the editor: only a document-linked run whose
-  // output is editable DOCX can return, and a superseded run's output never
-  // can — its review decisions no longer describe the source. The base the
-  // request names is the version the run redacted; a moved head is refused
-  // server-side rather than overwritten here.
   const returnable =
     run.documentId !== null &&
     run.documentVersionId !== null &&
@@ -172,8 +151,6 @@ export function FinalizedOutput({
   const returned = run.returnedDocumentVersionId ?? null
   const returnToDocument = useReturnToDocument(run.id)
   const schedule = useRedactionScheduleExport(run.id)
-  // A run with no document of its own has no version to return to, so the copy
-  // is filed by creating a document in the matter the reviewer picks.
   const standalone = run.matterId === null && run.documentId === null
   const exportSchedule = (format: 'pdf' | 'docx' | 'json-shareable') =>
     schedule.mutate(format, {

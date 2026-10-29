@@ -22,12 +22,6 @@ import {
   subject,
 } from './quote-fidelity.test-support'
 
-/**
- * The V4 span contract and source-integrity guards: a blank or mis-sliced
- * quotation is a named refusal, and a ready source that does not describe the
- * cited authority is a programmer error rather than a finding.
- */
-
 describe('quotation span contract', () => {
   it.each<[string, string, NormalizedCitation, QuoteSourceOutcome]>([
     [

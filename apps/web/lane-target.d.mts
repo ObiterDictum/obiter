@@ -1,9 +1,3 @@
-/**
- * Declarations for lane-target.mjs, which stays `.mjs` so Node can load it
- * from playwright.config.ts without a transform. Keep the signatures aligned
- * with the implementation — TypeScript trusts this file over inference.
- */
-
 export declare const SHARED_WEB_PORT: number
 export declare const SHARED_API_PORT: number
 export declare const WORKTREE_ROOT: string
@@ -16,11 +10,6 @@ export declare type LaneTargets = {
   apiOrigin: string
 }
 
-/**
- * The subset of `fetch` the lane checks use: a single-argument call returning
- * a Response. Declared rather than `typeof fetch` so tests can inject a fake
- * without Bun's `preconnect` helper on the function object.
- */
 export declare type LaneFetch = (
   input: string | URL | Request,
   init?: RequestInit,

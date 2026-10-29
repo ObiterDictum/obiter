@@ -1,11 +1,5 @@
 import { cn } from '../lib/cn'
 
-/**
- * The Obiter monogram — the approved "ob" mark from `final/icons.svg#i-obiter`.
- * Markup rather than the brand file so it inherits `currentColor` and tracks
- * the theme. Decorative when the surrounding link or heading already names
- * Obiter: pass `title=""`.
- */
 export function ObiterMark({
   className,
   title = 'Obiter',

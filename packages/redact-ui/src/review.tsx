@@ -37,10 +37,6 @@ import { ReviewPanel, type SpanFilter } from './review-panel'
 import { decisionCounts, spanDecisionState } from './span-copy'
 import type { RedactionRun } from './types'
 
-/**
- * The review header states where the run sits — filed in a matter, or not —
- * in words a reviewer understands, never "standalone run".
- */
 function runPosition(run: RedactionRun) {
   return run.matterName ?? 'Not filed in a matter'
 }
@@ -53,10 +49,7 @@ export function RedactionReviewView({
 }: {
   runId: string
   onOpenRun: (runId: string) => void
-  /** Opens the matter document the copy became; absent where the host has no
-   * route for it. */
   onOpenDocument?: (target: { matterId: string; documentId: string }) => void
-  /** Returns to the Redact run list; absent where the host has no route. */
   onBack?: () => void
 }) {
   const { data: me } = useCurrentUser()
@@ -81,8 +74,6 @@ export function RedactionReviewView({
   const listRef = useRef<HTMLDivElement | null>(null)
   const decision = useSpanDecision(runId)
 
-  // Keep the document mark for the selected span in view when choosing from the
-  // list, and the list row in view when walking with the decision bar.
   useEffect(() => {
     if (!selectedId) return
     document
@@ -90,8 +81,6 @@ export function RedactionReviewView({
       ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selectedId])
 
-  // A failed run needs no document text to explain itself: waiting for text it
-  // may never have would turn a dead end into a loading screen that fails.
   const failedWithoutText =
     runQuery.data?.status === 'failed' && !textQuery.data
   if (runQuery.isPending || (textQuery.isPending && !failedWithoutText)) {
@@ -104,8 +93,6 @@ export function RedactionReviewView({
       </div>
     )
   }
-  // Prefer cached data over a background refetch error (e.g. finalise
-  // invalidateQueries failing) so a successful local write is not blanked out.
   if (!runQuery.data) {
     return (
       <PageScaffold title="Redaction review">
@@ -196,8 +183,6 @@ export function RedactionReviewView({
   }
 
   const counts = decisionCounts(run.spans, run.decisions)
-  // A filter change drops the selection: the decision bar must always describe
-  // a span the reviewer can see, not one that the filter just hid.
   const changeFilter = (apply: () => void) => {
     apply()
     setSelectedId(null)
@@ -230,9 +215,6 @@ export function RedactionReviewView({
     decision.mutate({ spanId: selected.id, decision: decisionValue })
   }
 
-  // Same text, same decision: one "Priya" kept and another redacted leaks the
-  // name in the copy that leaves, so the decision can be repeated on every
-  // occurrence in one recorded action.
   const occurrences = selected
     ? sameTextOccurrences(run.spans, selected.text).length
     : 0
@@ -261,16 +243,7 @@ export function RedactionReviewView({
       return
     }
     if (!selected || decision.isPending || run.replacementRunId) return
-    // A modified chord belongs to the browser or the app shell, not to a legal
-    // decision: Ctrl+K opens app search and Ctrl+R reloads the page. Recording
-    // a decision on those chords mutated review state the user did not intend,
-    // so a modifier leaves every decision unchanged.
     if (event.ctrlKey || event.metaKey || event.altKey) return
-    // A decision shortcut is list-scoped: it belongs to the listbox only while
-    // the listbox itself owns focus. A key event that bubbled from a focused
-    // row button belongs to that row: acting on the separately selected span
-    // would record a legal decision against a span the reviewer was not looking
-    // at.
     if (event.target !== event.currentTarget) return
     const key = event.key.toLowerCase()
     const shortcut: SpanDecision | null =

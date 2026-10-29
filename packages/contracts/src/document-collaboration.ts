@@ -21,12 +21,6 @@ export const documentCursorSchema = z
   .strict()
 export type DocumentCursor = z.infer<typeof documentCursorSchema>
 
-/**
- * One heartbeat row exists per (document, user, client): the client id is a
- * per-tab nonce, so two tabs of one account are distinct participants and a
- * tab closing removes only its own cursor. Optional in the request so an
- * older client heartbeating without it keeps a single identity per user.
- */
 export const documentPresenceClientIdSchema = z.string().min(1).max(64)
 
 export const documentPresenceUpdateRequestSchema = z
@@ -70,12 +64,6 @@ export const documentCollaborationMergeRequestSchema = z
     operations: z
       .array(documentEditOperationSchema)
       .max(DOCUMENT_EDIT_OPERATION_MAX_COUNT),
-    /**
-     * Same contract as the direct edit: the persisted toggle the merged
-     * version carries. Omitted leaves the current version's setting — and
-     * the tracking behaviour — unchanged; with it, an empty `operations` is
-     * a settings-only merge.
-     */
     trackChanges: z.boolean().optional(),
   })
   .strict()
@@ -101,7 +89,6 @@ export const documentCollaborationMergeResponseSchema = z
     versionId: documentEditResponseSchema.shape.versionId,
     versionNumber: documentEditResponseSchema.shape.versionNumber,
     outcome: z.enum(['merged', 'already_applied']),
-    /** E50 lineage for a merge that edited the version the client holds. */
     lineage: documentVersionLineageSchema.optional(),
   })
   .strict()

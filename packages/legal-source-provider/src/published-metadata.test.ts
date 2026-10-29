@@ -23,7 +23,6 @@ const pressSummaryXml = `<akomaNtoso><doc name="pressSummary"><meta><proprietary
 
 const judgmentPage = `<html><body><a href="/uksc/2026/31/press-summary" class="button">View Press Summary</a></body></html>`
 
-/** Routes by URL path; anything unrouted is a 404 and is still recorded. */
 function provider(routes: Record<string, string>) {
   const calls: string[] = []
   const fetchImpl = async (url: URL) => {
@@ -89,7 +88,6 @@ describe('fetchPublishedCaseLawMetadata', () => {
 
     expect(result.status).toBe('ok')
     if (result.status !== 'ok') return
-    // The bench is still this judgment's; the other case's summary is not.
     expect(result.metadata.judges).toHaveLength(2)
     expect(result.metadata.summary).toBeNull()
   })

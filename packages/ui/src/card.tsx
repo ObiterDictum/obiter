@@ -1,12 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from './lib/cn'
 
-/**
- * Card — the one raised surface a screen puts its content on. The design has a
- * single card level (a quiet surface step, no border, no shadow), so screens
- * compose this instead of each repeating `rounded-lg bg-surface` and inventing
- * their own heading and padding.
- */
 export function Card({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return (
     <section
@@ -16,7 +10,6 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLElement>) {
   )
 }
 
-/** CardHead — the card's title and its one action, on the card's inner edge. */
 export function CardHead({
   title,
   titleId,
@@ -47,7 +40,6 @@ export function CardBody({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return <div className={cn('px-6 pb-6', className)} {...props} />
 }
 
-/** CardFoot — a divided strip for the card's counts or next action. */
 export function CardFoot({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return (
     <div

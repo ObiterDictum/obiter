@@ -2,12 +2,6 @@ import { Switch as BaseSwitch } from '@base-ui-components/react/switch'
 import type { ReactNode } from 'react'
 import { cn } from './lib/cn'
 
-/**
- * Switch — an on/off control with real switch semantics, from Base UI. The
- * root is a `<button role="switch">`, so it is focusable, Space/Enter toggles
- * it and the checked state is announced; the visible label sits inside it and
- * `label` is its accessible name.
- */
 export function Switch({
   label,
   checked,
@@ -21,7 +15,6 @@ export function Switch({
   onCheckedChange: (checked: boolean) => void
   disabled?: boolean
   className?: string
-  /** Visible content beside the track; the accessible name stays `label`. */
   children?: ReactNode
 }) {
   return (

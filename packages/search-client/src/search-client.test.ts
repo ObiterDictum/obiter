@@ -152,13 +152,6 @@ describe('Legal search client', () => {
     })
   })
 
-  /**
-   * Meilisearch added `prefixSearch` in 1.12. A 1.8 server has no
-   * `settings/prefix-search` route and answers 404, so an index it configures
-   * still has prefix search on. That is a different search configuration from
-   * the one this package defines, not a cosmetic gap, and the benchmark floor
-   * `minimumShortWordPrecision` rests on prefix search being off.
-   */
   describe('a server that cannot apply an index setting', () => {
     function unsupportedPrefixSearch() {
       const error = new Error('404: Not Found')
@@ -190,8 +183,6 @@ describe('Legal search client', () => {
       }
     }
 
-    // The default. A caller that has not said it can live with a missing
-    // setting is told, rather than served an index it did not ask for.
     it('fails by default rather than configuring a different index', async () => {
       const index = indexWithout404PrefixSearch()
 
@@ -210,19 +201,10 @@ describe('Legal search client', () => {
       )
 
       expect(result.unsupportedSettings).toEqual(['prefixSearch'])
-      // Everything after the unsupported setting still has to be applied.
       expect(index.updateStopWords).toHaveBeenCalled()
       expect(index.updateTypoTolerance).toHaveBeenCalled()
     })
 
-    /**
-     * The reason support is established by reading. Writing to a settings route
-     * Meilisearch 1.8.3 does not have returns 404 and then wedges the index:
-     * measured with curl, a stop-words write succeeds 5 of 5 on its own and
-     * times out 4 of 5 when it follows a write to the absent prefix-search
-     * route. Catching the 404 is not enough — issuing it is what does the
-     * damage, and it lands on whatever request comes next.
-     */
     it('never issues the write for a setting the server does not have', async () => {
       const index = indexWithout404PrefixSearch()
 
@@ -252,9 +234,6 @@ describe('Legal search client', () => {
       expect(result.unsupportedSettings).toEqual([])
     })
 
-    // A 400 means the value was wrong, which is a bug here. Opting in to old
-    // servers must not turn a real error into a skipped setting. The probe
-    // succeeds, so the route exists and the write is genuinely at fault.
     it('still fails on a rejected value, not only a missing route', async () => {
       const index = indexWithout404PrefixSearch()
       const badRequest = new Error('400: Bad Request')
@@ -276,9 +255,6 @@ describe('Legal search client', () => {
     })
   })
 
-  // The benchmark report embeds legalSearchIndexSettings as its record of the
-  // configuration under test, so it is only trustworthy while these values are
-  // the ones createIndex and search actually apply.
   it('reports the index settings it applies', async () => {
     const index = {
       updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
@@ -461,9 +437,6 @@ describe('Legal search client', () => {
     ])
 
     expect(result).toEqual({ indexedCount: 1, failedCount: 0, errors: [] })
-    // The engine receives the document plus the derived numeric date. The
-    // domain document itself is unchanged; the field exists only in the index,
-    // so that range filters have a numeric operand to compare against.
     expect(addDocuments).toHaveBeenCalledWith(
       [{ ...authority(), dateDecidedTimestamp: Date.UTC(2024, 0, 31) }],
       { primaryKey: 'id' },
@@ -753,9 +726,6 @@ describe('Legal search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    // Dropping an unparseable bound would return judgments outside the
-    // requested range as though they belonged in it, which is a wrong answer
-    // rather than a missing one.
     await expect(
       search(client, 'legal_authorities', 'test', { dateFrom: '01/01/2024' }),
     ).rejects.toThrow(/dateFrom must be an ISO date/)
@@ -786,8 +756,6 @@ describe('Legal search client', () => {
       filter: [
         'court = "uksc"',
         'jurisdiction = "england-and-wales"',
-        // Numeric operands. Meilisearch comparison operators reject a quoted
-        // date string, which is what made the three date benchmark cases error.
         `dateDecidedTimestamp >= ${Date.UTC(2024, 0, 1)}`,
         `dateDecidedTimestamp <= ${Date.UTC(2024, 11, 31)}`,
       ],
@@ -827,8 +795,6 @@ describe('Legal search client', () => {
       { exactPhrase: '[2024] UKSC 3' },
     )
 
-    // The engine sees the quoted phrase; the caller keeps its own query for
-    // the response, snippets, and tier ranking.
     expect(searchMock).toHaveBeenCalledWith(
       '"[2024] uksc 3"',
       expect.objectContaining({ matchingStrategy: 'all' }),
@@ -840,11 +806,7 @@ describe('Legal search client', () => {
   it('builds exact phrases with the citation folding', () => {
     expect(toExactPhraseQuery('[2024] UKSC 3')).toBe('"[2024] uksc 3"')
     expect(toExactPhraseQuery('  [2024]  UKSC 3  ')).toBe('"[2024] uksc 3"')
-    // Quotes are escaped so a hostile phrase cannot break out of the phrase.
     expect(toExactPhraseQuery('say "hi"')).toBe('"say \\"hi\\""')
-    // Padded tribunal numbers keep their zeros: the index stores them
-    // padded, and the comparison tier strips them, so stripping here would
-    // make a padded citation unfindable as a phrase while exact elsewhere.
     expect(toExactPhraseQuery('[2024] UKUT 00236 (IAC)')).toBe(
       '"[2024] ukut 00236 (iac)"',
     )
@@ -1012,7 +974,6 @@ describe('Legal search client', () => {
   })
 
   it('uses the engine score ahead of recency within a legal match tier', async () => {
-    // Raw provider field, exercises readEngineRankingScore through search().
     const newerLowerScore = authority({
       id: 'benchmark-newer',
       title: 'Alpha v Beta',
@@ -1091,7 +1052,6 @@ describe('Legal search client', () => {
   })
 
   it('orders phrase, all-term, and any-term body matches before recency', () => {
-    // Post-parse field, exercises the ranker in isolation.
     const anyTerm = authority({
       id: 'benchmark-any',
       title: 'Any v Term',
@@ -1231,9 +1191,6 @@ describe('Legal search client', () => {
   })
 
   it('ranks a partial title match ahead of a body mention from a senior court', () => {
-    // Misspelled party query: no whole-title tier fires, so without the
-    // title-partial tier the EWCA title bearer ties the UKSC body mention
-    // and loses on seniority.
     const bodyMention = authority({
       id: 'uksc-body-mention',
       title: 'Montgomery v Lanarkshire Health Board',
@@ -1767,8 +1724,6 @@ describe('Legal search client', () => {
   })
 
   it('reuses compiled term patterns without leaking match state', () => {
-    // The pattern cache is keyed by term, so the same term must keep giving an
-    // independent answer for each value it is tested against.
     expect(containsEveryQueryTerm('the testator intended', 'testator')).toBe(
       true,
     )
@@ -1783,8 +1738,6 @@ describe('Legal search client', () => {
     )
     expect(containsEveryQueryTerm('selfless conduct', 'self')).toBe(false)
 
-    // Metacharacter terms are escaped before compiling but cached under the raw
-    // key, so the cache must keep near-identical citations distinct.
     expect(
       containsEveryQueryTerm('cited as [2024] uksc 3 today', '[2024] UKSC 3'),
     ).toBe(true)
@@ -1794,8 +1747,6 @@ describe('Legal search client', () => {
   })
 
   it('excerpts snippets from the raw paragraph text', () => {
-    // Matching runs on normalized text, but the returned excerpt must come from
-    // the original so casing and punctuation survive.
     const snippets = extractLegalSearchSnippets(
       authority({
         paragraphs: [
@@ -1832,16 +1783,11 @@ describe('Legal search client', () => {
 
     const [snippet] = extractLegalSearchSnippets(hit, 'test')
 
-    // "testimony" appears first, but it is not a whole-term match, so the
-    // excerpt window must land on "The test was then applied".
     expect(snippet?.text).toContain('The test was then applied')
     expect(snippet?.matchedTerms).toEqual(['test'])
   })
 
   it('cuts a long snippet on word boundaries, never mid-word', () => {
-    // The reported defect: a 240-character slice landed mid-word, so a result
-    // card read "…t by becoming" and "an o…". An extract is evidence, so it
-    // must not read as a corrupted source.
     const paragraph =
       Array.from({ length: 120 }, (_, index) => `word${index + 1}`).join(' ') +
       ' volunteer'
@@ -1860,7 +1806,6 @@ describe('Legal search client', () => {
     )
 
     const core = (snippet?.text ?? '').replace(/^\.\.\.|\.\.\.$/g, '')
-    // Every token is whole: a mid-word cut shows up as "word" or "rd42".
     expect(
       core.split(' ').every((token) => /^word\d+$|^volunteer$/.test(token)),
     ).toBe(true)
@@ -1885,7 +1830,6 @@ describe('Legal search client', () => {
     )
 
     const text = snippet?.text ?? ''
-    // Cut back to a sentence end rather than stopping wherever 240 lands.
     expect(text.endsWith('.')).toBe(true)
     expect(text).toContain('tribunal considered the volunteer arrangement')
   })
@@ -1990,8 +1934,6 @@ describe('Legal search client', () => {
       id: 'uksc-2024-3',
       snippets: [
         {
-          // Position in the document, not the number the judgment prints.
-          // The fixture's only matching paragraph is the first one retained.
           evidenceId: 'uksc-2024-3:judgment_paragraph:1',
           matchReason: 'body_text_match',
           paragraphNumber: 7,
@@ -2098,9 +2040,6 @@ describe('Legal search client', () => {
   })
 
   it('keys evidence ids on position when a document repeats a paragraph number', () => {
-    // LegalDocML marks block-quoted paragraphs from a cited judgment as
-    // paragraphs carrying that judgment's numbering, and appendices restart at
-    // 1. Both produce duplicate paragraphNumbers in one document.
     const hit = {
       ...authority(),
       paragraphs: [
@@ -2123,20 +2062,16 @@ describe('Legal search client', () => {
 
     expect(snippets).toHaveLength(2)
     expect(new Set(snippets.map((snippet) => snippet.evidenceId)).size).toBe(2)
-    // The number the judgment prints is preserved for display, duplicates and all.
     expect(snippets.map((snippet) => snippet.paragraphNumber)).toEqual([7, 2])
   })
 
   it('matches a zero-padded tribunal citation against the unpadded form', () => {
-    // Find Case Law returns `[2024] UKUT 00236 (IAC)`; a reader types the form
-    // the tribunal's own headnote prints.
     expect(normalizeCitationValue('[2024] UKUT 00236 (IAC)')).toBe(
       normalizeCitationValue('[2024] UKUT 236 (IAC)'),
     )
     expect(normalizeCitationValue('[2024] UKFTT 001074 (TC)')).toBe(
       '[2024] ukftt 1074 (tc)',
     )
-    // Senior court citations are unaffected.
     expect(normalizeCitationValue('[2024] UKSC 22')).toBe('[2024] uksc 22')
 
     const padded = {

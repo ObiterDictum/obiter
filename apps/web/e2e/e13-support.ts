@@ -5,16 +5,7 @@ import { resolveJourneyTargets } from '../journey-target.mjs'
 import { openRibbonTab } from './editor-chrome'
 import { verifyEmailInDb } from './support'
 
-/** The chrome's command surfaces, re-exported for the specs that used tabs. */
 export { openRibbonTab }
-
-/*
- * The helpers every E13 spec family shares: a synthetic account through the
- * real sign-up endpoint, the product's own navigation to an uploaded fixture
- * document, and the editor/save locators the workspaces agree on. Split out
- * when document-e13.spec.ts passed the 500-line ceiling; keeping one copy
- * keeps the families honest about driving the same product path.
- */
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -140,11 +131,6 @@ export async function saveAndWait(page: Page) {
   await expect(saveButton(page)).toBeDisabled({ timeout: 30_000 })
 }
 
-/**
- * Find moved into its own bar; Ctrl+F reveals it the way the product does.
- * The chord is handled by the workspace, so the caret has to be in the
- * document for it to arrive — the same thing a reader does before searching.
- */
 export async function openFind(page: Page) {
   const field = page.getByLabel('Find in document')
   if (await field.isVisible().catch(() => false)) return field
@@ -155,7 +141,6 @@ export async function openFind(page: Page) {
   return field
 }
 
-/** The draft scope a seeded payload must match: tab writer, org, user, doc. */
 async function draftScope(page: Page) {
   const writerId = await page.evaluate(() =>
     window.sessionStorage.getItem('obiter.document-draft.tab'),
@@ -202,12 +187,6 @@ export const EMPTY_DRAFT_STATE = {
   trackedRejections: [],
 }
 
-/**
- * Writes a draft payload shaped exactly like the store's own schema — the
- * state a previous version's persistence left behind. The writer is this
- * tab's own, so the reload adopts it through the real restore path rather
- * than any back door.
- */
 export async function seedDraft(
   page: Page,
   state: Record<string, unknown>,

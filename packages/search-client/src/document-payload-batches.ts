@@ -1,21 +1,9 @@
-/**
- * Meilisearch rejects POST /indexes/.../documents with payload_too_large when
- * the HTTP body exceeds `http-payload-size-limit` (default 100_000_000 bytes).
- * The SDK sends `JSON.stringify(documents)` as that body. 80_000_000 leaves
- * 20 MB for headers, transfer encoding, and any extra framing so a measured
- * batch cannot sit on the 100 MB knife-edge.
- */
 export const meilisearchDocumentPayloadMaxBytes = 80_000_000
 
 export function utf8JsonBytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf8')
 }
 
-/**
- * Splits records so each `JSON.stringify(batch)` stays at or under `maxBytes`.
- * A JSON array is `'[' + items.join(',') + ']'`, so running totals match the
- * HTTP body without re-serializing the whole batch on every append.
- */
 export function partitionByUtf8JsonPayload<T>(
   documents: readonly T[],
   maxBytes: number,
