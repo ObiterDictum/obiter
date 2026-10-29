@@ -303,6 +303,44 @@ describe('collaboration merges', () => {
     expect(route.storage.writes).toEqual([])
   })
 
+  it('uses the current tracking setting when a stale merge omits the toggle', async () => {
+    const database = new EditDatabase()
+    const route = collaborationApp(database)
+    const settings = await route.app.request(
+      '/api/documents/doc_1/collaboration/merge',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          baseVersionId: 'ver_1',
+          syncId: 'tracking-on',
+          operations: [],
+          trackChanges: true,
+        }),
+      },
+    )
+    expect(settings.status).toBe(201)
+
+    const merged = await route.app.request(
+      '/api/documents/doc_1/collaboration/merge',
+      mergeRequest('ver_1', 'stale-edit', firstRun.id, 'Edited text'),
+    )
+    expect(merged.status).toBe(201)
+    const body = documentCollaborationMergeResponseSchema.parse(
+      await merged.json(),
+    )
+    const version = database.versions.get(body.versionId)
+    const bytes = route.storage.binary.get(version?.object_key ?? '')
+    if (!bytes) throw new Error('Merged source is missing.')
+    const document = await parseDocx(bytes)
+    expect(document.model.trackRevisions).toBe(true)
+    expect(document.model.changes.length).toBeGreaterThan(0)
+    expect(database.audits.at(-1)?.metadata).toMatchObject({
+      trackRevisions: true,
+      trackRevisionsChanged: false,
+    })
+  })
+
   it('returns 409 for an overlapping stale edit without another version or audit', async () => {
     const database = new EditDatabase()
     const route = collaborationApp(database)
