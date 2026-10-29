@@ -432,11 +432,7 @@ beforeEach(() => {
   window.sessionStorage.clear()
 })
 
-export {
-  command,
-  commandOrNull,
-  commandPrefix,
-} from './editor-test-commands'
+export { command, commandOrNull, commandPrefix } from './editor-test-commands'
 
 export function selectBodyParagraph(text = 'Hello') {
   fireEvent.click(screen.getByText(text))
