@@ -14,7 +14,7 @@ import {
 import { resolveRelationshipTarget } from './rels'
 import { attributeValue, WORD_NAMESPACE, type XmlElement } from './xml-elements'
 
-export const SETTINGS_PART = 'word/settings.xml'
+const SETTINGS_PART = 'word/settings.xml'
 const SETTINGS_RELATIONSHIP =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings'
 const SETTINGS_CONTENT_TYPE =

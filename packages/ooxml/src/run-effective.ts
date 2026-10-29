@@ -107,7 +107,7 @@ export function effectiveRunView(
  * folded ones. The consumed keys come back with the fold so the caller
  * removes them only once its own write is planned.
  */
-export function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
+function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
   const { start, end } = run.runRange
   const replacements = [...overlay.replacements.entries()]
     .filter(([, replacement]) => insideRunRange(replacement, start, end))
@@ -179,7 +179,7 @@ function insideRunRange(
  * children (a break, a tab) are emitted in order between the chosen properties
  * and the run close.
  */
-export function mergeSiblingRuns(partSource: string, runXml: string) {
+function mergeSiblingRuns(partSource: string, runXml: string) {
   const elements = parseWrappedRun(partSource, runXml)
   const runs = elements.filter((element) => element.depth === 0)
   // A fold can legitimately hold non-run siblings — a pending hyperlink wrap

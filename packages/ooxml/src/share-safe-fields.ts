@@ -67,7 +67,7 @@ export const SHARE_SAFE_FIELD_NAMES = new Set([
  * `AUTHOR`, `PRIVATE`, …) instead refuse: their cached result renders
  * private data as if it were document content.
  */
-export const SHARE_SAFE_REMOVE_FIELDS = new Set(['SET', 'FILENAME'])
+const SHARE_SAFE_REMOVE_FIELDS = new Set(['SET', 'FILENAME'])
 
 /**
  * Field names whose operands are in-document references — `REF`,

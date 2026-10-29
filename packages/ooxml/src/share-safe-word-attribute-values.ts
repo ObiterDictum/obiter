@@ -227,7 +227,7 @@ export const WML_PG_DISPLAY = enumBound([
   'notFirstPage',
 ])
 export const WML_PG_OFFSET = enumBound(['text', 'page'])
-export const WML_SECT_TYPE = enumBound([
+const WML_SECT_TYPE = enumBound([
   'nextPage',
   'nextColumn',
   'continuous',
@@ -361,7 +361,7 @@ export const WML_CALENDAR = enumBound([
   'none',
 ])
 export const WML_HELP_TYPE = enumBound(['name', 'text'])
-export const WML_TEXT_INPUT_TYPE = enumBound([
+const WML_TEXT_INPUT_TYPE = enumBound([
   'regular',
   'number',
   'date',

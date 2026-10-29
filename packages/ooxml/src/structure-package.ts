@@ -29,8 +29,6 @@ import {
 import { RELATIONSHIPS_NAMESPACE } from './parts/rels'
 import type { XmlElement } from './parts/xml-elements'
 
-export { IMAGE_RELATIONSHIP_TYPE } from './structure-xml'
-
 const CONTENT_TYPES_PART = '[Content_Types].xml'
 const RELATIONSHIPS_ROOT_OPEN = `<Relationships xmlns="${RELATIONSHIPS_NAMESPACE}">`
 const encoder = new TextEncoder()
@@ -47,10 +45,7 @@ export function relationshipsPartName(sourcePartName: string) {
  * The relationship-id allocator used elsewhere in the codebase: `rId` + a
  * 1-based counter colliding only against the source part's own set.
  */
-export function nextRelationshipId(
-  document: OoxmlDocument,
-  sourcePartName: string,
-) {
+function nextRelationshipId(document: OoxmlDocument, sourcePartName: string) {
   const used = new Set(
     document.model.relationships
       .filter((wire) => wire.sourcePartName === sourcePartName)

@@ -57,7 +57,7 @@ function preferred(a: Span, b: Span): Span {
  * Apply the keep-set. Returns only spans that must be redacted, sorted right to
  * left so callers can splice from the end and keep earlier offsets valid.
  */
-export function applyPolicy(spans: readonly Span[], keepLabels: ReadonlySet<PiiLabel> = KEEP_LABELS): Span[] {
+function applyPolicy(spans: readonly Span[], keepLabels: ReadonlySet<PiiLabel> = KEEP_LABELS): Span[] {
   return mergeSpans(spans)
     .filter((s) => shouldRedact(s.label, keepLabels))
     .sort((a, b) => b.start - a.start);

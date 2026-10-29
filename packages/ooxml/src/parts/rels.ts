@@ -6,7 +6,7 @@ import { attributeValue, requiredAttribute } from './xml-elements'
 export const RELATIONSHIPS_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/relationships'
 
-export type RelationshipPart = {
+type RelationshipPart = {
   sourcePartName: string
   relationships: DocumentRelationshipWire[]
 }

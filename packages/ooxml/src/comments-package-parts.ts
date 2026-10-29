@@ -15,7 +15,7 @@ import {
   type XmlElement,
 } from './parts/xml-elements'
 
-export const COMMENTS_PART = 'word/comments.xml'
+const COMMENTS_PART = 'word/comments.xml'
 export const COMMENTS_EXTENDED_PART = 'word/commentsExtended.xml'
 const DOCUMENT_RELATIONSHIPS_PART = 'word/_rels/document.xml.rels'
 const CONTENT_TYPES_PART = '[Content_Types].xml'

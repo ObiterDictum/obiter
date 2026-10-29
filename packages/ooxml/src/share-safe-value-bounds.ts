@@ -94,12 +94,6 @@ export const HEX20_BOUND = shapeBound(/^[0-9A-Fa-f]{20}$/u)
 /** An `RRGGBB` colour or the `auto` keyword. */
 export const COLOR_BOUND = shapeBound(/^[0-9A-Fa-f]{6}$|^auto$/u)
 
-/**
- * A bounded alphanumeric token — preset-like names in slots whose full
- * enumeration is not worth pinning.
- */
-export const TOKEN_BOUND = shapeBound(/^[A-Za-z0-9]{1,32}$/u)
-
 /** A BCP-47-style language tag. */
 export const LANG_BOUND = shapeBound(
   /^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8}){0,7}$/u,
@@ -123,11 +117,6 @@ export const SHORT_TEXT_BOUND = shapeBound(/^.{0,8}$/u)
 
 /** A dotted identifier — macro names, document-variable names. */
 export const IDENT_BOUND = shapeBound(/^[A-Za-z_][\w.]{0,63}$/u)
-
-/** A braced GUID — field identifiers, drawing instance ids. */
-export const GUID_BOUND = shapeBound(
-  /^\{[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}$/u,
-)
 
 /** An ISO-8601-style date — `w:date w:fullDate` stamps. */
 export const DATE_BOUND = shapeBound(/^\d{4}-\d{2}-\d{2}T[^<>&"']{0,32}$/u)

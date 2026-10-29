@@ -4,7 +4,7 @@ const CD_SIGNATURE = 0x02014b50
 export type PackageLimitViolation =
   'entries' | 'uncompressed-total' | 'entry-uncompressed' | 'compression-ratio'
 
-export interface ZipCentralDirectoryEntry {
+interface ZipCentralDirectoryEntry {
   name: string
   compressedSize: number
   uncompressedSize: number
