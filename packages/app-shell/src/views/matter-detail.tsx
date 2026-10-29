@@ -106,8 +106,6 @@ export function MatterRouteView({
     <PageScaffold
       eyebrow={
         <span className="flex flex-wrap items-center gap-2">
-          {/* Every domain the matter is filed under, not just the first: a
-              matter spanning two areas was reading as one. */}
           {m.legalDomains.map((domain) => (
             <span
               key={domain}
@@ -132,8 +130,6 @@ export function MatterRouteView({
       description={m.description ?? undefined}
       actions={
         <>
-          {/* An empty matter shows these in its EmptyState instead, so the same
-              two controls never appear twice on one page. */}
           {documents.data && documents.data.length === 0 ? null : (
             <>
               <MatterUploadButton matterId={m.id} />

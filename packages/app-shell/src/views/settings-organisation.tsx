@@ -169,9 +169,6 @@ function CreateOrganisationForm() {
     setSubmitting(true)
     try {
       await createOrganisation.mutateAsync({ name: trimmed })
-      // The created organisation is merged into the cached /api/me, so this
-      // section re-renders with the real organisation rather than navigating
-      // the user away from the page they are working in.
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === 'conflict_detected') {
         setError('You already have an organisation. Refreshing…')

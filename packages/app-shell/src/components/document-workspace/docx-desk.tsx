@@ -49,8 +49,7 @@ export function DocxDesk({
           />
         </div>
       ) : null}
-      {/* spellCheck on the column container is inherited by the paragraph
-          editors, so one toggle governs every field the document mounts. */}
+
       <DocumentDesk overlay={<VerificationMarkerLayer model={model} />}>
         <div
           ref={columnRef}

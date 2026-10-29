@@ -176,8 +176,7 @@ export function DocxWorkspaceChrome({
         onComment={onCommentSelection}
         onCite={actions.openAuthority}
       />
-      {/* The picture picker is a hidden input the Insert ▸ Picture command
-          clicks: it must stay mounted wherever the chrome is. */}
+
       {props.structure.picturePicker}
       <InsertTableDialog
         open={tableOpen}

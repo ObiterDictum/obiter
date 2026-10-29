@@ -69,9 +69,7 @@ export function ReviewDecisionBar({
       {location ? (
         <p className="truncate text-caption text-subtle">{location}</p>
       ) : null}
-      {/* The barrier reason belongs on the disabled controls, not in a
-          second paragraph: the banner above the document already says what
-          happened and offers Reload. */}
+
       <p className="text-caption break-words whitespace-pre-wrap text-muted">
         {lead?.text
           ? labelledBreaks(lead.text)

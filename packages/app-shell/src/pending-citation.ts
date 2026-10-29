@@ -23,10 +23,7 @@ export function requestCitation(documentId: string, text: string) {
   }
   try {
     storage()?.setItem(`${KEY_PREFIX}${documentId}`, JSON.stringify(request))
-  } catch {
-    // The store is full or blocked: the document opens with no pending
-    // citation rather than failing the navigation.
-  }
+  } catch {}
   return request
 }
 
@@ -60,7 +57,5 @@ export function readPendingCitation(
 export function clearPendingCitation(documentId: string) {
   try {
     storage()?.removeItem(`${KEY_PREFIX}${documentId}`)
-  } catch {
-    // Nothing to do: a store that cannot be written cannot hold a stale one.
-  }
+  } catch {}
 }

@@ -221,9 +221,7 @@ function PanelBody({
       </div>
 
       <p className="text-sm text-ink">{finding.explanation}</p>
-      {/* Word boundaries first: a drafted sentence must not break mid-word.
-          A token with no boundary, such as a URL or id, still breaks rather
-          than overflowing the panel. */}
+
       <p className="font-mono text-xs wrap-anywhere text-subtle">
         {finding.excerpt}
       </p>

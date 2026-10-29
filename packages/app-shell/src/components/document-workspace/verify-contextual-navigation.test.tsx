@@ -44,8 +44,6 @@ describe('contextual verification evidence', () => {
     })
     fireEvent.click(marker)
     const panel = await screen.findByRole('dialog')
-    // Move focus into the panel as a keyboard user would. The document-level
-    // listener, not the marker's own handler, must close it and restore focus.
     ;(panel.querySelector('button') as HTMLButtonElement).focus()
     expect(document.activeElement).not.toBe(marker)
     fireEvent.keyDown(document, { key: 'Escape' })

@@ -46,8 +46,6 @@ export function MatterOverview({
             </p>
           ) : (
             <div className="flex flex-col gap-3">
-              {/* The same words as the document row and the list's preview, so
-                  open work reads the same wherever it is counted. */}
               <ul className="flex flex-col gap-2">
                 {openWorkParts(openWork).map((part) => (
                   <li key={part.label}>

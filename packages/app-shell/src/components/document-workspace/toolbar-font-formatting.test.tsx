@@ -177,9 +177,6 @@ describe('the font formatting controls', () => {
 
     fireEvent.click(control('Redo'))
     expect(spanOf('p1', 'Hello')?.style.fontWeight).toBe('700')
-
-    // Applying a font value is the same draft-history path; the e2e journey
-    // covers the value itself through the Base UI select.
   })
 
   it('queues the font controls and clear formatting under track changes', async () => {

@@ -291,18 +291,14 @@ export function clearStoredDocumentDrafts() {
     if (rememberedUserId) {
       clearDocumentDraftsForUser(window.localStorage, rememberedUserId)
     }
-  } catch {
-    // Storage access can throw in locked-down browser modes.
-  }
+  } catch {}
 }
 
 export function clearStoredDocumentDraftsForUser(userId: string) {
   if (typeof window === 'undefined') return
   try {
     clearDocumentDraftsForUser(window.localStorage, userId)
-  } catch {
-    // As above.
-  }
+  } catch {}
 }
 
 type Scanned = {
@@ -381,9 +377,7 @@ function parkRecord(storage: DraftStorage, record: Scanned) {
   }
   try {
     storage.setItem(record.key, JSON.stringify(parked))
-  } catch {
-    // Leave the payload; it is still never applied to a newer version.
-  }
+  } catch {}
 }
 
 function adoptRecord(
@@ -399,8 +393,6 @@ function adoptRecord(
   }
   try {
     storage.setItem(record.key, JSON.stringify(next))
-  } catch {
-    // Adoption is still returned from memory; the next write retries.
-  }
+  } catch {}
   return { ...record, writerId, snapshot: next, status: 'active' }
 }

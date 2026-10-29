@@ -31,9 +31,6 @@ export function StaticDocumentPages({
     <DocumentDesk>
       <div className="mx-auto flex w-max max-w-full flex-col items-start gap-6">
         <div className="flex w-full flex-col gap-6">
-          {/* `@page` is the document's stored first-section box, derived from
-              the model rather than a painted page so no layout flow's
-              internal frame can reach the print contract. */}
           <DocumentPrintStyle
             box={pageBoxForSection(documentSections(model)[0]?.xml ?? '')}
           />

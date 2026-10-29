@@ -200,9 +200,7 @@ export function PendingInsert({
           minHeight: '1.15em',
         }}
       />
-      {/* Print never reaches a form control reliably, so the inserted text is
-          also painted as static content. Hidden on screen, where the textarea
-          above is the editable surface. */}
+
       <div
         data-pending-insert-print
         aria-hidden="true"

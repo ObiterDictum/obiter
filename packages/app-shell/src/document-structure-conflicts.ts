@@ -22,11 +22,6 @@ export type StructuralPlacement =
     }
   | { kind: 'link'; paragraphId: string; from: number; to: number }
   | { kind: 'defined-term'; paragraphId: string; from: number; to: number }
-  /**
-   * A refresh claims a field's whole generated range rather than a point,
-   * so it has no offset: its conflicts are range-level and live with the
-   * update predicates, not here.
-   */
   | { kind: 'table-of-authorities-refresh'; paragraphId: string }
 
 type RangePlacement = Extract<StructuralPlacement, { from: number }>

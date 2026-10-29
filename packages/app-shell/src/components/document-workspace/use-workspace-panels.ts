@@ -39,9 +39,7 @@ function readPlacements(): Placements {
 function writePlacements(placements: Placements) {
   try {
     localStorage.setItem(PLACEMENT_KEY, JSON.stringify(placements))
-  } catch {
-    // A full or blocked store forgets the position; the panel still floats.
-  }
+  } catch {}
 }
 
 function chromeBottom() {
