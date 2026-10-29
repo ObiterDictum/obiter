@@ -96,6 +96,8 @@ When either value is absent, a per-document deterministic encounter allocator su
 
 Story discovery follows namespace-resolved relationships, not filename assumptions alone. Root relationships, document relationships, per-story relationships and their targets are all retained. Content in headers, footers, notes or comments is not treated as absent merely because it is outside `word/document.xml`.
 
+Comments are never dropped for being awkward: a comment whose markers do not resolve is still listed with a null anchor, and a comment without a usable `w:id` gets a generated identity, because dropping either would silently lose file content.
+
 ### Opaque whole parts
 
 Opaque XML includes theme, font table, web settings, core/custom/application properties, glossary and building-block data, custom XML, comments extensions, signature parts and any unrecognised XML. `word/settings.xml` is source-preserved with one carve-out: a version write carrying the track-changes toggle may add, normalise or remove `w:trackRevisions` (and create the part with its declarations when absent), which is the only canonical change permitted there. Package metadata and relationships are source-preserved even when a typed relationship view is available. Binary media, embedded packages, OLE objects, fonts, signatures and unknown binary entries are byte-preserved.

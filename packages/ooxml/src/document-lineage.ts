@@ -9,29 +9,11 @@ import type {
   DocumentVersionLineage,
 } from '@obiter/contracts'
 
-/**
- * Authoritative edit lineage, gathered while operations are applied.
- *
- * A run that exists in the base model is tracked by its object identity, so a
- * split, merge or move is recorded by construction rather than inferred from a
- * reparsed document. The result side of the lineage is expressed as a result
- * paragraph id (persisted as `w14:paraId`) plus a run index, because run model
- * ids are reallocated on every parse and are not a cross-version identity.
- */
 export type LineageRecorder = {
-  /** Indexes in the submitted batch that were actually applied. */
   accepted: number[]
-  /** Length in code units of each base run, keyed by base run id. */
   baseRunLengths: Map<string, number>
-  /**
-   * Per current run object, the base segments that compose it, in order. The
-   * segment lengths sum to the run's text length unless the run was text
-   * replaced, in which case the segments are kept whole and not sliced again.
-   */
   runOrigins: Map<DocumentTextRunWire, DocumentLineageSegment[]>
-  /** Runs whose text was replaced, so their segments are coarse, not a partition. */
   replacedRuns: WeakSet<DocumentTextRunWire>
-  /** Base paragraph origin for every current paragraph touched by the batch. */
   paragraphOrigin: Map<
     DocumentParagraphWire,
     {
@@ -40,20 +22,11 @@ export type LineageRecorder = {
       insertedByIntent?: string
     }
   >
-  /** Base paragraphs deleted by the batch, keyed by base paragraph id. */
   deletedParagraphs: Map<string, { insertedByOperation?: number }>
-  /** Paragraphs this batch touched, in insertion order. */
   touched: Set<DocumentParagraphWire>
-  /**
-   * Tracked-change elements the batch created, each tagged with the accepted
-   * operation that created it and the base node it addresses. A tracked
-   * operation's reversal is a rejection of these persisted `w:id`s, never a
-   * positional run address.
-   */
   trackedChanges: RecordedTrackedChange[]
 }
 
-/** One tracked-change element created while applying an accepted batch. */
 export type RecordedTrackedChange = {
   operationIndex: number
   elementName: 'ins' | 'del' | 'rPrChange' | 'pPrChange'
@@ -85,11 +58,6 @@ export function createLineageRecorder(
   }
 }
 
-/**
- * Records the tracked-change elements one accepted operation created. A tracked
- * operation produces one or more records (a replacement produces a `del` and
- * an `ins`); they are reversed together as one unit.
- */
 export function recordTrackedChanges(
   recorder: LineageRecorder,
   changes: readonly Pick<RecordedTrackedChange, 'elementName' | 'ooxmlId'>[],
@@ -110,11 +78,6 @@ export function recordTrackedChanges(
   }
 }
 
-/**
- * Withdraws recorded changes whose elements ended up nested inside `w:ins` or
- * `w:del` — a property marker folded into a text replacement is not a listed
- * change, so a reversal group that named its id could never be decided.
- */
 export function dropTrackedChanges(
   recorder: LineageRecorder,
   ooxmlIds: readonly string[],
@@ -126,7 +89,6 @@ export function dropTrackedChanges(
   )
 }
 
-/** The segments a freshly parsed run carries before any edit. */
 export function seedRunOrigins(
   recorder: LineageRecorder,
   run: DocumentTextRunWire,
@@ -142,7 +104,6 @@ export function seedRunOrigins(
   }
 }
 
-/** Marks a paragraph as transformed by operation `operationIndex`. */
 export function touchParagraph(
   recorder: LineageRecorder,
   paragraph: DocumentParagraphWire,
@@ -193,13 +154,6 @@ export function recordDeletedParagraph(
   }
 }
 
-/**
- * Marks a run's text as changed. The run keeps its origins as provenance —
- * which base runs its text came from — but their ranges are re-expressed over
- * the text the run now carries, since a replacement no longer lines up with
- * the stored base text. A later split then slices those ranges further, so a
- * reversal can distribute a pre-save draft across the parts.
- */
 export function recordReplacedRun(
   recorder: LineageRecorder,
   run: DocumentTextRunWire,
@@ -217,10 +171,6 @@ export function recordReplacedRun(
   )
 }
 
-/**
- * The base segments composing `[from, to)` of a run whose text is a partition
- * of its segments. Callers must not use this on a replaced run.
- */
 export function sliceRunOrigins(
   origins: readonly DocumentLineageSegment[],
   from: number,
@@ -249,8 +199,6 @@ export function sliceRunOrigins(
     })
   }
   if (sliced.length === 0) {
-    // A zero-length piece still needs provenance: anchor it at the cut so the
-    // client never sees an unowned result run.
     let cursor = 0
     for (const segment of origins) {
       const length = segment.toOffset - segment.fromOffset
@@ -273,13 +221,6 @@ export function sliceRunOrigins(
   return sliced
 }
 
-/**
- * The parts of a run whose text was replaced. Every recorded range indexes
- * the text the run carries, not the stored base text: an origin spanning the
- * parent's whole current text is a previous part's own range, so a part's
- * slice shifts by that segment's start; a coarser origin cannot be aligned,
- * so the part simply claims its own range as provenance.
- */
 function sliceReplacedRunOrigins(
   origins: readonly DocumentLineageSegment[],
   parentLength: number,
@@ -303,13 +244,6 @@ function sliceReplacedRunOrigins(
   })
 }
 
-/**
- * Assigns segments to the parts a split produced. `parts` carry their range
- * in the run's current text. An unreplaced run's origins partition that text,
- * so each part takes its true sub-range; a replaced run's origins index the
- * replacement text instead, which `sliceReplacedRunOrigins` slices the same
- * way so a reversal can still distribute a pre-save draft across the parts.
- */
 export function recordSplitRun(
   recorder: LineageRecorder,
   parent: DocumentTextRunWire,
@@ -331,46 +265,24 @@ export function recordSplitRun(
   }
 }
 
-/**
- * Builds the authoritative lineage from the recorder and the resulting model.
- * Result paragraph ids are the canonical ids that serialization will persist.
- */
 export function buildVersionLineage(input: {
   recorder: LineageRecorder
   model: DocumentModelWire
   canonicalParagraphIds: ReadonlyMap<DocumentParagraphWire, string>
   baseVersionId: string
   versionId: string
-  /**
-   * Whether the result run addresses can be trusted. A tracked save reparses
-   * to a different run list than the in-memory model (wrapped in `w:ins` /
-   * `w:del`), and run model ids are reallocated by document position on every
-   * parse, so a tracked version omits every run address. The client then
-   * refuses a run-keyed reversal instead of retargeting a positional id.
-   */
   runAddressesReliable?: boolean
 }): DocumentVersionLineage {
   const { recorder, canonicalParagraphIds } = input
   const runAddressesReliable = input.runAddressesReliable ?? true
   const paragraphs: DocumentParagraphLineage[] = []
-  // Tracked-change elements group by the accepted operation that created
-  // them: ins-only groups that are paragraph insertions name their shell's
-  // paragraph id here, and every other group becomes a reversal below.
   const { insertionChangeIds, reversals } = buildTrackedReversals(recorder)
 
   for (const story of input.model.stories) {
-    // The main story is the editable one. Its paragraphs are all part of the
-    // map, untouched ones included, so a run that only shifted position when
-    // an earlier paragraph was inserted or split still has a result address.
     const wholeStory = story.kind === 'document'
     for (const paragraph of story.paragraphs) {
       const origin = recorder.paragraphOrigin.get(paragraph)
       const toParagraphId = canonicalParagraphIds.get(paragraph) ?? paragraph.id
-      // A paragraph the batch touched, or one whose persisted id changed when
-      // the version was canonicalised, is part of the base-to-result map. The
-      // canonicalised-but-untouched entries are what let a restore anchor on a
-      // legacy paragraph resolve to its renamed result id. Outside the main
-      // story only those are useful, so the rest are omitted.
       const renamed = toParagraphId !== paragraph.id
       if (!wholeStory && !origin && !renamed) continue
       const runs: DocumentLineageRun[] = runAddressesReliable
@@ -418,19 +330,6 @@ export function buildVersionLineage(input: {
   }
 }
 
-/**
- * Re-expresses a lineage recorded against the *current* version as one whose
- * base side is the *client's* base version. A reconciled collaboration merge
- * applies the client's operations to a newer current version, so the recorder
- * names current runs and paragraphs. The caller supplies the current-to-base
- * correspondence computed from the two parsed versions (persisted paragraph
- * ids, then run skeleton), and never a positional or text guess.
- *
- * Content that exists only in the current version (a collaborator's paragraph
- * or run within a touched paragraph) has no base origin, so it is dropped from
- * the map rather than claimed as the client's. The client's covered slots
- * never reference it: the merge refuses an operation that conflicts with it.
- */
 export function retargetLineageToBaseVersion(input: {
   lineage: DocumentVersionLineage
   currentToBaseParagraph: ReadonlyMap<string, string>
@@ -476,8 +375,6 @@ export function retargetLineageToBaseVersion(input: {
     const fromParagraphId = reversal.fromParagraphId
       ? (currentToBaseParagraph.get(reversal.fromParagraphId) ?? null)
       : null
-    // A reversal whose addresses do not exist in the base cannot be offered to
-    // the client; the boundary then blocks honestly rather than retargeting.
     if (reversal.fromRunId && !fromRunId) return []
     if (reversal.fromParagraphId && !fromParagraphId) return []
     return [

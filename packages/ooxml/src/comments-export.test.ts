@@ -164,9 +164,6 @@ describe('product comment DOCX export', () => {
       comments.indexOf('Earlier id'),
     )
 
-    // The resolved thread records its done flag in commentsExtended: the new
-    // part, its relationship, and its content-type override are the only
-    // additional parts the export is allowed to touch.
     const extended = requiredXml(outputParts, 'word/commentsExtended.xml')
     const doneEntry = extended.match(
       /<w15:commentEx w15:paraId="([0-9A-F]{8})" w15:done="1"\/>/u,
@@ -329,8 +326,6 @@ describe('product comment DOCX export', () => {
 
     expect(commentsXml).toContain('Head note')
     expect(commentsXml).toContain('Reply body')
-    // The head and reply both carry paraIds and the reply's commentEx names
-    // the head's paraId as its parent.
     const headParaId =
       /<w:comment w:id="1"[^>]*><w:p w14:paraId="([0-9A-F]+)"/u.exec(
         commentsXml,
@@ -399,8 +394,6 @@ describe('product comment DOCX export', () => {
     const parts = await zipParts(bytes)
     const commentsXml = requiredXml(parts, 'word/comments.xml')
 
-    // The foreign comment survives byte-identical in its own element and the
-    // reply is appended as a new comment after it.
     expect(commentsXml).toContain('Fictional review comment')
     expect(commentsXml).toContain('Product reply on a foreign thread')
   })

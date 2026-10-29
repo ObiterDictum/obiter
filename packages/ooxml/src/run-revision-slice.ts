@@ -1,7 +1,6 @@
 import { hasPropertyRevision } from './run-revision-eligibility'
 import type { DocumentTextRunWire } from '@obiter/contracts'
 
-/** Splices cut after controls; range edits cut before controls at the boundary. */
 export function sliceRunRevisionMetadata(
   run: DocumentTextRunWire,
   from: number,

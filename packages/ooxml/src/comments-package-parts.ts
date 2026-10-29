@@ -38,11 +38,6 @@ export function commentExportError() {
   return new OoxmlError('comment-export-failed')
 }
 
-/**
- * Resolves the part a relationship kind targets, falling back to the
- * conventional name when the document declares none. A declared but missing
- * or non-XML target fails closed.
- */
 export function resolveTypedPartName(
   document: OoxmlDocument,
   kind: 'comments' | 'commentsExtended',
@@ -131,11 +126,6 @@ export function ensureCommentsRelationship(
   ensureDocumentRelationship(document, commentsPartName, COMMENTS_RELATIONSHIP)
 }
 
-/**
- * Adds a `word/document.xml` relationship to `partName` when no relationship
- * of that type exists; a declared relationship pointing elsewhere fails
- * closed rather than redirecting a foreign part.
- */
 export function ensureDocumentRelationship(
   document: OoxmlDocument,
   partName: string,
@@ -161,12 +151,6 @@ export function ensureDocumentRelationship(
   if (existing.length > 1) throw commentExportError()
 
   const { part, overlay } = ensureRelationshipsPart(document)
-  // Relationship ids already inserted by an earlier ensure in this export
-  // live only in pending replacements, so ids are collected from the
-  // serialised current state — not the untouched source. The insertion
-  // position must still come from the source: overlay replacements are
-  // addressed in source coordinates, and the serialised positions shift
-  // once the first relationship lands.
   const current = serialiseOverlay(overlay)
   const relationshipIds = parseXmlElements(current)
     .filter(
@@ -250,12 +234,6 @@ export function requiredRoot(
   return root
 }
 
-/**
- * Inserts an element inside the part's root. One replacement owns a
- * self-closing root's expansion: the first child rewrites the whole element
- * and later children append inside that same replacement; a second
- * whole-root replacement would overlap the first and fail serialisation.
- */
 export function insertRootChild(
   part: SourcePart,
   overlay: XmlOverlay,

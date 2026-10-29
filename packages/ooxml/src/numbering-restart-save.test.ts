@@ -38,16 +38,12 @@ describe('numbering restart save round-trip', () => {
       'word/numbering.xml',
     )
     expect(() => parseXmlElements(numberingXml)).not.toThrow()
-    // The self-closing level is expanded into a paired redefinition carrying
-    // the restarted start, not dropped while the model keeps recording it.
     expect(numFragment(numberingXml, created.numberingId)).toContain(
       '<w:lvl w:ilvl="0"><w:start w:val="3"/></w:lvl>',
     )
 
     const parsed = await reloadInstance(document, created.numberingId)
     expect(parsed?.levels?.find((level) => level.ilvl === 0)?.start).toBe(3)
-    // The reloaded part must describe the same levels as the edit's model
-    // entry; a dropped redefinition leaks the abstract formatting back in.
     expect(parsed?.levels).toEqual(created.levels)
   })
 
@@ -79,8 +75,6 @@ describe('numbering restart save round-trip', () => {
       await serialiseDocx(document),
       'word/numbering.xml',
     )
-    // A paired source start must become one self-closing element, so the
-    // emitted part is well-formed and cannot carry a stray close tag.
     expect(() => parseXmlElements(numberingXml)).not.toThrow()
     const fragment = numFragment(numberingXml, created.numberingId)
     expect(fragment).not.toContain('</w:start>')

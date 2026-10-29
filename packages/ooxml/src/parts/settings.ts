@@ -23,12 +23,6 @@ const SETTINGS_CONTENT_TYPE =
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true })
 
-/**
- * The `CT_Settings` children the schema orders before `w:trackRevisions`
- * (ECMA-376 §17.15.1.78). A child outside this list — a later element or an
- * extension element — is a successor: the toggle is inserted ahead of the
- * first one so Word does not silently drop it.
- */
 const TRACK_REVISIONS_PREDECESSORS = new Set([
   'writeProtection',
   'view',
@@ -74,12 +68,6 @@ function settingsRelationship(relationship: DocumentRelationshipWire) {
   )
 }
 
-/**
- * The settings part a document declares, or the file at the conventional
- * name when it is carried undeclared. Reads tolerate both because a
- * conventional `word/settings.xml` with no relationship is what existing
- * packages in the wild — and this package's own fixtures — hold.
- */
 function settingsPart(
   relationships: readonly DocumentRelationshipWire[],
   sourceParts: ReadonlyMap<string, SourcePart>,
@@ -126,13 +114,6 @@ function onOff(element: XmlElement) {
     : !['false', '0', 'off'].includes(value.toLowerCase())
 }
 
-/**
- * Whether the package's `word/settings.xml` records tracked revisions: a
- * `w:trackRevisions` toggle that is present and not explicitly `w:val`-off.
- * An absent, undeclared or malformed part reads as off — the flag is a
- * convenience default for the editor, not content a missing answer should
- * block a document over.
- */
 export function readTrackRevisions(source: {
   model: Pick<OoxmlDocument['model'], 'relationships'>
   sourceParts: ReadonlyMap<string, SourcePart>
@@ -148,20 +129,8 @@ export function readTrackRevisions(source: {
   }
 }
 
-/**
- * Persists the Track Changes toggle: `on` writes a bare `w:trackRevisions`
- * into `word/settings.xml` — creating the part, its `word/document.xml`
- * relationship and its content-type override when absent — and `off` strips
- * every copy a reader could see. A part, relationship or content-type
- * declaration is only touched when a write actually follows, and an
- * unreadable or undeclared part blocks only the `on` path, so a package the
- * toggle does not change stays byte-identical.
- */
 export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
   const declared = document.model.relationships.filter(settingsRelationship)
-  // Duplicate settings relationships name an ambiguous part: `on` cannot
-  // guess which one a reader honours, while `off` cannot strip a toggle it
-  // cannot locate — and neither should rewrite declarations it cannot audit.
   if (declared.length > 1) {
     if (on) throw settingsError()
     return
@@ -170,10 +139,6 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
   const target = relationship
     ? resolveRelationshipTarget(relationship)
     : undefined
-  // The off path writes nothing it cannot locate: a missing, undeclared or
-  // unreadable part holds no visible toggle, so the package — declarations
-  // included — stays byte-identical. Only a requested `on` fails closed on
-  // the shapes it cannot honestly write.
   if (relationship && !target) {
     if (on) throw settingsError()
     return
@@ -201,10 +166,6 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
   }
   let overlay = part.overlay
   if (!overlay) throw settingsError()
-  // A second toggle write on one parsed document must see the first write's
-  // elements, not only the original XML: pending replacements are
-  // source-coordinate edits invisible to the element scan, so a dirty overlay
-  // is rebased onto its serialised text before this write's edits are placed.
   if (overlay.replacements.size > 0) {
     overlay = createXmlOverlay(serialiseOverlay(overlay))
     part.overlay = overlay
@@ -215,15 +176,11 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
   } catch {
     found = undefined
   }
-  // A part that is not a single w:settings root holds no readable toggle;
-  // stripping one would guess at malformed markup, so only `on` fails closed.
   if (!found) {
     if (on) throw settingsError()
     return
   }
   const { root, children, toggles } = found
-  // An unprefixed root declares the Word namespace as its default: the
-  // element must land unprefixed too — a `w:` written there binds to nothing.
   const prefix = root.qualifiedName.includes(':')
     ? `${root.qualifiedName.slice(0, root.qualifiedName.indexOf(':'))}:`
     : ''
@@ -242,8 +199,6 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
     return
   }
 
-  // A part carried undeclared is invisible to Word: a write it holds lands
-  // only once the relationship and the content type name it.
   if (!target) {
     const partName = part.name
     guardSettings(() =>
@@ -254,9 +209,6 @@ export function writeTrackRevisions(document: OoxmlDocument, on: boolean) {
     )
   }
   if (toggles.length === 1 && onOff(toggles[0]!)) return
-  // Normalise to exactly one bare toggle: extras are duplicates a malformed
-  // part could carry, and an explicit `w:val="false"` is rewritten rather
-  // than patched attribute-wise so the persisted form stays canonical.
   const keep = toggles[0]
   if (keep) {
     setOverlayReplacement(overlay, 'settings:trackRevisions:0', {
@@ -314,12 +266,6 @@ function createSettingsPart(document: OoxmlDocument) {
   return part
 }
 
-/**
- * The shared part helpers report every structural failure as
- * `comment-export-failed`. In this part that code would mislabel a settings
- * problem, so the calls run inside the narrowest conversion the error type
- * allows.
- */
 function guardSettings<T>(make: () => T): T {
   try {
     return make()

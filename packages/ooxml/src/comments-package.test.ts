@@ -52,11 +52,6 @@ describe('product comment package export', () => {
   })
 
   it('inserts two product relationships into a rels part that already has entries', async () => {
-    // A resolved comment emits a commentsExtended entry, so one export asks
-    // for two insertions into word/_rels/document.xml.rels. The fixture part
-    // carries nine relationships already; the second insertion's position
-    // must be taken in source coordinates — the serialised view has shifted
-    // by then — or the part comes back malformed.
     const input = await withoutCommentsPackageSupport()
     const source = requiredXml(
       await zipParts(input),
@@ -92,8 +87,6 @@ describe('product comment package export', () => {
       expect(relationships).toContain(`Id="${id[1]}"`)
     }
 
-    // The finished package must still load: malformed rels XML is a hard
-    // failure here, not a silently dropped part.
     const reparsed = await parseDocx(output)
     expect(
       reparsed.model.relationships.filter(
@@ -103,11 +96,6 @@ describe('product comment package export', () => {
   })
 
   it('inserts two product relationships into a self-closing rels root', async () => {
-    // A rels part whose root is `<Relationships .../>` is legal but carries no
-    // children: both product relationships must land inside the one expansion
-    // replacement, or two whole-root replacements overlap and serialisation
-    // throws. The foreign namespace attribute proves the rewrite preserves
-    // the root's original attributes.
     const zip = await JSZip.loadAsync(await withoutCommentsPackageSupport())
     zip.file(
       'word/_rels/document.xml.rels',

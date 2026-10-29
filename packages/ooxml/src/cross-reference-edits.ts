@@ -10,14 +10,6 @@ import { spliceInlineXml, spliceRunWires } from './structure-splice'
 
 const BOOKMARK_NAME_PREFIX = '_Ref_'
 
-/**
- * Splices a `REF` field — begin / instrText / separate / result / end — at
- * `offset` in `paragraph`, after ensuring `target` carries a `_Ref_*` bookmark
- * allocated from the part. The result run stores the target's current
- * text as the field result; Word refreshes it on demand. The shared splice
- * closes and reopens a containing run around the field, so a mid-run caret
- * splits the run the same way a page break does.
- */
 export function insertCrossReference(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -53,8 +45,6 @@ export function insertCrossReference(
     lineage,
   )
   if (lineage) {
-    // The field runs are new content, not a split of an existing run: their
-    // reversal origin is null, matching inserted-paragraph seeding.
     for (const wire of wires) {
       lineage.runOrigins.set(wire, [
         { fromRunId: null, fromOffset: 0, toOffset: 0 },
@@ -73,11 +63,6 @@ function crossReferenceFieldXml(bookmark: string, result: string) {
   ].join('')
 }
 
-/**
- * Five run wires in field order, carrying what a reparse collects: the field
- * characters and the instruction land in `preservedXmlFragments` (non-`w:t`
- * children), and the result run carries the stored result text.
- */
 function fieldRunWires(
   document: OoxmlDocument,
   bookmark: string,

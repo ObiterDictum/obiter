@@ -9,22 +9,11 @@ import {
   type ShareSafeValueBound,
 } from './share-safe-value-bounds'
 
-/**
- * OMML property elements and the bound each one's `m:val` must satisfy —
- * the map is generated from `shared-math.xsd`: an element appears here
- * exactly when its complex type declares an `m:val` attribute, and the
- * bound is that attribute's declared type. An element absent here cannot
- * carry `m:val` at all; a value outside its bound is a payload in a
- * value slot, and the copy refuses.
- */
-
-/** `s:ST_TwipsMeasure` — unsigned decimal twips or a universal measure. */
 const TWIPS_MEASURE = unionBound([
   shapeBound(/^[0-9]+(?:\.[0-9]+)?$/u),
   shapeBound(/^[0-9]+(?:\.[0-9]+)?(?:mm|cm|in|pt|pc|pi)$/u),
 ])
 
-/** `ST_Char` — a single character; delimiters hold glyphs, not text. */
 const CHAR = shapeBound(/^.$/su)
 
 const ON_OFF_ELEMENTS = [
@@ -77,12 +66,10 @@ const SPACING_RULE_ELEMENTS = ['cGpRule', 'rSpRule'] as const
 const CHAR_ELEMENTS = ['chr', 'begChr', 'endChr', 'sepChr'] as const
 
 const MATH_VAL_BOUNDS: ReadonlyMap<string, ShareSafeValueBound> = new Map([
-  // `CT_OnOff` — s:ST_OnOff (xsd:boolean plus on/off)
   ...ON_OFF_ELEMENTS.map((element): readonly [string, ShareSafeValueBound] => [
     element,
     FLAG_BOUND,
   ]),
-  // enumerations
   ['brkBin', enumBound(['before', 'after', 'repeat'])],
   ['brkBinSub', enumBound(['--', '-+', '+-'])],
   ['defJc', enumBound(['left', 'right', 'center', 'centerGroup'])],
@@ -111,7 +98,6 @@ const MATH_VAL_BOUNDS: ReadonlyMap<string, ShareSafeValueBound> = new Map([
   ['intLim', enumBound(['undOvr', 'subSup'])],
   ['naryLim', enumBound(['undOvr', 'subSup'])],
   ['shp', enumBound(['centered', 'match'])],
-  // measurements and counts
   ...TWIPS_MEASURE_ELEMENTS.map(
     (element): readonly [string, ShareSafeValueBound] => [
       element,
@@ -132,7 +118,6 @@ const MATH_VAL_BOUNDS: ReadonlyMap<string, ShareSafeValueBound> = new Map([
   ),
   ['count', intRangeBound(1, 255)],
   ['argSz', intRangeBound(-2, 2)],
-  // characters and font names — a delimiter slot holds glyphs, not text
   ...CHAR_ELEMENTS.map((element): readonly [string, ShareSafeValueBound] => [
     element,
     CHAR,
@@ -140,20 +125,8 @@ const MATH_VAL_BOUNDS: ReadonlyMap<string, ShareSafeValueBound> = new Map([
   ['mathFont', FONT_NAME_BOUND],
 ])
 
-/**
- * `CT_Char` declares `m:val` as required — a `chr`/`begChr`/`endChr`/
- * `sepChr` element without it is malformed and refuses rather than
- * shipping a delimiter property a reader fills with a default.
- */
 const MATH_REQUIRED_VAL_ELEMENTS: ReadonlySet<string> = new Set(CHAR_ELEMENTS)
 
-/**
- * The `m:` attribute verdict for an OMML element. `m:val` keeps only on
- * an element that declares it, within that element's bound; `m:alnAt` on
- * `m:brk` is the one other declared `m:` attribute. Anything else —
- * an unknown attribute name or a declared slot outside its bound —
- * refuses.
- */
 export function mathAttributeVerdict(
   elementLocalName: string,
   attributeLocalName: string,
@@ -168,11 +141,6 @@ export function mathAttributeVerdict(
   return boundAllows(bound, value) ? 'keep' : 'refuse'
 }
 
-/**
- * Whether an `m:` element requires an `m:val` it does not carry — the
- * element-level counterpart the transform and emitted-byte re-analysis
- * apply.
- */
 export function mathElementMissingRequiredAttribute(
   elementLocalName: string,
 ): boolean {

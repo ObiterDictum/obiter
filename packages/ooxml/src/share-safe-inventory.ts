@@ -32,7 +32,6 @@ const OFFICE_REL =
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
 
-/** A target naming a resource outside the package: URI scheme or UNC path. */
 const EXTERNAL_TARGET = /^[a-z][a-z0-9+.-]*:|^\\\\/iu
 
 function isExternal(relationship: DocumentRelationshipWire) {
@@ -50,26 +49,11 @@ function tryResolveTarget(relationship: DocumentRelationshipWire) {
   }
 }
 
-/**
- * Classifies every part in the package and collects the relationship and
- * element edits the transform applies. Nothing is copied on faith: a part
- * ships only when a recognised relationship type reaches it through the
- * package graph — from `_rels/.rels` down through kept parts' own `.rels` —
- * its declared root matches the role, and its XML surface passes the
- * element-level analysis in `share-safe-content`. Otherwise it is dropped
- * (recognised residue classes and unreachable payloads) or the export is
- * refused (declared content outside the allow-list, ambiguity a reader
- * could resolve the unsafe way, or material this layer cannot verify).
- * The document itself is never mutated; the caller clones first.
- */
 export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
   if (document.trackedChanges.size > 0 || document.model.changes.length > 0) {
     refuseShareSafe('tracked-changes', 'tracked changes remain in the document')
   }
 
-  // Part names are case-insensitive to an OPC consumer; two entries spelling
-  // the same name differently make scrubbing hit one file while a recipient
-  // may read the other.
   const folded = new Map<string, string>()
   for (const name of document.sourceParts.keys()) {
     const existing = folded.get(name.toLowerCase())
@@ -93,12 +77,7 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     relationshipIds: new Map(),
   }
   const dropped = new Set<string>()
-  // A `unique` type may repeat only when every declaration names the same
-  // target — real packages carry redundant same-target entries, while two
-  // different targets claiming one role are ambiguous and refuse.
   const uniqueTargets = new Map<string, string>()
-  // Binary parts carry their relationship's tail through to payload
-  // inspection — an `image` and a `font` read their bytes differently.
   const binaryTails = new Map<string, string>()
 
   const relationshipsByOwner = new Map<string, DocumentRelationshipWire[]>()
@@ -108,10 +87,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     relationshipsByOwner.set(relationship.sourcePartName, list)
   }
 
-  // Reachability walk: a part ships only when the package graph reaches it
-  // through kept relationships. Declarations inside dropped or orphaned
-  // `.rels` parts are never evaluated — their content cannot ship, so it
-  // cannot refuse the export either.
   const reachable = new Set<string>([PACKAGE_OWNER])
   const queue = [PACKAGE_OWNER]
   while (queue.length > 0) {
@@ -130,8 +105,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
       if (DROP_RELATIONSHIP_TAILS.has(tail)) {
         strip()
         const target = tryResolveTarget(relationship)
-        // A target a kept relationship also reaches would ship under two
-        // roles — one of which this copy refuses to carry.
         if (target && plan.dispositions.has(target)) {
           refuseShareSafe(
             'malformed-package',
@@ -148,12 +121,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
         tail === 'attachedTemplate' ||
         tail === 'printerSettings'
       ) {
-        // All three are detachable: an external hyperlink unwraps to its
-        // text, an attached template and a printer-settings record drop
-        // with their pointers. A hyperlink relationship without an
-        // external target is not a shape Word writes — ambiguous, so it
-        // refuses; a printer-settings pointer that escapes the package is
-        // an external reference like any other.
         if (tail === 'hyperlink' && !external) {
           refuseShareSafe(
             'malformed-package',
@@ -270,7 +237,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
       try {
         owner = relationshipSourcePartName(name)
       } catch {
-        // Not a relationships part a consumer can address — dead payload.
         plan.dispositions.set(name, { kind: 'drop' })
         continue
       }
@@ -295,10 +261,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
       continue
     }
     if (name === CUSTOM_PROPERTIES_PART) {
-      // An orphaned custom.xml is adopted only when it reads as a real
-      // Properties part: the markings it may carry are product state worth
-      // keeping. An unreadable file at the name is dead payload — dropped
-      // like anything else unreferenced.
       plan.dispositions.set(
         name,
         customPropertiesShape(part)
@@ -314,15 +276,9 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
       )
       continue
     }
-    // Nothing declared this part. Rather than guess at its payload, it does
-    // not ship.
     plan.dispositions.set(name, { kind: 'drop' })
   }
 
-  // An orphaned custom.xml adopted for its markings must declare itself
-  // before the content pass plans `_rels/.rels` and `[Content_Types].xml`
-  // — the declarations it writes land as pending overlay edits, and the
-  // content pass folds them into the text it plans against.
   for (const [name, disposition] of plan.dispositions) {
     if (
       disposition.kind === 'custom-properties' &&
@@ -343,8 +299,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     }
   }
 
-  // Kept binary parts prove their payload before anything is written —
-  // an image is re-serialised metadata-free and a font shows its magic.
   for (const [name, disposition] of plan.dispositions) {
     if (disposition.kind === 'drop') continue
     const part = document.sourceParts.get(name)
@@ -360,9 +314,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     if (payload !== undefined) plan.binaryPayloads.set(name, payload)
   }
 
-  // Canonical names resolve before the content pass: the `.rels` analysis
-  // emits `Target` values spelled against them and relationship ids are
-  // regenerated per owner, so both maps must be complete first.
   for (const [name, canonical] of canonicalPartNames(
     plan.dispositions,
     document.sourceParts,
@@ -370,9 +321,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     plan.partRenames.set(name, canonical)
   }
 
-  // Every bookmark name the kept surface carries is replaced by a
-  // generated `bm<n>` — collection runs across all word parts first so
-  // the rewrites the content pass records use the complete map.
   let bookmarkCounter = 0
   const nextBookmark = () => {
     bookmarkCounter += 1
@@ -394,7 +342,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
         part.overlay?.source ?? decoder.decode(part.originalPayload),
       )
     } catch {
-      // The content pass below owns the malformed-package refusal.
       continue
     }
     for (const element of elements) {
@@ -417,9 +364,6 @@ export function planShareSafeCopy(document: OoxmlDocument): ShareSafePlan {
     }
   }
 
-  // Two passes: every `.rels` part analyses first — it assigns the
-  // canonical `rId` values the owner parts' relationship-pointer rewrite
-  // resolves against — then the remaining parts.
   for (const relationshipsFirst of [true, false]) {
     for (const [name, disposition] of plan.dispositions) {
       if (disposition.kind === 'drop') continue

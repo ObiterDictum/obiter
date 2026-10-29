@@ -51,11 +51,6 @@ export function setRunEmphasis(
   emphasis: RunEmphasis,
 ) {
   const part = requireEditablePart(document, anchor.partName)
-  // A whole-run property write cannot compose with a page-break splice that
-  // already reopened the run: the write lands on the first sibling while the
-  // tail keeps its parse-time property snapshot, so the wire would claim the
-  // whole run is styled while the saved tail is not. Fail closed with a typed
-  // edit error instead of saving a mismatch.
   if (hasPendingBreakSplice(part.overlay, anchor.runRange)) {
     throw new OoxmlError('invalid-document-edit')
   }

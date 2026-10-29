@@ -9,12 +9,6 @@ import {
   save,
 } from './model-run-emphasis.test-support'
 
-// E44 review finding 1: `effectiveView` counted every w:br child as a text
-// newline while the parser counts only text-wrapping breaks, so a run mixing
-// text with a page/column break (or a CRLF replacement) still rejected the
-// composed save. Break classification has one owner now, and the replacement
-// path consumes the run's own text-wrapping breaks so the model, the parser and
-// the serialiser describe the same text.
 const PAGE_BREAK = '<w:br w:type="page"/>'
 const COLUMN_BREAK = '<w:br w:type="column"/>'
 
@@ -74,9 +68,6 @@ describe('replacement composed with range emphasis across w:br', () => {
     const { document, paragraph } = await loadRun(
       '<w:r><w:t>Hello world</w:t></w:r>',
     )
-    // A pending page-break splice is paragraph-keyed, not run-keyed, so the
-    // emphasis pass must still see it and materialise the run; otherwise it
-    // writes a whole-run replacement over the splice and serialising throws.
     applyDocumentEdits(document, [
       {
         type: 'insert_break',
@@ -105,9 +96,6 @@ describe('replacement composed with range emphasis across w:br', () => {
     const { document, paragraph } = await loadRun(
       '<w:r><w:t>Hello world</w:t></w:r>',
     )
-    // The whole-run fast path would write the run's properties while the break
-    // splice's tail still points at the parse-time snapshot, so the tail would
-    // save unstyled. Routing through materialise styles every character.
     applyDocumentEdits(document, [
       {
         type: 'insert_break',
@@ -132,9 +120,6 @@ describe('replacement composed with range emphasis across w:br', () => {
   })
 
   it('styles exactly the characters a range covers across a folded break', async () => {
-    // A page-break splice folds a run into sibling runs; the reopened tail
-    // duplicates the run's properties. The split must apply emphasis per run,
-    // emit each run's properties once, and style only the covered characters.
     const cases = [
       { from: 0, to: 2, bold: 'ab' },
       { from: 2, to: 4, bold: 'cd' },
@@ -263,7 +248,6 @@ describe('replacement composed with range emphasis across w:br', () => {
 
     const xml = await documentXml(document)
     expect(count(xml, PAGE_BREAK)).toBe(1)
-    // Position preserved: the break stays between the two text elements.
     expect(xml).toContain(`${PAGE_BREAK}<w:t>cd</w:t>`)
     const reparsed = await save(document)
     const runs = paragraphs(reparsed)[0]?.runs ?? []

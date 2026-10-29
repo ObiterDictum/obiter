@@ -11,11 +11,6 @@ import {
   save,
 } from './model-run-emphasis.test-support'
 
-// E44: a run whose text is replaced in the same batch as a range emphasis on
-// that new text. The range address and the replacement text share one
-// coordinate space (the paragraph text after the replacement), so applying
-// the split against the run's pre-replacement source mapping threw
-// `comment-anchor-unresolved` from run-split bookkeeping even with no comments.
 describe('composing run text replacement with range emphasis', () => {
   it('keeps the typed tail and underlines only the selected text', async () => {
     const document = await load(

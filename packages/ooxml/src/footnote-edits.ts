@@ -43,19 +43,6 @@ const FOOTNOTE_TEXT_STYLE = 'FootnoteText'
 const FOOTNOTE_ID =
   /<w:footnote\b[^>]*\bw:id="(-?\d+)"|<w:footnoteReference\b[^>]*\bw:id="(-?\d+)"/gu
 
-/**
- * Splices a `w:footnoteReference` run at `offset` in the body `paragraph`
- * and appends the matching `w:footnote` entry — the note's own `w:p` carrying
- * `text` — to `word/footnotes.xml`, creating the part, its document
- * relationship and its content-type override when the package has none yet.
- *
- * The reference run carries no `w:t`, so the paragraph's effective text is
- * unchanged and the same `w:p` reparse reads the reference back as the same
- * zero-width run this writes. The note entry always holds exactly one
- * paragraph: the client's per-paragraph `insert_footnote` text is a single
- * block, and the note-body invariant (`assertNoteStoriesKeepParagraph`)
- * then guards that paragraph like a story's last `w:p`.
- */
 export function insertFootnote(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -114,9 +101,6 @@ export function insertFootnote(
   footnotes.story.preservedXmlFragments.push(entryXml)
   footnotes.story.paragraphs.push(noteWire)
   if (lineage) {
-    // The reference run is new content, not a split of an existing run —
-    // the same null origin the field writers record — and the note
-    // paragraph is an insertion whose reversal removes it.
     lineage.recorder.runOrigins.set(referenceWire, [
       { fromRunId: null, fromOffset: 0, toOffset: 0 },
     ])
@@ -124,22 +108,10 @@ export function insertFootnote(
   }
 }
 
-/**
- * The `word/footnotes.xml` part and its story wire, creating the whole
- * package presence when absent: the part itself (with the required
- * `w:id="-1"` separator and `w:id="0"` continuation separator entries), the
- * content-type override and the relationship `word/document.xml` carries to
- * resolve it. An orphaned part — present but never related from the
- * document — is refused rather than guessed at: it could hold entries whose
- * ids the allocator must not recycle.
- */
 function ensureFootnotesStory(
   document: OoxmlDocument,
   lineage?: { recorder: LineageRecorder; operationIndex: number },
 ) {
-  // The relationship target names the part; `word/footnotes.xml` is only the
-  // conventional path, so the story wire — resolved through the document's
-  // relationships at parse — is the address, not the name.
   const story = document.model.stories.find((item) => item.kind === 'footnotes')
   if (story) {
     return {
@@ -196,12 +168,6 @@ function ensureFootnotesStory(
   return { part, story: created }
 }
 
-/**
- * Appended entries are emitted in the conventional `w:`/`w14:` spelling; a
- * part whose root binds either namespace to another prefix — or to none —
- * carries the declaration on each entry so the children still resolve. The
- * created root binds both, so the separator path never needs this.
- */
 function withDeclaredNamespaces(
   part: SourcePart & { kind: 'xml'; overlay: XmlOverlay },
   entryXml: string,
@@ -246,12 +212,6 @@ function separatorParagraphWire(
   }
 }
 
-/**
- * The note paragraph's wire, shaped exactly as the reparse yields it: the
- * persisted `para-w14-*` id, the `FootnoteText` style on the paragraph, the
- * `w:footnoteRef` mark run ahead of the note's own text run, and the `w:pPr`
- * as the paragraph's preserved fragment.
- */
 function noteParagraphWire(
   document: OoxmlDocument,
   paraId: string,
@@ -283,18 +243,6 @@ function noteParagraphWire(
   }
 }
 
-/**
- * One more than the highest `w:id` the package still names: the part's
- * `w:footnote` entries — source and pending replacements, since a
- * same-batch entry exists only as a pending value — plus every
- * `w:footnoteReference` the stories' preserved fragments carry: the same
- * rule the fold's `nextPendingFootnoteId` applies, over every story and
- * the overlay rather than the body and notes story alone. Separator ids are
- * negative or zero, so real notes allocate from 1. The reference scan is
- * load-bearing: a `w:footnote` entry can be removed while a mark naming it
- * survives, and recycling that id would silently re-point the stored mark
- * at the new note.
- */
 function nextFootnoteId(
   stories: readonly DocumentStoryWire[],
   overlay: XmlOverlay,
@@ -327,14 +275,6 @@ function nextFootnoteId(
   return next
 }
 
-/**
- * The per-entry counterpart of the story-level last-paragraph invariant: a
- * `w:footnote` or `w:endnote` with no `w:p` left is invalid markup, but the
- * per-part count cannot see it — a note part holds many entries. Every
- * anchor inside an entry's element range counts toward it, and a batch may
- * not leave an entry empty. Tracked deletes only wrap their paragraph in
- * markup, so the caller runs this on the untracked path only.
- */
 export type NoteParagraphOperation = {
   type:
     'insert_paragraph_after' | 'insert_paragraph_before' | 'delete_paragraph'

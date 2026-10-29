@@ -14,13 +14,6 @@ const changeContext = {
   date: '2026-08-11T12:30:00.000Z',
 }
 
-/**
- * Partial-range formatting under tracking: the covered runs split at the
- * range boundaries, each covered piece's `w:rPr` gains the patch plus a
- * `w:rPrChange` marker holding the piece's own previous properties, and the
- * untouched siblings stay byte-identical. A whole-covered run still goes
- * through the single-run tracked writer.
- */
 describe('tracked range emphasis', () => {
   it('splits a bare run at the range and marks the covered piece', async () => {
     const document = await parseDocx(
@@ -47,23 +40,17 @@ describe('tracked range emphasis', () => {
       'word/document.xml',
     )
 
-    // The covered piece carries the patch and the marker; the previous
-    // properties are an empty rPr because the source run had none. The
-    // unsplit pieces keep the source `w:t` tag verbatim; the synthetic split
-    // tags force xml:space="preserve".
     expect(xml).toContain('<w:t>before </w:t>')
     expect(xml).toContain('<w:t xml:space="preserve">middle</w:t>')
     expect(xml).toContain('<w:t xml:space="preserve"> after</w:t>')
     expect(xml).toMatch(
       /<w:rPr><w:b\/><w:rPrChange w:id="\d+"[^>]*><w:rPr\/><\/w:rPrChange><\/w:rPr>/u,
     )
-    // The wire model sees the split pieces too.
     expect(paragraph.runs.map(({ text }) => text)).toEqual([
       'before ',
       'middle',
       ' after',
     ])
-    // The emitted part reparses to the same text, pieces included.
     const reparsed = await parseDocx(await serialiseDocx(document))
     expect(mainParagraphs(reparsed)[0]?.runs.map(({ text }) => text)).toEqual([
       'before ',
@@ -112,7 +99,6 @@ describe('tracked range emphasis', () => {
     expect(xml).toMatch(
       /<w:rPr><w:b\/><w:i\/><w:rPrChange w:id="\d+"[^>]*><w:rPr><w:i\/><\/w:rPr><\/w:rPrChange><\/w:rPr><w:t>styled<\/w:t>/u,
     )
-    // The untouched sibling keeps the source properties byte-identical.
     expect(xml).toContain(
       '<w:rPr><w:i/></w:rPr><w:t xml:space="preserve"> run text</w:t>',
     )
@@ -183,8 +169,6 @@ describe('tracked range emphasis', () => {
         ],
         changeContext,
       )
-      // A decision acts on stored XML, so it runs against the reparsed
-      // document — the same surface the API decision route sees.
       const stored = await parseDocx(await serialiseDocx(document))
       const created = stored.model.changes.filter(
         ({ author }) => author === changeContext.author,
@@ -207,7 +191,6 @@ describe('tracked range emphasis', () => {
         expect(xml).toContain('<w:rPr><w:i/></w:rPr><w:t>styled</w:t>')
         expect(xml).not.toContain('<w:b/>')
       }
-      // Either way the split pieces stay; reparsing must round-trip.
       const reparsed = await parseDocx(await serialiseDocx(stored))
       expect(reparsed.model.changes).toHaveLength(0)
       expect(
@@ -289,8 +272,6 @@ describe('tracked range emphasis', () => {
         {
           type: 'set_run_emphasis',
           paragraphId: paragraph.id,
-          // The inserted text parses out of the paragraph model, so the
-          // stored run's range starts at model offset 0.
           from: 1,
           to: 3,
           bold: true,

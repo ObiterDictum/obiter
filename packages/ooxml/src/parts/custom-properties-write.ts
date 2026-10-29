@@ -35,13 +35,6 @@ const PACKAGE_RELATIONSHIPS_PART = '_rels/.rels'
 const RELATIONSHIPS_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/relationships'
 
-/**
- * Rewrites the product's marking properties inside `docProps/custom.xml`,
- * creating the part, its package relationship, and its content-type override
- * when absent. Foreign properties are preserved element-for-element; the
- * part, relationship, and content-type all go through the overlay machinery,
- * so the rest of the package stays byte-identical.
- */
 export function writeDocumentMarkings(
   document: OoxmlDocument,
   markings: DocumentMarkingsWire,
@@ -59,10 +52,6 @@ function applyMarkings(
   markings: DocumentMarkingsWire,
 ) {
   const part = ensureCustomPropertiesPart(document)
-  // A second markings write on one parsed document must see the first write's
-  // properties, not only the original XML: pending replacements are source-
-  // coordinate edits invisible to the element scan, so a dirty overlay is
-  // rebased onto its serialised text before this write's edits are placed.
   if (part.overlay && part.overlay.replacements.size > 0) {
     part.overlay = createXmlOverlay(serialiseOverlay(part.overlay))
   }
@@ -73,9 +62,6 @@ function applyMarkings(
     markingsWriteError,
   )
 
-  // The value elements declare their own namespace so a write survives a
-  // root that does not declare `vt` — e.g. the minimal `</Properties>` part
-  // this module creates or a foreign package's bare custom.xml.
   const vt = `xmlns:vt="${DOC_PROPS_VT_NAMESPACE}"`
   const wanted = new Map<string, string>()
   if (markings.documentKind !== null) {
@@ -101,9 +87,6 @@ function applyMarkings(
   for (const property of properties) {
     if (!MARKING_PROPERTIES.names.has(property.name)) continue
     const value = wanted.get(property.name)
-    // A duplicated marking name is ambiguous: the first element carries the
-    // write and every later duplicate is dropped, so the serialised part
-    // holds exactly one value per name.
     if (seen.has(property.name) || value === undefined) {
       setOverlayReplacement(overlay, `marking:drop:${property.element.start}`, {
         start: property.element.start,
@@ -160,13 +143,6 @@ function ensureCustomPropertiesPart(document: OoxmlDocument) {
     return existing
   }
 
-  // A package may carry a file at the conventional name without the
-  // relationship that declares it — an orphaned custom.xml is dead weight a
-  // reader ignores, but its properties still ride every export, so dropping
-  // the file would silently discard them and keeping it undeclared would
-  // leave the markings unreadable. A file that is itself a valid Properties
-  // part is adopted: declared, and written into with its foreign properties
-  // intact. Anything else at the name is ambiguous and fails closed.
   const orphaned = document.sourceParts.get(CUSTOM_PROPERTIES_PART)
   if (orphaned) {
     return adoptOrphanedCustomPropertiesPart(document)
@@ -196,14 +172,6 @@ function ensureCustomPropertiesPart(document: OoxmlDocument) {
   return part
 }
 
-/**
- * Declares an orphaned `docProps/custom.xml` — a file at the conventional
- * name with no package relationship — so it survives as the
- * custom-properties part. The caller must have already validated the file
- * as a readable `Properties` part; anything else at the name fails closed.
- * The share-safe export uses this to keep the part for the product markings
- * it may carry rather than dropping the file as an unreferenced payload.
- */
 export function adoptOrphanedCustomPropertiesPart(document: OoxmlDocument) {
   const orphaned = document.sourceParts.get(CUSTOM_PROPERTIES_PART)
   if (!orphaned || orphaned.kind !== 'xml') throw markingsWriteError()
@@ -226,11 +194,6 @@ export function adoptOrphanedCustomPropertiesPart(document: OoxmlDocument) {
   return orphaned
 }
 
-/**
- * The canonical serialisation of one marking property. The share-safe copy
- * rewrites each retained property rather than carrying the original
- * element, so no foreign attribute survives inside an allowed name.
- */
 export function markingPropertyXml(
   pid: number,
   name: string,
@@ -243,11 +206,6 @@ export function markingPropertyXml(
   return propertyXml(pid, name, inner)
 }
 
-/**
- * `_rels/.rels` analogue of `ensureDocumentRelationship` (which is scoped to
- * `word/document.xml`): adds the package-level relationship that declares
- * `partName` the custom-properties part.
- */
 function ensurePackageRelationship(document: OoxmlDocument, partName: string) {
   const part = document.sourceParts.get(PACKAGE_RELATIONSHIPS_PART)
   if (!part || part.kind !== 'xml') throw markingsWriteError()
@@ -257,12 +215,6 @@ function ensurePackageRelationship(document: OoxmlDocument, partName: string) {
     )
   }
   const overlay = part.overlay
-  // Relationship ids added by an earlier ensure in this write live only in
-  // pending replacements, so the declaration check and the id collection run
-  // on the serialised current state while the insertion position comes from
-  // source coordinates. A second markings write on one document must not add
-  // a second declaration: two package-level custom-properties relationships
-  // are the ambiguous state reads fail closed on.
   const current = serialiseOverlay(overlay)
   const declared = parseXmlElements(current).filter(
     (element) =>

@@ -9,6 +9,7 @@ import {
   parseDocx,
   serialiseDocx,
 } from './index'
+import { expectPartsByteIdentical } from './preservation.test-support'
 
 const TRACKING = { author: 'Reviewer', date: '2026-08-12T12:00:00.000Z' }
 
@@ -22,26 +23,17 @@ describe('table-of-contents edits', () => {
     )
     if (!anchor) throw new Error('Fixture model is missing.')
 
-    // Offset 5 lands strictly inside the single run's text — the position a
-    // paragraph split must reparent, not an end-of-paragraph boundary.
     applyDocumentEdits(document, [
       { type: 'insert_table_of_contents', paragraphId: anchor.id, offset: 5 },
     ])
     const output = await serialiseDocx(document)
     const xml = await zipText(output, 'word/document.xml')
 
-    // The field instruction opens inside the first result paragraph.
     expect(xml).toContain(' TOC \\o "1-3" \\u ')
-    // The heading was bookmarked and the entry references it.
     expect(xml).toContain('<w:bookmarkStart')
     expect(xml).toContain('w:name="_Toc1"')
     expect(xml).toContain('PAGEREF _Toc1')
-    // The heading's text is the stored entry text.
     expect(xml).toContain('Alice Example overview')
-    // The anchor split: head text, then the field result, then the tail
-    // holding the rest of 'Jane Example referenceJane Example reference'.
-    // The entry text is the occurrence after the anchor's head — the first
-    // is the heading paragraph itself.
     const head = xml.indexOf('Jane ')
     const firstEntry = xml.indexOf('Alice Example overview', head)
     const tail = xml.indexOf('Example reference', firstEntry)
@@ -49,8 +41,6 @@ describe('table-of-contents edits', () => {
     expect(head).toBeLessThan(firstEntry)
     expect(firstEntry).toBeLessThan(tail)
 
-    // Reparse: the entry paragraphs read back with their stored text and
-    // the anchor's runs still join to the full original text.
     const reparsed = await parseDocx(output)
     const paragraphs = mainParagraphs(reparsed)
     const anchorIndex = paragraphs.findIndex(
@@ -86,7 +76,6 @@ describe('table-of-contents edits', () => {
         ),
       ),
     ).toBe(true)
-    // The heading carries the bookmark the entry references.
     const heading = paragraphs.find((paragraph) =>
       paragraph.preservedXmlFragments.some((fragment) =>
         fragment.includes('w:name="_Toc1"'),
@@ -118,11 +107,6 @@ describe('table-of-contents edits', () => {
     const reparsed = await parseDocx(await serialiseDocx(document))
     const paragraphs = mainParagraphs(reparsed)
 
-    // The field split the effective text: 'Typed' closes the head, the
-    // entry paragraph follows, and the tail opens with the rest of the
-    // typed run ahead of the paragraph's untouched second run. The typed
-    // text keeps the order the caret implied rather than moving wholesale
-    // behind the field.
     const head = paragraphs.findIndex(
       (paragraph) =>
         paragraph.runs.map((item) => item.text).join('') === 'Typed',
@@ -168,11 +152,6 @@ describe('table-of-contents edits', () => {
     const document = await parseFixture()
     const { heading, xrefAnchor, tocAnchor } = tocFixture(document)
 
-    // The batch styles a surviving paragraph into a heading, splices the
-    // field, and deletes the stored heading — the order
-    // `collectEditOperations` emits, with every delete last. The captured
-    // entries must skip the doomed heading: bookmarking it would put
-    // replacements inside the range the delete covers.
     applyDocumentEdits(document, [
       {
         type: 'set_paragraph_style',
@@ -220,9 +199,6 @@ describe('table-of-contents edits', () => {
     const reparsed = await parseDocx(output)
     const paragraphs = mainParagraphs(reparsed)
 
-    // Only the Heading1-styled paragraph is captured; the fixture's
-    // 'Restarted list' and plain paragraphs are not, and the heading style
-    // carries no explicit w:outlineLvl — the built-in style id decides.
     const entries = paragraphs.filter(
       (paragraph) => paragraph.styleId === 'TOC1',
     )
@@ -252,8 +228,6 @@ describe('table-of-contents edits', () => {
     const output = await serialiseDocx(document)
     const xml = await zipText(output, 'word/document.xml')
 
-    // Both fields reference the heading's single bookmark; the paragraph
-    // carries one pair, not a nested duplicate.
     expect(xml.match(/PAGEREF _Toc1 /gu)?.length).toBe(2)
     expect(xml.match(/w:name="_Toc1"/gu)?.length).toBe(1)
   })
@@ -280,8 +254,6 @@ describe('table-of-contents edits', () => {
       'word/document.xml',
     )
 
-    // The heading carries both families' pairs: the _Ref write must not
-    // clobber the _Toc one the PAGEREF names.
     expect(xml).toContain('w:name="_Ref_1"')
     expect(xml).toContain('w:name="_Toc1"')
     expect(xml).toContain(' REF _Ref_1 ')
@@ -325,8 +297,6 @@ describe('table-of-contents edits', () => {
           'Controlled content' && anchor !== undefined
       )
     })
-    // The content-control paragraph may not be anchorable at all — either a
-    // missing anchor or a refusal is the fail-closed answer.
     if (!nested) {
       expect(
         mainParagraphs(document).some(
@@ -435,9 +405,7 @@ describe('table-of-contents edits', () => {
       { type: 'insert_table_of_contents', paragraphId: anchor.id, offset: 5 },
     ])
     const output = await serialiseDocx(document)
-    const before = await JSZip.loadAsync(input)
-    const after = await JSZip.loadAsync(output)
-    for (const name of [
+    await expectPartsByteIdentical(input, output, [
       'word/styles.xml',
       'word/numbering.xml',
       'word/header1.xml',
@@ -445,14 +413,7 @@ describe('table-of-contents edits', () => {
       'word/footer1.xml',
       'word/footer2.xml',
       'word/media/image1.png',
-    ]) {
-      const original = before.file(name)
-      const edited = after.file(name)
-      if (!original || !edited) throw new Error(`Missing part ${name}.`)
-      expect(await edited.async('uint8array')).toEqual(
-        await original.async('uint8array'),
-      )
-    }
+    ])
   })
 })
 

@@ -1,10 +1,3 @@
-/**
- * Settings, style-definition and structured-document-tag formatting
- * attributes — the element → attribute → value bound table slice for
- * `word/settings.xml`, `word/styles.xml` and SDT payload surfaces.
- * Consumed by `WML_FORMAT_ATTRIBUTE_BOUNDS` in
- * `share-safe-word-attribute-format.ts`.
- */
 import type { ShareSafeValueBound } from './share-safe-value-bounds'
 import {
   WML_ZOOM,

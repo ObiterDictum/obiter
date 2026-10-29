@@ -6,13 +6,6 @@ import {
   type XmlElement,
 } from './parts/xml-elements'
 
-/**
- * The package-level half of the share-safe policy: which parts may ship,
- * the root each must carry, and the namespaces each part family allows.
- * The inventory uses the relationship table to place parts; the scan uses
- * the family rules to bound what may exist inside them.
- */
-
 export const CONTENT_TYPES_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/content-types'
 export const PACKAGE_REL_NAMESPACE =
@@ -53,12 +46,6 @@ export const WPC_NAMESPACE =
 export const DRAWINGML_2010_NAMESPACE =
   'http://schemas.microsoft.com/office/drawing/2010/main'
 
-/**
- * The prefix every emitted part spells for a kept namespace. Emission
- * declares only namespaces the kept elements and attributes actually use,
- * so an unused `xmlns:` declaration — a byte channel that hides foreign
- * URIs in source XML — can never reach the output.
- */
 export const CANONICAL_NAMESPACE_PREFIXES = new Map<string, string>([
   [WORD_NAMESPACE, 'w'],
   ['http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'r'],
@@ -77,11 +64,6 @@ export const CANONICAL_NAMESPACE_PREFIXES = new Map<string, string>([
   [XML_NAMESPACE_URI, 'xml'],
 ])
 
-/**
- * Namespaces older readers know how to skip only when named in
- * `mc:Ignorable`. Emitted parts declare the attribute themselves — a
- * generated, bounded value — when their kept elements draw on one.
- */
 export const IGNORABLE_NAMESPACES = new Set([
   WPS_NAMESPACE,
   WPG_NAMESPACE,
@@ -94,7 +76,6 @@ export const PACKAGE_OWNER = ''
 export const PACKAGE_RELATIONSHIPS_PART = '_rels/.rels'
 export const CONTENT_TYPES_PART = '[Content_Types].xml'
 
-/** The `.rels` part that declares relationships owned by `sourcePartName`. */
 export function relationshipsPartFor(sourcePartName: string) {
   if (sourcePartName === PACKAGE_OWNER) return PACKAGE_RELATIONSHIPS_PART
   const slash = sourcePartName.lastIndexOf('/')
@@ -111,55 +92,22 @@ export type ShareSafePartDisposition = {
     | 'scrub-app-properties'
     | 'scrub-settings'
     | 'custom-properties'
-  /** The root element the part must parse to, proven by its relationship. */
   root?: ExpandedName
-  /** An orphaned `docProps/custom.xml` adopted by name, not relationship. */
   orphaned?: boolean
 }
 
-/**
- * The inventory's verdict for one package: a disposition for every part and
- * the relationship declarations the transform strips because their target
- * was dropped or the pointer is detachable (an external hyperlink is
- * unlinked, an attached template detached — neither ships its target).
- */
 export type ShareSafePlan = {
   dispositions: Map<string, ShareSafePartDisposition>
-  /** relationships part name → relationship ids to remove from it */
   stripRelationships: Map<string, Set<string>>
-  /** owning part name → detached relationship ids and their shapes */
   detachedReferences: Map<string, Map<string, DetachedReferenceShape>>
-  /**
-   * Per kept XML part, the content decisions the emitter applies: elements
-   * removed or unwrapped, field instructions rewritten. Computed once at
-   * plan time so scan and transform can never disagree.
-   */
   contentPlans: Map<string, ShareSafeContentPlan>
-  /** Binary parts rewritten in place (stripped image metadata). */
   binaryPayloads: Map<string, Uint8Array>
-  /** Bookmark names replaced by generated `bm<n>` values. */
   bookmarkRenames: Map<string, string>
-  /**
-   * The canonical name every kept non-declaration part emits under —
-   * original part names are identifier text and never ship.
-   */
   partRenames: Map<string, string>
-  /**
-   * Relationships part name → original `Id` → generated `rId<n>` the
-   * canonical declaration emits. Owner-part references rewrite through it.
-   */
   relationshipIds: Map<string, Map<string, string>>
 }
 
-/**
- * What a part's emission stage needs to know — computed while the plan
- * scans the parsed surface. `removed` elements never emit, `unwrapped`
- * elements emit their children but no tags, `textOverrides` replace an
- * element's content, and `attrOverrides` rewrite (`string`) or drop
- * (`undefined`) an attribute.
- */
 export type ShareSafeContentPlan = {
-  /** The parsed element tree the emitter and verifier walk. */
   elements: XmlElement[]
   removed: Set<XmlElement>
   unwrapped: Set<XmlElement>
@@ -189,11 +137,6 @@ const keep = (localName: string, unique = false): ShareSafeKeepSpec => ({
   unique,
 })
 
-/**
- * Relationship types the copy keeps and the root each target must carry —
- * a `header` relationship pointing at `<w:document>` is ambiguous and
- * refuses rather than shipping under a guessed role.
- */
 export const KEEP_RELATIONSHIPS = new Map<string, ShareSafeKeepSpec>([
   [`${OFFICE_REL}officeDocument`, keep('document', true)],
   [`${OFFICE_REL}styles`, keep('styles', true)],
@@ -264,11 +207,6 @@ export const KEEP_RELATIONSHIPS = new Map<string, ShareSafeKeepSpec>([
   ],
 ])
 
-/**
- * Relationships whose targets the copy removes outright — comment surfaces
- * (every recognised namespace vintage), the `people` part, thumbnail
- * previews and digital signatures, which are void once sanitised.
- */
 export const DROP_RELATIONSHIP_TAILS = new Set([
   'comments',
   'commentsExtended',
@@ -280,27 +218,13 @@ export const DROP_RELATIONSHIP_TAILS = new Set([
   'signature',
   'origin',
   'certificate',
-  // Effects-only style sheets, customXml datastores (Word writes a
-  // bibliography store into nearly every document it saves) and the
-  // building-block glossary are dead payload in a share-safe copy: nothing
-  // inside them ships, and the markup that bound to them is stripped at
-  // element level.
   'stylesWithEffects',
   'customXml',
   'customXmlProps',
   'glossaryDocument',
-  // Embedded font payloads are font-program bytes the binary layer cannot
-  // bound or re-serialise metadata-free — the part drops with its
-  // relationship, and the `w:embed*` elements pointing at it are removed
-  // at element level.
   'font',
 ])
 
-/**
- * The family a kept XML part belongs to, proven by its root namespace —
- * which element namespaces are legal inside it follows from the family,
- * not from the elements' prefixes.
- */
 export type ShareSafePartFamily =
   'word' | 'theme' | 'relationships' | 'content-types' | 'metadata'
 
@@ -311,8 +235,6 @@ export function shareSafePartFamily(
   if (rootNamespace === DRAWINGML_MAIN_NAMESPACE) return 'theme'
   if (rootNamespace === PACKAGE_REL_NAMESPACE) return 'relationships'
   if (rootNamespace === CONTENT_TYPES_NAMESPACE) return 'content-types'
-  // Core, app and custom properties are rewritten canonically — the input
-  // surface below the root never ships, so it needs no family rules.
   return 'metadata'
 }
 
@@ -329,15 +251,6 @@ function isEmbeddedNamespace(namespaceUri: string) {
   )
 }
 
-/**
- * Element namespaces a part family may carry. A word-family part allows
- * WordprocessingML, markup compatibility, DrawingML and its extension
- * vintages, Word's own extension vocabularies, and OMML. VML and Office
- * (`urn:schemas-microsoft-com:vml`, `…:office:office`, `…:office:word`),
- * smart-tag urns, the `dt:`/`sl:` metadata namespaces and every strict
- * OOXML namespace are absent — an element the policy cannot place refuses
- * the export rather than shipping.
- */
 export function isAllowedElementNamespace(
   namespaceUri: string,
   family: ShareSafePartFamily,
@@ -364,19 +277,16 @@ export function isAllowedElementNamespace(
   }
 }
 
-/** Relationship parts carry only `Relationships` root + `Relationship`. */
 export function isRelationshipPartElement(localName: string) {
   return localName === 'Relationships' || localName === 'Relationship'
 }
 
-/** Content-type parts carry only `Types`, `Default`, `Override`. */
 export function isContentTypeElement(localName: string) {
   return (
     localName === 'Types' || localName === 'Default' || localName === 'Override'
   )
 }
 
-/** The only attributes a `Relationship` element may carry. */
 export const RELATIONSHIP_ATTRIBUTES = new Set([
   'Id',
   'Type',
@@ -384,14 +294,12 @@ export const RELATIONSHIP_ATTRIBUTES = new Set([
   'TargetMode',
 ])
 
-/** The only attributes content-type entries may carry. */
 export const CONTENT_TYPE_ATTRIBUTES = new Map<string, ReadonlySet<string>>([
   ['Types', new Set()],
   ['Default', new Set(['Extension', 'ContentType'])],
   ['Override', new Set(['PartName', 'ContentType'])],
 ])
 
-/** The canonical payload the core/app property parts emit. */
 export const CANONICAL_CORE_PROPERTIES_XML =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
   `\r\n<cp:coreProperties xmlns:cp="${CORE_PROPERTIES_NAMESPACE}"></cp:coreProperties>`

@@ -71,11 +71,6 @@ export function applyDocumentEdits(
       operationIndex,
     )
 
-    // A tracked operation names its reversal by the persisted `w:id`s it just
-    // created. Taking them per operation keeps each history step's reversal a
-    // unit: a replacement's `del`/`ins` pair is never split from its run. The
-    // drain runs even when the operation has no paragraph so a stray change
-    // cannot leak into the deferred range-emphasis recording below.
     if (trackedWriter && lineage) {
       const created = trackedWriter.takeChanges()
       if (created.length > 0) {
@@ -85,8 +80,6 @@ export function applyDocumentEdits(
           fromRunId: trackedRunIdOf(operation),
         })
       }
-      // An earlier marker this operation folded inside `w:ins`/`w:del` is not
-      // a listed change, so its recorded reversal entry is withdrawn.
       dropTrackedChanges(lineage, trackedWriter.takeConsumedChanges())
     }
   }

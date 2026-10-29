@@ -400,9 +400,6 @@ describe('share-safe probes: provenance and binding surfaces', () => {
         'customXml/itemProps1.xml': `<?xml version="1.0"?><ds:datastoreItem xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"/>`,
       },
     })
-    // A declared store is dead payload — every Word save carries a
-    // bibliography customXml — so part, properties and rels go while the
-    // document's bound markup is stripped at element level.
     expect(parts.has('customXml/item1.xml')).toBe(false)
     expect(parts.has('customXml/itemProps1.xml')).toBe(false)
     expect(parts.get('word/_rels/document.xml.rels') ?? '').not.toContain(

@@ -7,11 +7,6 @@ import { parseDocx, serialiseDocx, writeDocumentMarkings } from './index'
 const CUSTOM_REL =
   '<Relationship Id="rIdCustom" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="/docProps/custom.xml"/>'
 
-/**
- * The fixture ships `docProps/custom.xml` without the `_rels/.rels`
- * declaration that would make it the custom-properties part. Declaring it is
- * the realistic shape; the package is otherwise untouched.
- */
 async function withDeclaredCustomProperties(customXml?: string) {
   const zip = await JSZip.loadAsync(
     await buildOoxmlFixture('full-fidelity-with-w14-ids'),
@@ -147,9 +142,6 @@ describe('document markings in docProps/custom.xml', () => {
   })
 
   it('adopts an undeclared custom.xml file, keeping its foreign properties', async () => {
-    // The raw fixture ships the file with no `_rels/.rels` declaration: the
-    // write declares the existing part rather than discarding its contents
-    // or shadowing it with a second part.
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
     )

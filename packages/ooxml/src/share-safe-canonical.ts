@@ -17,17 +17,6 @@ import {
 } from './share-safe-parts'
 import { refuseShareSafe } from './share-safe-refusal'
 
-/**
- * Canonical package naming and declaration emission. A part name, a
- * `Target` spelling, an `Override` `PartName` and every content-type value
- * are author-controlled identifier strings — left alone they carry an
- * arbitrary payload out in three different places (the zip entry name, the
- * owning part's declarations and `[Content_Types].xml`). Everything here is
- * generated: parts get the name their role dictates, relationship targets
- * are spelled relative from the emitted owner, and the content-types part
- * is written wholesale from the plan.
- */
-
 const WML_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.'
 const WORDML = (tail: string) => `${WML_MIME}${tail}+xml`
@@ -35,24 +24,16 @@ const WORDML = (tail: string) => `${WML_MIME}${tail}+xml`
 const RELS_CONTENT_TYPE =
   'application/vnd.openxmlformats-package.relationships+xml'
 
-/** Image formats the binary layer can re-serialise → their MIME type. */
 const CANONICAL_IMAGE_TYPES: ReadonlyMap<string, string> = new Map([
   ['png', 'image/png'],
   ['jpeg', 'image/jpeg'],
   ['gif', 'image/gif'],
 ])
 
-/**
- * `Extension` → `ContentType` pairs a `[Content_Types].xml` may declare as
- * a `Default`: the relationships default plus one per image format the
- * binary layer can prove. Any other `Default` in emitted bytes is a writer
- * splice.
- */
 export const CANONICAL_DEFAULT_CONTENT_TYPES: ReadonlyMap<string, string> =
   new Map([['rels', RELS_CONTENT_TYPE], ...CANONICAL_IMAGE_TYPES])
 
 type CanonicalRole = {
-  /** Parts that repeat per document get a generated ordinal name. */
   path?: string
   countedPrefix?: string
   mime: string
@@ -63,11 +44,6 @@ const counted = (prefix: string, mime: string): CanonicalRole => ({
   mime,
 })
 
-/**
- * The part name and MIME type each shipped role emits — the shape Word
- * writes for a new document, so a clean export carries no trace of how the
- * source package named its parts.
- */
 const CANONICAL_PART_ROLES: ReadonlyMap<string, CanonicalRole> = new Map([
   [
     `${WORD_NAMESPACE} document`,
@@ -133,35 +109,18 @@ const CANONICAL_PART_ROLES: ReadonlyMap<string, CanonicalRole> = new Map([
   ],
 ])
 
-/** Every content type an `Override` declaration may emit. */
 export const CANONICAL_OVERRIDE_CONTENT_TYPES: ReadonlySet<string> = new Set(
   [...CANONICAL_PART_ROLES.values()].map((role) => role.mime),
 )
 
-/**
- * A name canonical emission could produce: bounded segments, no traversal,
- * no whitespace, no markup characters. `.rels` parts and the content-types
- * stream pass too — `_rels/.rels` is itself a legal spelling.
- */
 export function isCanonicalPartName(name: string) {
   if (!/^[\w.-]+(?:\/[\w.-]+)*$/u.test(name)) return false
   return !name.split('/').some((segment) => segment === '.' || segment === '..')
 }
 
-/**
- * The `Target` spelling canonical rels emission writes — relative to the
- * owning part, so an absolute or traversal-laden input spelling becomes the
- * one canonical form.
- */
 export const CANONICAL_RELATIONSHIP_TARGET =
   /^(?:\.\.\/)*[\w.-]+(?:\/[\w.-]+)*$/u
 
-/**
- * Computes the name every kept non-declaration part emits under. Ordinals
- * (`header1`, `image2`) follow plan order — the declaration order the
- * reachability walk recorded — so the same document names its parts the
- * same way twice, and a re-parse of emitted bytes computes the identity.
- */
 export function canonicalPartNames(
   dispositions: ReadonlyMap<string, ShareSafePartDisposition>,
   sourceParts: ReadonlyMap<string, SourcePart>,
@@ -216,10 +175,6 @@ export function canonicalPartNames(
   return renames
 }
 
-/**
- * The name a kept `.rels` part emits under — derived from the canonical
- * name of the part it declares relationships for.
- */
 export function canonicalRelsPartName(
   name: string,
   renames: ReadonlyMap<string, string>,
@@ -234,11 +189,6 @@ export function canonicalRelsPartName(
   return renamed === undefined ? name : relationshipsPartFor(renamed)
 }
 
-/**
- * The `Target` a kept relationship declaration emits: the canonical target
- * name spelled relative to the canonical owner name — `media/image1.png`,
- * `../docProps/custom.xml` — never the input's spelling.
- */
 export function canonicalRelationshipTarget(
   ownerPartName: string,
   targetPartName: string,
@@ -266,13 +216,6 @@ export function canonicalRelationshipTarget(
   )
 }
 
-/**
- * Writes `[Content_Types].xml` wholesale from the plan: a `rels` `Default`,
- * one `Default` per image format the copy carries, and an `Override` per
- * shipped XML part at its canonical name with its role's MIME type. Order
- * is sorted and deterministic; the original declarations inform nothing
- * but the kept-part set.
- */
 export function canonicalContentTypesXml(plan: ShareSafePlan) {
   const defaults = new Map<string, string>()
   const overrides: { name: string; mime: string }[] = []

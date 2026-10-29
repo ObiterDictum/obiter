@@ -1,9 +1,3 @@
-/**
- * Layout, table, section and numbering formatting attributes — the
- * element → attribute → value bound table slice covering frames, table
- * machinery, page/section setup and numbering declarations. Consumed by
- * `WML_FORMAT_ATTRIBUTE_BOUNDS` in `share-safe-word-attribute-format.ts`.
- */
 import type { ShareSafeValueBound } from './share-safe-value-bounds'
 import {
   WML_FRAME_ALIGN,

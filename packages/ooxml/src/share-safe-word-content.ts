@@ -18,37 +18,11 @@ import { fieldInstructionName } from './field-instructions'
 import { SHARE_SAFE_COMMENT_MARKERS } from './share-safe-word-classes'
 import { refuseShareSafe } from './share-safe-refusal'
 
-/**
- * The word-family halves of the content analysis: comment-marker run
- * collapse, field-span classification and bookmark renaming. Each records
- * its decisions on the shared content plan the emitter and verifier replay.
- */
-/**
- * A run whose only content is a comment surface marker collapses: the marker is
- * gone, and a run holding only markers leaves a dead shell. The marker list is
- * `SHARE_SAFE_COMMENT_MARKERS`, the same set the element pass removes.
- *
- * Two checks decide whether the run still carries something, and neither is
- * sufficient alone. The carries set ignores a `w:rPr` and its descendants — a
- * run's own formatting is not content a reader sees — and rules out a run
- * holding any other surviving element: text, a tab, a break, a symbol. The
- * empty-text check then rules out character data written directly inside the
- * run rather than in a child element, as in
- * `<w:r><w:commentRangeStart/>BARE<w:commentRangeEnd/></w:r>`. Character data is
- * not an element, so the carries set never sees it: a run can have every element
- * it carried removed and still survive on this check.
- */
 export function collapseCommentRuns(
   source: string,
   elements: readonly XmlElement[],
   contentPlan: ShareSafeContentPlan,
 ): Set<XmlElement> {
-  // Every run's fate is decided from the removal state the element pass
-  // left, so the carries flag is computed once. Collapsing adds only `w:r`
-  // elements to `removed`, and a run that reaches the collapse decision
-  // below has no non-rPr descendant — runs can nest, since a text box holds
-  // one — so no later collapse can sit inside it and change what it
-  // excludes.
   const removedByStart = [...contentPlan.removed].sort(
     (left, right) => left.start - right.start,
   )
@@ -84,9 +58,6 @@ export function collapseCommentRuns(
     }
     const run = nearestRun(element)
     if (!run || contentPlan.removed.has(run) || carries.has(run)) continue
-    // One run can carry many comment references, and a run that keeps text
-    // is never collapsed: decide each run once, or the same run is examined
-    // per marker.
     if (decided.has(run)) continue
     decided.add(run)
     const text = innerTextExcluding(source, run, removedByStart)
@@ -107,20 +78,11 @@ function nearestRun(element: XmlElement) {
   return undefined
 }
 
-/**
- * The text a consumer reads inside `element`, minus every removed
- * descendant's range — used only to decide whether an emptied run still
- * carries anything.
- */
 function innerTextExcluding(
   source: string,
   element: XmlElement,
   removedByStart: readonly XmlElement[],
 ) {
-  // `removedByStart` is sorted once by the caller: binary-search to the
-  // first removed element inside this element's content range, then walk
-  // only that window. Filtering the whole removed set per candidate run is
-  // quadratic in a comment-heavy part.
   let low = 0
   let high = removedByStart.length
   while (low < high) {
@@ -154,13 +116,6 @@ function innerTextExcluding(
   return text
 }
 
-/**
- * Field machinery: spans are reconstructed semantically, classified by
- * instruction name, and marked for the emitter — remove-class fields drop
- * their whole span, flatten-class fields keep only their displayed result,
- * and orphaned markers go. A span the element pass half-removed closes
- * over the whole span: a partial field never ships.
- */
 export function analyseWordFields(
   part: SourcePart,
   source: string,
@@ -205,9 +160,6 @@ export function analyseWordFields(
         `${part.name} carries a field instruction ${fieldInstructionName(span.instruction) || '(unnamed)'} the copy cannot bound`,
       )
     }
-    // Keep-class spans ship their instruction — but only reference fields
-    // rewrite operands, and only to bookmark names that actually ship. A
-    // dangling operand flattens the field to its displayed result.
     let rewritten: string | undefined
     if (FIELD_REFERENCE_NAMES.has(fieldInstructionName(span.instruction))) {
       const resolution = rewriteReferenceInstruction(
@@ -237,10 +189,6 @@ export function analyseWordFields(
     contentPlan.textOverrides.set(first, rewritten)
     for (const element of rest) contentPlan.textOverrides.set(element, '')
   }
-  // A span the element pass half-removed closes over its whole span, and
-  // that closure propagates between spans that share elements. Propagate it
-  // with a worklist instead of rescanning every span to a fixpoint, which is
-  // quadratic when a part is built from many nested fields.
   const triggerElements = new Map<FieldSpan, XmlElement[]>()
   const spansByElement = new Map<XmlElement, FieldSpan[]>()
   for (const span of fields.spans) {
@@ -255,10 +203,6 @@ export function analyseWordFields(
       else spansByElement.set(element, [span])
     }
   }
-  // A comment surface is not the author's field content: the element pass
-  // removes its markers and the collapse above removes a run left holding
-  // only them. Neither half-removes the span, or a keep-class field whose
-  // whole result is a comment marker would take its cached result with it.
   const isCommentSurface = (element: XmlElement) =>
     collapsedCommentRuns.has(element) ||
     (element.namespaceUri === WORD_NAMESPACE &&
@@ -289,12 +233,6 @@ export function analyseWordFields(
   }
 }
 
-/**
- * Flattening drops a field's machinery — the `w:fldChar` markers and
- * instruction runs — while its displayed result stays: a complex field
- * loses `[begin, lastSeparate)` plus the end marker, and a `w:fldSimple`
- * loses only its wrapper (and with it the `w:instr` attribute).
- */
 function flattenField(span: FieldSpan, contentPlan: ShareSafeContentPlan) {
   if (span.simple !== undefined) {
     contentPlan.unwrapped.add(span.simple)
@@ -303,14 +241,6 @@ function flattenField(span: FieldSpan, contentPlan: ShareSafeContentPlan) {
   for (const element of span.dropped) contentPlan.removed.add(element)
 }
 
-/**
- * Every name a bookmark or form field carries is replaced by a generated
- * `bm<n>` — the input names are labels a recipient can read, so none
- * ships. `w:anchor` values that name a renamed bookmark are rewritten to
- * the generated name; an anchor that names nothing emitted is dropped.
- * Field instructions are rewritten token-wise so `REF`/`PAGEREF` argument
- * names follow the same map.
- */
 export function rewriteBookmarks(
   part: SourcePart,
   elements: readonly XmlElement[],

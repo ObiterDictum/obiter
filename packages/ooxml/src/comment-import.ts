@@ -27,13 +27,6 @@ type MarkerEndpoint = { anchor: ParagraphAnchor; offset: number }
 type RangeEndpoints = { start?: MarkerEndpoint; end?: MarkerEndpoint }
 type ExtendedEntry = { paraId: string; parentParaId?: string; done: boolean }
 
-/**
- * Reads the package's own `word/comments.xml` into model comments. A comment
- * whose markers do not resolve is still listed with a null anchor — dropping
- * it would silently lose file content. Comments without a usable `w:id` get an
- * `ooxml-anon-*` identity: displayable but not replyable, because only the
- * file's own numeric id gives a reply a stable target.
- */
 export function extractImportedComments(input: {
   relationships: readonly DocumentRelationshipWire[]
   sourceParts: ReadonlyMap<string, SourcePart>
@@ -76,9 +69,6 @@ export function extractImportedComments(input: {
       if (id.startsWith('ooxml-anon-')) anonymous += 1
       usedIds.add(id)
 
-      // The comments part is not a story, so body text and paraIds are read
-      // straight off the comment element's own paragraphs rather than story
-      // anchors.
       const paragraphs = elements.filter(
         (candidate) => isWord(candidate, 'p') && candidate.parent === element,
       )
@@ -134,8 +124,6 @@ export function extractImportedComments(input: {
   for (const comment of comments) {
     const anchor = comment.anchor
     if (!anchor) continue
-    // Markers are only a valid anchor when the end follows the start in
-    // document order; order is the parse-time paragraph sequence.
     const startIndex = order.get(anchor.paragraphId)
     const endIndex = order.get(anchor.endParagraphId ?? anchor.paragraphId)
     if (
@@ -162,7 +150,6 @@ export function extractImportedComments(input: {
   return comments
 }
 
-/** The comments parts named by document relationships, in file order. */
 function commentsPartNames(input: {
   relationships: readonly DocumentRelationshipWire[]
   sourceParts: ReadonlyMap<string, SourcePart>
@@ -190,11 +177,6 @@ function groupAnchorsByPart(
   return byPart
 }
 
-/**
- * Pairs `w:commentRangeStart`/`w:commentRangeEnd` markers by `w:id` across
- * every story part except the comments parts themselves, resolving each
- * marker to a paragraph + UTF-16 offset.
- */
 function rangeEndpoints(
   sourceParts: ReadonlyMap<string, SourcePart>,
   anchorsByPart: ReadonlyMap<string, ParagraphAnchor[]>,
@@ -239,8 +221,6 @@ function markerAnchor(
   const pair = endpoints.get(ooxmlId)
   const start = pair?.start
   const end = pair?.end
-  // A range cannot span story parts: paired markers in different parts are
-  // malformed, so the comment keeps displayable with a null anchor.
   if (!start || !end || start.anchor.partName !== end.anchor.partName) {
     return null
   }
@@ -254,7 +234,6 @@ function markerAnchor(
   }
 }
 
-/** Parse-time paragraph sequence keyed by wire id, in story order. */
 function paragraphOrderIndex(
   paragraphAnchors: ReadonlyMap<string, ParagraphAnchor>,
 ) {
@@ -267,11 +246,6 @@ function paragraphOrderIndex(
   return order
 }
 
-/**
- * The model offset a marker at a source position lands on: the length of all
- * editable text nodes that end before it, plus the decoded prefix when it
- * falls inside a `w:t` body.
- */
 function markerOffset(
   source: string,
   anchor: ParagraphAnchor,
@@ -306,14 +280,12 @@ function markerOffset(
   return offset
 }
 
-/** Trims a raw slice back before a trailing unterminated entity reference. */
 function sliceBeforeEntityBoundary(raw: string) {
   const amp = raw.lastIndexOf('&')
   if (amp === -1) return raw
   return raw.indexOf(';', amp + 1) === -1 ? raw.slice(0, amp) : raw
 }
 
-/** `w15:commentEx` entries from any `commentsExtended` part the file links. */
 function extendedEntries(input: {
   relationships: readonly DocumentRelationshipWire[]
   sourceParts: ReadonlyMap<string, SourcePart>
@@ -355,8 +327,6 @@ function extendedEntries(input: {
 function numericId(value: string | undefined) {
   if (value === undefined || !/^-?\d+$/u.test(value)) return null
   const id = Number(value)
-  // The wire contract is nonnegative; a negative w:id has no usable reply
-  // identity, so the comment falls back to an anonymous ooxml-anon id.
   return Number.isSafeInteger(id) && id >= 0 ? id : null
 }
 
@@ -369,8 +339,6 @@ function decodePart(part: SourcePart) {
   try {
     return decoder.decode(part.originalPayload)
   } catch {
-    // A malformed comments part cannot fail the document; it simply has no
-    // extractable comments.
     return ''
   }
 }

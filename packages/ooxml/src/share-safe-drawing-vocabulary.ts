@@ -14,16 +14,7 @@ import {
   mathElementRefusesHidden,
 } from './share-safe-math-vocabulary'
 
-/**
- * The bounded embedded vocabulary: DrawingML, picture, wordprocessing-
- * drawing, OMML and the Word extension shape namespaces a kept part may
- * emit, plus the unqualified attribute names embedded elements may carry.
- * An element whose namespace has no entry — VML, `urn:` Office legacy
- * namespaces, or an unbounded drawing extension — refuses the export.
- */
-
 const DRAWINGML_MAIN_ELEMENTS = new Set([
-  // graphic payloads and shape containers
   'graphic',
   'graphicData',
   'graphicFrame',
@@ -45,13 +36,11 @@ const DRAWINGML_MAIN_ELEMENTS = new Set([
   'spLocks',
   'grpSpLocks',
   'cxnSpLocks',
-  // images and fills
   'blip',
   'stretch',
   'fillRect',
   'srcRect',
   'tile',
-  // geometry
   'xfrm',
   'off',
   'ext',
@@ -71,7 +60,6 @@ const DRAWINGML_MAIN_ELEMENTS = new Set([
   'pt',
   'close',
   'fillToRect',
-  // line and fill styles
   'ln',
   'headEnd',
   'tailEnd',
@@ -91,7 +79,6 @@ const DRAWINGML_MAIN_ELEMENTS = new Set([
   'fgClr',
   'bgClr',
   'grpFill',
-  // colours and colour transforms
   'schemeClr',
   'srgbClr',
   'sysClr',
@@ -142,7 +129,6 @@ const DRAWINGML_MAIN_ELEMENTS = new Set([
   'greenMod',
   'blueOff',
   'blueMod',
-  // effects
   'effectLst',
   'effectDag',
   'outerShdw',
@@ -164,17 +150,14 @@ const DRAWINGML_MAIN_ELEMENTS = new Set([
   'rot',
   'extLst',
   'ext',
-  // links inside drawings
   'hlinkClick',
   'hlinkHover',
-  // fonts
   'latin',
   'ea',
   'cs',
   'font',
   'sym',
   'script',
-  // theme parts
   'theme',
   'themeElements',
   'clrScheme',
@@ -215,7 +198,6 @@ const DRAWINGML_MAIN_ELEMENTS = new Set([
   'officeStyleSheet',
   'baseStyles',
   'clrMapOvr',
-  // text bodies inside shapes
   'bodyPr',
   'noAutofit',
   'normAutofit',
@@ -258,7 +240,6 @@ const DRAWINGML_MAIN_ELEMENTS = new Set([
   'buClrTx',
   'buBlip',
   'buSzTx',
-  // tables inside drawings
   'tbl',
   'tblPr',
   'tblGrid',
@@ -307,26 +288,8 @@ const WP_DRAWING_ELEMENTS = new Set([
   'simplePos',
 ])
 
-/**
- * `a:rPr`-class parents whose `a:noFill` child hides text outright —
- * like an OMML phantom, a fill that erases a run's visible text refuses
- * rather than shipping a reader-invisible carrier.
- */
 const HIDDEN_FILL_PARENTS = new Set(['defRPr', 'endParaRPr', 'rPr'])
 
-/**
- * `a:` alpha-effect elements whose declared function can erase their
- * input outright, wherever they sit — `alphaInv` subtracts the running
- * alpha from 100% (an opaque fill goes transparent), `alphaFloor` zeroes
- * any alpha under 100%, and `alphaBiLevel` zeroes everything under its
- * threshold. Whether a given instance erases depends on the base alpha
- * it composes with, which a per-element check cannot see, so the family
- * refuses outright. Siblings that can only preserve or deepen opacity
- * keep: `alphaCeiling` (nonzero alpha → opaque), `alphaOutset` (its
- * eroding inset form is refused by the non-negative `rad` bound), and
- * the per-attribute `alpha`/`alphaOff`/`alphaMod`/`alphaModFix`/
- * `alphaRepl` slots bounded in `share-safe-drawing-attributes.ts`.
- */
 const ALPHA_ERASURE_ELEMENTS = new Set([
   'alphaBiLevel',
   'alphaFloor',
@@ -351,12 +314,6 @@ export function embeddedElementRefusesHidden(element: {
   )
 }
 
-/**
- * Extension URIs (`a:ext uri`) whose payload vocabulary this build can
- * bound — currently only `a14:useLocalDpi`. Any other `a:ext` removes
- * whole rather than shipping an opaque payload under a text-bearing
- * identifier.
- */
 export const SHARE_SAFE_EXTENSION_URIS = new Set([
   '{28A0092B-C50C-407E-A947-70E740481C1C}',
 ])
@@ -375,10 +332,6 @@ const WPG_ELEMENTS = new Set(['wgp', 'cNvGrpSpPr', 'grpSp'])
 const WPC_ELEMENTS = new Set(['wholeCanvas', 'bg', 'fg'])
 const WP14_ELEMENTS = new Set(['sizeRelH', 'sizeRelW'])
 
-/**
- * Element names allowed per embedded or extension namespace. A namespace
- * without an entry refuses every element it carries.
- */
 export const EMBEDDED_ELEMENTS = new Map<string, ReadonlySet<string>>([
   [DRAWINGML_MAIN_NAMESPACE, DRAWINGML_MAIN_ELEMENTS],
   [DRAWINGML_PICTURE_NAMESPACE, DRAWINGML_PICTURE_ELEMENTS],
@@ -391,11 +344,6 @@ export const EMBEDDED_ELEMENTS = new Map<string, ReadonlySet<string>>([
   [DRAWINGML_2010_NAMESPACE, new Set(['useLocalDpi'])],
 ])
 
-/**
- * Embedded vocabulary elements the copy drops outright rather than
- * carrying. `a:tableStyleId` is a dangling pointer into the refused
- * tableStyles part — keeping it ships a name reference to nothing.
- */
 export const EMBEDDED_REMOVE_ELEMENTS = new Map<string, ReadonlySet<string>>([
   [DRAWINGML_MAIN_NAMESPACE, new Set(['tableStyleId'])],
 ])

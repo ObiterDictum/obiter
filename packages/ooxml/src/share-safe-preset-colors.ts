@@ -1,14 +1,5 @@
 import { enumBound, type ShareSafeValueBound } from './share-safe-value-bounds'
 
-/**
- * Colour-name enumerations for the embedded (DrawingML) attribute policy.
- * Each list is exactly the enumeration the schema declares — `a:sysClr`
- * uses the transitional slot names (`3dDkShadow`, `scrollBar`) and
- * `a:prstClr` carries the CSS palette plus its `*Grey` spellings — so a
- * colour slot keeps only a value Office itself could have written.
- */
-
-/** `a:sysClr val` — the system colour slot names. */
 export const SYSTEM_COLOR: ShareSafeValueBound = enumBound([
   '3dDkShadow',
   '3dLight',
@@ -42,7 +33,6 @@ export const SYSTEM_COLOR: ShareSafeValueBound = enumBound([
   'windowText',
 ])
 
-/** `a:prstClr val` — the named preset colours. */
 export const PRESET_COLOR: ShareSafeValueBound = enumBound([
   'aliceBlue',
   'antiqueWhite',

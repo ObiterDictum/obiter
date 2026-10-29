@@ -4,6 +4,7 @@ import { describe, expect, it } from 'bun:test'
 import { buildOoxmlFixture } from '../fixtures/builder'
 
 import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
+import { expectPartsByteIdentical } from './preservation.test-support'
 
 const TRACKING = { author: 'Reviewer', date: '2026-08-12T12:00:00.000Z' }
 
@@ -27,7 +28,6 @@ describe('page-number edits', () => {
       '<w:instrText xml:space="preserve"> PAGE </w:instrText>',
     )
     expect(field).toContain('w:fldCharType="separate"')
-    // The field splits 'Second footer' at offset 7: 'Second ' then 'footer'.
     expect(xml.indexOf('Second ')).toBeLessThan(
       xml.indexOf('fldCharType="begin"'),
     )
@@ -89,7 +89,6 @@ describe('page-number edits', () => {
 
     expect(xml).toContain('Matter header')
     expect(xml.match(FIELD)?.[0]).toContain(' PAGE ')
-    // The splice landed after the replaced text: the field sits at the end.
     expect(xml.indexOf('Matter header')).toBeLessThan(
       xml.indexOf('fldCharType="begin"'),
     )
@@ -188,9 +187,7 @@ describe('page-number edits', () => {
       { type: 'insert_page_number', paragraphId: anchor.id, offset: 4 },
     ])
     const output = await serialiseDocx(document)
-    const before = await JSZip.loadAsync(input)
-    const after = await JSZip.loadAsync(output)
-    for (const name of [
+    await expectPartsByteIdentical(input, output, [
       'word/document.xml',
       'word/styles.xml',
       'word/numbering.xml',
@@ -198,16 +195,7 @@ describe('page-number edits', () => {
       'word/footer1.xml',
       'word/footer2.xml',
       'word/media/image1.png',
-    ]) {
-      const original = before.file(name)
-      const edited = after.file(name)
-      if (!original || !edited) throw new Error(`Missing part ${name}.`)
-      expect(await edited.async('uint8array')).toEqual(
-        await original.async('uint8array'),
-      )
-    }
-    // The edited header part itself carries only the field splice: the run is
-    // split at offset 4 around the field.
+    ])
     const xml = await zipText(output, 'word/header2.xml')
     expect(xml.match(FIELD)?.[0]).toContain(' PAGE ')
     expect(xml).toContain('<w:t>Jane</w:t>')

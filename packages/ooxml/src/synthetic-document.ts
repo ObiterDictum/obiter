@@ -38,24 +38,11 @@ export type SyntheticParagraph =
   | { text: string; paraId?: string }
   | { table: { rows: number; columns: number } }
 
-/**
- * An optional header or footer the body's single section references. Each is
- * one paragraph of text in its own part, so tests can put a margin story
- * through the same parse–edit–serialise pipeline as a real document.
- */
 export type SyntheticMargins = {
   header?: string
   footer?: string
 }
 
-/**
- * Builds a minimal, valid DOCX whose document body is one paragraph per entry,
- * with an optional `w14:paraId` on each, or a table whose cells hold one
- * unparaId'd paragraph apiece — the shape a legacy document carries. Tests
- * that exercise the first-save transition for a legacy document need real
- * bytes with positional identities, and identity tests need to control the
- * ids exactly.
- */
 export async function createSyntheticDocx(
   paragraphs: readonly SyntheticParagraph[],
   margins: SyntheticMargins = {},

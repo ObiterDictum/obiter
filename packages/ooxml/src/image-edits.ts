@@ -11,17 +11,6 @@ import {
 import { spliceInlineXml, spliceRunWires } from './structure-splice'
 import { buildInlineDrawingXml, IMAGE_RELATIONSHIP_TYPE } from './structure-xml'
 
-/**
- * An inline picture at a caret offset: a `w:drawing`/`wp:inline`/`a:blip` run
- * with the image bytes in a new `word/media` part and an `r:embed`
- * relationship on the story part — the same shape the reader resolves
- * (`imagePartNameForDrawing`) and paints (`paragraphHasImage`). The extent is
- * the requested pixel size in EMU at 96 dpi, which is how
- * `drawingBoxSize`/`emuToPx` reads it back.
- *
- * The run carries no text, so the paragraph's effective text — and every
- * offset the batch addresses — is unchanged by the splice.
- */
 export function insertImage(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -71,9 +60,6 @@ export function insertImage(
   )
   part.dirty = true
 
-  // Keep the wire in step with the source: the drawing is one zero-length run
-  // carrying the `w:drawing` element as a preserved fragment, exactly as
-  // parseRun reports a non-text run child.
   const drawingRun = {
     id: allocateModelId(document, 'text-edit'),
     text: '',
@@ -87,9 +73,6 @@ export function insertImage(
     lineage,
   )
   if (lineage) {
-    // The drawing run is new content, not a split of an existing run: its
-    // reversal origin is null, matching how `recordInsertedParagraph` seeds
-    // inserted runs.
     lineage.runOrigins.set(drawingRun, [
       { fromRunId: null, fromOffset: 0, toOffset: 0 },
     ])

@@ -2,15 +2,6 @@ import { describe, expect, it } from 'bun:test'
 
 import { A, expectRefusal, outputParts, PIC, WP } from './share-safe-probe-kit'
 
-/**
- * R7: the schema itself, not a plausibility guess. The alpha family's
- * percentage slots carry the union the type declares (thousandths int or
- * `N%` literal) with the sign and range the same type permits, required
- * attributes must be present, the OMML `m:val` enumeration tables match
- * `shared-math.xsd` token for token, and package declarations carry only
- * their declared grammar. Every bound the transform applies is
- * re-derived at byte level — a writer splice faces the same refusal.
- */
 const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
 
 const DRAW = (inner: string) =>

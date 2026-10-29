@@ -1,8 +1,3 @@
-/**
- * `ST_Border` — every line style and page-border artwork name the simple
- * type declares. The artwork tails read like words but are enum tokens;
- * a value outside the list is a crafted payload, not a border choice.
- */
 import { enumBound, INT_BOUND, unionBound } from './share-safe-value-bounds'
 
 export const WML_BORDER = enumBound([
@@ -199,9 +194,4 @@ export const WML_BORDER = enumBound([
   'zigZagStitch',
 ])
 
-/**
- * `w:start`/`w:end` border slots double as measurement carriers —
- * `ST_Border` is a union with a decimal number, so the bound admits
- * either spelling.
- */
 export const WML_BORDER_OR_INT = unionBound([WML_BORDER, INT_BOUND])

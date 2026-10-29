@@ -34,7 +34,6 @@ describe('footnote edits', () => {
     const body = await zipText(output, 'word/document.xml')
     const notes = await zipText(output, 'word/footnotes.xml')
 
-    // The existing entry holds w:id 1, so the new note allocates 2.
     expect(body).toContain('<w:footnoteReference w:id="2"/>')
     expect(body).toContain('<w:rStyle w:val="FootnoteReference"/>')
     expect(body.indexOf('Alice ')).toBeLessThan(
@@ -46,8 +45,6 @@ describe('footnote edits', () => {
     expect(notes).toContain('<w:footnoteRef/>')
     expect(notes).toContain('<w:t>Example footnote text</w:t>')
 
-    // The reference run is zero-width: the reparse reads the same effective
-    // text, and the note body lands in the footnotes story.
     const reparsed = await parseDocx(output)
     const paragraph = mainParagraphs(reparsed)[0]
     expect(paragraph?.runs.map((run) => run.text).join('')).toBe(
@@ -105,8 +102,6 @@ describe('footnote edits', () => {
       `PartName="/word/footnotes.xml" ContentType="${FOOTNOTE_CONTENT_TYPE}"`,
     )
 
-    // The package must reparse: the new story is a real story, not a loose
-    // part, and the reference resolves to the new entry.
     const reparsed = await parseDocx(output)
     const story = reparsed.model.stories.find(
       (item) => item.kind === 'footnotes',
@@ -154,9 +149,6 @@ describe('footnote edits', () => {
   })
 
   it('allocates above an orphaned reference whose entry was removed', async () => {
-    // A stored w:footnoteReference can outlive its w:footnote entry; the
-    // next note must allocate above the id the orphaned mark still names,
-    // or the stored mark silently re-points at the new note.
     const zip = await JSZip.loadAsync(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
     )
@@ -184,7 +176,6 @@ describe('footnote edits', () => {
     const body = await zipText(output, 'word/document.xml')
     const notes = await zipText(output, 'word/footnotes.xml')
 
-    // The orphaned mark keeps id 1; the new note allocates 2, not 1.
     expect(body.match(/<w:footnoteReference w:id="1"\/>/gu)).toHaveLength(1)
     expect(body).toContain('<w:footnoteReference w:id="2"/>')
     expect(notes).toMatch(/<w:footnote\b[^>]*w:id="2">/u)
@@ -233,9 +224,6 @@ describe('footnote edits', () => {
         text: 'Canonical note',
       },
     ])
-    // The version-save path canonicalises every editable story's paragraph
-    // identities after the edits run; the notes part must take the namespace
-    // and the injected ids without corrupting the new entry.
     canonicaliseParagraphIdentities(document)
     const output = await serialiseDocx(document)
     const notes = await zipText(output, 'word/footnotes.xml')
@@ -322,16 +310,12 @@ describe('footnote edits', () => {
       ?.paragraphs.find((paragraph) => paragraph.runs.length > 0)
     if (!note) throw new Error('Fixture model is missing.')
 
-    // The fixture's note entry holds a single paragraph, so deleting it
-    // would leave the w:footnote element empty even though siblings survive.
     expect(() =>
       applyDocumentEdits(document, [
         { type: 'delete_paragraph', paragraphId: note.id },
       ]),
     ).toThrowError(expect.objectContaining({ code: 'last-paragraph-required' }))
 
-    // A second paragraph inside the entry releases the delete: the entry
-    // still holds a paragraph afterwards.
     applyDocumentEdits(document, [
       {
         type: 'insert_paragraph_after',
@@ -372,14 +356,6 @@ async function parseFixture() {
   return parseDocx(await buildOoxmlFixture('full-fidelity-with-w14-ids'))
 }
 
-/**
- * The fixture package with the footnotes part, its content-type override,
- * its document relationship and the body mark that named an entry stripped —
- * the state a first footnote must repair. The `w:footnoteReference` has to
- * go with the part: a mark without an entry still reserves its `w:id`, so
- * leaving it would make the allocator skip id 1. Rewriting the declaring
- * parts keeps every other byte as the builder produced it.
- */
 async function fixtureWithoutFootnotes() {
   const zip = await JSZip.loadAsync(
     await buildOoxmlFixture('full-fidelity-with-w14-ids'),

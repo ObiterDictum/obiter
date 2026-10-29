@@ -15,26 +15,14 @@ import {
 } from './table-of-contents-xml'
 import { wordRunInnerTextXml } from './text-run-edit'
 
-/** An entry plus the `_ToA` bookmark names its page references resolve. */
 export type ToaEntry = TableOfAuthoritiesEntry & { bookmarks: string[] }
 
-/**
- * `\h` hyperlinks each entry to its authority, `\c "1"` collects category 1
- * — cases — the only category the citation grammar produces.
- */
 const TOA_INSTRUCTION = ' TOA \\h \\c "1" '
-/** The heading the generated field's first result paragraph carries. */
 const TOA_HEADING = 'Table of Cases'
 const HIDDEN_RUN_PROPERTIES = '<w:rPr><w:vanish/></w:rPr>'
 const FIELD_BEGIN_FRAGMENT = '<w:fldChar w:fldCharType="begin"/>'
 const FIELD_END_FRAGMENT = '<w:fldChar w:fldCharType="end"/>'
 
-/**
- * The instruction a `TA` mark stores: `\l` the long citation (the matched
- * text), `\s` the short form (the same, there is no shorter cite), `\c 1`
- * the cases category. Word writes the field hidden — the three runs carry
- * `w:vanish` so the mark is metadata, not text.
- */
 export function tableAuthorityMarkXml(citation: string) {
   const escaped = escapeXmlText(citation)
   const instruction = `<w:instrText xml:space="preserve"> TA \\l "${escaped}" \\s "${escaped}" \\c 1 </w:instrText>`
@@ -45,7 +33,6 @@ export function tableAuthorityMarkXml(citation: string) {
   ].join('')
 }
 
-/** The run wires a reparse of `tableAuthorityMarkXml`'s output produces. */
 export function tableAuthorityMarkWires(
   nextId: () => string,
   citation: string,
@@ -65,12 +52,6 @@ export function tableAuthorityMarkWires(
   ]
 }
 
-/**
- * The table's heading paragraph as it serialises: `TOAHeading` styling, and
- * the `TOA` field's begin, instruction and separator before the heading
- * text — the first result paragraph of the field whose `end` opens the
- * tail paragraph after the last entry.
- */
 export function toaHeadingParagraphXml(paraId: string) {
   const runs = [
     FIELD_BEGIN_RUN,
@@ -81,7 +62,6 @@ export function toaHeadingParagraphXml(paraId: string) {
   return `<w:p xmlns:w14="${W14_NAMESPACE}" w14:paraId="${paraId}"><w:pPr><w:pStyle w:val="TOAHeading"/></w:pPr>${runs}</w:p>`
 }
 
-/** The wire counterpart of `toaHeadingParagraphXml`. */
 export function toaHeadingParagraphWire(
   nextId: () => string,
   paraId: string,
@@ -107,12 +87,6 @@ export function toaHeadingParagraphWire(
   }
 }
 
-/**
- * One entry paragraph as it serialises: `TableofAuthorities` styling with
- * the right dot-leader tab, the citation text, a tab and a `PAGEREF` field
- * per citing paragraph's `_ToA` bookmark — a comma-separated page list
- * when several paragraphs cite the same authority.
- */
 export function toaEntryParagraphXml(
   entry: ToaEntry,
   paraId: string,
@@ -129,7 +103,6 @@ export function toaEntryParagraphXml(
   return `<w:p xmlns:w14="${W14_NAMESPACE}" w14:paraId="${paraId}">${entryPropertiesFragment(tabPosition)}${runs}</w:p>`
 }
 
-/** The wire counterpart of `toaEntryParagraphXml`. */
 export function toaEntryParagraphWire(
   nextId: () => string,
   entry: ToaEntry,

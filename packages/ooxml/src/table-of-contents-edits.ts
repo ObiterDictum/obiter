@@ -40,37 +40,6 @@ import { allocateModelId } from './model-paragraph-edits'
 
 const TOC_BOOKMARK_PREFIX = '_Toc'
 
-/**
- * Splices a multi-paragraph `TOC` field at `offset` in `paragraph` — the
- * first generated structure whose result is not run-level:
- *
- * ```
- * <w:p>…head…</w:p>
- * <w:p>begin instrText(TOC) separate entry 1 …PAGEREF…</w:p>
- * <w:p>entry 2 …</w:p>
- * <w:p><w:r><w:fldChar end/></w:r>…tail…</w:p>
- * ```
- *
- * The head paragraph closes at the caret and the tail reopens after the
- * entry paragraphs — the shape a multi-paragraph field takes in OOXML:
- * `begin`, the instruction and `separate` sit inside the first result
- * paragraph, the remaining result paragraphs are siblings, and `end` opens
- * the paragraph the tail continues in. Every heading paragraph is
- * bookmarked `_Toc<n>` and each entry stores a `PAGEREF` field to it, so
- * the page reference resolves at paint like `PAGE` does.
- *
- * Entries are the document's heading paragraphs — by style and outline
- * level — computed when the batch applies: a stored snapshot, never
- * recomputed. A heading paragraph that already carries tracked changes
- * fails closed, like the other structural writers. An anchor that is not a
- * direct body child — a table cell, a content control — is refused, and so
- * is one whose `w:pPr` holds `w:sectPr`: those properties end a section at
- * the paragraph and the split would strand them on the head.
- *
- * Returns the tail wire and the number of paragraph wires the splice
- * appended after the anchor, so the dispatcher's post-anchor bookkeeping
- * stays in step with the serialised order.
- */
 export function insertTableOfContents(
   document: OoxmlDocument,
   story: DocumentStoryWire,
@@ -92,9 +61,6 @@ export function insertTableOfContents(
   )
   const parent = paragraphElement?.parent
   if (!paragraphElement || !parent || !isWord(parent, 'body')) {
-    // A table cell or a content-control paragraph is still part of the
-    // document story, but entries that splice siblings beside it would
-    // corrupt the container's child structure.
     throw new OoxmlError('invalid-document-edit')
   }
 
@@ -103,9 +69,6 @@ export function insertTableOfContents(
     entries.length === 0 ||
     entries.length > DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES
   ) {
-    // A TOC with no entries stores an empty result field — the honest
-    // answer is the refusal the ribbon already gives. Above the contract
-    // ceiling the field would write unbounded generated paragraphs.
     throw new OoxmlError('invalid-document-edit')
   }
 
@@ -138,10 +101,6 @@ export function insertTableOfContents(
   } else {
     const insertion = `</w:p>${entriesXml}${tailOpen}`
     const key = `${paragraph.wire.id}:toc:${String(occurrence)}`
-    // The offset addresses effective text, and a run already rewritten in
-    // this batch no longer maps to a source offset: compose into the
-    // pending run replacement like every other splice, so the field lands
-    // inside the text the batch wrote.
     const holder = runHoldingOffset(paragraph, offset)
     if (holder && runHasPendingOverlay(overlay, holder.run)) {
       refuseInsideStoredHyperlink(overlay, holder.run.runRange.start)
@@ -185,18 +144,6 @@ export function insertTableOfContents(
   return { lastWire: tailWire, appended: entries.length + 1 }
 }
 
-/**
- * The heading paragraphs the entry list is captured from: every document-
- * story paragraph the entry collector reports, mapped to its anchor and
- * bookmarked `_Toc<n>` — the bookmarks the entries' `PAGEREF` fields point
- * at. A paragraph the same batch inserted, or the tail an earlier same-batch
- * split created, exists only as pending XML and cannot carry a stored
- * bookmark yet, so it is skipped — the field lists the headings that were
- * stored. A heading with tracked changes cannot hold a bookmark safely, so
- * the whole insertion fails closed rather than drop it from the list. A
- * heading the same batch deletes is skipped too: bookmarking it would write
- * replacements inside the range its delete covers.
- */
 function headingEntries(
   document: OoxmlDocument,
   deletedIds: ReadonlySet<string>,
@@ -217,10 +164,6 @@ function headingEntries(
   return entries
 }
 
-/**
- * A splice inside a stored `w:hyperlink` would nest the field inside the
- * link; the same half-open rule `spliceInlineXml` applies.
- */
 function refuseInsideStoredHyperlink(
   overlay: XmlOverlay,
   sourceOffset: number,
