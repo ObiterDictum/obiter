@@ -6,16 +6,16 @@ import type {
   ApiErrorResponse,
   UserRole,
 } from '@obiter/contracts'
+import { appendAuditLog } from '../audit-log'
 import {
-  appendAuditLog,
   createMatter,
   getMatter,
   listMatters,
   restoreMatterWithAudit,
   softDeleteMatterWithCascade,
   updateMatter,
-  type UpdatableMatterStatus,
 } from '../database'
+import { type UpdatableMatterStatus } from '../database-records'
 import { ensureOrgUser, requireManageRole } from '../authz'
 
 interface RouteUser {

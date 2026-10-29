@@ -11,7 +11,7 @@ import {
   type ResolutionResult,
   type ReplyRow,
 } from './comments-db'
-import { appendAuditLog } from './database'
+import { appendAuditLog } from './audit-log'
 import { lockMatterForEdit } from './matter-lock'
 
 /**

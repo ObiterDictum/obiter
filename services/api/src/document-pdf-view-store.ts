@@ -4,7 +4,7 @@ import {
   DocumentDerivedStoreError,
   validateAndDeriveDocumentObjectKey,
 } from './document-derived-store'
-import type { DocumentVersionRecord } from './database'
+import type { DocumentVersionRecord } from './database-records'
 import type { StorageService } from './storage'
 
 type DocumentPdfViewSource = Pick<

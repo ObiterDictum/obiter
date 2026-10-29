@@ -16,7 +16,8 @@ import {
   matterShareUpdateResponseSchema,
 } from '@obiter/contracts'
 import { ensureOrgUser, type AuthzVariables } from '../authz'
-import { appendAuditLog, getMatter } from '../database'
+import { appendAuditLog } from '../audit-log'
+import { getMatter } from '../database'
 
 interface MatterShareRow {
   id: string

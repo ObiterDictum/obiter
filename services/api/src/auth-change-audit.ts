@@ -1,5 +1,5 @@
 import type { Pool } from 'pg'
-import { appendAuditLog } from './database'
+import { appendAuditLog } from './audit-log'
 
 /**
  * The success audit for `POST /api/auth/change-password`.

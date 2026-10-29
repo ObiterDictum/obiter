@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from 'pg'
 import type { ApiErrorCode, UserRole } from '@obiter/contracts'
-import { appendAuditLog } from './database'
+import { appendAuditLog } from './audit-log'
 
 export type InviteUnavailableCode = Extract<
   ApiErrorCode,

@@ -5,7 +5,7 @@ import { bearer } from 'better-auth/plugins/bearer'
 import { Resend } from 'resend'
 import type { Pool } from 'pg'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
-import { appendAuditLog } from './database'
+import { appendAuditLog } from './audit-log'
 import { authTrustedOrigins } from './client-origins'
 import type { ApiEnv } from './env'
 import {

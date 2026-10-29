@@ -1,5 +1,6 @@
 import { readPackageImageParts, requestedImagePartName } from '@obiter/ooxml'
-import { createDocumentObjectKey, type DocumentVersionRecord } from './database'
+import { createDocumentObjectKey } from './document-database'
+import { type DocumentVersionRecord } from './database-records'
 import { DocumentDerivedStoreError } from './document-derived-store'
 import type { StorageService } from './storage'
 

@@ -17,11 +17,11 @@ import {
 } from '@obiter/contracts'
 import { sendEmail } from '../auth'
 import { canGrantRole, requireManageRole, requireOwnerRole } from '../authz'
+import { appendAuditLog } from '../audit-log'
 import {
-  appendAuditLog,
   createOrganisationForUser,
   renameOrganisation,
-} from '../database'
+} from '../organisation-database'
 import { organisationInviteEmail } from '../email-templates'
 import type { ApiEnv } from '../env'
 import {

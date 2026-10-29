@@ -1,6 +1,6 @@
 import type { Pool } from 'pg'
 import type { CurrentUser, UserRole } from '@obiter/contracts'
-import { appendAuditLog } from './database'
+import { appendAuditLog } from './audit-log'
 
 /**
  * The account write path: the signed-in user's own display name. It lives here

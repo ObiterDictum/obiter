@@ -8,7 +8,7 @@ import {
   replyColumns,
   type ReplyRow,
 } from './comments-db'
-import { appendAuditLog } from './database'
+import { appendAuditLog } from './audit-log'
 import { lockMatterForEdit } from './matter-lock'
 
 const IMPORTED_PARENT_FINGERPRINT = /^[0-9a-f]{64}$/u

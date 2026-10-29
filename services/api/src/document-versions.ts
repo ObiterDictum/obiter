@@ -17,7 +17,8 @@ import {
   writeDocumentMarkings,
   writeTrackRevisions,
 } from '@obiter/ooxml'
-import type { AuditRecordInput, DocumentVersionRecord } from './database'
+import type { AuditRecordInput } from './audit-log'
+import type { DocumentVersionRecord } from './database-records'
 import { lockMatterForEdit } from './matter-lock'
 import {
   commitPreparedVersion,

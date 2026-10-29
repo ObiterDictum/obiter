@@ -1,6 +1,7 @@
 import type { DocumentCursor, DocumentPresence } from '@obiter/contracts'
 import { DOCUMENT_COLLABORATION_PARTICIPANT_MAX_COUNT } from '@obiter/contracts'
-import { createDocumentObjectKey, type DocumentVersionRecord } from './database'
+import { createDocumentObjectKey } from './document-database'
+import { type DocumentVersionRecord } from './database-records'
 import { getDocumentModel } from './document-model-store'
 import type { StorageService } from './storage'
 

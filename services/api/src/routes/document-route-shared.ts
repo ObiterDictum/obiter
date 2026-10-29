@@ -6,7 +6,7 @@ import {
   type AuthenticatedOrgUser,
   type AuthzVariables,
 } from '../authz'
-import { getDocument } from '../database'
+import { getDocument } from '../document-database'
 import { resolveMatterAccess } from '../document-access'
 
 type RouteContext = Context<{ Variables: AuthzVariables }>
