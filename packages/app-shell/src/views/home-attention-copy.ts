@@ -1,5 +1,8 @@
 import type { VerificationFindingView } from '@obiter/contracts'
-import { verificationFailureLabel } from '../verification-copy'
+import {
+  verificationAuthority,
+  verificationFailureLabel,
+} from '../verification-copy'
 import { formatDateTime } from '../format'
 import type { AttentionItem, AttentionSummary } from './home-attention'
 
@@ -129,7 +132,7 @@ export function attentionExplanation(
       const remaining = item.flaggedCount + item.reviewRequiredCount
       if (finding) {
         const rest = remaining > 1 ? ` ${remaining - 1} more in this run.` : ''
-        return `${finding.authorityLabel}: ${finding.explanation}${rest}`
+        return `${verificationAuthority(finding)}: ${finding.explanation}${rest}`
       }
       const parts: string[] = []
       if (item.flaggedCount > 0) parts.push(`${item.flaggedCount} flagged`)
