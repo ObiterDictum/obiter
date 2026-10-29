@@ -6,7 +6,7 @@ import {
   type AuthenticatedOrgUser,
   type AuthzVariables,
 } from '../authz'
-import { getDocument } from '../database'
+import { getDocument } from '../document-database'
 import { resolveMatterAccess } from '../document-access'
 
 type RouteContext = Context<{ Variables: AuthzVariables }>
@@ -101,6 +101,17 @@ export async function canReadDocumentHistory(
 export function requestedVersionSelection(c: RouteContext) {
   const versionId = c.req.query('versionId')
   return versionId === undefined ? {} : { versionId }
+}
+
+export function conflictDetected(c: RouteContext) {
+  const body: ApiErrorResponse = {
+    error: {
+      code: 'conflict_detected',
+      message: 'The document has changed since editing began.',
+      requestId: c.get('requestId'),
+    },
+  }
+  return c.json(body, 409)
 }
 
 export function documentNotFound(c: RouteContext) {

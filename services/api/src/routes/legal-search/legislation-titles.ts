@@ -26,7 +26,6 @@ import {
 } from './legislation-title-boundary'
 
 export {
-  looseActTitleKey,
   normalizeActTitle,
   trimTitleBoundary,
 } from './legislation-title-boundary'

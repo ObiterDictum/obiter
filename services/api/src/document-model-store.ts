@@ -3,7 +3,7 @@ import {
   DocumentDerivedStoreError,
   validateAndDeriveDocumentObjectKey,
 } from './document-derived-store'
-import type { DocumentVersionRecord } from './database'
+import type { DocumentVersionRecord } from './database-records'
 import { runDocumentModelTask } from './document-model-pool'
 import type { DocumentModelTaskResult } from './document-model-pool'
 import type { StorageService } from './storage'

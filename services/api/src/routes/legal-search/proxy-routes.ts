@@ -1374,9 +1374,5 @@ function toSearchFilters(request: LegalFetchRequest): LegalSearchFilters {
 
 export { parseFindCaseLawAtom } from '@obiter/legal-source-provider'
 export { parseJudgmentParagraphs } from '@obiter/legal-source-provider'
-export {
-  createPostgresLegalAuthorityReadStore,
-  createPostgresLegalAuthoritySourceStore,
-  createPostgresLegalAuthorityWriteStore,
-} from './source-store'
+export { createPostgresLegalAuthorityReadStore } from './source-store'
 export type { LegalFetchSearchHit } from './response-utils'

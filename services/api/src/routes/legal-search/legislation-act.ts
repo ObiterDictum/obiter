@@ -15,7 +15,7 @@ import {
 import type { LegislationProvisionKind } from './legislation-kind'
 import { isContainerKind } from './legislation-kind'
 
-export interface LegislationActContentsNode {
+interface LegislationActContentsNode {
   label: string
   labelPath: string
   href: string
@@ -31,7 +31,7 @@ export interface LegislationActContentsNode {
   children: LegislationActContentsNode[]
 }
 
-export interface LegislationActPage {
+interface LegislationActPage {
   act: {
     identity: string
     title: string
@@ -55,7 +55,7 @@ export interface LegislationActPage {
   }
 }
 
-export type LegislationActPageResult =
+type LegislationActPageResult =
   | { status: 'ok'; page: LegislationActPage }
   | { status: 'not_found' }
   | { status: 'unavailable' }

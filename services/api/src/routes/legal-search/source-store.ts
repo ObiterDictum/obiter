@@ -10,16 +10,11 @@ import {
 import { z } from 'zod'
 import { normalizeCitationValue } from '@obiter/search-client'
 
-// Defined alongside the provider that produces it, and re-exported here so
-// storage callers keep importing it from the store they already use.
-export type { ProviderSourceMetadata } from '@obiter/legal-source-provider'
 import type { ProviderSourceMetadata } from '@obiter/legal-source-provider'
 import {
   readWithdrawnInfo,
   type WithdrawnInfo,
 } from '@obiter/legal-source-provider'
-
-export type { WithdrawnInfo }
 
 export interface StoredLegalAuthorityRecord {
   summary: LegalAuthority
@@ -99,7 +94,7 @@ export function selectAuthorityCarriers(
  * either order. Deciding it from an earlier read cannot tell those orders apart
  * and would put a withdrawn judgment back in the index.
  */
-export interface AuthorityWriteResult {
+interface AuthorityWriteResult {
   indexable: boolean
 }
 
@@ -110,7 +105,7 @@ export interface LegalAuthorityReadStore {
 
 /** Corpus writes. Absent from a process with no corpus write path, so a
  * read-only process cannot attempt one and cannot swallow a permission error. */
-export interface LegalAuthorityWriteStore {
+interface LegalAuthorityWriteStore {
   upsertSummary(
     summary: LegalAuthority,
     provider: ProviderSourceMetadata,
@@ -480,7 +475,7 @@ export async function findStoredAuthorityIdsByNeutralCitation(
   return matches.get(normalized) ?? []
 }
 
-export function toAuthoritySummary(document: LegalAuthority): LegalAuthority {
+function toAuthoritySummary(document: LegalAuthority): LegalAuthority {
   return {
     id: document.id,
     title: document.title,

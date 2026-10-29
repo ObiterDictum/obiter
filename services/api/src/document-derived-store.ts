@@ -1,4 +1,5 @@
-import { createDocumentObjectKey, type DocumentVersionRecord } from './database'
+import { createDocumentObjectKey } from './document-database'
+import { type DocumentVersionRecord } from './database-records'
 
 type DocumentDerivedSource = Pick<
   DocumentVersionRecord,

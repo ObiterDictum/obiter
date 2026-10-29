@@ -47,29 +47,6 @@ function routeApp(
   return routes
 }
 
-export function mattersApp(pool: Pool, user: AuthzUser, requestId: string) {
-  return routeApp(pool, user, requestId, (routes, current) => {
-    routes.route('/', createMattersRoutes(current))
-  })
-}
-
-export function documentsApp(
-  pool: Pool,
-  storage: StorageService,
-  user: AuthzUser,
-  requestId: string,
-) {
-  return routeApp(pool, user, requestId, (routes, current) => {
-    routes.route('/', createDocumentsRoutes(current, storage))
-  })
-}
-
-export function sharesApp(pool: Pool, user: AuthzUser, requestId: string) {
-  return routeApp(pool, user, requestId, (routes, current) => {
-    routes.route('/', createDocumentAccessRoutes(current))
-  })
-}
-
 /** All three real route groups over one pool, for positive controls. */
 export function fullApp(
   pool: Pool,
@@ -84,7 +61,7 @@ export function fullApp(
   })
 }
 
-export const residualUploadBytes = Buffer.from(
+const residualUploadBytes = Buffer.from(
   'Synthetic residual-authorization upload body.\n',
 )
 

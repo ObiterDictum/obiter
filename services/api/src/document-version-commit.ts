@@ -1,13 +1,12 @@
 import { createHash } from 'node:crypto'
 import type { PoolClient } from 'pg'
 import type { DocumentVersionLineage } from '@obiter/contracts'
+import { appendAuditLog, type AuditRecordInput } from './audit-log'
 import {
-  appendAuditLog,
   createDocumentObjectKey,
   insertDocumentVersion,
-  type AuditRecordInput,
-  type DocumentVersionRecord,
-} from './database'
+} from './document-database'
+import { type DocumentVersionRecord } from './database-records'
 import type { StorageService } from './storage'
 
 export type DocumentVersionScope = {

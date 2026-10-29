@@ -5,7 +5,7 @@ import type {
 } from '@obiter/verification-core'
 import type { VerificationFailureCode } from '@obiter/contracts'
 import type { AuthenticatedOrgUser } from './authz'
-import { appendAuditLog } from './database'
+import { appendAuditLog } from './audit-log'
 import {
   getDocumentModel,
   DocumentModelStoreError,

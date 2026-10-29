@@ -8,7 +8,8 @@ import {
   type SavedMatterSource,
   type UserRole,
 } from '@obiter/contracts'
-import { appendAuditLog, getMatter } from '../database'
+import { appendAuditLog } from '../audit-log'
+import { getMatter } from '../database'
 import { ensureOrgUser } from '../authz'
 import { lockMatterForEdit } from '../matter-lock'
 

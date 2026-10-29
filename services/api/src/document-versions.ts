@@ -17,7 +17,8 @@ import {
   writeDocumentMarkings,
   writeTrackRevisions,
 } from '@obiter/ooxml'
-import type { AuditRecordInput, DocumentVersionRecord } from './database'
+import type { AuditRecordInput } from './audit-log'
+import type { DocumentVersionRecord } from './database-records'
 import { lockMatterForEdit } from './matter-lock'
 import {
   commitPreparedVersion,
@@ -27,8 +28,6 @@ import {
   rollback,
 } from './document-version-commit'
 import type { StorageService } from './storage'
-
-export { DocumentEditStoreError } from './document-version-commit'
 
 type VersionMutationInput = {
   organisationId: string
@@ -95,7 +94,7 @@ export class DocumentEditInvalidError extends Error {
   }
 }
 
-export class DocumentTrackedChangeReadError extends Error {
+class DocumentTrackedChangeReadError extends Error {
   constructor() {
     super('The tracked changes could not be read.')
     this.name = new.target.name

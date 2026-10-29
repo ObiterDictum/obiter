@@ -2,10 +2,8 @@ import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { documentTextResponseSchema } from '@obiter/contracts'
 import type { AuthzVariables } from '../authz'
-import {
-  createDocumentObjectKey,
-  type DocumentVersionRecord,
-} from '../database'
+import { createDocumentObjectKey } from '../document-database'
+import { type DocumentVersionRecord } from '../database-records'
 import {
   DocumentDerivedStoreError,
   validateAndDeriveDocumentObjectKey,
@@ -17,13 +15,13 @@ import {
   resolveReadyDocumentVersion,
 } from './document-route-shared'
 
-export class DocumentDownloadError extends DocumentDerivedStoreError {
+class DocumentDownloadError extends DocumentDerivedStoreError {
   constructor() {
     super('The document could not be downloaded.')
   }
 }
 
-export class DocumentTextError extends DocumentDerivedStoreError {
+class DocumentTextError extends DocumentDerivedStoreError {
   constructor() {
     super('The document text could not be read.')
   }

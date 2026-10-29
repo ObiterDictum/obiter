@@ -36,7 +36,7 @@ export interface AuthorityRow extends QueryResultRow {
   withdrawn?: boolean
 }
 
-export interface ActRow extends QueryResultRow {
+interface ActRow extends QueryResultRow {
   identity: string
   actType: 'ukpga'
   year: number
@@ -46,7 +46,7 @@ export interface ActRow extends QueryResultRow {
   extent: string
 }
 
-export const actRow = (number: number, title: string): ActRow => ({
+const actRow = (number: number, title: string): ActRow => ({
   identity: `ukpga/2066/${number}`,
   actType: 'ukpga',
   year: 2066,
@@ -58,7 +58,7 @@ export const actRow = (number: number, title: string): ActRow => ({
 
 /** Titles chosen so each fold under test (case, quote, hyphen, `(repealed)`,
  * alias) has exactly one stored Act to converge on. */
-export const actRows: ActRow[] = [
+const actRows: ActRow[] = [
   actRow(1, 'Test Authority Act 2066'),
   actRow(2, 'Duplicate Title Act 2066'),
   actRow(3, 'Duplicate Title Act 2066'),

@@ -16,11 +16,9 @@ import {
 } from './comments-db'
 import { listDocumentComments } from './comments-list'
 import { importedParentMatches } from './imported-comment-fingerprint'
-import {
-  appendAuditLog,
-  createDocumentObjectKey,
-  type DocumentVersionRecord,
-} from './database'
+import { appendAuditLog } from './audit-log'
+import { createDocumentObjectKey } from './document-database'
+import { type DocumentVersionRecord } from './database-records'
 import { DocumentDerivedStoreError } from './document-derived-store'
 import {
   DOWNLOAD_FILENAME_MAX_LENGTH,
@@ -42,7 +40,7 @@ type ExportVersion = Pick<
   | 'filename'
 >
 
-export class DocumentExportError extends DocumentDerivedStoreError {
+class DocumentExportError extends DocumentDerivedStoreError {
   constructor() {
     super('The document could not be exported.')
   }

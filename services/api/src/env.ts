@@ -288,7 +288,7 @@ function readPort() {
  * file as well as its checkout. The bounded walk and duplicate rule live once,
  * in `@obiter/config`, shared with the legal ingestor.
  */
-export function loadLocalDotEnv(): string | null {
+function loadLocalDotEnv(): string | null {
   return loadLocalEnvFile()
 }
 

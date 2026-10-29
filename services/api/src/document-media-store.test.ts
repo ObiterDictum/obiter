@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { createDocumentObjectKey } from './database'
+import { createDocumentObjectKey } from './document-database'
 import {
   DocumentMediaStoreError,
   createDocumentImagePartCache,

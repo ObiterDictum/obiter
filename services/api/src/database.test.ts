@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'bun:test'
 import type { Pool, PoolClient } from 'pg'
+import { createDocument, updateDocumentExtraction } from './document-database'
 import {
-  createDocument,
   createOrganisationForUser,
   ensureOrganisationForUser,
+} from './organisation-database'
+import {
   restoreDocumentWithAudit,
-  restoreMatterWithAudit,
   softDeleteDocumentWithCascade,
-  softDeleteMatterWithCascade,
-  updateDocumentExtraction,
-} from './database'
+} from './document-deletion'
+import { restoreMatterWithAudit, softDeleteMatterWithCascade } from './database'
 
 type QueryCall = [string, unknown[] | undefined]
 

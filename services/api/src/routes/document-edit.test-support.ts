@@ -16,7 +16,7 @@ export const sourceBytes = await readFile(
   '../../data/evals/redact/demo-fixture.docx',
 )
 const sourceModel = await parseDocx(sourceBytes)
-export const editableRunId = sourceModel.model.stories.find(
+const editableRunId = sourceModel.model.stories.find(
   ({ kind }) => kind === 'document',
 )?.paragraphs[0]?.runs[0]?.id
 if (!editableRunId) throw new Error('Edit fixture has no ordinary text run.')

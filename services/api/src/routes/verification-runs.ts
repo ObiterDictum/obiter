@@ -14,7 +14,7 @@ import {
   dismissVerificationFinding,
   undismissVerificationFinding,
 } from '../verification-dismissals'
-import { appendAuditLog } from '../database'
+import { appendAuditLog } from '../audit-log'
 import { reviewerNames } from '../reviewer-names'
 import {
   getVerificationRun,

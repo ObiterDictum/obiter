@@ -5,7 +5,7 @@ import type {
   ApiErrorResponse,
   UserRole,
 } from '@obiter/contracts'
-import { ensureOrganisationForUser } from './database'
+import { ensureOrganisationForUser } from './organisation-database'
 
 /**
  * The session user as seen by route handlers. better-auth exposes `role`

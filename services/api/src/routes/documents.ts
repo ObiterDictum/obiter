@@ -12,16 +12,18 @@ import {
   documentOpenResponseSchema,
   recentlyOpenedDocumentResponseSchema,
 } from '@obiter/contracts'
+import { appendAuditLog } from '../audit-log'
 import {
-  appendAuditLog,
   createDocument,
   getDocument,
   updateDocumentExtraction,
-  getMatter,
   listDocuments,
+} from '../document-database'
+import { getMatter } from '../database'
+import {
   restoreDocumentWithAudit,
   softDeleteDocumentWithCascade,
-} from '../database'
+} from '../document-deletion'
 import {
   DocumentExtractionError,
   extractDocumentContent,

@@ -5,7 +5,7 @@ import { ApiBootError } from './runtime'
  * Short enough that a supervisor's own kill timeout is never the thing that
  * ends the process, long enough for an in-flight inference or upload.
  */
-export const DEFAULT_DRAIN_DEADLINE_MS = 10_000
+const DEFAULT_DRAIN_DEADLINE_MS = 10_000
 
 /**
  * What a runtime must expose for shutdown. Each adapter supplies its own

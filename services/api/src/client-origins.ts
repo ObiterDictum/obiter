@@ -1,8 +1,8 @@
 import type { ApiEnv } from './env'
 
 /** electron-vite / Vite default port and the bump range when the default is taken. */
-export const DEV_DESKTOP_RENDERER_PORT_MIN = 5173
-export const DEV_DESKTOP_RENDERER_PORT_MAX = 5199
+const DEV_DESKTOP_RENDERER_PORT_MIN = 5173
+const DEV_DESKTOP_RENDERER_PORT_MAX = 5199
 
 /**
  * Origins of product clients that may call this API (CORS + better-auth CSRF).

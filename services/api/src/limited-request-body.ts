@@ -16,7 +16,7 @@ export class RequestBodyTooLargeError extends Error {
   }
 }
 
-export function payloadTooLargeMessage(limitKind: 'json' | 'upload') {
+function payloadTooLargeMessage(limitKind: 'json' | 'upload') {
   return new RequestBodyTooLargeError(limitKind).message
 }
 

@@ -13,7 +13,7 @@ export interface LegalSearchHydrationBudgetConfig {
   retainedUserWindowMax: number
 }
 
-export const DEFAULT_LEGAL_SEARCH_HYDRATION_BUDGET_CONFIG: LegalSearchHydrationBudgetConfig =
+const DEFAULT_LEGAL_SEARCH_HYDRATION_BUDGET_CONFIG: LegalSearchHydrationBudgetConfig =
   {
     queueMax: DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
     perClientMax: DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
