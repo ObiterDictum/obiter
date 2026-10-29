@@ -20,7 +20,10 @@ import {
   parseLegislationActPath,
   parseLegislationProvisionPath,
 } from '@obiter/contracts'
-import type { LegalSearchCitationStatus } from '@obiter/contracts'
+import type {
+  CaseLawSummaryResponse,
+  LegalSearchCitationStatus,
+} from '@obiter/contracts'
 import {
   apiError,
   toFetchResponse,
@@ -555,9 +558,30 @@ export function createLegalSearchProxyRoutes(
     // judgment's metadata. Absent remains absent — never the row's
     // updated_at, which moves on re-index without the source being re-read.
     const acquiredAt = storedSourceRecord?.provider.acquiredAt ?? null
+    // Both read from published metadata only (see 0039). An empty list and a
+    // null summary are the honest "the source publishes none", so the page
+    // renders nothing rather than a placeholder.
+    const published: {
+      judges: string[]
+      summary: CaseLawSummaryResponse | null
+    } = {
+      judges: storedSourceRecord?.judges?.map((judge) => judge.name) ?? [],
+      summary: storedSourceRecord?.publishedSummary
+        ? {
+            kind: 'press_summary',
+            paragraphs: storedSourceRecord.publishedSummary.paragraphs,
+            sourceUrl: storedSourceRecord.publishedSummary.sourceUrl,
+          }
+        : null,
+    }
 
     if (document) {
-      return c.json({ document, courtParagraphNumbers, acquiredAt })
+      return c.json({
+        document,
+        courtParagraphNumbers,
+        acquiredAt,
+        ...published,
+      })
     }
 
     if (storedSourceRecord?.document) {
@@ -565,6 +589,7 @@ export function createLegalSearchProxyRoutes(
         document: storedSourceRecord.document,
         courtParagraphNumbers,
         acquiredAt,
+        ...published,
       })
     }
 
@@ -574,7 +599,11 @@ export function createLegalSearchProxyRoutes(
     // The case view renders the stored metadata alongside its "full text
     // unavailable" state, so nothing is invented and nothing is fetched.
     if (storedSourceRecord?.summary) {
-      return c.json({ document: storedSourceRecord.summary, acquiredAt })
+      return c.json({
+        document: storedSourceRecord.summary,
+        acquiredAt,
+        ...published,
+      })
     }
 
     return c.json(

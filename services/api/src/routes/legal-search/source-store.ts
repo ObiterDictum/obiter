@@ -1,5 +1,13 @@
 import type { Pool, QueryResultRow } from 'pg'
-import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
+import {
+  CaseLawJudgeSchema,
+  CaseLawSummarySchema,
+  LegalAuthoritySchema,
+  type CaseLawJudge,
+  type CaseLawSummary,
+  type LegalAuthority,
+} from '@obiter/legal-schema'
+import { z } from 'zod'
 import { normalizeCitationValue } from '@obiter/search-client'
 
 // Defined alongside the provider that produces it, and re-exported here so
@@ -17,6 +25,12 @@ export interface StoredLegalAuthorityRecord {
   summary: LegalAuthority
   document?: LegalAuthority
   provider: ProviderSourceMetadata
+  /** The bench, read from published metadata. Empty when the source carried
+   * no field for it; never derived from the judgment text. */
+  judges?: CaseLawJudge[]
+  /** The court's published summary, quoted whole. Null when the source has
+   * none. Absent on stores that do not model it. */
+  publishedSummary?: CaseLawSummary | null
   /** Set when the row is marked withdrawn upstream. Search excludes these
    * from default results; the document route surfaces a banner instead. */
   withdrawn?: WithdrawnInfo | null
@@ -161,6 +175,8 @@ interface LegalAuthoritySourceRow extends QueryResultRow {
   summary_json: unknown
   document_json: unknown | null
   provider_json: ProviderSourceMetadata
+  judges: unknown
+  summary: unknown
 }
 
 interface LegalAuthorityWriteRow extends QueryResultRow {
@@ -194,7 +210,7 @@ export function createPostgresLegalAuthorityReadStore(
     async get(documentId) {
       const result = await pool.query<LegalAuthoritySourceRow>(
         `
-          select summary_json, document_json, provider_json
+          select summary_json, document_json, provider_json, judges, summary
           from legal_source_documents
           where document_id = $1
         `,
@@ -321,6 +337,10 @@ function toStoredLegalAuthorityRecord(
       summary,
       document,
       provider: row.provider_json,
+      judges: z.array(CaseLawJudgeSchema).parse(row.judges ?? []),
+      publishedSummary: row.summary
+        ? CaseLawSummarySchema.parse(row.summary)
+        : null,
       withdrawn: readWithdrawnInfo(row.provider_json),
     }
   } catch (error) {
