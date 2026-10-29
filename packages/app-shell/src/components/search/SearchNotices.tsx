@@ -5,12 +5,6 @@ import {
 } from './legislationGuidance'
 import type { LegalSearchFetchResponse } from './searchTypes'
 
-/**
- * Verdicts and incomplete coverage that sit above the result list: a half that
- * failed, a legislation half that reached a verdict but served no group, or a
- * schedule citation that names no schedule. Each is stated by name so a
- * partial answer never reads as a complete one.
- */
 export function SearchNotices({
   response,
   onResubmit,

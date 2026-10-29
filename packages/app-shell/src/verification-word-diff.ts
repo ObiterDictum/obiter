@@ -8,7 +8,6 @@ function tokens(text: string) {
   )
 }
 
-/** Presentation only: never used to decide a verification outcome. */
 export function verificationWordDiff(draft: string, source: string) {
   const left = tokens(draft)
   const right = tokens(source)
@@ -20,12 +19,9 @@ export function verificationWordDiff(draft: string, source: string) {
     )
   const a = words(left)
   const b = words(right)
-  // Bound memory and work even for unusually long stored paragraphs.
   if ((a.length + 1) * (b.length + 1) > 2_000_000) return null
   const width = b.length + 1
   const costs = new Uint32Array((a.length + 1) * width)
-  // Free source prefixes and suffixes keep surrounding paragraph text out of
-  // the diff and align repeated words to the closest continuous quotation.
   for (let i = 1; i <= a.length; i++) {
     costs[i * width] = i
     for (let j = 1; j <= b.length; j++) {

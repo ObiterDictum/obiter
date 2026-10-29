@@ -25,35 +25,14 @@ import { runNoteRefs } from '../../document-page-notes'
 import { runCss, runFace } from '../../document-page-style'
 import type { ParagraphFace } from '../../document-page-style'
 
-/**
- * The colour a selected run paints with both in the run overlay and in the
- * focused textarea's native ::selection, so a selection that spans paragraphs
- * reads as one highlight rather than a model-painted range butting against a
- * platform-painted one.
- */
 const SELECTION_PAINT = '#b8d4f5'
 
 export type ParagraphSelectionRange = { from: number; to: number }
 
-/**
- * A pending cross-reference: a zero-width marker anchored at `offset`. It
- * contributes no characters — the label reads the resolved target's text so
- * the chip shows what the saved field will say without entering the
- * editable stream.
- */
 type ParagraphFieldMarker = { offset: number; label: string }
 
 type LinkOverlay = ParagraphLinkOverlay
 
-/**
- * Paints one paragraph's runs, marking the part a document selection covers.
- * `start`/`end` are the block's slice of the paragraph, so a paragraph split
- * across pages highlights only the code units this block owns.
- *
- * `paragraph` already carries the effective text, including any range split.
- * Slicing must not apply text drafts again: a draft is the whole original
- * run, and the slice that kept that run id would repeat it.
- */
 export function ParagraphRunPaint({
   paragraph,
   toEditableOffset = (at) => at,
@@ -93,16 +72,10 @@ export function ParagraphRunPaint({
   selection?: ParagraphSelectionRange
   linkOverlay?: LinkOverlay
   carets?: DocumentPresence[]
-  /** True when this block resumes a paragraph split across a page break. */
   continuation?: boolean
-  /** The page this block paints on: resolves `PAGE` fields in stored runs. */
   pageNumber?: number
-  /** Bookmark name → laid-out page: resolves `PAGEREF` field instructions. */
   pageReferences?: ReadonlyMap<string, number>
 }) {
-  // A marker exactly at a slice's end belongs to the next slice — except at
-  // the paragraph's own end, where nothing follows. The block end alone
-  // cannot tell the two apart, so the paragraph's full length is the rule.
   const paragraphEnd = paragraphPlainText(paragraph).length
   const inlineByRun = new Map(inlineSpans.map((span) => [span.runId, span]))
   const paint = (slices: RunSlice[]) => {
@@ -169,14 +142,6 @@ export function ParagraphRunPaint({
         style={{
           lineHeight: `${linePx}px`,
           height: linePx,
-          // The wrapper inherits the paragraph's text-indent, which would then
-          // apply to the first line of every one of these wrapped blocks and so
-          // indent every line. Only the paragraph's own opening block keeps it;
-          // the rest reset it. A block that resumes mid-paragraph — a
-          // continuation, or the block a page break inside the paragraph opens,
-          // which the layout reports with `continuation` false and an offset
-          // above zero — begins on the body edge, so no line on it carries the
-          // special first-line or hanging indent, its first line included.
           textIndent:
             index === 0 && !continuation && start === 0 ? undefined : 0,
         }}
@@ -198,16 +163,6 @@ export function ParagraphRunPaint({
   return paint(paintSlices(paragraph, start, end, pageNumber, pageReferences))
 }
 
-/**
- * The painted slices of a paragraph in `[from, to)`. Same model offsets
- * `sliceParagraphRuns` produces — text drafts are already applied to
- * `run.text` — except for a field run, whose stored text is not what the
- * field displays: this writer stores an empty result run and Word stores a
- * stale one, so the slice carries the instruction resolved through
- * `runDisplayText`. A field is zero-width in the model, so its resolved
- * text paints in the one block that owns its offset without shifting any
- * caret or selection offset.
- */
 function paintSlices(
   paragraph: DocumentParagraphWire,
   from: number,
@@ -272,8 +227,6 @@ function ModelRun({
   notesVisible?: boolean
   revision?: 'insert' | 'delete'
 }) {
-  // The run's own formatting and note refs depend on the run XML, not its
-  // text, so they survive a keystroke elsewhere in the document.
   const face = useMemo(
     () => runFace(run, paragraphFace, styles),
     [run.preservedXmlFragments, run.styleId, paragraphFace, styles],
@@ -321,13 +274,6 @@ function ModelRun({
   )
 }
 
-/**
- * Splits a run slice at every overlay boundary — the document selection,
- * pending hyperlink ranges and pending field markers — and paints each
- * piece with the overlays that cover it. Every boundary becomes a cut, so a
- * piece is either wholly covered by an overlay or wholly outside it; markers
- * anchor at their cut as zero-width spans that shift no glyph.
- */
 function rangedParts(
   text: string,
   from: number,
@@ -337,9 +283,6 @@ function rangedParts(
   storedLinkTarget?: string,
 ) {
   const markers = overlay?.fieldMarkers
-  // A stored w:hyperlink wraps whole runs, so the run's target covers this
-  // slice end to end; pending link drafts keep their explicit ranges and win
-  // where the two overlap.
   const links = [
     ...(overlay?.links ?? []),
     ...(storedLinkTarget
@@ -372,8 +315,6 @@ function rangedParts(
   const markerOffsets = new Map<number, ParagraphFieldMarker[]>()
   for (const marker of markers ?? []) {
     const local = marker.offset - from
-    // A marker at the slice's start is this slice's; at its end it belongs
-    // to the next slice — unless the slice reaches the paragraph's end.
     if (local < 0 || local >= text.length) {
       if (local !== text.length || from + local !== paragraphEnd) continue
     }
@@ -434,7 +375,6 @@ function rangedParts(
   return nodes
 }
 
-/** The chip's anchor: zero width in flow, so no painted glyph moves. */
 function FieldMarkerAnchor({ label }: { label: string }) {
   return (
     <span className="relative inline-block w-0">

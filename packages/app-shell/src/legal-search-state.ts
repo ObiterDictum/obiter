@@ -7,12 +7,6 @@ import type {
 } from './components/search/searchTypes'
 
 export const LEGAL_SEARCH_DEBOUNCE_MS = 300
-// Bounded recheck for hydration_queued: the background path has not
-// consulted live yet, so a queue position is honest there but cannot
-// resolve itself. Five rechecks at 2s (~10s total) covers a normal
-// hydration landing without letting the spinner run forever (the reported
-// case polled byte-identical for 80s+). When the bound is reached the UI
-// says so plainly instead of spinning on.
 export const LEGAL_SEARCH_HYDRATION_POLL_MS = 2000
 export const LEGAL_SEARCH_HYDRATION_MAX_POLLS = 5
 export function getLegalSearchStateLabel(state: LegalSearchState) {
@@ -105,47 +99,24 @@ export function getLegalSearchEmptyFeedback(input: {
   outcome?: LegalSearchOutcome
   hydrationQueued?: boolean
   browse?: { courtLabel: string }
-  /** 1-based count of queued polls so far, for the progress line. */
   hydrationAttempt?: number
-  /** True once the bounded recheck gives up waiting. */
   hydrationExpired?: boolean
-  /** Response diagnostics.legislationNote: the legislation half recognised a
-   * citation but served nothing. Names what was asked for. */
   legislationNote?: string
-  /** Response diagnostics.legislationNotHeld: an authoritative not-held
-   * verdict, not an outage. */
   legislationNotHeld?: boolean
-  /** Response diagnostics.legislationTitleUnresolved: a whole-title request no
-   * exact title key matched. */
   legislationTitleUnresolved?: boolean
-  /** Response diagnostics.legislationAmbiguous: more than one stored Act
-   * satisfies the query. */
   legislationAmbiguous?: boolean
-  /** Response diagnostics.legislationScheduleGuidance: a schedule citation
-   * that names a paragraph but no schedule. The structured example and Act
-   * context drive a corrective with a resubmission the parser accepts. */
   legislationScheduleGuidance?: LegislationScheduleGuidance
-  /** True when the search carried filters, so the empty copy can point at
-   * them as the thing to clear rather than blaming the query. */
   filtersActive?: boolean
 }) {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
 
-  // A held Act whose schedule citation names no schedule. A corrective, not a
-  // not-held verdict: it must show the parser-compatible example with its Act
-  // context rather than fall through to the generic judgment copy.
   if (input.legislationScheduleGuidance) {
     return getLegislationScheduleGuidanceFeedback(
       input.legislationScheduleGuidance,
     )
   }
 
-  // The legislation half's honest negatives. Each rides its own flag, so a
-  // terminal branch that answers no_match or hydration_queued still surfaces
-  // the verdict, and the generic judgment copy below never stands in for it.
-  // The not-held copy is reserved for an authoritative verdict (a chapter or
-  // provision the store proves absent), never a failed title lookup.
   if (input.legislationNotHeld && input.legislationNote) {
     return {
       eyebrow: 'Legislation not held',
@@ -154,10 +125,6 @@ export function getLegalSearchEmptyFeedback(input: {
     }
   }
 
-  // A whole-title request the directory could not resolve. Say only what is
-  // known: no exact title matched. Never claim the Act itself is absent, and
-  // suppress the unrelated keyword provisions the exact path would otherwise
-  // fall through to.
   if (input.legislationTitleUnresolved && input.legislationNote) {
     return {
       eyebrow: 'Legislation title not matched',
@@ -174,10 +141,6 @@ export function getLegalSearchEmptyFeedback(input: {
     }
   }
 
-  // Honest empty for a well-formed citation no source holds. Names the
-  // citation so the failure reads as not-held rather than not-searched. A
-  // stored-only search must not claim a provider was consulted, and the
-  // corpus-only API never consults one.
   if (outcome === 'recognised_not_held') {
     return {
       eyebrow: 'Citation not held',
@@ -227,12 +190,6 @@ export function getLegalSearchEmptyFeedback(input: {
   }
 }
 
-/**
- * The public sources a reader continues in when this corpus has nothing:
- * legislation.gov.uk for statute, The National Archives' Find Case Law for
- * judgments. The query travels with them so the next search is one click, not
- * a retype.
- */
 export function getLegalSearchElsewhereLinks(query: string) {
   const encoded = encodeURIComponent(query.trim())
   return [

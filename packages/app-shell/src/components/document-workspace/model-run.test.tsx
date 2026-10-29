@@ -6,7 +6,6 @@ import type { DocumentParagraphWire } from '@obiter/contracts'
 import { paragraphFace } from '../../document-page-style'
 import { ParagraphRunPaint } from './model-run'
 
-/** The five runs `insertPageNumber` stores, anchored at the paragraph's end. */
 function trailingPageField(paragraphId: string): DocumentParagraphWire {
   return {
     id: paragraphId,

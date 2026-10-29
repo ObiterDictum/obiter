@@ -9,9 +9,6 @@ import { guardAuth, prefetchHomeData } from './route-loaders'
 
 const noopQueryClient = new QueryClient()
 
-// Canonical current-user query key (see current-user.ts). Kept as a literal
-// here rather than exported from the module to avoid widening the shell's
-// public surface.
 const CURRENT_USER_QUERY_KEY = ['current-user'] as const
 
 const ORGLESS_ME: MeResponse = {
@@ -66,7 +63,6 @@ describe('guardAuth', () => {
 
   it('works with no window present (SSR): still throws a redirect, does not swallow', async () => {
     const originalWindow = globalThis.window
-    // Simulate an SSR environment where `window` is undefined.
     vi.stubGlobal('window', undefined as unknown as Window)
 
     const run = vi
@@ -105,7 +101,6 @@ describe('prefetchHomeData', () => {
     const prefetchSpy = vi
       .spyOn(queryClient, 'prefetchQuery')
       .mockResolvedValue(undefined)
-    // ensureQueryData resolves the current user from the seeded cache.
     vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(undefined)
 
     await prefetchHomeData(queryClient)

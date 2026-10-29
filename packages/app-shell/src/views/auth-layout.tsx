@@ -5,20 +5,10 @@ import { ThemeToggle } from '../theme-toggle'
 import authArtDark from '../assets/auth/auth-art-dark.webp'
 import authArtLight from '../assets/auth/auth-art-light.webp'
 
-/**
- * The auth gate: the form on the left, a sample of the work on the right. It is
- * one layout for every signed-out screen so the entry point looks the same
- * whether a person is signing in, resetting a password or accepting an invite.
- *
- * Below 1025px the right-hand panel is dropped (as the mock-up does) and the
- * form sits in the middle of a single column, which is all a 1024px window has
- * room for.
- */
 export function AuthLayout({
   footnote,
   children,
 }: {
-  /** The one line that closes the screen: what just happened, or what to know. */
   footnote: ReactNode
   children: ReactNode
 }) {
@@ -80,7 +70,6 @@ export function AuthForm({
   )
 }
 
-/** The completed step replaces the form rather than sitting beside it. */
 export function AuthDone({
   title,
   children,
@@ -99,20 +88,10 @@ export function AuthDone({
   )
 }
 
-/** The "new here / remembered it" line that closes the form block. */
 export function AuthFoot({ children }: { children: ReactNode }) {
   return <p className="mt-6 text-center text-caption text-subtle">{children}</p>
 }
 
-/**
- * The right-hand panel is decoration: it carries the product's mood and nothing
- * a person has to read, so it is hidden from assistive technology (the region is
- * labelled) and from every window narrower than the 1025px breakpoint.
- *
- * The artwork is one engraving per theme (Midjourney, 29 Oct 2026), full-bleed
- * and cropped by the panel. Both leave the top of the panel empty, so the one
- * line of text sits there rather than over the busy lines below.
- */
 const AUTH_ART = { light: authArtLight, dark: authArtDark }
 
 function AuthSamplePanel() {

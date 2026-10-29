@@ -19,11 +19,6 @@ import { emphasisSlotKey } from './document-save-slots'
 import { resolveInsertAnchor } from './document-story-flow'
 import { partitionStructureSlots } from './document-structure-partition'
 
-/**
- * A tracked-change decision the save can send: the group's persisted `w:id`s
- * resolved to the current version's wire change ids, plus any empty
- * tracked-insert shells to remove in the same decision.
- */
 export type ResolvedRejection = {
   key: string
   ooxmlIds: string[]
@@ -32,32 +27,13 @@ export type ResolvedRejection = {
 }
 
 export type SavePartition = {
-  /** The draft state restricted to slots the loaded model can address. */
   keep: DraftState
-  /** Slots the request covers. A successful save clears exactly these. */
   covered: DraftSlot[]
-  /** Slots that cannot be addressed against this model, so they are not sent. */
   blocked: BlockedDraft[]
-  /**
-   * Pending-baseline reversals no model names yet. Not sent and not blocked,
-   * but unsaved work the workspace must not report itself saved over.
-   */
   pending: number
-  /** Tracked-change decisions resolved against the loaded model's changes. */
   rejections: ResolvedRejection[]
 }
 
-/**
- * Partitions draft state into what the server can accept and what it cannot.
- *
- * E45: a format draft keyed to a client-side pending-insert id was emitted as
- * `set_paragraph_style` against an id that does not exist server-side, so every
- * later save resent it and failed. Addressability is therefore decided here,
- * against the loaded model, before any batch is built. A slot whose target is
- * absent from the model is held back rather than sent, so one stale change
- * cannot poison a later request, and the caller can still clear precisely the
- * slots the request covered.
- */
 export function partitionDraftState(
   model: DocumentModelWire,
   state: DraftState,
@@ -104,10 +80,6 @@ export function partitionDraftState(
     covered.push({ kind: 'run-text', key: `run:${runId}`, runId })
   }
 
-  // A pending footnote's note text is held as extra runs under a paragraph
-  // id only the painted model carries, so the paragraph-id check cannot
-  // address it: the runs live and die with their structure and are decided
-  // once the structures loop has run.
   const noteParagraphById = new Map(
     state.structures
       .filter((item) => item.kind === 'footnote')
@@ -116,8 +88,6 @@ export function partitionDraftState(
   const deferredNoteRuns: { paragraphId: string; structureId: string }[] = []
 
   for (const [paragraphId, runs] of Object.entries(state.extraRuns)) {
-    // A persisted draft from before empty lists were dropped may still carry
-    // one; it holds nothing, so it is not a slot.
     if (runs.length === 0) continue
     const structureId = noteParagraphById.get(paragraphId)
     if (structureId !== undefined) {
@@ -194,14 +164,6 @@ export function partitionDraftState(
     covered.push({ kind: 'delete', key: `delete:${paragraphId}`, paragraphId })
   }
 
-  // The batch's resolved deletions, computed once so the partition and every
-  // painted surface read the same answer (`batchParagraphDeletions`):
-  // `applied` is the marks minus the deletions the emptied-story guard
-  // refuses, and `effective` adds the runless paragraphs a pending
-  // replacement deletes implicitly — no draft marks those, but the writer's
-  // `deletedIds` collects their `delete_paragraph` ops all the same. A check
-  // reading only `keep.deletedParagraphIds` would pass a structure, a heading
-  // or a reference target the writer then refuses.
   const deletions = batchParagraphDeletions(
     model,
     keep.inserts,
@@ -210,11 +172,6 @@ export function partitionDraftState(
     keep.drafts,
   )
   if (deletions.emptied.size > 0) {
-    // A restored or constructed draft state can hold deletions that would
-    // empty an editable story — the body's last paragraph, or a
-    // header/footer's only one. Block them rather than send a batch the
-    // server must reject; the client guard already stops the editor creating
-    // this state, so this is the save-plan safety net.
     for (const slot of covered) {
       if (slot.kind !== 'delete' || !deletions.emptied.has(slot.paragraphId)) {
         continue
@@ -235,15 +192,6 @@ export function partitionDraftState(
     )
   }
   if (deletions.split.size > 0) {
-    // A removal that drops some but not all of a stored field's boundary
-    // markers leaves `fldChar` runs the writer can never pair — and its own
-    // batch validation refuses the whole save. Block every slot carrying a
-    // partial removal: a marked paragraph's `delete`, and the appended text
-    // whose implicit replacement removes a runless boundary paragraph —
-    // whether or not the paragraph is also marked, since dropping the mark
-    // alone leaves the replacement deleting the element all the same. An
-    // `extra-runs` slot on a split paragraph outside `implicit` keeps its
-    // runs: they fold into the surviving paragraph rather than remove it.
     const removesFieldBoundary = (
       slot: DraftSlot,
     ): slot is Extract<DraftSlot, { kind: 'delete' | 'extra-runs' }> => {
@@ -280,8 +228,6 @@ export function partitionDraftState(
       story.paragraphs.map((paragraph) => [paragraph.id, story.kind] as const),
     ),
   )
-  // Why each blocked structure was held back, so the deferred note text can
-  // disclose the same reason rather than blaming a missing anchor paragraph.
   const blockedStructureReasons = new Map<string, string>()
   partitionStructureSlots({
     model,
@@ -296,9 +242,6 @@ export function partitionDraftState(
     blockedStructureReasons,
   })
 
-  // The note text deferred above joins the save only when its footnote
-  // structure does — the `insert_footnote` operation carries it — and is
-  // blocked with the same honest reason when the structure could not go.
   for (const deferred of deferredNoteRuns) {
     if (keep.structures.some((item) => item.id === deferred.structureId)) {
       keep.extraRuns[deferred.paragraphId] =
@@ -352,8 +295,6 @@ export function partitionDraftState(
   blocked.push(...format.blocked)
 
   state.format.emphasis.forEach((item) => {
-    // A run-keyed reversal the save boundary has not named yet is pending: it
-    // is neither sent nor blocked, and it keeps the document unsaved.
     if (item.runId !== undefined && isPendingBaselineId(item.runId)) {
       pending += 1
       return
@@ -380,9 +321,6 @@ export function partitionDraftState(
     })
   })
 
-  // A tracked reversal is a decision, not an edit operation. Its persisted
-  // `w:id`s are resolved against the loaded model's change list; a change the
-  // model no longer names blocks honestly rather than targeting a stale id.
   const rejections: ResolvedRejection[] = []
   for (const group of state.trackedRejections) {
     const changeIds: string[] = []

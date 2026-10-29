@@ -20,11 +20,6 @@ import type { VerticalCaretColumn } from './paragraph-arrow'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
 import type { EditingKind } from './use-editing-story'
 
-/**
- * The laid-out pages of the document. The margin story open for editing is
- * resolved against the painted model — the same wire the page renders — so
- * the band and the column never disagree about which part the caret sits in.
- */
 export function DocxModelPages({
   model,
   painted,
@@ -57,8 +52,6 @@ export function DocxModelPages({
   pendingRedlines?: PendingRedlines
   pages: LaidOutPage[]
   zoom: number
-  /** 'web' is the continuous flow view: the sheets lose their paper chrome
-   * and margin bands and the page measures its content. */
   view?: 'print' | 'web'
   editingKind: EditingKind
   selectedParagraphId: string | null
@@ -82,9 +75,7 @@ export function DocxModelPages({
   focusParagraph: (paragraphId: string) => void
   moveCaret: (paragraphId: string, offset: number) => void
   reportJoinRefusal: (refusal: DocumentRangeRefusal) => void
-  /** A body click while a margin story is open closes the story. */
   onExitMarginEditing: () => void
-  /** A footnote-body click opens the notes story at that paragraph. */
   onOpenNoteEditing: (paragraphId: string) => void
 }) {
   const rendered = painted ?? model
@@ -92,17 +83,10 @@ export function DocxModelPages({
     editingKind === 'document'
       ? undefined
       : editingStoryFor(rendered, editingKind)
-  // `PAGEREF` fields resolve through the laid-out pages, so the map is built
-  // once per layout pass rather than per paragraph render.
   const pageReferences = useMemo(
     () => pageReferenceMap(rendered, pages),
     [rendered, pages],
   )
-  // The paragraphs the batch removes outright — the applied marks — are the
-  // ones the paint strikes through. A runless paragraph carrying typed text
-  // still shows that text, so the implicit replacements in the effective set
-  // stay visible; a refused last-paragraph mark stays painted too. The set is
-  // shared with the save via `batchParagraphDeletions`, not the raw marks.
   const paintedDeletes = useMemo(
     () => [
       ...batchParagraphDeletions(

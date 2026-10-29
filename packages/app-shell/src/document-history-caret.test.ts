@@ -116,8 +116,6 @@ describe('history caret placement', () => {
   })
 
   it('falls back to a surviving neighbour when the insert anchor is removed too', () => {
-    // The step removed the insert and the stored paragraph it was placed after,
-    // so the insert's own anchor cannot hold the caret either.
     expect(
       historyCaretPlacement({
         model: body,

@@ -35,7 +35,6 @@ function pageQuery(cursor: string | null) {
   return cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
 }
 
-/** True while a listed run is still live, so the caller can poll it. */
 function runsAreLive(runs: readonly VerificationRun[] | undefined) {
   return (
     runs?.some((run) => run.status === 'queued' || run.status === 'running') ??
@@ -64,11 +63,6 @@ export type DocumentVerificationState =
   | { status: 'unavailable' }
   | { status: 'loaded'; run: VerificationRun | null }
 
-/**
- * The latest Verify run per document, read through the same per-document
- * boundary and cache entry the document page uses, so a matter overview and
- * an open document never disagree about a run.
- */
 export function useLatestVerificationRuns(
   documentIds: string[],
 ): Map<string, DocumentVerificationState> {
@@ -89,11 +83,6 @@ export function useLatestVerificationRuns(
   return states
 }
 
-/**
- * The organisation run list is keyset-paginated, so it is an infinite query:
- * the first page loads with the view and each continuation is an explicit,
- * accessible "Load more" action rather than an unbounded response.
- */
 export function useOrganisationVerificationRuns(enabled: boolean) {
   const query = useInfiniteQuery({
     queryKey: verificationRunsQueryKey,
@@ -105,16 +94,11 @@ export function useOrganisationVerificationRuns(enabled: boolean) {
     getNextPageParam: (last) => last.nextCursor,
     enabled,
     staleTime: 15_000,
-    // A live run's progress is the page's whole point, so the list re-reads
-    // while one is queued or running and stops as soon as none is.
     refetchInterval: (query) =>
       runsAreLive(query.state.data?.pages.flatMap((page) => page.runs))
         ? 2500
         : false,
   })
-  // Flattened once per page state: a new array every render would make every
-  // consumer of the list look like it changed, and measurement effects keyed on
-  // that list would re-run forever.
   const runs = useMemo(
     () => query.data?.pages.flatMap((page) => page.runs) ?? [],
     [query.data],
@@ -167,12 +151,6 @@ export function useCreateVerificationRun(documentId: string) {
   })
 }
 
-/**
- * Dismiss one finding, or replace the reason on an existing dismissal. The
- * dismissal is stored server-side with the signed-in user and the time; nothing
- * about it is kept client-side. Every verification read is invalidated, so the
- * run's counts, the page and the editor panel agree on the next render.
- */
 export function useDismissVerificationFinding(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -190,11 +168,6 @@ export function useDismissVerificationFinding(runId: string) {
   })
 }
 
-/**
- * Put a dismissed finding back in the queue. The dismissal was the only record
- * of the decision, so the server audits the reopening; every verification read
- * is invalidated so the run's counts and the queued work agree again.
- */
 export function useUndismissVerificationFinding(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -212,33 +185,18 @@ export function latestVerificationRun(runs: VerificationRun[]) {
   return runs[0] ?? null
 }
 
-/**
- * What the run list knows about one document. A pending lookup is its own
- * state, not a failure: the run contract carries ids only, so a filename
- * resolves per document and a cold load must not read as unavailable.
- */
 export type RunDocumentIdentity =
   | { status: 'pending' }
   | {
       status: 'available'
       filename: string
-      /** The version a person would check now, to say which is current. */
       currentVersionId: string | null
       currentVersionNumber: number | undefined
-      /** Version id to stored version number, for naming a checked version. */
       versionNumbers: ReadonlyMap<string, number>
-      /** True only when the current version can be checked at all. */
       ready: boolean
     }
   | { status: 'unavailable' }
 
-/**
- * The filename and matter of the documents a run list names. The run contract
- * carries ids only and there is no bulk document endpoint, so the shell reads
- * the existing document-detail boundary per distinct document. That keeps the
- * run list's identity on the same source of truth as the document route
- * instead of adding a second document projection to the API.
- */
 export function useVerificationRunDocuments(
   runs: VerificationRun[],
 ): Map<string, RunDocumentIdentity> {

@@ -21,28 +21,10 @@ import {
 import type { StructuralDraft } from './document-structural-drafts'
 import type { ExtraRuns } from './document-word-edits'
 
-/**
- * The defined-term check. A mark is a `_Def_` bookmark pair whose name
- * carries the term's normalised words — written by `mark_defined_term` for
- * our own marks, read here for both stored and pending ones. The check
- * counts where the term's words appear in the body's effective text and
- * reports the drafting facts a person should see: a term used before its
- * definition, a definition marked twice, a mark whose covered text changed,
- * and quoted capitalised phrases that look like unmarked terms.
- *
- * What it cannot tell, it does not claim: a stored mark's position inside
- * its paragraph is lost in the wire, so same-paragraph use-before-define
- * cannot be ordered and only cross-paragraph ordering is reported.
- */
-
 type DefinedTermEntry = {
-  /** The term's normalised words, joined for display. */
   term: string
-  /** How many marks bind the term (stored and pending). */
   marks: number
-  /** Body occurrences of the term's words outside the marked ranges. */
   uses: number
-  /** The paragraph the first mark sits on, for navigation. */
   paragraphId: string | null
 }
 
@@ -51,7 +33,6 @@ export type DefinedTermCheck = {
   findings: LegalCheckFinding[]
 }
 
-/** A quoted phrase plausibly naming a term: "Services" or “Hourly Rate”. */
 const QUOTED = /["\u201c]([^"\u201d]{1,80})["\u201d]/gu
 const CANDIDATE_MAX_WORDS = 6
 const CANDIDATE_MAX_COUNT = 10
@@ -83,8 +64,6 @@ export function checkDefinedTerms(
     textOf,
   )
 
-  // The body's effective text in flow order, stored and pending-insert
-  // paragraphs alike, paired with its word tokens for occurrence counting.
   const insertById = new Map(inserts.map((item) => [item.clientId, item]))
   const flow: Array<{ paragraphId: string; text: string; words: string[] }> = []
   for (const id of flowParagraphIds(model, inserts, [...gone])) {
@@ -115,9 +94,6 @@ export function checkDefinedTerms(
       message: `The bookmark "${name}" looks like a defined-term mark but does not decode.`,
     })
   }
-  // A pending mark whose covered text drifted cannot save: the bookmark's
-  // name derives from `marked`, so the finding names the term it would
-  // have bound, not the text now under the range.
   for (const mark of marks) {
     if (!mark.drifted) continue
     findings.push({
@@ -129,7 +105,6 @@ export function checkDefinedTerms(
     })
   }
 
-  // Marks sharing normalised words bind the same term.
   const grouped: Array<{ words: string[]; marks: Mark[] }> = []
   for (const mark of marks) {
     const group = grouped.find((item) => sameTerm(item.words, mark.words))
@@ -161,8 +136,6 @@ export function checkDefinedTerms(
         earlierParagraphId = row.paragraphId
       }
     }
-    // The marked ranges count toward `uses`; discount one occurrence per mark
-    // so the figure reads as uses elsewhere in the body.
     terms.push({
       term,
       marks: group.marks.length,
@@ -202,8 +175,6 @@ export function checkDefinedTerms(
     }
   }
 
-  // Quoted capitalised phrases that are not a marked term are candidates —
-  // flagged for review, never asserted to be terms.
   const knownTerms = grouped.map((group) => group.words)
   const seen = new Set<string>()
   for (const row of flow) {

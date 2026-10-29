@@ -6,10 +6,6 @@ import {
   type CitationStyle,
 } from '../../document-preferences'
 
-/**
- * The References ribbon's legal-tool state: the persisted citation style. The
- * legal-checks panel's own open state lives with the other docked panels.
- */
 export function useLegalToolsState(documentId: string) {
   const [citationStyle, setCitationStyle] = useState<CitationStyle>(() =>
     readCitationStyle(window.localStorage, documentId),

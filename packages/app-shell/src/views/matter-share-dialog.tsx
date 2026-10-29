@@ -28,11 +28,6 @@ const ACCESS_OPTIONS = [
   { value: 'edit', label: 'Can edit' },
 ]
 
-/**
- * Share, and who is on the matter. The stack of faces is the answer to "who can
- * see this?" without opening anything; both controls open the same dialog, which
- * is the only place access changes.
- */
 export function MatterShareControls({
   matter,
   organisationId,
@@ -79,10 +74,6 @@ interface MatterPerson {
   isOwner: boolean
 }
 
-/**
- * The owner and the people they have shared with, in grant order. A grant whose
- * person is no longer in the member list still counts: the access exists.
- */
 function useMatterPeople(
   matterId: string,
   organisationId: string | null,
@@ -135,12 +126,6 @@ function MatterPeopleStack({ people }: { people: MatterPerson[] }) {
   )
 }
 
-/**
- * Who can open this matter, from the API that owns access. Only the matter's
- * owner may read or change grants, so the caller offers the controls only to
- * them. A grant carries the grantee's user id, so names come from the
- * organisation's member list — the same read Settings uses.
- */
 function MatterShareDialog({
   matter,
   organisationId,
@@ -153,9 +138,6 @@ function MatterShareDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const shares = useMatterShares(matter.id, { enabled: open })
-  // A member who owns a matter cannot list colleagues: the member list needs an
-  // owner or administrator. The grants still read, so the list stands and the
-  // add form explains why it is absent.
   const members = useOrganisationMembers(organisationId ?? '', {
     enabled: open && organisationId !== null,
   })
@@ -256,11 +238,6 @@ function MatterShareDialog({
   )
 }
 
-/**
- * A grant whose grantee is no longer in the member list still shows its access
- * level and can be removed: access must be revocable even when the person's name
- * is no longer readable.
- */
 function ShareRow({
   matterId,
   shareId,
@@ -342,7 +319,6 @@ function ShareRow({
   )
 }
 
-/** The add form only offers members who do not already have access. */
 function AddPersonForm({
   matterId,
   members,

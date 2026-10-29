@@ -1,10 +1,5 @@
 import '@obiter/test-dom'
 import { command } from './editor-test-commands'
-/*
- * E5 break placement from the caret. A mouse-placed offset must survive the
- * editor remount that pagination causes, so a page break lands where the
- * pointer was and a second click does not fall back to the paragraph start.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -48,8 +43,6 @@ describe('page break caret placement', () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: breakModel() }, editAsync })
     openRibbonTab('Insert')
-    // Clicking into the body text of an unfocused paragraph mounts its editor;
-    // that focus must not drop the offset the pointer carried.
     clickParagraph('p1', 10)
     fireEvent.click(command('Page break'))
 
@@ -75,9 +68,6 @@ describe('page break caret placement', () => {
     const offsets = insertBreakOperations(editAsync).map(
       (operation) => operation.offset,
     )
-    // The first insert splits the paragraph and remounts the editor; the caret
-    // stays resolved, so the second click is the same offset (deduplicated)
-    // rather than a silent break at the paragraph start.
     expect(offsets.length).toBeGreaterThan(0)
     expect(offsets).not.toContain(0)
     expect(offsets).toEqual([...offsets].sort((left, right) => left - right))

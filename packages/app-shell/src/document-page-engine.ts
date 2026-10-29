@@ -39,16 +39,8 @@ export type {
   LaidOutTable,
 } from './document-page-blocks'
 
-/**
- * The flow the paginator fills. Omitted means print layout: each section's
- * own page box, margins and columns. `{ kind: 'web' }` is the continuous web
- * layout — the width the desk gives the column, an unbounded frame height
- * and no margins — so sections stop paginating and the flow ends only at a
- * stored page break, matching how Word's web view drops sheet chrome.
- */
 export type DocumentLayoutFlow = { kind: 'web'; widthPx: number }
 
-/** A web frame tall enough that no pagination rule ever fires inside it. */
 const WEB_FRAME_HEIGHT_PX = 10_000_000
 
 export function layoutDocument(
@@ -56,11 +48,7 @@ export function layoutDocument(
   drafts?: Record<string, string>,
   inserts: LocalInsert[] = [],
   extraRuns: ExtraRuns = {},
-  /** The document story's blocks, when the caller already holds them. They are
-   * a pure function of the model, so re-deriving them inside every pagination
-   * pass re-parsed the table structure on each keystroke for no change. */
   blocks?: StoryBlock[],
-  /** Pending breaks, folded at their caret offset rather than appended. */
   pageBreaks: readonly BreakDraft[] = [],
   flow?: DocumentLayoutFlow,
   pendingRedlines?: PendingRedlines,
@@ -74,9 +62,6 @@ export function layoutDocument(
     list.push(item.offset)
     breakOffsets.set(item.paragraphId, list)
   }
-  // Draft order is insertion order, not text order. `layoutParagraph` picks the
-  // first offset after the current one, so an unsorted list would skip an
-  // earlier break inserted later.
   for (const list of breakOffsets.values()) {
     list.sort((left, right) => left - right)
   }
@@ -135,8 +120,6 @@ export function layoutDocument(
     geometry.columns[session.col] ??
     geometry.columns[0] ?? { left: 0, widthPx: geometry.frame.widthPx }
 
-  // The web flow's page measure is what its blocks filled, since its frame is
-  // unbounded and never wraps.
   const pushPage = () => {
     if (web) session.page.contentPx = session.y
     pages.push(session.page)
@@ -296,9 +279,6 @@ function layoutNotes(
   }
 }
 
-/** One story's blocks with pending paragraph inserts woven in at their
- * anchors — the same source the paginator flows, so a margin band and the
- * body column paint pending paragraphs identically. */
 export function storyBlocksWithInserts(
   blocks: StoryBlock[],
   inserts: LocalInsert[],

@@ -55,7 +55,6 @@ function model(paragraphs: DocumentParagraphWire[]): DocumentModelWire {
   }
 }
 
-/** The comparison the route pairs with a base and a target version. */
 const comparison: DocumentCompareResponse = {
   documentId: 'doc_1',
   base: { versionId: 'ver_1', versionNumber: 1 },
@@ -90,8 +89,6 @@ describe('DocumentComparisonView', () => {
         onClose={() => undefined}
       />,
     )
-    // Both numbers are marked, in place: the diff is the reader's redline, so
-    // a replaced figure must show what it replaced, not just what replaced it.
     const removed = screen.getAllByText('60,000')[0]
     const added = screen.getAllByText('45,000')[0]
     expect(removed.tagName).toBe('DEL')
@@ -106,12 +103,10 @@ describe('DocumentComparisonView', () => {
 
 describe('comparisonPageLayout', () => {
   it('keeps the reading size when the desk has room for the paper', () => {
-    // 1440px window, sidebar and the docked Differences panel removed.
     expect(comparisonPageLayout(808)).toEqual({ zoom: 90, width: 794 })
   })
 
   it('narrows the sheet at a readable size beside a docked panel at 1024px', () => {
-    // 1024px window: 252px sidebar and a 380px panel leave ~390px of desk.
     const { zoom, width } = comparisonPageLayout(392)
     expect(zoom).toBe(80)
     expect(Math.round((width * zoom) / 100)).toBeLessThanOrEqual(392 - 64)

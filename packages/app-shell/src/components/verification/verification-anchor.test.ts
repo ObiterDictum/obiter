@@ -1,8 +1,4 @@
 import '@obiter/test-dom'
-// The rendered-range decision. Fail-first: before the repair, rangeForTarget
-// clamped a range at a page-fragment boundary and every non-attachment was
-// reported as the text having changed. These cases pin the truthful reason and
-// prove a finding is never attached to a clamped, shorter excerpt.
 import { afterEach, describe, expect, it } from 'bun:test'
 import {
   rangeForTarget,
@@ -25,7 +21,6 @@ function target(overrides: Partial<Target> = {}): Target {
   }
 }
 
-/** One rendered paragraph fragment with a single painted line. */
 function fragment({
   text,
   from,
@@ -76,16 +71,12 @@ describe('renderedRangeFor', () => {
   })
   it('reports a hard break as a renderer limit, not a text change', () => {
     const scope = root(fragment({ text: 'abcd', from: 0, to: 4 }))
-    // The model still carries the recorded excerpt `ab\ncd`; the page never
-    // paints the break, so the rendered text is "abcd".
     const decision = renderedRangeFor(scope, target(), 'ab\ncd')
     expect(decision.kind).toBe('unavailable')
     expect(decision).toMatchObject({ reason: 'range_spans_line_break' })
   })
 
   it('never attaches a finding to a range clamped at a page-fragment boundary', () => {
-    // The reviewer's repro: [6,14) over fragments 0/10 and 10/20. The old
-    // clamp returned a range reading "ghij", four of the eight characters.
     const scope = root(
       fragment({ text: 'abcdefghij', from: 0, to: 10 }) +
         fragment({ text: 'klmnopqrst', from: 10, to: 20 }),

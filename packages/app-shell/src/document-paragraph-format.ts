@@ -18,12 +18,6 @@ import type {
   ParagraphFormatDraft,
 } from './document-format-types'
 
-/**
- * Word's standard line multiples as `line` twips with an `auto` rule. `single`
- * is 240 twips; 1.15, 1.5 and double are proportional. The option value is the
- * ratio the renderer reads back from the same XML, so the select and the paint
- * cannot drift.
- */
 export const LINE_SPACING_OPTIONS = [
   { value: '1', label: '1.0', line: 240 },
   { value: '1.15', label: '1.15', line: 276 },
@@ -39,13 +33,8 @@ export const INDENT_OPTIONS = [
 
 export type IndentKind = (typeof INDENT_OPTIONS)[number]['value']
 
-/**
- * Word's default half-inch paragraph indent, the width it applies when a first
- * line or hanging indent is chosen without a custom offset (720 twips = 0.5in).
- */
 export const DEFAULT_INDENT_TWIPS = 720
 
-/** The `lineSpacing` value for one line-spacing option, or undefined. */
 export function lineSpacingPatch(
   value: string,
 ): { line: number; lineRule: 'auto' } | undefined {
@@ -53,18 +42,6 @@ export function lineSpacingPatch(
   return option ? { line: option.line, lineRule: 'auto' } : undefined
 }
 
-/**
- * The `indentation` value for one indent kind. None clears the special
- * first-line/hanging indent but leaves any direct left/right indentation alone,
- * so it is an instruction that names those two attributes rather than a release
- * of the whole `ind`.
- *
- * Hanging also names `w:left`: OOXML measures `w:hanging` from `w:left`, so
- * without a body indent the first line would outdent into the margin. The body
- * indent is the larger of the paragraph's effective left indent and Word's
- * default half inch; the caller supplies it in px so the face stays the single
- * source of the effective value.
- */
 export function indentationPatch(
   kind: IndentKind,
   options?: { leftPx?: number },
@@ -76,19 +53,9 @@ export function indentationPatch(
       hanging: DEFAULT_INDENT_TWIPS,
     }
   }
-  // None cancels the indent outright: an explicit `w:firstLine="0"` overrides
-  // an indent inherited from the paragraph's style, which merely releasing the
-  // direct attribute would not — the style's value would paint again. Zero is
-  // a valid twip, and the two attributes are mutually exclusive in OOXML, so
-  // hanging is released rather than zeroed.
   return { firstLine: 0, hanging: null }
 }
 
-/**
- * The assigned contract fields of one draft, omitting the ones it leaves alone
- * so a later merge does not clear a property this click did not act on, and so
- * the operation always carries at least the one field the control set.
- */
 export function paragraphFormatFields(draft: ParagraphFormatDraft) {
   return {
     ...(draft.alignment !== undefined ? { alignment: draft.alignment } : {}),
@@ -101,11 +68,6 @@ export function paragraphFormatFields(draft: ParagraphFormatDraft) {
   }
 }
 
-/**
- * Restates only the named fields on one paragraph's draft. A field absent from
- * `patch` keeps its previous answer, so an align click does not drop a pending
- * indent. `null` is an assignment that releases the field.
- */
 export function setParagraphFormatDraft(
   format: FormatDrafts,
   paragraphId: string,
@@ -121,20 +83,11 @@ export function setParagraphFormatDraft(
 }
 
 export type ParagraphFormatState = {
-  /** The alignment every target paragraph agrees on, or null when mixed. */
   alignment: AlignmentValue | null
-  /** A line-spacing option value, or '' when mixed or not an option. */
   lineSpacing: string
-  /** The indent kind every target agrees on, or null when mixed. */
   indent: IndentKind | null
 }
 
-/**
- * The effective paragraph layout over the target paragraphs, read from the
- * painted paragraph so a pending draft is what the controls report. A value the
- * targets do not agree on is null (alignment/indent) or '' (line spacing): a
- * mixed selection presses nothing and one click makes it uniform.
- */
 export function paragraphFormatState(
   model: DocumentModelWire,
   format: FormatDrafts,
@@ -156,12 +109,6 @@ export function paragraphFormatState(
   }
 }
 
-/**
- * The effective left indent of one paragraph in px, read from the painted
- * paragraph so a pending draft is what the next control acts on. The hanging
- * indent option needs a body indent to measure `w:hanging` from; an absent
- * paragraph (a pending insert) reports no indent.
- */
 export function paragraphIndentLeftPx(
   model: DocumentModelWire,
   format: FormatDrafts,
@@ -175,19 +122,6 @@ export function paragraphIndentLeftPx(
   )
 }
 
-/**
- * The direct paragraph layout one paragraph already carries. The reversal a
- * saved edit is undoing needs the pre-save answer in contract form, including
- * which families were absent (so the release can be explicit).
- *
- * Known limitation (recorded in architecture.html, "Known divergences"): the
- * wire parser drops any paragraph child containing a tracked change, so a
- * `w:pPr` that holds a `w:pPrChange` never reaches `preservedXmlFragments`.
- * Such a paragraph reads here as carrying no direct layout, and a reversal
- * releases properties it actually still has. Numbering shares the blind spot
- * through `paragraphNumPr`; a model-level active-properties fragment is the
- * proper fix and is out of scope for E3.
- */
 export function paragraphFormatOf(
   paragraph: DocumentParagraphWire,
 ): ParagraphFormatDraft {

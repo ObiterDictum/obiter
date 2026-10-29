@@ -102,8 +102,6 @@ describe('emphasis addressing from the caret selection', () => {
 
 describe('tracked emphasis from the client path', () => {
   it('queues a range emphasis while track changes is on', () => {
-    // The engine records a mid-run selection as a w:rPrChange, so the client
-    // must queue the draft rather than refuse it.
     let format: FormatDrafts = emptyFormatDrafts
     const toolbar = documentFormatToolbar(
       model,
@@ -160,8 +158,6 @@ describe('tracked emphasis from the client path', () => {
     toolbar().onFontSize(28)
     toolbar().onColour('FF0000')
     toolbar().onToggleSubscript()
-    // Subscript owns vertAlign on the same tracked range: the queued draft
-    // restates superscript as subscript rather than stacking a second entry.
     expect(format.emphasis).toEqual([
       {
         paragraphId: 'p1',
@@ -527,8 +523,6 @@ describe('formatControlState from the selection', () => {
       paragraphFormats: {},
       section: {},
     }
-    // The stored paragraph ends at offset 5: without the drafts this cover is
-    // empty and every flag reads false while the screen paints bold.
     expect(
       formatControlState(source, emptyFormatDrafts, 'p1', [
         { paragraphId: 'p1', from: 5, to: 6 },
@@ -571,7 +565,6 @@ describe('formatControlState from the selection', () => {
       bold: false,
     })
     expect(off).toEqual([{ paragraphId: 'p1', from: 5, to: 6, bold: false }])
-    // A different range stays its own entry, and a second flag merges in.
     expect(
       mergeEmphasis(off, { paragraphId: 'p1', from: 0, to: 2, italic: true }),
     ).toHaveLength(2)
@@ -954,8 +947,6 @@ describe('font formatting controls', () => {
     const fragment = (
       painted.stories[0]?.paragraphs[0]?.runs[0]?.preservedXmlFragments ?? []
     ).join('')
-    // The active run gains the new font while the historical w:rPrChange
-    // subtree keeps the font it recorded.
     expect(fragment).toContain('w:ascii="Georgia"')
     expect(fragment).toContain('w:ascii="Old"')
   })
@@ -1263,7 +1254,6 @@ describe('list and style hardening', () => {
 
   it('clamps list indent and outdent to the levels the instance defines', () => {
     const indented = indentList(emptyFormatDrafts, twoParagraphs, first)
-    // Levels 0 and 2 only: indent jumps to 2, never to an undefined 1.
     expect(indented.numbering.p1).toEqual({ numId: '1', ilvl: 2 })
     const outdented = outdentList(indented, twoParagraphs, first)
     expect(outdented.numbering.p1).toEqual({ numId: '1', ilvl: 0 })
@@ -1382,8 +1372,6 @@ describe('list and style hardening', () => {
         },
         { kind: 'selection', ranges },
       )
-    // p1 is multilevel and p2 is plain, so one click makes both the picked
-    // decimal instance instead of adding to one and removing from the other.
     build().onToggleList('number')
     expect(format.numbering.p1).toEqual({ numId: '3', ilvl: 0 })
     expect(format.numbering.p2).toEqual({ numId: '3', ilvl: 0 })
@@ -1426,8 +1414,6 @@ describe('list and style hardening', () => {
       startOverride: 1,
     })
 
-    // The draft names the source, which the model does not carry an override
-    // for, so the paint synthesises an instance and the marker restarts now.
     const after = documentListMarkers(formattedModel(listedModel, format))
     expect(after.get('p1')?.text).toBe('1.')
     expect(after.get('p2')?.text).toBe('2.')
@@ -1457,8 +1443,6 @@ describe('list and style hardening', () => {
       ilvl: 0,
       startOverride: 1,
     })
-    // The resolved instance already carries the override, so the paint does
-    // not synthesise a second one.
     const painted = formattedModel(reusable, format)
     expect(painted.numbering.map((instance) => instance.numberingId)).toEqual([
       '1',
@@ -1491,8 +1475,6 @@ describe('list and style hardening', () => {
     }
     let format = restartList(emptyFormatDrafts, listed, second)
     format = restartList(format, listed, third)
-    // Both drafts still name the source; the paint must synthesise one shared
-    // instance, so the two restarted paragraphs count 1., 2. like the save.
     expect(format.numbering.p2).toEqual({
       numId: '1',
       ilvl: 0,
@@ -1550,8 +1532,6 @@ describe('list and style hardening', () => {
       { paragraphId: 'p1', from: 0, to: 0 },
       { paragraphId: 'p2', from: 0, to: 0 },
     ]
-    // The caret sits in the plain p2, but p1 is a valid numbered target, so
-    // the control that would act on it must not be disabled.
     expect(
       formatControlState(twoParagraphs, emptyFormatDrafts, 'p2', ranges)
         .canRestart,

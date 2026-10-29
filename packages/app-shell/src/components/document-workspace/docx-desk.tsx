@@ -8,19 +8,6 @@ import { DocumentDesk } from './document-page'
 import { DocumentRuler } from './document-ruler'
 import { DocumentNavigationPane } from './navigation-pane'
 
-/**
- * The document column: the navigation pane beside it, the ruler above the
- * pages and the docked panel after it. `pages` and `sidePanels` arrive rendered
- * because their props run deep into the workspace's caret and review
- * machinery; this component owns only how the desk lays them out and the view
- * state that wraps them (spell-check inheritance, the measured column, the
- * outline row).
- *
- * The pane and the docked panel sit outside the canvas, so each scrolls on its
- * own and the page never drags either out of view. Below `lg` they stack above
- * the desk rather than overlaying it: a reader on a narrow screen keeps the
- * whole sheet readable without a dismiss-first gesture.
- */
 export function DocxDesk({
   model,
   navOpen,

@@ -101,7 +101,6 @@ describe('planDocumentSave addressability', () => {
       },
     ])
     expect(plan.blocked).toEqual([])
-    // The style rides on the insert, so it is cleared with it.
     expect(plan.covered).toEqual([
       { kind: 'insert', key: 'insert:ins_1', clientId: 'ins_1' },
       {
@@ -152,8 +151,6 @@ describe('planDocumentSave addressability', () => {
       format: { ...emptyFormatDrafts, numbering: { p1: { numId: '1' } } },
     }
     planDocumentSave(model(['p1']), state)
-    // Planning fills a working copy; it must not leave anything behind in the
-    // module-level empty format that a second workspace would inherit.
     expect(second.format.numbering).toEqual({})
     expect(emptyFormatDrafts.numbering).toEqual({})
     expect(emptyFormatDrafts.paragraphStyles).toEqual({})
@@ -287,8 +284,6 @@ describe('draft slot removal', () => {
     const covered = planDocumentSave(source, base).covered
     expect(clearableSlots(covered, base, base)).toHaveLength(1)
 
-    // A change to any one font property makes the slot a different value, so
-    // clearing it after the request would drop the newer edit.
     const edits = [
       { ...item, fontFamily: 'Arial' },
       { ...item, fontSize: 28 },

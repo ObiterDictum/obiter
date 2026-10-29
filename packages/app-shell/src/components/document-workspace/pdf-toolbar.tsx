@@ -2,11 +2,6 @@ import { DownloadSimple, FileArrowDown } from '@phosphor-icons/react'
 import { EditorIconButton, EditorTextButton } from './editor-controls'
 import type { DocumentFindToolbar } from './ribbon-types'
 
-/**
- * The read-only PDF surface's toolbar — zoom, find and the file actions. It
- * is its own component rather than a mode of the editor chrome so the
- * editable-document props never exist on a surface that cannot honour them.
- */
 export function PdfWorkspaceToolbar({
   zoom,
   onZoom,

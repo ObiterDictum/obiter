@@ -11,14 +11,6 @@ import { vi } from '../../../../scripts/test/vitest-compat'
 import type { MeResponse } from '@obiter/contracts'
 import { SettingsRouteView } from './settings'
 
-/**
- * Fixtures and render helpers shared by the Settings suites. Not collected as a
- * test: runners discover `*.test.*`, and this file is
- * `settings-test-support.tsx`. The `vi.mock` registrations stay in each test
- * file, because a mock belongs to the module graph of the file that declares
- * it, not to a helper it imports.
- */
-
 export const ORGLESS_ME: MeResponse = {
   user: {
     id: 'usr_2',
@@ -79,7 +71,6 @@ export function renderSettings() {
   )
 }
 
-/** The value of a read-only field, by its label: <dt>label</dt><dd>value</dd>. */
 export function readOnlyValue(scope: HTMLElement, label: string) {
   return within(scope).getByText(label).nextElementSibling?.textContent
 }

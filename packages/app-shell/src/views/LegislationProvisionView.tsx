@@ -245,12 +245,6 @@ export function LegislationProvisionView({
   )
 }
 
-/**
- * One level of the provision: its own number, then its words, then its
- * children indented beneath. The number shown is the label minus its parent's
- * ("(3)", "(a)"), and it links to that level's own page — which is what makes
- * "s. 13(3)" citable rather than a phrase inside a section.
- */
 function SubsectionNode({
   node,
   documentIdentity,

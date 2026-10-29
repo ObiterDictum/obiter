@@ -3,8 +3,6 @@ import { describe, expect, it, mock } from 'bun:test'
 import type { ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one.
 const routerKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,

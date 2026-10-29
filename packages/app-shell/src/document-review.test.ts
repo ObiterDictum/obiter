@@ -57,7 +57,6 @@ describe('rejectedShellParagraphIds', () => {
     const model = modelWith([{ id: 'p1' }, { id: 'p2', runs: 1 }])
     const changes = [inserted('c1', 'p1'), inserted('c2', 'p2')]
 
-    // p2 keeps visible runs, so rejecting its insertion leaves no shell.
     expect(
       rejectedShellParagraphIds(model, changes, new Set(['c1', 'c2'])),
     ).toEqual(['p1'])
@@ -79,10 +78,6 @@ describe('rejectedShellParagraphIds', () => {
       } satisfies DocumentChangeWire,
     ]
 
-    // Rejecting c1 alone would strand the undecided property change inside a
-    // removed paragraph; and the removal rule only covers paragraphs whose
-    // content is wholly insertions, so the shell is never named while a
-    // non-insert change lives inside it.
     expect(rejectedShellParagraphIds(model, changes, new Set(['c1']))).toEqual(
       [],
     )

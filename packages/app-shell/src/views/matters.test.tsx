@@ -45,11 +45,9 @@ mock.module('../verification-runs', () => ({
   useOrganisationVerificationRuns: mocks.useOrganisationVerificationRuns,
 }))
 
-// Loaded after the registrations above.
 const { MattersRouteView } = await import('./matters')
 
 const at = '2026-10-25T09:00:00.000Z'
-/** The row control's accessible name: the matter name, then its action. */
 const northgate = /^Northgate Foods v Brightwater Packaging/
 const okafor = /^Okafor v Lumen Logistics/
 
@@ -233,10 +231,8 @@ describe('matters list', () => {
     const table = screen.getByRole('table')
     expect(within(table).getByText('NGF-0418')).toBeTruthy()
     expect(within(table).getByText('Commercial contracts')).toBeTruthy()
-    // Open work is the same attention item Home ranks: 1 flagged + 2 to review.
     expect(await screen.findByText('1 flagged')).toBeTruthy()
     expect(screen.getByText('2 need review')).toBeTruthy()
-    // The document count column, read from that matter's documents.
     await waitFor(() => {
       expect(within(table).getAllByText('2').length).toBeGreaterThan(0)
     })

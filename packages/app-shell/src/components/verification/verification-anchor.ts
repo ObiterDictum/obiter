@@ -1,25 +1,8 @@
 import type { FindingTarget, UnmappedReason } from './verification-mapping'
 import { editableRangeText } from '../document-workspace/inline-change-review'
 
-/**
- * DOM anchoring for verification findings.
- *
- * The offsets in a finding are UTF-16 offsets into the paragraph's concatenated
- * run text, and the rendered page does not put that text in one node: it splits
- * runs, wraps lines into separate elements, and paints non-text decoration
- * (note marks, empty-line placeholders) inside the same container. Locating a
- * range therefore walks the rendered text with the offsets the page renderer
- * already exposes, and refuses rather than guessing when they are absent.
- */
-
-/** The narrowest viewport that can host the floating panel beside the page. */
 export const minimumFloatingViewportPx = 768
 
-/**
- * One documented responsive rule: a viewport wide enough to hold the page and
- * the panel side by side keeps the floating panel; anything narrower uses the
- * drawer, which is a bottom sheet rather than a panel that covers the text.
- */
 export function panelPlacement(viewportWidth: number): 'floating' | 'drawer' {
   return viewportWidth >= minimumFloatingViewportPx ? 'floating' : 'drawer'
 }
@@ -29,8 +12,6 @@ type TextPoint = { node: Text; offset: number }
 function isDecoration(node: Node): boolean {
   const parent = node.parentElement
   if (!parent) return true
-  // Note marks and empty-line placeholders are painted text that is not part of
-  // the paragraph's run text, so they must not consume a character offset.
   return (
     parent.closest('[data-inline-change]:not([data-inline-editable])') !==
       null ||
@@ -66,11 +47,6 @@ function locateIn(scope: Element, offset: number): TextPoint | null {
   return { node: last, offset: last.data.length }
 }
 
-/**
- * The rendered line element that carries a character offset. The page renderer
- * publishes each line's own half-open range, so a wrapped paragraph resolves
- * without reconstructing line breaks from the DOM.
- */
 function lineFor(fragment: Element, offset: number): HTMLElement | null {
   const lines = fragment.querySelectorAll<HTMLElement>('[data-line-from]')
   if (lines.length === 0) return null
@@ -82,17 +58,10 @@ function lineFor(fragment: Element, offset: number): HTMLElement | null {
   return found ?? lines[0] ?? null
 }
 
-/** Every rendered fragment of the paragraph this target names, in page order.
- * The filter also matches the story the target names: paragraph ids are only
- * unique inside a story, so a same-id body paragraph must never satisfy a
- * footnote finding. */
 function fragmentsFor(
   root: ParentNode,
   target: Extract<FindingTarget, { kind: 'mapped' }>,
 ): HTMLElement[] {
-  // Filtered in JS rather than by selector: a paragraph id is model data and
-  // needs no escaping rule, and a miss must be a miss rather than a selector
-  // error.
   return Array.from(
     root.querySelectorAll<HTMLElement>('[data-paragraph-id]'),
   ).filter(
@@ -126,12 +95,6 @@ function fragmentBounds(fragment: HTMLElement) {
   }
 }
 
-/**
- * How a mapped finding's rendered range failed, or that it was built. These
- * are renderer limits, not statements about the document: a hard break is not
- * painted, and a range the renderer split across page fragments cannot always
- * be reassembled. Only `text_changed_since_check` means the text differs.
- */
 export type RenderedRangeReason = Extract<
   UnmappedReason,
   | 'range_spans_line_break'
@@ -154,14 +117,6 @@ function fragmentHolding(
   })
 }
 
-/**
- * The full rendered range for a mapped finding, or a stated reason it cannot be
- * expressed. A paragraph split across pages keeps its id on every fragment; a
- * range that crosses a fragment boundary is built across the fragments in page
- * order rather than clamped to the first one, so a finding is never attached to
- * a shorter excerpt than the one checked. The caller compares the range text to
- * the excerpt; this function only decides whether the range exists.
- */
 export function rangeForTarget(
   root: ParentNode,
   target: FindingTarget,
@@ -175,9 +130,6 @@ export function rangeForTarget(
   if (!startFragment) {
     return { kind: 'unavailable', reason: 'rendered_anchor_unavailable' }
   }
-  // The end is exclusive, so place it after the range's last character. If that
-  // character is not rendered, the tail is not on the page either: refuse
-  // rather than clamp the range to what is drawn.
   const endFragment = fragmentHolding(fragments, target.end - 1)
   if (!endFragment) {
     return { kind: 'unavailable', reason: 'range_split_across_fragments' }
@@ -213,12 +165,6 @@ export function rangeForTarget(
   }
 }
 
-/**
- * Why a built range does not carry a finding's excerpt. A hard break is a
- * renderer limit, not a change to the document, and a range the renderer split
- * across fragments is a limit too; only a genuine text difference is reported
- * as one.
- */
 export function renderedRangeMismatchReason(
   excerpt: string,
   spansFragments: boolean,
@@ -229,12 +175,6 @@ export function renderedRangeMismatchReason(
   return 'text_changed_since_check'
 }
 
-/**
- * The one decision the marker layer and its tests share: either the page
- * carries this finding's exact excerpt, or it does not and there is a stated
- * reason. The range is built across fragments first, so a finding is never
- * attached to a clamped, shorter excerpt.
- */
 export function renderedRangeFor(
   root: ParentNode,
   target: FindingTarget,
@@ -258,7 +198,6 @@ export function renderedRangeFor(
   }
 }
 
-/** The geometry a marker needs, without depending on the DOMRect class. */
 export type RangeRect = {
   left: number
   top: number
@@ -278,9 +217,6 @@ const degenerateRect: RangeRect = {
 }
 
 export function rectsOfRange(range: Range): RangeRect[] {
-  // A layout-free environment (jsdom) has no range geometry. A degenerate box
-  // is still a position, so the marker is rendered and reachable rather than
-  // silently dropped.
   if (typeof range.getClientRects !== 'function') return [degenerateRect]
   const rects = Array.from(range.getClientRects()).filter(
     (rect) => rect.width > 0 || rect.height > 0,

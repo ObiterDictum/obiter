@@ -55,11 +55,6 @@ export type {
 export { documentFormatToolbar } from './document-format-toolbar'
 export type { FormatTarget, ParagraphRange } from './document-format-toolbar'
 
-/**
- * The contract fields an emphasis draft restates, omitting the ones it leaves
- * untouched so a later merge does not clear a property this click did not act
- * on. Shared by the whole-run and range forms so they cannot drift.
- */
 function emphasisProperties(item: PendingEmphasis): EmphasisPatch {
   return {
     ...(item.bold !== undefined ? { bold: item.bold } : {}),
@@ -81,11 +76,6 @@ export function collectFormatOperations(
   model: DocumentModelWire,
   format: FormatDrafts,
   deletedParagraphIds: readonly string[],
-  /**
-   * Addresses that must not become their own operation because they belong to
-   * something else in the same batch; a pending insert's style rides on the
-   * insert operation. See document-edits collectEditOperations.
-   */
   omitParagraphIds: ReadonlySet<string> = new Set(),
 ): DocumentEditOperation[] {
   const deleted = new Set(deletedParagraphIds)
@@ -152,8 +142,6 @@ export function collectFormatOperations(
   )) {
     if (deleted.has(paragraphId) || omitParagraphIds.has(paragraphId)) continue
     const fields = paragraphFormatFields(paragraphFormat)
-    // The contract requires at least one assigned field, so an all-undefined
-    // draft (a cleared entry) is a no-op rather than an invalid operation.
     if (Object.keys(fields).length === 0) continue
     operations.push({
       type: 'set_paragraph_format',
@@ -191,11 +179,6 @@ export function mergeEmphasis(
             item.from === next.from &&
             item.to === next.to,
         )
-  // One entry per addressed run or range, and a restated address is the last
-  // entry: projection and save both apply entries in order, so the newest
-  // answer must sit behind the older one it replaces rather than in front of
-  // it. The save plan keys a range slot by its address, which assumes the
-  // same single entry.
   return [...rest, { ...previous, ...next }]
 }
 
@@ -204,21 +187,11 @@ export function emphasisAddress(
   sliceFrom: number,
   selectionStart: number,
   selectionEnd: number,
-  /**
-   * The runs whole-run emphasis may address by id. A collapsed caret in a run
-   * outside this set (a join's appended run, which the save folds into another
-   * run) addresses that run's span in the paragraph instead: a range is the
-   * only address paint and save can both carry for text this run id does not
-   * name server-side.
-   */
   wholeRunIds?: ReadonlySet<string>,
 ): { runId: string } | { paragraphId: string; from: number; to: number } {
   const from = sliceFrom + Math.min(selectionStart, selectionEnd)
   const to = sliceFrom + Math.max(selectionStart, selectionEnd)
   if (from !== to) {
-    // The selection is in the paragraph text this function is given, which
-    // must already be the effective string. Snapping here is what save sends,
-    // so a range cannot ask the server to cut a surrogate the paint avoided.
     const snapped = snapEmphasisRange(paragraphPlainText(paragraph), from, to)
     return { paragraphId: paragraph.id, ...snapped }
   }
@@ -298,9 +271,6 @@ export function indentList(
     format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, model.styles)
   if (!current?.numId) return format
   const instance = findNumberingInstance(model, current.numId)
-  // Clamp to the levels the instance actually defines: a numbering definition
-  // can skip a level, and asking for `ilvl + 1` would then name a level the
-  // instance does not have.
   const next = nextDefinedLevel(instance?.levels, current.ilvl ?? 0)
   if (next === undefined) return format
   return {
@@ -321,8 +291,6 @@ export function outdentList(
     format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, model.styles)
   if (!current?.numId) return format
   const instance = findNumberingInstance(model, current.numId)
-  // A dangling numbering definition cannot be outdented without emitting an
-  // operation the server would reject; leave the paragraph alone instead.
   if (!instance) return format
   const previous = previousDefinedLevel(instance.levels, current.ilvl ?? 0)
   return {
@@ -337,11 +305,6 @@ export function outdentList(
   }
 }
 
-/**
- * Restarts the target's list at 1 by pointing it at a numbering instance with a
- * start override. The draft carries the effective instance and level so the
- * save and the paint agree; the writer de-duplicates the override instance.
- */
 export function restartList(
   format: FormatDrafts,
   model: DocumentModelWire,
@@ -353,10 +316,6 @@ export function restartList(
   const source = findNumberingInstance(model, current.numId)
   if (!source) return format
   const ilvl = current.ilvl ?? 0
-  // Mirror the server's resolution: point the draft at the instance the save
-  // will reuse when one already carries this restart, so the painted `w:numPr`
-  // and the saved one name the same instance. The create case keeps the source
-  // id and relies on the paint's virtual instance for the marker.
   const matching = findRestartInstance(model, source, ilvl, 1)
   const draft: NumberingDraft = {
     numId: matching?.numberingId ?? current.numId,
@@ -403,9 +362,6 @@ export function continueList(
     const numPr =
       format.numbering[previous.id] ?? paragraphNumPr(previous, model.styles)
     if (!numPr?.numId) continue
-    // A previous paragraph may point at a numbering definition this model no
-    // longer holds; copying it would emit an operation the server rejects, so
-    // keep looking rather than continue from a dangling list.
     if (!findNumberingInstance(model, numPr.numId)) continue
     return {
       ...format,

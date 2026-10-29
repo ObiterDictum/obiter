@@ -24,13 +24,6 @@ import {
   type DraftState,
 } from './document-save-plan'
 
-/*
- * E3 paragraph formatting: the draft, the operation it emits, the effective
- * values the controls read back, and the save-plan slot that carries a pending
- * change across a request. The paint is covered by the same `patchParagraphFormatXml`
- * the server writes, so these tests read the model the paint would produce.
- */
-
 function paragraph(id: string, pPr: string): DocumentParagraphWire {
   return {
     id,
@@ -282,8 +275,6 @@ describe('indentation paint and release', () => {
       ).stories[0]?.paragraphs[0]?.preservedXmlFragments.join('') ?? ''
     expect(released).toContain('w:left="720"')
     expect(released).toContain('w:right="360"')
-    // An explicit zero, not a release: releasing the direct attribute would
-    // let a style's own indent paint again.
     expect(released).toContain('w:firstLine="0"')
     expect(released).not.toMatch(/w:hanging=/u)
   })
@@ -299,22 +290,15 @@ describe('indentation paint and release', () => {
           indentation: indentationPatch('none'),
         }),
       ).stories[0]?.paragraphs[0]?.preservedXmlFragments.join('') ?? ''
-    // The element stays, carrying a zero: that is what overrides an indent the
-    // paragraph's style would otherwise paint. Releasing the attribute instead
-    // would leave the style free to indent the paragraph again.
     expect(cancelled).toContain('<w:ind w:firstLine="0"/>')
   })
 })
 
 describe('indentation None no-op', () => {
-  // A paragraph whose only direct indent is left/right has no special indent
-  // for None to clear, so None must not draft, record history, or save.
   const leftOnly = modelWith([
     paragraph('p1', '<w:pPr><w:ind w:left="720"/></w:pPr>'),
   ])
 
-  // A special indent that comes from the paragraph's style is cancelled by an
-  // explicit zero, so None has real work to do on this paragraph.
   const styleFirstLine = {
     ...modelWith([]),
     styles: [
@@ -367,8 +351,6 @@ describe('indentation None no-op', () => {
   })
 
   it('is a no-op for a zero-valued special indent', () => {
-    // Word writes `<w:ind w:left="0" w:firstLine="0"/>` for "no indent":
-    // a zero is absent, not a special indent to release.
     const zeroed = modelWith([
       paragraph('p1', '<w:pPr><w:ind w:left="0" w:firstLine="0"/></w:pPr>'),
     ])
@@ -381,14 +363,10 @@ describe('indentation None no-op', () => {
 
   it('paints a style-inherited indent, which None then cancels', () => {
     const state = toolbarWith(styleFirstLine)
-    // The style's own `w:firstLine` reaches the merged face, so the control
-    // reads First line rather than None.
     expect(
       paragraphFormatState(styleFirstLine, state.format(), ['p1']).indent,
     ).toBe('first')
     state.toolbar.onIndentKind('none')
-    // None writes an explicit zero, which overrides the style instead of
-    // releasing the (absent) direct attribute and letting the style paint.
     expect(state.format().paragraphFormats.p1).toEqual({
       indentation: { firstLine: 0, hanging: null },
     })
@@ -396,7 +374,6 @@ describe('indentation None no-op', () => {
       paragraphFormatState(styleFirstLine, state.format(), ['p1']).indent,
     ).toBe('none')
     expect(state.historySteps()).toBe(1)
-    // The save carries the cancel, not a release.
     expect(collectFormatOperations(styleFirstLine, state.format(), [])).toEqual(
       [
         {
@@ -461,9 +438,6 @@ describe('hanging indent body anchor', () => {
 })
 
 describe('paragraph layout on a pending insert', () => {
-  // A pending insert is not a stored paragraph: its layout cannot be sent as
-  // its own operation, so a control acting on it would only leave a draft that
-  // never paints and blocks the save.
   function toolbarFor(paragraphId: string, model: DocumentModelWire = plain) {
     let format = emptyFormatDrafts
     const toolbar = documentFormatToolbar(
@@ -526,8 +500,6 @@ describe('paragraph format save plan slot', () => {
     expect(plan.blocked).toEqual([])
     expect(clearableSlots(plan.covered, state, state)).toHaveLength(1)
 
-    // A value edited while the request was in flight is not the value the
-    // request sent, so clearing it would drop the newer edit.
     const edited: DraftState = {
       ...state,
       format: {

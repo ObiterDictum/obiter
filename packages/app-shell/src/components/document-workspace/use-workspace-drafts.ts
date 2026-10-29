@@ -41,12 +41,6 @@ import { createWorkspaceDraftEdits } from './workspace-draft-edits'
 
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
 
-/**
- * Live drafts plus held changes restored from older snapshots, and the
- * pending track-changes flip when one is set — an unsaved flip is unsaved
- * work, so it persists and restores beside the drafts a save would carry it
- * with instead of dying on a remount while they survive.
- */
 type DraftBundle = {
   state: DraftState
   held: HeldChange[]
@@ -154,8 +148,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   function persistBundle(next: DraftBundle) {
     if (!hydrated || !storage || !scope.baseVersionId) return
     const writer = storedScope()
-    // Keep the painted drafts until the saved model arrives, but never write
-    // acknowledged slots back while other edits or query refreshes are pending.
     const acknowledged = acknowledgedSlots.current
     if (acknowledged) {
       const slots = clearableSlots(
@@ -183,8 +175,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setPersistence(ok ? 'ok' : 'unavailable')
   }
 
-  // Browser persistence follows edits; successful requests also flush it in
-  // their acknowledgement, before model refetches or React effects can run.
   useEffect(() => {
     persistBundle(bundle)
   }, [
@@ -211,16 +201,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     instanceId: instanceId.current,
   })
   function checkpoint(edit?: HistoryEdit) {
-    // Recording ends the redo branch: a new edit supersedes anything undone.
     history.record(bundleRef.current.state, edit)
   }
 
-  /**
-   * Advances the history baseline after a successful save. The covered slots
-   * are cleared from live state, and every history snapshot is re-expressed
-   * against the saved document: undo now reverses a saved edit instead of
-   * replaying it as fresh work.
-   */
   function commitSaveBoundary(
     covered: readonly DraftSlot[],
     sent: DraftState,
@@ -263,8 +246,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setBundle((current) => ({ ...current, state: update(current.state) }))
   }
 
-  // The editor operations live in their own module; they read the latest state
-  // and history checkpoint through these seams.
   const edits = createWorkspaceDraftEdits({
     getModel: () => scope.model,
     getState: () => bundleRef.current.state,
@@ -272,13 +253,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     checkpoint,
   })
 
-  /**
-   * Clears the slots a successful request covered, leaving anything held back
-   * (blocked or previously rejected) in place. `sent` is the state the request
-   * was planned from: a slot edited while it was in flight is kept, because the
-   * request did not carry that edit. E45: a save must not report work saved
-   * that it did not send, and must not discard work it did not send.
-   */
   function clearSlots(slots: readonly DraftSlot[], sent?: DraftState) {
     if (slots.length === 0) return
     setBundle((current) => ({
@@ -310,8 +284,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     if (!storage || !scope.baseVersionId) return
     const result = adoptDocumentDraft(storage, storedScope(), draftId)
     if (result.status !== 'restored') return
-    // The adopted draft was recorded against another version, so the history
-    // taken against this one cannot be replayed over it.
     history.clear()
     baseline.clear()
     setBlockedReason(null)
@@ -349,9 +321,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     return snapshot
   }
 
-  /** The one history-checkpointed field update format, breaks and structures
-   * share: an unchanged field keeps the bundle's identity so no history step
-   * or re-render pays for a no-op write. */
   function setField<K extends 'format' | 'breaks' | 'structures'>(
     key: K,
     update: (current: DraftState[K]) => DraftState[K],
@@ -371,11 +340,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     update: (current: StructuralDraft[]) => StructuralDraft[],
   ) => setField('structures', update)
 
-  /**
-   * The pending track-changes flip the draft bundle carries. The workspace
-   * reads it as intent — a value equal to the stored toggle means no flip —
-   * and the write effect normalises it out of the persisted payload.
-   */
   function setTrackChangesFlip(value: boolean | undefined) {
     setBundle((current) =>
       value === undefined

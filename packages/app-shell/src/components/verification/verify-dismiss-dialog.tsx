@@ -15,12 +15,6 @@ import { useDismissVerificationFinding } from '../../verification-runs'
 import { verificationStateLabel } from '../../verification-copy'
 import type { VerificationFindingView } from '@obiter/contracts'
 
-/**
- * Dismiss one finding, with an optional reason. The decision is stored on the
- * server against the signed-in person and the time, so the dialog states what is
- * recorded and never changes anything in the document. A dismissal never
- * rewrites the check's own outcome.
- */
 export function VerifyDismissDialog({
   finding,
   runId,
@@ -30,7 +24,6 @@ export function VerifyDismissDialog({
 }: {
   finding: VerificationFindingView
   runId: string
-  /** The document and version the finding belongs to, in the reviewer's words. */
   documentLabel: string
   open: boolean
   onOpenChange: (open: boolean) => void

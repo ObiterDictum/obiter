@@ -11,13 +11,11 @@ import { reviewerStyle } from './reviewer-identity'
 
 export const InlineChangeReview = createContext<{
   activeChangeId?: string
-  /** The single revision in the tab order; arrows rove to the others. */
   tabChangeId?: string
   moveChange?: (fromId: string, direction: -1 | 1) => void
   selectChange: (id: string) => void
 } | null>(null)
 
-/** The canvas's view of the review panel: selecting a revision opens it there. */
 export function inlineReviewOf(review: ChangeReview, openPanel: () => void) {
   return {
     activeChangeId: review.activeChangeId,
@@ -36,7 +34,6 @@ const BREAK_LABELS = new Map([
   ['\u21e5', 'Column break'],
 ])
 
-/** Tracked text with its break marks labelled for assistive technology. */
 export function labelledBreaks(text: string) {
   return markBreaks(text)
     .split(/([\u21df\u21e5])/u)
@@ -52,7 +49,6 @@ export function labelledBreaks(text: string) {
     })
 }
 
-/** Painted text without revision spans, in editable characters. */
 export function editableRangeText(range: Range) {
   const fragment = range.cloneContents()
   for (const node of fragment.querySelectorAll(
@@ -84,7 +80,6 @@ export function InlineChange({
   const review = pending ? null : context
   const node = useRef<HTMLSpanElement>(null)
   const active = review?.activeChangeId === change.id
-  // Review navigation is a browser scroll boundary, independent of edit offsets.
   useLayoutEffect(() => {
     if (active && tabStop) {
       node.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
@@ -93,11 +88,6 @@ export function InlineChange({
     }
   }, [active, tabStop])
   const content = children ?? labelledBreaks(text)
-  // Each reviewer keeps one hue wherever their revisions paint, and the strike
-  // or underline still says which kind of revision it is, so the distinction
-  // never rests on colour alone. On the fixed white sheet the hue is the paper
-  // form of the palette: the dark theme lightens the panel's token until it is
-  // unreadable against paper.
   const reviewer = reviewerStyle(author)
 
   return (
@@ -150,8 +140,6 @@ export function InlineChange({
       }}
     >
       {hyperlinkTarget ? (
-        // Word keeps the revision colour on tracked link text; a dotted rule
-        // marks the link without hiding the insertion underline or strike.
         <span
           data-hyperlink-target={hyperlinkTarget}
           className="border-b border-dotted border-current"

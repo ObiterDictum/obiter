@@ -12,13 +12,6 @@ import {
   type DocumentTextRunWire,
 } from '@obiter/contracts'
 
-/**
- * A structural insertion the workspace holds before save: a body-level table
- * after a stored paragraph, or an inline picture at a caret offset. Unlike a
- * `LocalInsert` these are not paragraphs the user types into — a table cell's
- * paragraphs stay outside the editable flow — so they get their own draft
- * slot, folded into the painted model by `document-structure-fold`.
- */
 type StructuralTableDraft = {
   id: string
   kind: 'table'
@@ -39,14 +32,6 @@ export type StructuralImageDraft = {
   name: string
 }
 
-/**
- * A pending range mark over `[from, to)` of a stored paragraph's painted
- * text. It carries the link target rather than a model change: nothing is
- * folded into the painted runs, so `structuralLinkOverlays` paints it as an
- * overlay range and the save writer wraps the same range in `w:hyperlink`.
- * The range is fixed at creation; later typing does not remap it, the same
- * treatment a pending picture's offset gets.
- */
 export type StructuralLinkDraft = {
   id: string
   kind: 'link'
@@ -56,12 +41,6 @@ export type StructuralLinkDraft = {
   target: string
 }
 
-/**
- * A pending `REF` field at `offset` in `paragraphId`, pointing at the
- * bookmark the writer ensures on `targetParagraphId`. Pending paint shows a
- * zero-width marker at the offset — the field's result text exists only in
- * the saved OOXML, never in the editable text stream.
- */
 export type StructuralCrossReferenceDraft = {
   id: string
   kind: 'cross-reference'
@@ -70,12 +49,6 @@ export type StructuralCrossReferenceDraft = {
   targetParagraphId: string
 }
 
-/**
- * A pending `PAGE` field at `offset` in `paragraphId`. Like the
- * cross-reference it paints as a zero-width marker — the page number exists
- * only in the saved OOXML and in the margin band's resolved paint, never in
- * the editable text stream.
- */
 type StructuralPageNumberDraft = {
   id: string
   kind: 'page-number'
@@ -83,13 +56,6 @@ type StructuralPageNumberDraft = {
   offset: number
 }
 
-/**
- * A pending `w:footnoteReference` at `offset` in `paragraphId`, whose note
- * body is a paragraph the footnotes story folds in for paint. The note's own
- * text is typed into that paragraph like any pending edit — it is held as
- * extra runs keyed by `footnoteNoteParagraphId`, not on the draft — and the
- * save operation carries it as the entry's paragraph text.
- */
 export type StructuralFootnoteDraft = {
   id: string
   kind: 'footnote'
@@ -97,14 +63,6 @@ export type StructuralFootnoteDraft = {
   offset: number
 }
 
-/**
- * A pending `TOC` field at `offset` in `paragraphId` — the one draft whose
- * fold is multi-paragraph: the painted model splits the anchor into head
- * and tail around one entry paragraph per document heading, captured when
- * the fold runs, exactly as the save writer captures them when the batch
- * applies. The draft itself is still only a placement: entry text, page
- * references and `_Toc` bookmarks are all generated, never held.
- */
 type StructuralTableOfContentsDraft = {
   id: string
   kind: 'table-of-contents'
@@ -112,15 +70,6 @@ type StructuralTableOfContentsDraft = {
   offset: number
 }
 
-/**
- * A pending `TOA` field at `offset` in `paragraphId` — the second draft
- * whose fold is multi-paragraph: the painted model splits the anchor around
- * a heading wire plus one entry wire per distinct citation, and every
- * citing paragraph carries a hidden `TA` mark run and a `_ToA` bookmark
- * fragment — exactly as the save writer captures them when the batch
- * applies. The draft itself is still only a placement: the citations,
- * marks, bookmarks and page references are all generated, never held.
- */
 type StructuralTableOfAuthoritiesDraft = {
   id: string
   kind: 'table-of-authorities'
@@ -128,49 +77,21 @@ type StructuralTableOfAuthoritiesDraft = {
   offset: number
 }
 
-/**
- * A pending refresh of a table of authorities the document already
- * holds. `paragraphId` names the stored paragraph carrying the field's
- * `begin` — the generated heading paragraph — so the writer rewrites
- * the field's generated range in place rather than splicing a second
- * field. Payload-free like the insertion: the server rediscovers the
- * citations, adds `TA` marks only where an occurrence is not already
- * marked, and reuses the `_ToA` bookmarks it finds.
- */
 type StructuralTableOfAuthoritiesRefreshDraft = {
   id: string
   kind: 'table-of-authorities-refresh'
   paragraphId: string
 }
 
-/**
- * A pending `_Def_` bookmark mark over `[from, to)` of a stored paragraph's
- * painted text — the editor's defined-term mark. Like the link draft it
- * carries no model change: the paint draws an overlay range and the save
- * writes the bookmark pair.
- *
- * `marked` is the term's identity, not just its address: the range alone is
- * stale the moment text shifts, and re-reading the covered words at save
- * time could mark words the user never selected. The draft holds the
- * effective text it covered at creation, so the save partition can verify
- * the same slice still reads `marked` before the writer names the bookmark
- * — a mark whose text drifted is blocked, never silently re-pointed.
- */
 type StructuralDefinedTermDraft = {
   id: string
   kind: 'defined-term'
   paragraphId: string
   from: number
   to: number
-  /** The effective text `[from, to)` covered when the mark was made. */
   marked: string
 }
 
-/**
- * The paragraph id the pending footnote's note body folds under. It is not a
- * stored paragraph and never becomes one: the note's own `w14` id is only
- * allocated by the save writer.
- */
 export function footnoteNoteParagraphId(draft: { id: string }) {
   return `${draft.id}:note`
 }
@@ -187,12 +108,6 @@ export type StructuralDraft =
   | StructuralTableOfAuthoritiesRefreshDraft
   | StructuralDefinedTermDraft
 
-/**
- * The persisted form of a structural draft, bounded to exactly the fields the
- * save serialises. E2: a persisted draft that fails to parse is silently
- * deleted, so the schema accepts nothing the operation cannot carry and the
- * state carries nothing the schema will not read back.
- */
 export const structuralDraftSchema = z.discriminatedUnion('kind', [
   z
     .object({
@@ -292,11 +207,6 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
     }),
 ])
 
-/**
- * The persisted `structures` field: a malformed slot is dropped on its own
- * rather than failing the whole snapshot, so unrelated work — typed drafts
- * especially — survives a slot the writer no longer produces.
- */
 export const structuralDraftsFieldSchema = z
   .array(z.unknown())
   .optional()
@@ -308,7 +218,6 @@ export const structuralDraftsFieldSchema = z
     ),
   )
 
-/** The save operations the covered structural drafts produce, in draft order. */
 export function structuralEditOperations(
   structures: readonly StructuralDraft[],
   deletedIds: ReadonlySet<string>,
@@ -359,8 +268,6 @@ export function structuralEditOperations(
       continue
     }
     if (structure.kind === 'footnote') {
-      // The note's text is the typed draft held against the folded note
-      // paragraph — the same effective-text merge the text operations use.
       const text = (extraRuns[footnoteNoteParagraphId(structure)] ?? [])
         .map((run) => drafts[run.id] ?? run.text)
         .join('')
@@ -396,9 +303,6 @@ export function structuralEditOperations(
       continue
     }
     if (structure.kind === 'defined-term') {
-      // `marked` is not sent: the save partition has already proved the
-      // covered slice still reads it, so the writer naming the bookmark
-      // from `[from, to)` names the words the user selected.
       operations.push({
         type: 'mark_defined_term',
         paragraphId: structure.paragraphId,

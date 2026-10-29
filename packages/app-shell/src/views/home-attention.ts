@@ -9,11 +9,6 @@ import {
 } from '../redaction-runs'
 import { latestRunsPerDocument, openWorkForRun } from '../open-work'
 
-/**
- * Anything on Home that is waiting for a person, assembled from the endpoints
- * the shell already reads. Kept free of React so the ranking and the copy can
- * be tested without a renderer.
- */
 type AttentionKind =
   | 'verify_flagged'
   | 'verify_review'
@@ -21,13 +16,6 @@ type AttentionKind =
   | 'verify_failed'
   | 'redact_failed'
 
-/**
- * Triage order, risk first: a citation that may make the document wrong, then
- * a disclosure decision that blocks finalising, then a citation only a person
- * can judge, then work that stopped. The review asked each row to say why it
- * sits where it does (`REVIEW-professional.md` [10]), so this order is the
- * reason line, not an opaque score.
- */
 const RISK_ORDER = {
   verify_flagged: 0,
   redact_decision: 1,
@@ -41,14 +29,11 @@ interface AttentionBase {
   matterId: string | null
   matterName: string | null
   matterReference: string | null
-  /** Null until the document it names has been read. */
   filename: string | null
-  /** When it started waiting, ISO. Within a risk tier the oldest wait is first. */
   waitingSince: string
 }
 
 export type VerificationAttentionItem = AttentionBase & {
-  /** Stable across a refresh: the kind plus the run it came from. */
   id: string
   kind: 'verify_flagged' | 'verify_review' | 'verify_failed'
   matterId: string
@@ -72,9 +57,7 @@ export type AttentionItem = VerificationAttentionItem | RedactionAttentionItem
 export interface AttentionSources {
   verificationRuns: VerificationRun[]
   redactionRuns: RedactionRunListItem[]
-  /** documentId → filename, from the document boundary the run list lacks. */
   documentFilenames: Map<string, string>
-  /** matterId → the matter record, for the name and client reference. */
   matters: Map<string, { name: string; clientReference: string }>
 }
 
@@ -82,8 +65,6 @@ export function buildAttentionItems(
   sources: AttentionSources,
 ): AttentionItem[] {
   return [
-    // One document's newest run stands for that document: a re-run answers the
-    // same question, so counting both would count the same work twice.
     ...latestRunsPerDocument(sources.verificationRuns).flatMap((run) =>
       verificationAttentionItem(run, sources),
     ),
@@ -93,7 +74,6 @@ export function buildAttentionItems(
   ]
 }
 
-/** A run still detecting is work in progress, not a decision waiting. */
 function verificationAttentionItem(
   run: VerificationRun,
   sources: AttentionSources,
@@ -113,8 +93,6 @@ function verificationAttentionItem(
       return []
     case 'completed': {
       const { flaggedCount } = run.summary
-      // A check that did not run is unfinished work, so it joins the review
-      // count here; the Verify page still reports the two states apart.
       const reviewRequiredCount =
         run.summary.reviewRequiredCount + run.summary.notCheckedCount
       if (openWorkForRun(run) === 0) return []
@@ -155,7 +133,6 @@ function redactionAttentionItem(
   run: RedactionRunListItem,
   sources: AttentionSources,
 ): AttentionItem[] {
-  // The rule the sidebar counts by, so the count here and there always match.
   if (!redactionRunNeedsDecision(run)) return []
   const matter = run.matterId ? sources.matters.get(run.matterId) : undefined
   const decisions = run.summary?.byDecision
@@ -183,7 +160,6 @@ function redactionAttentionItem(
   ]
 }
 
-/** Risk first, then the longest wait, then the id so a tie never jitters. */
 export function rankAttentionItems(items: AttentionItem[]): AttentionItem[] {
   return [...items].sort((a, b) => {
     const risk = RISK_ORDER[a.kind] - RISK_ORDER[b.kind]
@@ -194,17 +170,13 @@ export function rankAttentionItems(items: AttentionItem[]): AttentionItem[] {
   })
 }
 
-/** An unreadable timestamp ranks as newest: it must not jump the queue. */
 function waitTime(iso: string) {
   const time = Date.parse(iso)
   return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time
 }
 
 export interface AttentionSummary {
-  /** Rows on the queue: a document with work, or a redaction run. */
   queue: number
-  /** Open findings plus undecided redaction runs: the number every surface
-   * shows, so the sidebar, the Home header and a matter agree. */
   total: number
   verify: number
   redact: number

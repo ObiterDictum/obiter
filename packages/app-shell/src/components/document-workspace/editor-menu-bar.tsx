@@ -11,15 +11,6 @@ import { EditorMenuItem } from './editor-controls'
 import { refocusCaret } from './document-actions'
 import type { EditorCommand, EditorMenu } from './editor-commands'
 
-/**
- * The editor's menu bar. Every command the old ribbon held is a row in one of
- * six menus, so the chrome is one 32px row instead of six tab panels. The
- * menus are non-modal: the document stays visible and editable behind them.
- *
- * A row that flips state keeps its menu open (`stayOpen`), which is what makes
- * a menu usable for the repetitive parts of review — track changes, lists,
- * alignment — rather than a one-shot list.
- */
 export function EditorMenuBar({
   menus,
   className,
@@ -27,10 +18,6 @@ export function EditorMenuBar({
   menus: readonly EditorMenu[]
   className?: string
 }) {
-  // A row that edits the document hands the caret back once its menu has
-  // finished closing: the menu restores focus to its trigger, and a reader
-  // who picked "Delete paragraph" expects the cursor in the text, not on the
-  // Edit button.
   const refocusAfterClose = useRef(false)
   return (
     <nav
@@ -84,18 +71,11 @@ export function EditorMenuBar({
   )
 }
 
-/**
- * The rows of one group. A run of radio choices is its own `MenuRadioGroup`,
- * because a group can hold both a choice and plain actions (the Authorities
- * group names citation styles beside its commands); a radio group holding a
- * plain row would break the roving focus and the announced choice.
- */
 function MenuGroupCommands({
   commands,
   onEdit,
 }: {
   commands: readonly EditorCommand[]
-  /** Told whether the row about to run leaves the document as the focus. */
   onEdit: (command: EditorCommand) => void
 }) {
   const segments: Array<{
@@ -137,9 +117,6 @@ function MenuGroupCommands({
         ))
         const first = segment.commands[0]
         if (segment.kind === 'radio') {
-          // The group's value is the checked row: a radio item reads its
-          // checked state from the group, so omitting it would leave every
-          // choice announcing "not checked".
           const selected = segment.commands.find(
             (command) => command.checked === true,
           )

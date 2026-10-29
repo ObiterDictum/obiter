@@ -14,7 +14,6 @@ import type {
   LegislationSearchResultHit,
 } from './searchTypes'
 
-/** A snippet is the source's own text, so terms the index matched are marked. */
 export function SearchSnippet({
   snippet,
   className,

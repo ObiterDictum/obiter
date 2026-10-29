@@ -88,16 +88,12 @@ describe('DocxWorkspace change review', () => {
     const previous = () =>
       within(panel).getByRole('button', { name: /^Previous/ })
 
-    // Nothing is current yet, so the bar offers navigation only and says so.
     expect(panel.textContent).toContain('No change selected')
     expect(previous()).toHaveProperty('disabled', true)
 
     fireEvent.click(next())
-    // The reveal lands the caret on the change's paragraph and the row is
-    // current, so its Accept can run and the bar names it.
     expect(screen.getByLabelText('Paragraph text')).toBeTruthy()
     expect(panel.textContent).toContain('1 of 2')
-    // The first row has nothing before it, so Previous stays unavailable.
     expect(previous()).toHaveProperty('disabled', true)
 
     fireEvent.click(next())
@@ -144,7 +140,6 @@ describe('DocxWorkspace change review', () => {
       [...container.querySelectorAll('[data-inline-change][tabindex="0"]')].map(
         (node) => node.getAttribute('data-inline-change'),
       )
-    // Nothing active yet: the first painted revision holds the only stop.
     expect(stops()).toEqual(['ins_a'])
     const span = container.querySelector('[data-inline-change="ins_a"]')
     if (!(span instanceof HTMLElement)) throw new Error('Expected revision')
@@ -153,8 +148,6 @@ describe('DocxWorkspace change review', () => {
       fireEvent.keyDown(document.activeElement ?? span, { key })
       return document.activeElement?.getAttribute('data-inline-change')
     }
-    // The property change between them has no canvas text, so it is skipped,
-    // and focus follows the stop rather than landing in the caret's textarea.
     expect(rove('ArrowRight')).toBe('ins_b')
     expect(rove('ArrowLeft')).toBe('ins_a')
     expect(stops()).toEqual(['ins_a'])
@@ -200,8 +193,6 @@ describe('DocxWorkspace change review', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
     fireEvent.click(command('Accept all changes'))
 
-    // A pending flip is unsaved state the decision commits with the version,
-    // so the request carries it; without one the field stays absent.
     expect(decide).toHaveBeenCalledWith(
       {
         baseVersionId: 'ver_1',
@@ -234,8 +225,6 @@ describe('DocxWorkspace change review', () => {
   })
 
   it('names the save barrier ahead of the decision cap', () => {
-    // Both conditions hold here: the supported set alone exceeds the cap, and
-    // unsaved edits bar every decision. The barrier is the actionable reason.
     mountWorkspace({ changes: overCap })
     selectBodyParagraph()
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
@@ -261,8 +250,6 @@ describe('DocxWorkspace change review', () => {
   })
 
   it('names the absent review surface instead of a boundary reason', () => {
-    // A surface with no review state at all (a read-only document) must say so
-    // rather than borrow one of the save barriers.
     const absent = 'Change review is not available for this document.'
     const menus = editorMenus(
       {
@@ -364,13 +351,10 @@ describe('DocxWorkspace change review', () => {
     const panel = screen.getByRole('complementary', {
       name: 'Changes and comments',
     })
-    // The undecidable move is pinned above the list, so it is the first row.
     fireEvent.click(
       within(panel).getAllByRole('button', { name: 'Show this change' })[0]!,
     )
 
-    // The merged move row is the one current target, so the panel states why
-    // it cannot be decided and its Accept cannot run.
     for (const accept of within(panel).getAllByRole('button', {
       name: 'Accept',
     })) {
@@ -386,8 +370,6 @@ describe('DocxWorkspace change review', () => {
   it('rejects a lone insertion with its empty shell in the same decision', () => {
     const decide = vi.fn(decided)
     mountWorkspace({
-      // The stored paragraph is empty because all its content is the pending
-      // insertion — rejecting the change must remove the shell with it.
       models: {
         doc_1: {
           version: 1,
@@ -442,8 +424,6 @@ describe('DocxWorkspace change review', () => {
     openRibbonTab('Review')
     fireEvent.click(command('Accept all supported changes'))
 
-    // The undecidable change is never put on the wire — the request is one
-    // atomic decision over the supported ids only.
     expect(decide).toHaveBeenCalledWith(
       {
         baseVersionId: 'ver_1',

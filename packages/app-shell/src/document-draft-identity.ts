@@ -77,11 +77,6 @@ export function documentDraftTabId(storage: DraftStorage | null) {
   return memoryTabId
 }
 
-/**
- * Forks a copied session identity before this tab writes. A live claim from
- * another instance means Duplicate Tab cloned sessionStorage; the original
- * draft is left untouched.
- */
 export function resolveDocumentDraftWriter(
   session: DraftStorage | null,
   local: DraftStorage | null,

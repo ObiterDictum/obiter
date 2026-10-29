@@ -1,11 +1,4 @@
 import '@obiter/test-dom'
-/*
- * The Strikethrough, Highlight, Superscript and Subscript controls must read
- * the same effective text and projected emphasis the editor paints and the save
- * plan sends. That surface lives in toolbar-emphasis-state.test.tsx for
- * Bold/Italic/Underline; this file is the character-formatting slice so neither
- * file crosses the source line ceiling.
- */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -290,8 +283,6 @@ describe('the character formatting controls', () => {
     clickParagraph('p1')
     nativeSelect(0, 5)
 
-    // The current rPr is strike off, dark blue and superscript; the tracked
-    // history must not press anything, and the aria state must match paint.
     expect(pressed('Strikethrough')).toBe('false')
     expect(pressed('Highlight')).toBe('true')
     expect(pressed('Superscript')).toBe('true')
@@ -302,8 +293,6 @@ describe('the character formatting controls', () => {
     expect(spanOf('p1', 'Hello')?.style.backgroundColor).not.toBe('')
     expect(spanOf('p1', 'Hello')?.style.verticalAlign).toBe('super')
 
-    // A pressed control releases on the next click, so the direction follows
-    // what is painted rather than pressing an already-on state.
     fireEvent.click(control('Highlight'))
     expect(pressed('Highlight')).toBe('false')
     expect(spanOf('p1', 'Hello')?.style.backgroundColor).toBe('')
@@ -342,8 +331,6 @@ describe('the character formatting controls', () => {
     clickParagraph('p1')
     nativeSelect(0, 5)
 
-    // The historical mark properties paint nothing, so every character
-    // control starts unpressed and the first click turns the flag on.
     expect(spanOf('p1', 'Hello')?.style.textDecoration ?? '').not.toContain(
       'line-through',
     )

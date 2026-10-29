@@ -115,7 +115,6 @@ describe('buildVerifyGroups', () => {
     })
     expect(group?.documents[0]?.run.id).toBe('failed')
     expect(group?.documents[0]?.findingsRun?.id).toBe('done')
-    // A stale result is never presented as covering the stored version.
     expect(group?.documents[0]?.coversCurrentVersion).toBe(false)
   })
 
@@ -131,8 +130,6 @@ describe('buildVerifyGroups', () => {
 })
 
 describe('sortFindings', () => {
-  // The list is read from the top: a possible error first, then what only a
-  // person can judge, then the matches that need no reading.
   it('ranks flagged first, then review-required, then matches', () => {
     const matched = finding({
       id: 'clear',
@@ -153,8 +150,6 @@ describe('sortFindings', () => {
     ).toEqual(['flagged', 'review', 'clear'])
   })
 
-  // Two findings of one state keep the document's own order, so reading down
-  // the list does not jump backwards and forwards through the file.
   it('keeps the document order inside one state', () => {
     const later = finding({
       id: 'later',

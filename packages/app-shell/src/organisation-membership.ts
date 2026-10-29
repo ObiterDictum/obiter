@@ -74,12 +74,6 @@ export function organisationMembersQueryOptions(organisationId: string) {
   })
 }
 
-/**
- * Whether an account already exists for the email an invite was sent to. Only
- * answerable for the invite's own email (403 otherwise). Returns null when the
- * answer is undetermined (invite unavailable, email mismatch, network failure)
- * so sign-up can fall back to its normal path instead of blocking.
- */
 export async function checkInviteAccountExists(
   token: string,
   email: string,

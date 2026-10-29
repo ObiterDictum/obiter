@@ -99,7 +99,6 @@ describe('replacing a range inside one paragraph', () => {
 })
 
 describe('a range that would split a stored field', () => {
-  // p2 holds the field's begin/separate, p4 its end.
   const fieldModel = () => {
     const document = doc(
       para('p1', 'alpha'),
@@ -125,7 +124,6 @@ describe('a range that would split a stored field', () => {
   }
 
   it('refuses a range leaving one boundary behind', () => {
-    // p1→p3 removes the head while the tail's `end` survives.
     expect(
       applyReplaceDocumentRange(
         fieldModel(),
@@ -135,7 +133,6 @@ describe('a range that would split a stored field', () => {
         'X',
       ),
     ).toBeUndefined()
-    // p3→p5 removes the tail while the head's `begin` survives.
     expect(
       applyReplaceDocumentRange(
         fieldModel(),
@@ -155,17 +152,10 @@ describe('a range that would split a stored field', () => {
       { paragraphId: 'p5', offset: 2 },
       'X',
     )
-    // The tail endpoint joins away too — every boundary lands inside the
-    // removed set, so the field leaves whole.
     expect(result?.state.deletedParagraphIds).toEqual(['p2', 'p3', 'p4', 'p5'])
   })
 
   it('refuses a cross-paragraph range on a wire without field metadata', () => {
-    // The model a pre-field-metadata server serves — the same wire minus
-    // the keys the parser now guarantees — cannot prove a removed
-    // paragraph carries no field marker, and the old server has no
-    // writer-side split check, so the removal refuses rather than
-    // guessing field-free.
     const legacy = JSON.parse(
       JSON.stringify(
         doc(para('p1', 'alpha'), para('p2', 'bravo'), para('p3', 'charlie')),
@@ -185,7 +175,6 @@ describe('a range that would split a stored field', () => {
         'X',
       ),
     ).toBeUndefined()
-    // A range inside one paragraph removes nothing, so it still applies.
     expect(
       applyReplaceDocumentRange(
         wire,
@@ -233,8 +222,6 @@ describe('replacing a range across paragraphs', () => {
       '',
     )
     const state = result?.state ?? emptyEditorState()
-    // A range needs two endpoints to span paragraphs, so the join always
-    // leaves the head paragraph: a selection cannot reach zero paragraphs.
     expect(
       flowParagraphIds(model, state.inserts, state.deletedParagraphIds),
     ).toEqual(['p1'])
@@ -255,8 +242,6 @@ describe('replacing a range across paragraphs', () => {
       '',
     )
     const state = result?.state ?? emptyEditorState()
-    // The range covers the two paragraph breaks; the tail paragraph keeps its
-    // text and joins onto the head, which is what deleting a break does.
     expect(blockText(model, state, 'p1')).toBe('alphacharlie')
     expect(state.deletedParagraphIds).toEqual(['p2', 'p3'])
     expect(result?.caret).toEqual({ paragraphId: 'p1', offset: 5 })
@@ -315,7 +300,6 @@ describe('replacing a range across paragraphs', () => {
         '',
       ),
     ).toBeUndefined()
-    // Nothing was mutated by the refused call.
     expect(operations(model, state)).toEqual([])
   })
 
@@ -350,8 +334,6 @@ describe('replacing a range across paragraphs', () => {
       '',
     )
     const next = result?.state ?? state
-    // The inserted paragraph's text is inside the range, so it is deleted;
-    // the tail paragraph's text is after the range and joins onto the head.
     expect(next.inserts).toEqual([])
     expect(blockText(model, next, 'p1')).toBe('alphabravo')
   })
@@ -386,7 +368,6 @@ function run(
   return { id, text, preservedXmlFragments, ...(styleId ? { styleId } : {}) }
 }
 
-/** Body p1, a two-cell table, then body p4. Cell paragraphs are structural. */
 function tabledDoc(): DocumentModelWire {
   return {
     version: 1,
@@ -444,7 +425,6 @@ describe('a range that would cross a table', () => {
         '',
       ),
     ).toBeUndefined()
-    // Nothing was mutated, and no operation targets a cell paragraph.
     const ops = operations(model, state)
     expect(ops).toEqual([])
     expect(
@@ -506,13 +486,6 @@ function emptyCellDoc(): DocumentModelWire {
   }
 }
 
-/*
- * A single caret (no document selection) reaches the same join primitive a
- * range edit uses. It has to pass the same structural boundary: a Delete at
- * the end of the body paragraph before a table, or a Backspace at the start
- * of the body paragraph after it, must not pull a cell's text across the
- * table and must not emit delete_paragraph for a cell paragraph.
- */
 describe('a single-caret join at a structural boundary', () => {
   it('refuses Delete at the end of the body paragraph before a table', () => {
     const model = tabledDoc()
@@ -628,8 +601,6 @@ describe('a join preserves the surviving tail run formatting', () => {
     )
     const state = result?.state ?? emptyEditorState()
     const ops = operations(model, state)
-    // The appended 'vo' is not bold even though the head run it folds into is,
-    // so the emphasis strips the head run's direct bold rather than keeping it.
     expect(ops).toContainEqual(
       expect.objectContaining({
         type: 'set_run_emphasis',

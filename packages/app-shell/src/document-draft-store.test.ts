@@ -108,8 +108,6 @@ describe('document draft persistence', () => {
     const restored = readDocumentDraft(storage, scope, 'ver_1')
     expect(restored.status).toBe('restored')
     if (restored.status !== 'restored') throw new Error('expected restored')
-    // A schema that rejected any of these keys would fail the parse and delete
-    // the payload, silently destroying the whole unsaved draft.
     expect(restored.state.format.emphasis).toEqual(state.format.emphasis)
   })
 
@@ -135,8 +133,6 @@ describe('document draft persistence', () => {
     const restored = readDocumentDraft(storage, scope, 'ver_1')
     expect(restored.status).toBe('restored')
     if (restored.status !== 'restored') throw new Error('expected restored')
-    // A schema that rejected any of these keys would fail the parse and delete
-    // the payload, silently destroying the whole unsaved draft.
     expect(restored.state.format.paragraphFormats).toEqual(
       state.format.paragraphFormats,
     )
@@ -148,8 +144,6 @@ describe('document draft persistence', () => {
     const properties = runPropertiesFromFragments([
       `<w:rPr><w:rFonts w:ascii="${'A'.repeat(80)}"/><w:sz w:val="4000"/></w:rPr>`,
     ])
-    // The bounded reader drops only the inherited property, so the emphasis a
-    // reversal builds stays inside the persisted schema.
     expect(properties.fontFamily).toBeNull()
     expect(properties.fontSize).toBeNull()
     state.format.emphasis = [{ runId: 'r1', ...properties }]
@@ -210,7 +204,6 @@ describe('document draft persistence', () => {
       held: [],
     })
     expect(readDocumentDraft(storage, scope, 'ver_2').status).toBe('stale')
-    // The active key is free again, so this tab can keep saving new drafts.
     expect(
       writeDocumentDraft(storage, scope, {
         baseVersionId: 'ver_2',
@@ -222,8 +215,6 @@ describe('document draft persistence', () => {
     expect(restored.status === 'restored' && restored.state.drafts).toEqual({
       r1: 'new work',
     })
-    // A successful save clears the active draft and leaves the parked one for
-    // the user to discard.
     clearDocumentDraft(storage, scope)
     expect(
       listDocumentDrafts(storage, scope).some(
@@ -279,8 +270,6 @@ describe('document draft persistence', () => {
         state: stateWithText('someone else'),
         held: [],
       })
-      // Move the payload under this session's key: a scope mismatch must still
-      // stop it being offered to the wrong user or document.
       const key = documentDraftKey(scope)
       storage.entries.set(
         key,

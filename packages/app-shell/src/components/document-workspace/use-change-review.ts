@@ -24,12 +24,6 @@ type DecisionMutation = Pick<
 
 export type ChangeReview = ReturnType<typeof useChangeReview>
 
-/**
- * Why a listed change can never be decided, or undefined when it can. The
- * server derives the flag on the wire (`undecidable`); this only turns it
- * into the review copy the two surfaces share, so neither offers a decision
- * the engine would refuse.
- */
 function undecidableReason(change: DocumentChangeWire) {
   if (change.undecidable === 'unsupported-move') {
     return 'This move cannot be decided here; it stays listed and unchanged in the document.'
@@ -40,17 +34,6 @@ function undecidableReason(change: DocumentChangeWire) {
   return undefined
 }
 
-/**
- * The tracked-change review state the ribbon and the Changes panel share.
- * One active target, one availability answer and one dispatch live here, so
- * the ribbon's single/bulk actions and the panel's per-change buttons can
- * never disagree about what deciding means right now.
- *
- * A decision is an immutable version, so it is refused while unsaved work or
- * an unresolved boundary could make it write against the wrong base — the
- * controls stay disabled with the reason on their accessible name rather
- * than discarding a draft or landing a stale write.
- */
 export function useChangeReview({
   documentId,
   model,
@@ -68,11 +51,9 @@ export function useChangeReview({
   model: DocumentModelWire | undefined
   changes: readonly DocumentChangeWire[]
   baseVersionId: string
-  /** The current track-changes toggle, including an unsaved flip. */
   trackChanges: boolean
   decision: DecisionMutation
   drafts: WorkspaceDrafts
-  /** The save state machine; a decision shares its unsaved-work barriers. */
   save: ReturnType<typeof useDocumentSave>
   caret: {
     editingKind: ReturnType<typeof useEditingStory>['editingKind']
@@ -88,9 +69,6 @@ export function useChangeReview({
   onSaved: (versionId: string) => void
   onNotice: (message: string) => void
 }) {
-  // The active target keeps its list position across a decision: the decided
-  // change leaves the list, so the slot it held names the next change to
-  // review without a second navigation step.
   const [active, setActive] = useState<{ id: string; index: number } | null>(
     null,
   )
@@ -108,9 +86,6 @@ export function useChangeReview({
         ? Math.min(active.index, changes.length - 1)
         : -1
   const activeChange = activeIndex >= 0 ? changes[activeIndex] : undefined
-  // The ribbon's single Accept/Reject target: the active change, else the
-  // first change anchored at the caret's paragraph — the same deterministic
-  // "current" a word processor's review commands use.
   const current =
     activeChange ??
     changes.find(
@@ -119,10 +94,6 @@ export function useChangeReview({
         change.paragraphId === caret.selectedParagraphId,
     )
 
-  // A decision is an immutable version, so it may run only when nothing
-  // unsaved or unresolved could silently retarget against the new base. The
-  // save state machine is the single truth for that: anything but 'saved'
-  // names its own reason on the disabled controls rather than losing work.
   const status = save.saveState.status
   const unavailable =
     decision.isPending || status === 'saving'
@@ -136,14 +107,8 @@ export function useChangeReview({
             : save.editsPending
               ? 'Save or discard unsaved edits before deciding changes.'
               : null
-  // Changes the server has marked undecidable stay listed and preserved, but
-  // no decision can run on them — single controls name the reason, and bulk
-  // actions scope themselves to the supported set with the excluded count
-  // visible rather than wedging on a guaranteed refusal.
   const supported = changes.filter((change) => change.undecidable === undefined)
   const undecidableCount = changes.length - supported.length
-  // The save barrier outranks the request cap: with unsaved edits the truer
-  // answer is "save first" even when the supported set is also too large.
   const bulkUnavailable =
     changes.length === 0
       ? 'There are no tracked changes.'
@@ -172,8 +137,6 @@ export function useChangeReview({
     }
     const paragraph = editableParagraph(model!, change.paragraphId)
     const before = change.inlinePosition?.beforeRunId
-    // An anchor run the model no longer holds falls back to the paragraph
-    // end, where an unanchored revision paints, rather than its start.
     const offset =
       change.inlinePosition && paragraph
         ? before && paragraph.runs.some((run) => run.id === before)
@@ -221,15 +184,10 @@ export function useChangeReview({
     ) {
       return
     }
-    // Rejection may remove a tracked-insert paragraph's empty shell in the
-    // same decision; name only shells whose pending changes are all being
-    // rejected, so nothing undecided can disappear inside one.
     const removeParagraphIds =
       action === 'reject'
         ? rejectedShellParagraphIds(model, changes, new Set(changeIds))
         : []
-    // The decided change leaving the list disables the controls mid-flight;
-    // hand focus back to the caret first so it cannot drop to document.body.
     refocusCaretBeforeFlight()
     decision.mutate(
       {
@@ -237,25 +195,16 @@ export function useChangeReview({
         action,
         changeIds,
         ...(removeParagraphIds.length > 0 ? { removeParagraphIds } : {}),
-        // The decision commits a version, so a pending toggle flip rides on
-        // it rather than being silently dropped. An unpended toggle sends
-        // nothing — an explicit value would re-assert the loaded setting and
-        // silently revert a collaborator's flip this tab never saw.
         ...(trackChanges !== model.trackRevisions
           ? { trackRevisions: trackChanges }
           : {}),
       },
       {
         onSuccess: (data) => {
-          // A decision version carries no lineage and re-allocates run ids,
-          // so the pre-decision history cannot be replayed; the committed
-          // version is held until its model reloads before anything edits.
           drafts.resetHistoryAfterDecision(data.versionId, data.versionNumber)
           onSaved(data.versionId)
         },
         onError: (error) => {
-          // A stale base is the same conflict a save reports; share its
-          // banner so the reload affordance appears in one place.
           if (error instanceof ApiError && error.code === 'conflict_detected')
             save.markStale()
         },
@@ -265,34 +214,22 @@ export function useChangeReview({
 
   return {
     changes,
-    /** The review target's own id, when one is marked active. */
     activeChangeId: activeChange?.id,
-    /** The one canvas revision in the tab order: the active one when it is
-     * painted inline, else the first painted one, so Tab never loses it. */
     inlineTabChangeId: (activeChange && paintedInline(activeChange, model)
       ? activeChange
       : changes.find((change) => paintedInline(change, model))
     )?.id,
     activeIndex,
     pending: decision.isPending,
-    // The server's wording ("unexpected error response") names the transport,
-    // not what the reader can do; the banner and the retry are the same either
-    // way, so the panel says the one thing that is actionable.
     error: decision.error ? "Your decision wasn't saved. Try again." : null,
-    /** Why no decision can run right now, or null when one can. */
     unavailable,
-    /** Why a bulk decision is unavailable (barrier or the request cap). */
     bulkUnavailable,
-    /** Why the single-change controls are unavailable, or undefined. */
     targetUnavailable,
-    /** How many listed changes the engine can never decide. */
     undecidableCount,
-    /** Why this change can never be decided, or undefined when it can. */
     undecidableReason,
     canPrevious: activeIndex > 0,
     canNext: changes.length > 0 && activeIndex < changes.length - 1,
     goTo,
-    /** Arrow keys rove between painted revisions, skipping panel-only ones. */
     goToAdjacentInline: (fromId: string, direction: -1 | 1) => {
       for (
         let index =
@@ -302,11 +239,6 @@ export function useChangeReview({
       ) {
         const change = changes[index]
         if (change && paintedInline(change, model)) {
-          // Roving browses the read-only paint. Revealing would place the
-          // caret, and the caret's paragraph paints its revisions under the
-          // textarea, unfocusable and hidden from assistive technology, so
-          // focus would fall into the textarea. Drop the caret as Escape
-          // does; Enter on the revision places it.
           setActive({ id: change.id, index })
           caret.closeEditingStory()
           return
@@ -316,9 +248,6 @@ export function useChangeReview({
     goToPrevious: () => goTo(activeIndex - 1),
     goToNext: () => goTo(activeIndex + 1),
     decideChange: (action: 'accept' | 'reject', change: DocumentChangeWire) => {
-      // Marking the decided change active makes its slot name the next
-      // change once this one leaves the list — review advances without a
-      // second navigation step.
       const index = changes.findIndex((item) => item.id === change.id)
       if (index >= 0) setActive({ id: change.id, index })
       decide(action, [change.id])
@@ -334,9 +263,6 @@ export function useChangeReview({
         action,
         supported.map((change) => change.id),
       ),
-    /** A decision over the reviewer's own selection. The ids are narrowed to
-     * the supported set here, so a surface cannot put an undecidable change on
-     * the wire even if it offers one. */
     decideSelected: (action: 'accept' | 'reject', changeIds: string[]) => {
       const chosen = new Set(changeIds)
       decide(
@@ -349,8 +275,6 @@ export function useChangeReview({
   }
 }
 
-/** Mirrors the projection: a property change or a comment story's revision
- * never paints, so it must not hold the canvas's only review tab stop. */
 function paintedInline(change: DocumentChangeWire, model?: DocumentModelWire) {
   return Boolean(
     change.kind !== 'property' &&

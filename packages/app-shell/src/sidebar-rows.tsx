@@ -3,12 +3,6 @@ import { matterInitials, type MatterRecord } from './matters'
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
 import type { ReactElement, ReactNode, Ref } from 'react'
 
-/**
- * The sidebar's two row renderers. They live beside the sidebar rather than in
- * it so each file stays small enough to scan; both read the same collapsed
- * state and the same account of what a count means.
- */
-
 export function ModuleRow({
   label,
   to,
@@ -30,13 +24,10 @@ export function ModuleRow({
     'aria-hidden'?: boolean
   }) => ReactNode
   count?: number
-  /** Status tone for a module whose count is work waiting on a person. */
   alertTone?: 'danger' | 'warning' | 'success'
   current?: boolean
   collapsed: boolean
-  /** An entry that opens something in place (the Agent panel) instead of a route. */
   onClick?: () => void
-  /** Whether what `onClick` opens is showing, for `aria-expanded`. */
   expanded?: boolean
   actionRef?: Ref<HTMLButtonElement>
 }) {
@@ -70,9 +61,6 @@ export function ModuleRow({
       ? 'bg-brand-soft font-medium text-ink'
       : 'text-muted hover:bg-hover hover:text-ink',
   )
-  // The rail has no room for a count, so it carries a numbered badge pinned to
-  // the icon: a bare coloured dot said "something" without saying what or how
-  // much, and the tooltip is where the sentence lives.
   const badge =
     collapsed && count && toneClass !== 'text-subtle' ? (
       <span
@@ -138,22 +126,15 @@ export function ModuleRow({
   )
 }
 
-/** "Verify · 2 unresolved findings": what the row is, and what the number means. */
 function tooltipLabel(label: string, countNote: string | null) {
   return countNote ? `${label} · ${countNote}` : label
 }
 
-/**
- * The rail's labels. The tooltip is supplementary: the control's accessible
- * name already carries the label (and its count), so a keyboard or screen
- * reader user never has to hover to know what a row is.
- */
 function RailTooltip({
   label,
   children,
 }: {
   label: string
-  /** A control to anchor the label to; it keeps its own role and name. */
   children: ReactElement<Record<string, unknown>>
 }) {
   return (
@@ -164,12 +145,9 @@ function RailTooltip({
   )
 }
 
-/** The count's meaning, in the same words the accessible name uses. */
 function countToneLabel(label: string, count?: number) {
   if (!count) return null
   if (label === 'Matters') return `${count} active`
-  // Findings, not runs: one run can leave several unresolved, and Home shows
-  // one queue row for that run.
   if (label === 'Verify')
     return `${count} unresolved ${count === 1 ? 'finding' : 'findings'}`
   if (label === 'Redact') return `${count} waiting`

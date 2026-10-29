@@ -11,11 +11,6 @@ import {
 } from '@obiter/ui'
 import type { StructuralInsertOutcome } from '../../document-structure-toolbar'
 
-/**
- * The cross-reference target chooser: every stored body paragraph, labelled
- * by its text. A target deleted between render and submit is refused by the
- * outcome and shown in place.
- */
 export function InsertCrossReferenceDialog({
   open,
   onOpenChange,

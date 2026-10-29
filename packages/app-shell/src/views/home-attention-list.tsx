@@ -11,7 +11,6 @@ import {
   topUnresolvedFinding,
 } from './home-attention-copy'
 
-/** The mock-up shows the queue at a glance; the module pages hold the rest. */
 export const ATTENTION_LIMIT = 5
 
 export function AttentionSection({
@@ -20,9 +19,7 @@ export function AttentionSection({
   loading,
   error,
 }: {
-  /** Ranked and already sliced to {@link ATTENTION_LIMIT}. */
   items: AttentionItem[]
-  /** How many ranked items exist, including the ones not shown. */
   total: number
   loading: boolean
   error: string | null
@@ -88,8 +85,6 @@ export function AttentionSection({
 }
 
 function AttentionRow({ item, rank }: { item: AttentionItem; rank: number }) {
-  // The title already carries the state ("Flagged finding", "2 findings need
-  // review"), so the row does not repeat it as a pill beside the title.
   const tone =
     item.kind === 'redact_decision'
       ? 'bg-info-soft text-info'
@@ -198,11 +193,6 @@ function AttentionExplanation({ item }: { item: AttentionItem }) {
   }
 }
 
-/**
- * The findings endpoint is per run, so the row explains the run it names rather
- * than guessing from counts. Same cache entry the document page reads, so
- * opening the finding does not fetch it twice.
- */
 function VerificationExplanation({
   item,
 }: {
@@ -221,7 +211,6 @@ function AttentionAction({
   variant = 'button',
 }: {
   item: AttentionItem
-  /** 'text' for a quiet row action inside a rail or preview. */
   variant?: 'button' | 'text'
 }) {
   const className =

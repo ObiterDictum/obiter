@@ -34,17 +34,9 @@ import {
   type RecentDocument,
 } from './home-rail'
 
-/** The dashboard reads documents from this many recently updated matters. */
 const DOCUMENT_MATTER_WINDOW = 6
-/** How many rows each rail card shows. */
 const RAIL_LIMIT = 4
 
-/**
- * Home — the workspace queue. Every row is a real Verify finding, a redaction
- * run waiting for a decision, or a run that failed; the ranking says why one
- * outranks another (`home-attention.ts`). No activity, assignment or count is
- * invented.
- */
 export function HomeRouteView({
   platform: _platform,
 }: {
@@ -58,16 +50,11 @@ function HomeDashboard({ me }: { me: MeResponse }) {
   const queryClient = useQueryClient()
   const matters = useMattersList()
   const redactionRuns = useRedactionRunsList()
-  // Always enabled, like the sidebar: the two share this cache entry, so Home
-  // costs no extra request once the frame has loaded.
   const verification = useOrganisationVerificationRuns(true)
   const hasOrganisation = me.organisation != null
   const organisationName = me.organisation?.name ?? null
   const invalidatedCurrentUser = useRef(false)
 
-  // Reading matters creates a personal workspace for an account without one.
-  // `/api/me` is a suspense query, so it has to be re-read once to show the
-  // organisation the API just made. Runs once, guarded by a ref.
   useEffect(() => {
     if (
       matters.isSuccess &&
@@ -114,9 +101,6 @@ function HomeDashboard({ me }: { me: MeResponse }) {
   })
   recentDocuments.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
-  // The run list carries document ids only. The recent runs' filenames come
-  // from the same per-document boundary the Verify page reads; the window is
-  // bounded so the dashboard never fans out across every run.
   const verificationRuns = verification.runs
   const identityRuns = [...verificationRuns]
     .sort((a, b) =>
@@ -247,8 +231,6 @@ function HomeDashboard({ me }: { me: MeResponse }) {
           />
           <aside
             aria-label="Recent work"
-            // The rail is one column beside the queue (320px) and two columns when
-            // the page is single-column, as the mock-up shows at 1024.
             className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] max-compact:grid-cols-1 wide:grid-cols-1"
           >
             <RecentDocumentsCard
@@ -268,11 +250,6 @@ function HomeDashboard({ me }: { me: MeResponse }) {
   )
 }
 
-/**
- * "Continue where you left off" — the last document this person opened, named
- * with its matter and when. It comes from the open the document page records,
- * so it is a fact about this reader rather than a guess from the newest file.
- */
 function ContinueLine() {
   const recentlyOpened = useRecentlyOpenedDocument()
   const document = recentlyOpened.data
@@ -280,7 +257,6 @@ function ContinueLine() {
   return (
     <span
       className="block max-w-full truncate text-meta text-muted"
-      /* One line, as the mock-up has it: the full sentence is the tooltip. */
       title={`Continue where you left off: ${document.filename} · ${document.matterName}`}
     >
       Continue where you left off:{' '}
@@ -313,7 +289,6 @@ function greetingForHour(hour: number) {
   return 'Good evening'
 }
 
-/** "Monday 26 Oct 2026": one date style, with the weekday on the page head. */
 function todayLabel(date: Date) {
   const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long' }).format(
     date,

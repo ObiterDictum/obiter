@@ -15,12 +15,6 @@ import { storyBlocks } from './document-page-tables'
 export type LocalInsert = {
   clientId: string
   afterParagraphId: string
-  /**
-   * When set, the insert is placed before this paragraph instead of after its
-   * anchor. A restored first paragraph has no preceding anchor, so it uses the
-   * surviving next paragraph and inserts ahead of it. `afterParagraphId` still
-   * carries the same target so reparenting and flow fallbacks stay valid.
-   */
   beforeParagraphId?: string
   text: string
   runs?: DocumentTextRunWire[]
@@ -121,12 +115,6 @@ export function flowParagraphIds(
   )
 }
 
-/**
- * The flow order of one story — stored paragraphs with pending inserts woven
- * at their anchors and deleted paragraphs dropped. The body and each
- * header/footer story each have their own flow; an insert's anchor decides
- * which story it joins.
- */
 export function storyFlowParagraphIds(
   story: { paragraphs: readonly { id: string }[] } | undefined,
   inserts: readonly LocalInsert[],
@@ -157,14 +145,6 @@ export function resolveInsertAnchor(
   return id
 }
 
-/**
- * The paragraphs a story flows as ordinary body text: everything outside a
- * table, and nothing hosted by a text box (those render in a page overlay at
- * an absolute position, not at their story position). A document selection may
- * only cover these, and a range edit may not cross a paragraph that is not one.
- * The document's table binding is the owner of that partition, so the
- * selection does not re-derive it from the XML.
- */
 export function storyBodyParagraphIds(story: DocumentStoryWire): Set<string> {
   const hosted = new Set<string>()
   for (const paragraph of story.paragraphs) {
@@ -183,12 +163,6 @@ export function storyBodyParagraphIds(story: DocumentStoryWire): Set<string> {
   return body
 }
 
-/**
- * The story a flow id's order lives in — the paragraph's own editable story,
- * or, for a pending insert, the story its anchor chain resolves to. A margin
- * insert anchors on a header/footer paragraph, so it belongs to that story's
- * flow rather than the body's.
- */
 export function editingStoryOfFlowId(
   model: DocumentModelWire,
   inserts: readonly LocalInsert[],
@@ -206,7 +180,6 @@ export function editingStoryOfFlowId(
   )
 }
 
-/** `paragraphId`'s flow order inside its own story. */
 export function storyFlowOrder(
   model: DocumentModelWire,
   inserts: readonly LocalInsert[],

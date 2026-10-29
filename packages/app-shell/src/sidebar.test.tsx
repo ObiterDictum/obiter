@@ -157,7 +157,6 @@ describe('sidebar data helpers', () => {
         redactionRun({ id: 'done', status: 'finalized' }),
       ]),
     ).toBe(1)
-    // Every span decided: the run needs finalising, not a decision.
     expect(
       count([
         redactionRun({
@@ -167,11 +166,9 @@ describe('sidebar data helpers', () => {
         }),
       ]),
     ).toBe(0)
-    // A failed run also waits on a person: the same rule the Redact list uses.
     expect(count([redactionRun({ id: 'failed', status: 'failed' })])).toBe(1)
   })
 
-  // The count and the queue are two views of one rule; this fails if they drift.
   it('counts exactly the Redact runs Home queues', () => {
     const runs = [
       redactionRun({ id: 'reviewing' }),
@@ -200,8 +197,6 @@ describe('sidebar data helpers', () => {
     ).toBe(queued.length)
   })
 
-  // The count and the Home header are two views of one rule, which is why the
-  // badge and the header can no longer disagree about a re-run.
   it('counts exactly the finding the Home header counts', () => {
     const runs = [
       run({
@@ -303,7 +298,6 @@ describe('Sidebar', () => {
         .getByRole('button', { name: 'Expand sidebar' })
         .getAttribute('aria-expanded'),
     ).toBe('false')
-    // Every module is still reachable from the collapsed rail.
     expect(screen.getByRole('link', { name: 'Matters' })).toBeTruthy()
   })
 })

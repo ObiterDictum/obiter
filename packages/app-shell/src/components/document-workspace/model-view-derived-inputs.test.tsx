@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentModelWire } from '@obiter/contracts'
 
-// Document-wide notes stay cached while structural drafts rebuild navigation.
 const counts = vi.hoisted(() => ({ notes: 0, neighbors: 0 }))
 const arrows = { ...(await import('./paragraph-arrow')) }
 mock.module('./paragraph-arrow', () => ({
@@ -17,15 +16,9 @@ mock.module('./paragraph-arrow', () => ({
   },
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const documentPageNotesModule = {
   ...(await import('../../document-page-notes')),
 }
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const documentPageNotesModuleKeys = Object.fromEntries(
   Object.keys(await import('../../document-page-notes')).map((key) => [
     key,
@@ -48,9 +41,6 @@ mock.module('../../document-page-notes', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { DocumentModelPage } = await import('./model-view')
 
 const model: DocumentModelWire = {

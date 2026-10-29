@@ -4,12 +4,6 @@ import type { CrossReferenceCheck } from '../../document-cross-reference-check'
 import type { DefinedTermCheck } from '../../document-defined-terms'
 import type { LegalCheckFinding } from '../../document-legal-checks'
 
-/**
- * The stored-markup legal checks: what `REF` fields and `_Def_` defined-term
- * bookmarks say about this document, read from the wire plus pending drafts.
- * Findings are presented as things to look at, never as a verdict — the
- * checks name what they could not read rather than pass it silently.
- */
 export function LegalChecksPanel({
   checks,
   focus,
@@ -19,14 +13,11 @@ export function LegalChecksPanel({
     references: CrossReferenceCheck
     terms: DefinedTermCheck
   } | null
-  /** The section the ribbon control asked for; scrolled into view. */
   focus: 'terms' | 'references'
   onSelect: (paragraphId: string) => void
 }) {
   const termsRef = useRef<HTMLElement>(null)
   const referencesRef = useRef<HTMLElement>(null)
-  // Scrolling the requested section into view is a DOM boundary the panel
-  // cannot express in state, so the focus prop drives one effect.
   useEffect(() => {
     const target = focus === 'terms' ? termsRef : referencesRef
     target.current?.scrollIntoView({ block: 'nearest' })

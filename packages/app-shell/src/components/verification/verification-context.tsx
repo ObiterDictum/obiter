@@ -25,40 +25,16 @@ import {
   type UnmappedReason,
 } from './verification-mapping'
 
-/**
- * What the document layer actually drew for the current document. `null` means
- * the layer has not measured yet or this document has no mapped layer. The
- * visible ids and the per-finding reasons are one value so a render can never
- * read half of one document's measurement with half of another's.
- */
 export type RenderedFindings = {
   visibleIds: ReadonlySet<string>
   reasons: ReadonlyMap<string, UnmappedReason>
 }
 
-/**
- * One canonical answer to "can the document-level Run verification control
- * start a run, and if not, why not". The ribbon reads this instead of
- * re-deriving the dock's gate, so an enabled ribbon control always has a real
- * dock control to reveal and focus.
- */
 type StartAvailability =
   { available: true } | { available: false; reason: string }
 
-/** The document-level Verify strip. `revealStart` falls back to it if the
- * dock's own control anchor is not yet registered. */
 export const verificationDockId = 'document-verification'
 
-/**
- * One owner for the contextual verification interaction: which run and findings
- * are current, which finding is selected, where it maps in the open document,
- * and whether the editor holds unsaved work. The panel, the marker layer, the
- * document-level control and the findings index all read this, so they cannot
- * disagree about what was checked.
- *
- * The verification engine, run model and findings persistence are untouched:
- * this is the presentation boundary over the V5 API.
- */
 export type VerificationWorkspaceValue = {
   documentId: string
   mappable: boolean
@@ -69,8 +45,6 @@ export type VerificationWorkspaceValue = {
   findings: VerificationFindingView[]
   findingsPending: boolean
   findingsError: Error | null
-  /** Retry a failed findings continuation or refetch, without dropping the
-   * pages that already loaded. */
   retryFindings: () => void
   hasNextPage: boolean
   loadingMore: boolean
@@ -84,33 +58,22 @@ export type VerificationWorkspaceValue = {
   step: (delta: 1 | -1) => void
   dirty: boolean
   ready: boolean
-  /** The stored version number a result is about, to name it in words. */
   checkedVersionNumber: number | undefined
-  /** The version a run would check now. Undefined while the document loads. */
   currentVersionNumber: number | undefined
-  /** The checked version is no longer the stored one: either the API says so or
-   * the open document has moved on since the run. */
   stale: boolean
   startRun: () => void
   startPending: boolean
   startError: Error | null
-  /** Whether the document-level Run verification control can start a run. */
   startAvailability: StartAvailability
   registerMarker: (findingId: string, element: HTMLElement | null) => void
   markerFor: (findingId: string) => HTMLElement | null
   dockAnchor: HTMLElement | null
   setDockAnchor: (element: HTMLElement | null) => void
-  /** The dock's Run verification control, so a ribbon entry can reveal the one
-   * real control instead of starting a second run of its own. */
   setStartAnchor: (element: HTMLElement | null) => void
   revealStart: () => void
-  /** What the document layer drew, once it has measured. */
   rendered: RenderedFindings | null
   setRendered: (value: RenderedFindings | null) => void
-  /** The server's total for the selected run, not the loaded page count. */
   totalFindings: number
-  /** The findings index is a modal list; while it is open the panel's own
-   * outside-dismissal rule is suspended so the dialog is not "outside". */
   indexOpen: boolean
   openIndex: () => void
   closeIndex: () => void
@@ -120,19 +83,14 @@ export type VerificationWorkspaceValue = {
 const VerificationWorkspaceContext =
   createContext<VerificationWorkspaceValue | null>(null)
 
-/** The contextual verification context, or null outside a document workspace. */
 export function useVerificationWorkspace() {
   return useContext(VerificationWorkspaceContext)
 }
 
-/** Read the viewport width for the one responsive placement rule. */
 function useViewportWidth() {
   const [width, setWidth] = useState(() =>
     typeof window === 'undefined' ? 1024 : window.innerWidth,
   )
-  // A resize listener is a genuine browser boundary: the placement rule cannot
-  // be derived from React state, and Base UI's own media handling targets the
-  // popup, not the choice between a floating panel and a drawer.
   useEffect(() => {
     const update = () => setWidth(window.innerWidth)
     window.addEventListener('resize', update)
@@ -172,13 +130,6 @@ export function VerificationWorkspaceProvider({
   const pendingStep = useRef<number | null>(null)
   const placement = panelPlacement(useViewportWidth())
 
-  // Mapping, navigation and marker coverage must span the whole finding set,
-  // not only the pages fetched so far. The endpoint is keyset-paginated, so the
-  // provider walks the remaining pages once a completed run is selected; each
-  // completed page re-runs this effect and starts the next. It is a real
-  // network boundary, so the guard and the cleanup are deliberate. A failed page
-  // stops the walk and surfaces through findingsError instead of retrying on
-  // every render.
   const hasNextPage = findingsQuery.hasNextPage
   const fetchingNextPage = findingsQuery.isFetchingNextPage
   const findingsFailed = findingsQuery.isError
@@ -189,13 +140,9 @@ export function VerificationWorkspaceProvider({
     void fetchNextPage()
   }, [hasNextPage, fetchingNextPage, findingsFailed, fetchNextPage])
 
-  // Retry keeps the loaded pages: a continuation is re-attempted from the last
-  // cursor, and a failed first page or refetch re-runs the query. Nothing is
-  // reset, so the selection and every already-loaded finding survive.
   const retryFindings = () => {
     const attempt =
       findings.length > 0 && hasNextPage ? fetchNextPage() : refetchFindings()
-    // The query owns the error state; without this the rejection is unhandled.
     void attempt.catch(() => undefined)
   }
 
@@ -208,9 +155,6 @@ export function VerificationWorkspaceProvider({
       record.versionNumber,
     ]),
   )
-  // The run row reports staleness against the stored pointer. The open
-  // document's own version is the faster and, after a save, the truer signal,
-  // so either one marks the evidence as earlier than the document.
   const stale =
     latest != null &&
     (latest.stale ||
@@ -226,15 +170,8 @@ export function VerificationWorkspaceProvider({
   }, [findings, mappable, model.data])
 
   const activeIndex = findings.findIndex((finding) => finding.id === activeId)
-  // The run summary is computed server-side over every finding, so it, not the
-  // loaded page, is the truthful total. Fall back to the loaded set only while
-  // the run summary is not yet available.
   const totalFindings = latest?.summary.findingCount ?? findings.length
 
-  // The dock does not render its Run verification control while the runs or
-  // the document are unavailable, and it disables the control for unsaved work
-  // and a not-ready version. Deriving one availability here keeps the ribbon
-  // from offering a command with nothing to reveal.
   const startAvailability: StartAvailability = document.isPending
     ? { available: false, reason: 'the document is still loading' }
     : document.isError
@@ -257,9 +194,6 @@ export function VerificationWorkspaceProvider({
                 ? { available: false, reason: 'save before verification' }
                 : { available: true }
 
-  // Focus moved after the panel mounts is a DOM boundary the render cannot
-  // express: `revealStart` can be called in the same gesture that opens the
-  // panel, before its Run control is in the tree.
   useEffect(() => {
     if (!revealPending || !startAnchor) return
     setRevealPending(false)
@@ -267,9 +201,6 @@ export function VerificationWorkspaceProvider({
     startAnchor.focus({ preventScroll: true })
   }, [revealPending, startAnchor])
 
-  // A Next/Previous that lands on a page that is not loaded yet is remembered
-  // and applied when the page arrives, so navigation is never silently bounded
-  // by whichever pages happen to be resident.
   useEffect(() => {
     const pending = pendingStep.current
     if (pending == null) return
@@ -313,8 +244,6 @@ export function VerificationWorkspaceProvider({
         setPanelOpen(true)
         return
       }
-      // The next finding is on a page that has not arrived yet: request it and
-      // let the effect above land on it once it does.
       pendingStep.current = next
       void fetchNextPage()
     },
@@ -342,9 +271,6 @@ export function VerificationWorkspaceProvider({
     setDockAnchor,
     setStartAnchor,
     revealStart: () => {
-      // The Run control lives in the docked panel. A caller that opens the
-      // panel in the same gesture finds no anchor yet, so remember the request
-      // and let the mount effect below hand it focus once it exists.
       if (!startAnchor) {
         setRevealPending(true)
         return

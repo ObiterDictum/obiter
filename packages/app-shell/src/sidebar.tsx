@@ -18,19 +18,9 @@ import { latestRunsPerDocument, openWorkCount } from './open-work'
 import { useOrganisationVerificationRuns } from './verification-runs'
 
 const COLLAPSE_STORAGE_KEY = 'obiter.sidebar.collapsed'
-/**
- * At 1024 the sidebar is the labelled column the mock-ups show. Below that the
- * mock-ups hide it outright, which would leave a narrow window with no
- * navigation at all, so it becomes the compact icon rail instead.
- */
 const NARROW_QUERY = '(max-width: 1023px)'
 const RECENT_MATTERS_LIMIT = 4
 
-/**
- * How serious the waiting work is, so the sidebar never shows a softer colour
- * than the page it leads to. Read from the same newest-run-per-document rule
- * the counts come from, so the dot and the number describe one set of runs.
- */
 function verificationAttentionTone(
   runs: VerificationRun[],
 ): 'danger' | 'warning' | 'success' {
@@ -42,11 +32,6 @@ function verificationAttentionTone(
   return 'success'
 }
 
-/**
- * The tone of one run's waiting findings, by the rule Verify uses: a flagged
- * finding outranks one that needs review, and a check that did not run is still
- * unfinished work rather than a pass.
- */
 function verificationAttentionToneFor(summary: VerificationRunSummary) {
   if (summary.flaggedCount > 0) return 'danger' as const
   if (summary.reviewRequiredCount > 0 || summary.notCheckedCount > 0)
@@ -54,10 +39,6 @@ function verificationAttentionToneFor(summary: VerificationRunSummary) {
   return 'success' as const
 }
 
-/**
- * Most recently updated matters. The mock-up pins matters, but there is no pin
- * store yet, so the section shows recent matters and says so.
- */
 export function recentMatters(matters: MatterRecord[]): MatterRecord[] {
   return [...matters]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -93,8 +74,6 @@ export function Sidebar({
   const runs = useRedactionRunsList().data?.runs ?? []
   const verificationRuns = useOrganisationVerificationRuns(true).runs
 
-  // Modules without a cheap source of truth show no count rather than a zero.
-  // Verify and Redact read the one open-work rule Home and a matter also read.
   const work = openWorkCount({ verificationRuns, redactionRuns: runs })
   const counts = new Map<ModuleId, number>([
     ['matters', matters.filter((matter) => matter.status === 'active').length],

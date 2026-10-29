@@ -33,7 +33,6 @@ export function DocumentCommentsPanel({
   canModerate: boolean
   pending: boolean
   error: string | null
-  /** Resolves true only when the comment was stored; a failed submit keeps the draft. */
   onCreate: (body: string) => Promise<boolean>
   onReply: (input: { parentId: string; body: string }) => Promise<boolean>
   onResolve: (commentId: string) => void
@@ -63,8 +62,6 @@ export function DocumentCommentsPanel({
           onSubmit={async (event) => {
             event.preventDefault()
             if (!commentTarget || body.trim() === '') return
-            // The draft survives a failed submit so the same intent can be
-            // retried; only a stored comment clears the field.
             if (await onCreate(body.trim())) setBody('')
           }}
         >
@@ -392,8 +389,6 @@ function ReplyForm({
       onSubmit={async (event) => {
         event.preventDefault()
         if (body.trim() === '') return
-        // Same contract as the new-comment form: the draft clears only once
-        // the reply is stored, so a failed submit can be retried as-is.
         if (await onReply({ parentId, body: body.trim() })) setBody('')
       }}
     >

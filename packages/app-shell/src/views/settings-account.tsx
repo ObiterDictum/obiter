@@ -10,11 +10,6 @@ import {
 } from './settings-fields'
 import { useCanonicalNameField } from './use-canonical-name-field'
 
-/**
- * The account section: the name the user is shown under, and the identity
- * facts they cannot change here. The mutation is session-scoped, so this form
- * never sends a user id.
- */
 export function AccountSection({
   user,
   active,
@@ -24,11 +19,6 @@ export function AccountSection({
 }) {
   const updateProfile = useUpdateProfile()
   const nameRef = useRef<HTMLInputElement>(null)
-  // The field, its saved baseline and the mutation result are reconciled by one
-  // shared policy (`useCanonicalNameField`): a resolved save cannot discard text
-  // typed while it was in flight, and a refetched canonical name cannot leave a
-  // stale baseline behind. The identity is the user id, so switching account
-  // discards the draft rather than carrying it into another person's form.
   const field = useCanonicalNameField({
     identity: user.id,
     canonical: user.name,

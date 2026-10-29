@@ -32,7 +32,6 @@ mock.module('../current-user', () => ({
   useCurrentUser: mocks.useCurrentUser,
 }))
 
-// Loaded after the registration above.
 const { VerifyRouteView } = await import('./verify')
 
 const at = '2026-10-26T09:02:00.000Z'
@@ -371,8 +370,6 @@ describe('VerifyRouteView', () => {
 
   it('folds the matches behind one line, and states each limit once', async () => {
     await renderVerify()
-    // A run's matches are the bulk of a healthy check and the least urgent to
-    // read, so they arrive as one line the reader can open.
     await screen.findByText('advice-note-northgate.docx')
     const show = await screen.findByRole('button', {
       name: /matches? the checked source/,
@@ -386,7 +383,6 @@ describe('VerifyRouteView', () => {
     ).toBeTruthy()
     expect(screen.getAllByText('Flagged').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Needs review').length).toBeGreaterThan(0)
-    // The check's own sentence is the only statement of the limit on the card.
     expect(
       screen.getAllByText('The quotation could not be attributed.').length,
     ).toBeGreaterThan(0)
@@ -415,7 +411,6 @@ describe('VerifyRouteView', () => {
     await waitFor(() => {
       expect(screen.queryByText('Citation matches checked source')).toBeNull()
     })
-    // The status word appears on the row, not only in the selected filter.
     expect(screen.getAllByText('Needs review').length).toBeGreaterThan(0)
     expect(
       screen.queryByText('Flagged', { selector: '[class*="text-meta"]' }),
@@ -442,7 +437,6 @@ describe('VerifyRouteView', () => {
     expect(
       screen.getByText('The paragraph quotes the judgment directly.'),
     ).toBeTruthy()
-    // The check's own outcome is unchanged: it is still a flagged finding.
     expect(screen.getAllByText('Flagged').length).toBeGreaterThan(0)
   })
 
@@ -460,9 +454,7 @@ describe('VerifyRouteView', () => {
       finding(),
     ]
     await renderVerify()
-    // Settled, not alarming: the state word is the decision, not the outcome.
     expect(await screen.findByText('Dismissed')).toBeTruthy()
-    // The tab still counts the run's outcomes; the card no longer states one.
     expect(screen.queryByText('Flagged', { selector: 'span' })).toBeNull()
     expect(screen.getByText(/Dismissed by Priya Shah ·/)).toBeTruthy()
     expect(
@@ -471,7 +463,6 @@ describe('VerifyRouteView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reopen finding' }))
     await waitFor(() => expect(reopenals).toEqual(['vf_flagged']))
-    // Back in the queue: the finding shows its own state again.
     await waitFor(() => expect(screen.queryByText('Dismissed')).toBeNull())
     expect(
       screen.getAllByText('Flagged', { selector: 'span' }).length,
@@ -492,7 +483,6 @@ describe('VerifyRouteView', () => {
     expect(
       await within(dialog).findByText(/The dismissal was not saved\./),
     ).toBeTruthy()
-    // Nothing is recorded, so the finding is still undismissed.
     expect(dismissals).toEqual([])
     expect(screen.queryByText(/Dismissed by you/)).toBeNull()
   })

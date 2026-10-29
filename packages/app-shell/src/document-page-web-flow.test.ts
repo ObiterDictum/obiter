@@ -66,7 +66,6 @@ describe('layoutDocument web flow', () => {
     expect(page?.box.margin).toEqual({ top: 0, right: 0, bottom: 0, left: 0 })
     expect(page?.columns).toEqual([{ left: 0, widthPx: 500 }])
     expect(page?.blocks).toHaveLength(40)
-    // The flow records the height its content filled, not the frame bound.
     expect(page?.contentPx).toBeGreaterThan(0)
     expect(page?.contentPx).toBeLessThan(10_000)
   })

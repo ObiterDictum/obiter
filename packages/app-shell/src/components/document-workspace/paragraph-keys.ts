@@ -3,10 +3,6 @@ import type { KeyboardEvent } from 'react'
 import type { InlineSlice } from '../../document-inline-changes'
 import type { WrappedLine } from '../../document-page-flow'
 
-/**
- * Whether a key press inserts text. A single-character key with no command
- * modifier is one; the Enter and Backspace families are handled above.
- */
 export function printableKey(event: {
   key: string
   ctrlKey: boolean
@@ -14,8 +10,6 @@ export function printableKey(event: {
   metaKey: boolean
 }): boolean {
   if (event.ctrlKey || event.altKey || event.metaKey) return false
-  // A single code point, not a single UTF-16 code unit: an astral character
-  // such as an emoji is one printable key even though `length` is two.
   return [...event.key].length === 1
 }
 
@@ -32,7 +26,6 @@ export function arrowKey(
 
 const words = new Intl.Segmenter(undefined, { granularity: 'word' })
 
-/** Word and line moves in editable text, so a tracked span is never a stop. */
 function modifiedOffset(
   text: string,
   lines: WrappedLine[],
@@ -56,7 +49,6 @@ function modifiedOffset(
         .find((at) => at < offset) ?? 0)
 }
 
-/** Native textareas cannot skip read-only display spans on horizontal arrows. */
 export function moveInlineSelection(
   event: KeyboardEvent<HTMLTextAreaElement>,
   input: {
@@ -74,8 +66,6 @@ export function moveInlineSelection(
   },
 ): boolean {
   const { projection } = input
-  // A document selection owns its own anchor across paragraphs; leave its
-  // keys to the existing handlers rather than re-anchor it in this paragraph.
   if (
     !projection ||
     input.selection?.active ||

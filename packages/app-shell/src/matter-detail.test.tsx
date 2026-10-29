@@ -50,8 +50,6 @@ mock.module('./current-user', () => ({
   useCurrentUser: mocks.useCurrentUser,
 }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one.
 const documentBlankModuleKeys = Object.fromEntries(
   Object.keys(await import('./document-blank')).map((key) => [key, undefined]),
 )
@@ -78,8 +76,6 @@ mock.module('@obiter/ui', () => ({
   useToast: mocks.useToast,
 }))
 
-// Loaded after the registrations above: these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { MatterRouteView } = await import('./views/matter-detail')
 
 const OWNER = {
@@ -193,8 +189,6 @@ function buildRouter(matterId: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Verify and redaction run lists are empty: this file covers the page shell,
-  // the document table and the actions.
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => Response.json({ runs: [] })),

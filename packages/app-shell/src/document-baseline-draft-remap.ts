@@ -35,10 +35,6 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
       drafts[key] = value
       continue
     }
-    // A draft that raced a save which split its run still names the run's
-    // whole text, so it distributes across the continuing parts the same way
-    // a reversal does — writing it to the first alone would duplicate the
-    // tail's saved text beside it.
     if (identities.runContinuations.get(key)?.length) {
       for (const [targetRunId, text] of reversalRunTexts(
         identities,
@@ -57,7 +53,6 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
     if (item.runId) {
       const continuations = identities.runContinuations.get(item.runId)
       if (continuations?.length) {
-        // A run the save split inherits the pending styling on every part.
         return continuations.map((continuation) => ({
           ...item,
           runId:
@@ -109,11 +104,6 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
     unresolved: unresolved || hasUnresolvedBaselineIdentities(resolved),
   }
 }
-
-/**
- * Whether a boundary carries the authoritative lineage it needs to translate
- * safely. A response without one must be surfaced, never guessed around.
- */
 
 export function resolveBaselineIdentities(
   state: DraftState,
@@ -178,10 +168,6 @@ export function resolveBaselineIdentities(
   }
 }
 
-/**
- * Whether any identity the boundary introduced is still without a result
- * address. The caller must treat that as a blocked boundary, not as saved work.
- */
 export function hasUnresolvedBaselineIdentities(state: DraftState): boolean {
   return (
     Object.keys(state.drafts).some(isPendingBaselineId) ||

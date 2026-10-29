@@ -39,11 +39,6 @@ import {
   NewDocumentButton,
 } from './matter-upload'
 
-/**
- * Matter — the matter's documents, its facts, and what is waiting in it, from
- * reads the shell already makes. Deleting lives in the overflow menu, as the
- * mock-up has it: a destructive action is never the only thing in a header.
- */
 export function MatterRouteView({
   matterId,
   platform: _platform,
@@ -104,8 +99,6 @@ export function MatterRouteView({
   const openWorkUnavailable = verification.isError || redactionRuns.isError
   const attentionReady = verification.isSuccess && redactionRuns.isSuccess
   const attentionTotal = attentionReady ? (attention.get(m.id)?.total ?? 0) : 0
-  // Only the matter's owner may read or change its access list; only an owner
-  // or administrator of the organisation may delete the matter.
   const isOwner = me.user.id === m.createdBy
   const canManage = me.user.role === 'owner' || me.user.role === 'admin'
 
@@ -205,11 +198,6 @@ export function MatterRouteView({
   )
 }
 
-/**
- * The matter's actions that are not a primary job of this page. Only delete is
- * here today: there is no archive or export endpoint, and editing the record is
- * not part of this stage.
- */
 function MatterActionsMenu({
   matterId,
   documentCount,

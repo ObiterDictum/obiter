@@ -170,17 +170,13 @@ describe('comment anchors', () => {
     openCommentsPanel()
     submitNewComment('Tighten this')
     await waitFor(() => expect(createComment).toHaveBeenCalledTimes(1))
-    // A failed submit keeps the draft so the same intent can be retried.
     const input = screen.getByLabelText('New comment')
     expect((input as HTMLInputElement).value).toBe('Tighten this')
 
-    // Retrying the identical unsatisfied intent replays under the same key.
     submitNewComment('Tighten this')
     await waitFor(() => expect(createComment).toHaveBeenCalledTimes(2))
     await waitFor(() => expect((input as HTMLInputElement).value).toBe(''))
 
-    // Once stored, the intent is finished: the next identical submission is
-    // a deliberate second comment under a fresh key, not a replay.
     submitNewComment('Tighten this')
     await waitFor(() => expect(createComment).toHaveBeenCalledTimes(3))
 
@@ -201,18 +197,14 @@ describe('comment anchors', () => {
     submitNewComment('Tighten this')
     await waitFor(() => expect(createComment).toHaveBeenCalledTimes(1))
 
-    // A changed body is a different intent and must not reuse the key.
     submitNewComment('Different wording')
     await waitFor(() => expect(createComment).toHaveBeenCalledTimes(2))
 
-    // A changed anchor is a different intent too: the pointer press that
-    // collapses the live selection comes first, then the new drag.
     clickParagraph('p1')
     nativeSelect(0, 3)
     submitNewComment('Different wording')
     await waitFor(() => expect(createComment).toHaveBeenCalledTimes(3))
 
-    // Submitting the original unsatisfied intent again still replays its key.
     clickParagraph('p1')
     nativeSelect(1, 4)
     submitNewComment('Tighten this')
@@ -364,8 +356,6 @@ describe('comment cards', () => {
       ),
     )
 
-    // The stored reply satisfied the intent: a further identical reply is a
-    // new deliberate write under a new key.
     submitReply('Agreed')
     await waitFor(() => expect(replyComment).toHaveBeenCalledTimes(3))
 

@@ -21,15 +21,8 @@ import {
 import type { EditorChromeProps } from './editor-commands'
 import { styleDisplayName } from './editor-commands'
 
-/** The value the style select shows when the selection covers several styles. */
 const MIXED_STYLE_VALUE = '__mixed__'
 
-/**
- * The one compact toolbar row: the controls a document is actually written
- * with. Everything else lives in the menu bar and the command palette, so the
- * page gets the vertical space back. The row never wraps; a narrow window
- * scrolls it sideways rather than pushing the paper down.
- */
 export function EditorToolbar({
   props,
   onOpenFormatting,

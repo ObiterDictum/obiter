@@ -10,11 +10,6 @@ import { useState, type FormEvent } from 'react'
 import { getRecentLegalSearches } from '../legal-search-recents'
 import { CreateMatterDialog } from './create-matter-dialog'
 
-/**
- * Example authorities a new workspace can search for straight away. They are
- * queries, not stored state: each opens a real search, which is why the list is
- * only shown when there is no search history of the reader's own.
- */
 const SUGGESTED_SEARCHES = [
   {
     query: 'Wood v Capita Insurance Services Ltd',
@@ -120,8 +115,6 @@ export function HomeEmpty() {
 
       <aside
         aria-label="Getting started"
-        // The rail is one column beside the queue (320px) and two columns when
-        // the page is single-column, as the mock-up shows at 1024.
         className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] max-compact:grid-cols-1 wide:grid-cols-1"
       >
         <section aria-labelledby="try-search" className="rounded-lg bg-surface">
@@ -211,7 +204,6 @@ export function HomeEmpty() {
   )
 }
 
-/** The suggested and recent rows behave the same way: they open a search. */
 function SearchRow({
   label,
   detail,

@@ -88,7 +88,6 @@ describe('the painted rows of a paragraph ending in a hard break', () => {
   it('draws the empty row the trailing break opens', () => {
     const { rows } = renderParagraph(para('p1', 'alpha\n'))
     expect(rows).toHaveLength(2)
-    // The empty row paints a blank placeholder rather than any text.
     expect((rows[1]?.textContent ?? '').trim()).toBe('')
   })
 

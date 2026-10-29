@@ -174,3 +174,13 @@ Renders the approved page heading on the frame's content column: title at 28/600
 - **Auth screens** (`/sign-in`, `/sign-up`, `/forgot-password`, `/reset-password`, `/invites/accept`) share one layout: the form in a 360px column on the left under the wordmark and the theme toggle, a sample clause in serif on paper with a summary of _Wood v Capita Insurance Services Ltd_ [2017] UKSC 24 at [10]–[12] on the right, and one footnote line per screen. Below 1025px the right-hand panel is dropped and the form sits in the middle of the column. The sample panel is product illustration, not state: the sheet is hidden from assistive technology. There is no session-expired screen: the product has no such state, so no route or view is invented for it.
 
 `<Toaster/>` is mounted once in the frame. User-facing copy uses **Obiter** throughout (FR6a).
+
+## 7. Invariants the shell must not break
+
+- Organisation rename is owner-only, enforced by the API (`requireOwnerRole` plus an ownership check against the caller's own organisation). The client sends no organisation id in `PATCH /api/organisations`: an id in the request could only be meant to address another tenant.
+- Draft state is per workspace. Each workspace builds its own `format` draft state rather than sharing `emptyFormatDrafts`, because `planDocumentSave` fills a copy in place; sharing the singleton would leak one workspace's paragraph styles into every other one.
+- Tracked-change decisions and classification markings (Document type, Draft, Privileged, Without prejudice) each commit a new immutable version server-side, so both are refused while unsaved, blocked, stale or failed work would leave the base version behind.
+- A refused find-and-replace batch never half-applies: the state is immutable, so a refusal returns its reason and changes nothing.
+- Password change is verified server-side; the client-side checks are a courtesy the API repeats.
+- A permission refusal is not an error to retry: the shell chooses its surface from the typed `ApiError` code.
+- Verification findings and the legal checks are presented as things a person should look at, never as a verdict; honest uncertainty is surfaced, not passed silently.

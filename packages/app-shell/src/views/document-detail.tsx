@@ -25,16 +25,6 @@ import { DocumentWorkspace } from '../components/document-workspace/workspace'
 import { DocumentVersionView } from '../components/document-workspace/document-version-view'
 import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
 
-/**
- * Document detail — the contract route (PRD FR4). Receives route params as
- * props and renders the editor, which owns its own header, then the
- * redaction-runs region and a child <Outlet/> so feature sub-routes such as
- * redact/$runId nest beneath it.
- *
- * The editor is the page: it fills the frame below the top bar so the paper
- * and its docked panels scroll independently. The redaction-runs region keeps
- * its place below the editor, where the contract puts it.
- */
 export function DocumentDetailLayoutView({
   matterId,
   documentId,
@@ -47,9 +37,6 @@ export function DocumentDetailLayoutView({
   const navigate = useNavigate()
   const document = useDocument(documentId)
   const matter = useMatter(matterId)
-  // Naming a version the detail query did not return selects nothing — a
-  // viewer sees only the current version's row, so historical ids are never
-  // selectable from this surface in the first place.
   const [selectedVersionId, setSelectedVersionId] = useState<string>()
   const selectedVersion = document.data?.versions.find(
     (version) => version.id === selectedVersionId,
@@ -59,9 +46,6 @@ export function DocumentDetailLayoutView({
     selectedVersion.documentStatus === 'ready' &&
     selectedVersion.id !== document.data?.document.currentVersionId
 
-  // The document is loaded by id alone; guard against the URL's matterId not
-  // matching the document's actual matter. Render not-found rather than show a
-  // valid document under the wrong matter's chrome/back-link.
   const loaded = document.data
   const matterMismatch =
     !document.isLoading &&
@@ -204,7 +188,6 @@ export function DocumentDetailLayoutView({
   )
 }
 
-/** The document's overflow actions: Delete, behind a confirmation step. */
 function DocumentActionsMenu({
   documentId,
   matterId,

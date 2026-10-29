@@ -10,15 +10,6 @@ import {
   legislationProvisionQueryOptions,
 } from './views/legislation-document-query'
 
-/**
- * The source a page is showing, named for the breadcrumb. A source page is
- * reached from Search, so a trail that stops at "Search" leaves the reader
- * without the one thing the page is about.
- *
- * The title comes from the same query the page itself reads, so it is one
- * request, and it is null until that answer arrives rather than a slug-derived
- * guess (the slug drops capitalisation and punctuation).
- */
 export function useSourceTitle(pathname: string): string | null {
   const caseId = caseIdFromPath(pathname)
   const caseDocument = useQuery({

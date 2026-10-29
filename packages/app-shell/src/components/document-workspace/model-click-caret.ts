@@ -83,11 +83,6 @@ export function pageClickCaret(
   return best
 }
 
-/**
- * A body-paragraph hit while a margin story is open: the click exits margin
- * editing and lands as a body caret, the way Word leaves header editing.
- * Returns null when the clicked element is not a body paragraph.
- */
 export function bodyParagraphCaret(
   paragraphEl: HTMLElement,
   clientX: number,

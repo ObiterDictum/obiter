@@ -19,7 +19,6 @@ export function editableStories(model: DocumentModelWire): DocumentStoryWire[] {
   return model.stories.filter((story) => EDITABLE_STORY_KINDS.has(story.kind))
 }
 
-/** The editable story — body, margin or notes — `paragraphId` belongs to. */
 export function editableStoryOf(
   model: DocumentModelWire,
   paragraphId: string,
@@ -29,7 +28,6 @@ export function editableStoryOf(
   )
 }
 
-/** `paragraphId`'s wire in whichever editable story owns it. */
 export function editableParagraph(
   model: DocumentModelWire,
   paragraphId: string,
@@ -39,13 +37,10 @@ export function editableParagraph(
   )
 }
 
-/** Every paragraph across the editable stories, in story order. */
 export function editableParagraphs(model: DocumentModelWire) {
   return editableStories(model).flatMap((story) => story.paragraphs)
 }
 
-/** The run texts joined in order — the plain text a paragraph or insert's
- * runs spell. */
 export const runsText = (runs: readonly { text: string }[]) =>
   runs.map((run) => run.text).join('')
 
@@ -56,17 +51,6 @@ export function paragraphPlainText(
   return paragraph.runs.map((run) => drafts?.[run.id] ?? run.text).join('')
 }
 
-/**
- * The paragraph the layout, caret and save paths read: the stored runs plus
- * runs an edit holds outside them (`extraRuns`, which a join stores so the
- * saved operation keeps its original run ids), with text drafts applied.
- *
- * A draft replaces one whole run. This must see that run before range
- * emphasis slices it: the slice that keeps the original id would otherwise
- * become the entire draft, and the later slices would be appended after it.
- * Returns the same paragraph when nothing textual changes, so a pagination
- * pass does not rebuild every paragraph's runs.
- */
 export function effectiveParagraph(
   paragraph: DocumentParagraphWire,
   drafts: Record<string, string> | undefined,
@@ -164,11 +148,6 @@ export function sliceContainsOffset(
   return to === fullLength && offset >= to
 }
 
-/**
- * A slice of one run, carrying the paragraph-model offset it starts at. The
- * renderer needs `from` to decide which part of the run a document selection
- * covers, which a bare text slice cannot answer on its own.
- */
 export type RunSlice = {
   run: DocumentTextRunWire
   text: string
@@ -237,11 +216,6 @@ export function cursorForSelection(
   return { paragraphId: paragraph.id, runId: run.id, offset: 0 }
 }
 
-/**
- * Resolves a paragraph id to the story that paints it, indexed once over the
- * whole model: the body answers for ids no margin or note story claims, so a
- * lookup stays O(1) instead of walking every story per paragraph.
- */
 export function paragraphStoryResolver(model: DocumentModelWire) {
   const storyByParagraph = new Map<string, { kind: string; partName: string }>()
   let bodyStory = { kind: 'document', partName: '' }

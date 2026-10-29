@@ -65,13 +65,6 @@ const operationFor = (draft: StructuralDraft): DocumentEditOperation => {
   throw new Error('Only table and image drafts fold into the model.')
 }
 
-/**
- * The fold and the writer must agree on the same placement rules — one
- * shared binding decides which wires belong to a table, so the painted
- * pending document cannot drift from what save/reload produces. Each case
- * compares block shapes and paragraph counts, not ids: pending wires carry
- * client-minted ids that canonicalisation rewrites.
- */
 describe('fold-versus-reload placement', () => {
   it('matches on a legacy table whose cells carry no paragraph ids', async () => {
     const document = await parseDocx(
@@ -85,8 +78,6 @@ describe('fold-versus-reload placement', () => {
     applyDocumentEdits(document, structures.map(operationFor))
     const reloaded = await parseDocx(await serialiseDocx(document))
 
-    // The writer emits a separator before the stored table; the fold must
-    // count the same paragraph, not one fewer.
     expect(blockTypes(reloaded.model)).toEqual(blockTypes(folded))
     expect(paragraphCount(reloaded.model)).toBe(paragraphCount(folded))
   })
@@ -129,8 +120,6 @@ describe('fold-versus-reload placement', () => {
 
     expect(blockTypes(reloaded.model)).toEqual(blockTypes(folded))
     expect(paragraphCount(reloaded.model)).toBe(paragraphCount(folded))
-    // The picture folded into 'Body text' lands where the writer put it: a
-    // drawing run splits 'Body ' from 'text'.
     const foldedBody = requiredStory(folded).paragraphs.find(
       (paragraph) => paragraph.id === body.id,
     )
@@ -150,9 +139,6 @@ describe('fold-versus-reload placement', () => {
     const run = anchor?.runs[0]
     if (!anchor || !run) throw new Error('Fixture model is missing.')
 
-    // The client folds the typed text then the pictures; save replays the
-    // same batch — text replacement first, then both insertions at the same
-    // effective offset.
     const drafts = { [run.id]: 'Hello brave world' }
     const structures = [
       imageDraft('s1', anchor.id, 6, 'Figure0'),
@@ -173,9 +159,6 @@ describe('fold-versus-reload placement', () => {
         paragraph.runs.map((candidate) => candidate.text).join('') ===
         'Hello brave world',
     )
-    // The writer coalesces the first drawing into the head run while the
-    // fold keeps it a standalone run, so compare the content sequence —
-    // text chunks and drawing names in order — not run boundaries.
     expect(contentSequence(reloadedAnchor?.runs ?? [])).toEqual([
       'Hello ',
       'Figure0',
@@ -208,7 +191,6 @@ function runShapes(runs: readonly { text: string; id: string }[]) {
   return runs.map((run) => run.text.length)
 }
 
-/** A run's content in order: its text, then each drawing's `wp:docPr` name. */
 function contentSequence(
   runs: readonly {
     text: string

@@ -49,12 +49,6 @@ describe('drawingAnchor', () => {
   })
 })
 
-/**
- * The old extent regexes used `[^>]*` on either side of two required
- * attributes, which backtracks polynomially when one attribute repeats and its
- * partner is missing. A bounded wall clock is the regression assertion: the
- * linear rewrite is sub-millisecond on these inputs.
- */
 describe('drawingScene regex bounds', () => {
   const repeatedX = 'x="0" '.repeat(20_000)
   const repeatedCx = 'cx="0" '.repeat(20_000)

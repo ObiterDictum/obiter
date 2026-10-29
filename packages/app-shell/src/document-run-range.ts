@@ -1,13 +1,5 @@
 import { normaliseEditText, type DocumentTextRunWire } from '@obiter/contracts'
 
-/**
- * The pure run-list range primitives the paragraph edit operations compose:
- * replacing a UTF-16 range inside a run list, splitting one at an offset, and
- * removing a key from a run map. They hold no editor state, so they are the
- * part of the word-edit module that can be reasoned about (and tested) without
- * a document.
- */
-
 export function replaceRunRange(
   runs: DocumentTextRunWire[],
   from: number,

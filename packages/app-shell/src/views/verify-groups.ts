@@ -9,12 +9,8 @@ import { verificationSummaryCounts } from '../verification-copy'
 export type VerifyDocumentGroup = {
   documentId: string
   identity: RunDocumentIdentity
-  /** The newest run for this document: the state its row reports. */
   run: VerificationRun
-  /** The newest completed run, whose findings are the ones listed. */
   findingsRun: VerificationRun | null
-  /** True only when the run whose findings are listed still covers the stored
-   * version, so an older result can never read as a check of current text. */
   coversCurrentVersion: boolean
 }
 
@@ -25,12 +21,6 @@ export type VerifyMatterGroup = {
   documents: VerifyDocumentGroup[]
 }
 
-/**
- * The Verify list is grouped by matter and then by document, because that is how
- * a lawyer looks for the work: the client first, then the file. Groups follow
- * the run list's order, which is newest first, so the matter that moved most
- * recently leads.
- */
 export function buildVerifyGroups(input: {
   runs: VerificationRun[]
   matters: readonly Pick<MatterRecord, 'id' | 'name' | 'clientReference'>[]
@@ -62,8 +52,6 @@ export function buildVerifyGroups(input: {
       findingsRun: run.status === 'completed' ? run : null,
       coversCurrentVersion: false,
     }
-    // A run is stale when the document's current version is no longer the one
-    // the run was bound to; the findings shown must answer for themselves.
     document.coversCurrentVersion =
       document.findingsRun != null && !document.findingsRun.stale
     group.documents.push(document)
@@ -86,12 +74,6 @@ export function isVerifyFilter(value: string | null): value is VerifyFilter {
   return value !== null && verifyFilters.some((filter) => filter === value)
 }
 
-/**
- * What a reader must see first: a finding that may make the document wrong,
- * then a citation only a person can judge, then a check that did not run, then
- * the matches. Within one group the document's own order is kept, so a reader
- * moving down a document does not jump around while the states stay ranked.
- */
 const stateOrder = {
   flagged: 0,
   review_required: 1,
@@ -109,11 +91,6 @@ export function sortFindings(
   )
 }
 
-/**
- * A state filter shows open work of that state, so a finding a person has
- * already dismissed is listed only under All. Its outcome is unchanged: it keeps
- * its flagged or review-required state, and the counts keep it apart.
- */
 export function findingMatchesFilter(
   finding: VerificationFindingView,
   filter: VerifyFilter,
@@ -136,8 +113,6 @@ export function findingMatchesFilter(
   }
 }
 
-/** Whether a document group has anything the filter would show, read from the
- * run summary so the answer is known before any findings are fetched. */
 export function groupMatchesFilter(
   group: VerifyDocumentGroup,
   filter: VerifyFilter,
@@ -162,8 +137,6 @@ export function groupMatchesFilter(
   }
 }
 
-/** Filter counts across every shown document's results, from the run summaries
- * the API computes over every finding rather than the pages loaded so far. */
 export function verifyFilterCounts(groups: VerifyMatterGroup[]) {
   const counts = {
     all: 0,

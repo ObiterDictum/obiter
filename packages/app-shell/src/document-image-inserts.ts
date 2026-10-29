@@ -15,12 +15,6 @@ export type ImageInsertFields = {
   name: string
 }
 
-/**
- * The package part name a pending image resolves to in the folded model. It
- * cannot collide with a stored part — the server allocates
- * `word/media/image<N>.<ext>` — and it survives only until the save, when the
- * real part name replaces it.
- */
 export function pendingImagePartName(draft: {
   id: string
   contentType: DocumentEditImageContentType
@@ -28,7 +22,6 @@ export function pendingImagePartName(draft: {
   return `word/media/obiter-pending-${draft.id}.${imageExtensionForContentType(draft.contentType)}`
 }
 
-/** The relationship target the same part carries from `word/document.xml`. */
 export function pendingImageTarget(draft: {
   id: string
   contentType: DocumentEditImageContentType
@@ -45,18 +38,11 @@ function decodeImageBytes(dataBase64: string) {
   return bytes
 }
 
-/**
- * Blob URLs for every pending image, keyed by its pending part name — the same
- * key `imagePartNameForDrawing` resolves in the folded model, so `PageDrawing`
- * paints it through the same lookup a reloaded image uses. The caller owns
- * revocation.
- */
 export function pendingImageUrls(structures: readonly StructuralDraft[]) {
   const urls: Record<string, string> = {}
   for (const draft of structures) {
     if (draft.kind !== 'image') continue
     // SAFETY: the bytes were just allocated as a fresh Uint8Array, so its
-    // buffer is a real ArrayBuffer, not a SharedArrayBuffer.
     const blob = new Blob(
       [decodeImageBytes(draft.dataBase64).buffer as ArrayBuffer],
       {
@@ -78,15 +64,8 @@ const SIGNATURES: Array<{
   { contentType: 'image/bmp', bytes: [0x42, 0x4d] },
 ]
 
-/** The widest a freshly inserted picture paints; taller images scale with it. */
 const PICTURE_MAX_WIDTH_PX = 600
 
-/**
- * Scales a picked image to the page column and bounds both dimensions by the
- * contract's maximum. Width alone is not enough: a 1×20000 file scales to
- * 600×12,000,000 and would produce a draft the schema refuses, silently
- * deleting itself — and every sibling draft — on the next restore.
- */
 export function scaleImageInsertSize(widthPx: number, heightPx: number) {
   const scale = Math.min(1, PICTURE_MAX_WIDTH_PX / widthPx)
   const clamp = (value: number) =>
@@ -97,19 +76,10 @@ export function scaleImageInsertSize(widthPx: number, heightPx: number) {
   return { widthPx: clamp(widthPx), heightPx: clamp(heightPx) }
 }
 
-/**
- * Reads a picked image file into the fields an `insert_image` draft carries.
- * The declared type and the magic bytes must agree — a renamed file would
- * store bytes under the wrong content type — and the size is clamped to the
- * page column so a photograph does not blow the layout.
- */
 export async function readImageInsert(
   file: File,
 ): Promise<ImageInsertFields | { error: string }> {
   const bytes = new Uint8Array(await file.arrayBuffer())
-  // A base64 string encodes 3 bytes per 4 characters; a file past this size
-  // can only produce a draft the contract bound refuses, so reject it as a
-  // typed picker error rather than let the save answer 413.
   if (bytes.length > (DOCUMENT_EDIT_IMAGE_DATA_MAX_LENGTH / 4) * 3) {
     return { error: 'That image is too large to insert.' }
   }
@@ -126,7 +96,6 @@ export async function readImageInsert(
     return { error: 'That image is too large to insert.' }
   }
   // SAFETY: `file.arrayBuffer()` returns an ArrayBuffer and the Uint8Array is
-  // built directly over it, so the buffer is never a SharedArrayBuffer.
   const size = await imageNaturalSize(
     new Blob([bytes.buffer as ArrayBuffer], { type: signature.contentType }),
   )

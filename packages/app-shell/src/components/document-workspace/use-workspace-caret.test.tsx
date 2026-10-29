@@ -38,8 +38,6 @@ describe('useWorkspaceCaret', () => {
     act(() => result.current.selectParagraph('p2', 40))
     expect(result.current.verticalCaret.column).toBe(40)
 
-    // A programmatic selection at another offset is not the armed transition
-    // and must end the run.
     act(() => result.current.selectParagraph('p2', 5))
     expect(result.current.verticalCaret.column).toBeNull()
   })
@@ -58,8 +56,6 @@ describe('useWorkspaceCaret', () => {
     act(() => result.current.selectParagraph('p1', 3))
     expect(result.current.formatRange).toEqual({ from: 3, to: 3 })
 
-    // Focus without moving the caret must not leave a stale offset behind: a
-    // later break insert would otherwise address a previous paragraph.
     act(() => result.current.focusParagraph('p2'))
     expect(result.current.formatRange).toBeNull()
   })
@@ -68,8 +64,6 @@ describe('useWorkspaceCaret', () => {
     const { result } = renderHook(() => useCaretHarness('doc_1'))
 
     act(() => result.current.selectParagraph('p1', 3))
-    // Pagination remounts the editor after a break; that focus must not drop
-    // the resolved offset, or the next break would land at zero.
     act(() => result.current.focusParagraph('p1'))
     expect(result.current.formatRange).toEqual({ from: 3, to: 3 })
   })

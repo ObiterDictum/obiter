@@ -39,8 +39,6 @@ const markClass = {
   not_checked: 'text-subtle',
 } satisfies Record<VerificationFindingView['state'], string>
 
-/** The in-app source page for one piece of evidence, or null when the store has
- * no record to build one from. Stage 7's pages take the canonical paths. */
 function sourceLocation(sourceId: string, canonicalUrl: string) {
   if (canonicalUrl.startsWith('/ln/')) {
     return {
@@ -84,12 +82,6 @@ function EvidenceSourceLine({
   )
 }
 
-/**
- * One finding, with everything a lawyer needs before deciding: the words that
- * were checked, the authority they were attributed to, what was compared, what
- * is uncertain, the source page and its pinpoint, and who dismissed it if
- * somebody did. The state is always stated in words, never by colour alone.
- */
 export function VerifyFinding({
   finding,
   currentUserId,
@@ -100,19 +92,14 @@ export function VerifyFinding({
 }: {
   finding: VerificationFindingView
   currentUserId: string | undefined
-  /** When and against which version the check ran. */
   checkedLabel: string
   onDismiss: () => void
-  /** Put a dismissed finding back in the queue. */
   onUndismiss?: () => void
-  /** Open the finding beside its text, where the document can show it. */
   onOpen?: () => void
 }) {
   const story = verificationStoryLabel(finding.location.storyKind)
   const uncertainty = verificationUncertainty(finding)
   const dismissal = finding.dismissal
-  // A dismissed finding is settled work: it keeps the outcome the check
-  // recorded, and it stops competing for attention with what is still open.
   const settled = dismissal != null
   const Icon = settled ? MinusCircle : markIcon[finding.state]
   return (

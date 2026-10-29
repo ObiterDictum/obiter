@@ -3,11 +3,6 @@ import { describe, expect, it } from 'bun:test'
 import type { CitationTarget } from '@obiter/contracts'
 import { citationTargetRefusal, sourceCitation } from './SourceActions'
 
-/**
- * The citation text and the refusal rule behind "Cite in document". Both are
- * rules rather than markup, so they are checked without rendering the page.
- */
-
 const DOCX =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 

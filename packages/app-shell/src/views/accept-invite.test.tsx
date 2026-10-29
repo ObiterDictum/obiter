@@ -24,15 +24,9 @@ const mocks = vi.hoisted(() => ({
   search: { token: 'invite-token' } as { token?: string },
 }))
 
-// The real module, snapshotted before mock.module registers: a factory
-// that awaited its own specifier re-entered the in-flight mock and
-// deadlocked under bun's module registry.
 const apiModule = { ...(await import('../api')) }
 mock.module('../api', () => ({ ...apiModule, apiFetch: mocks.apiFetch }))
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const authModuleKeys = Object.fromEntries(
   Object.keys(await import('../auth')).map((key) => [key, undefined]),
 )
@@ -55,9 +49,6 @@ mock.module('../auth', () =>
   ),
 )
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const tanstackReactRouterModuleKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,
@@ -97,9 +88,6 @@ mock.module('@tanstack/react-router', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { AcceptInviteRouteView } = await import('./accept-invite')
 
 const preview = {

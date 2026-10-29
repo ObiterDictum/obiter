@@ -17,12 +17,6 @@ export type DisplayTableCell = {
   widthPct?: number
   minHeightPx?: number
   paragraphIds: string[]
-  /**
-   * The `w:p` count inside the cell, including paragraphs that carry no
-   * `w14:paraId`. Positional binding needs it: a legacy cell still owns its
-   * terminal paragraph even when no id names it. Populated by the table
-   * fragment parser; hand-built cells fall back to `paragraphIds.length`.
-   */
   paragraphCount?: number
 }
 
@@ -120,14 +114,6 @@ export function storyBlocks(story: DocumentStoryWire): StoryBlock[] {
   return blocks
 }
 
-/**
- * The paragraph ids bound inside the story's tables. Cell paragraphs are
- * story paragraphs, but the writer refuses them as anchors — a nested `w:tbl`
- * is not a body-level block — so the ribbon must refuse them too, and the
- * structural fold must know the wire after an insertion site belongs to an
- * existing table. Reads the same `storyBlocks` binding the paint uses, so
- * paraId-less stored tables resolve by position exactly as they render.
- */
 export function storyTableCellIds(
   story: DocumentStoryWire | undefined,
 ): Set<string> {
@@ -162,9 +148,6 @@ function bindTableParagraphs(
   let index = 0
   const rows = table.rows.map((row) => ({
     cells: row.cells.map((cell) => {
-      // Bind every paragraph the cell owns — a cell must end in one — so a
-      // legacy table whose cells carry no `w14:paraId` still consumes its
-      // wires instead of leaving them to paint as body paragraphs.
       const take = Math.max(
         cell.paragraphCount ?? cell.paragraphIds.length,
         cell.paragraphIds.length,
@@ -188,9 +171,6 @@ function bindTableParagraphs(
 
 function parseWordTable(xml: string): DisplayTable | undefined {
   if (!xml.includes('<w:tbl')) return undefined
-  // A table fragment never carries a DTD. A DOCTYPE or entity declaration is a
-  // billion-laughs attempt that `application/xml` would expand before layout,
-  // so refuse the fragment rather than parse it.
   if (/<!(?:DOCTYPE|ENTITY)\b/i.test(xml)) return undefined
   const document = new DOMParser().parseFromString(
     `<root ${TABLE_WRAP}>${tableStructureXml(xml)}</root>`,

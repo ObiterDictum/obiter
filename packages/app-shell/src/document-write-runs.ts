@@ -3,10 +3,6 @@ import { editableParagraph, runsText } from './document-model-text'
 import { omitKey, replaceRunRange } from './document-run-range'
 import type { EditorState } from './document-word-edits'
 
-/**
- * Appends runs onto a paragraph: a pending insert's runs and collapsed text
- * grow together, a stored paragraph accumulates the runs in `extraRuns`.
- */
 export function appendRuns(
   state: EditorState,
   paragraphId: string,
@@ -85,8 +81,6 @@ export function writeRuns(
   for (const id of originalIds) {
     drafts[id] = runs.find((run) => run.id === id)?.text ?? ''
   }
-  // An edit that stays inside the stored runs adds no extra run. Storing an
-  // empty list would make the paragraph look dirty and persist an empty entry.
   const extra = runs.filter((run) => !originalIds.has(run.id))
   return {
     ...state,

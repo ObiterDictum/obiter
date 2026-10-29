@@ -280,8 +280,6 @@ describe('collectEditOperations', () => {
   })
 
   it('keeps a tracked emphasis bold across a same-batch text replacement', async () => {
-    // The real product order emits the text replacement before the emphasis,
-    // so the tracked writer cannot rely on the property change landing first.
     const document = await parseDocx(await createBlankDocx())
     const paragraph = documentStory(document.model)?.paragraphs[0]
     if (!paragraph) throw new Error('expected a body paragraph')
@@ -314,7 +312,6 @@ describe('collectEditOperations', () => {
     const recorder = createLineageRecorder(seeded.model)
     applyDocumentEdits(seeded, operations, TRACKING, recorder)
     const saved = await parseDocx(await serialiseDocx(seeded))
-    // Accepting every listed change keeps the patch on all three pieces.
     applyTrackedChangeDecisions(
       saved,
       saved.model.changes.map((change) => change.id),
@@ -775,7 +772,6 @@ describe('paragraphDeletionRefusal', () => {
   })
 
   it('refuses the second deletion after a first valid deletion', () => {
-    // Deleting p1 leaves p2; deleting p2 against that state is the refusal.
     expect(paragraphDeletionRefusal(twoParagraphs(), [], ['p1'], 'p2')).toBe(
       'last-paragraph',
     )

@@ -32,12 +32,6 @@ import {
 } from './matters-rows'
 import { MattersTable } from './matters-table'
 
-/**
- * Matters — every matter in the organisation, most recently active first, with
- * the selected matter beside the table. Every column comes from a read the
- * shell already makes: the matter record, its documents, and the same attention
- * items Home ranks, so open work means one thing everywhere.
- */
 export function MattersRouteView({
   platform: _platform,
 }: {
@@ -63,8 +57,6 @@ export function MattersRouteView({
   )
   const attentionReady = verification.isSuccess && redactionRuns.isSuccess
   const attentionFailed = verification.isError || redactionRuns.isError
-  // Filenames for the queue's rows come from the same document reads the table
-  // uses, so a run names its document instead of calling it "document".
   const documentFilenames = new Map<string, string>()
   for (const documents of documentsByMatter.values()) {
     for (const document of documents ?? []) {
@@ -96,8 +88,6 @@ export function MattersRouteView({
   const selected =
     visible.find((row) => row.matter.id === selectedId) ?? visible[0] ?? null
   const domains = legalDomainOptions(list)
-  // Four chips fit a 1440px row beside the search box; the rest would run to the
-  // edge, so they fold into one menu. A selected domain always stays a chip.
   const VISIBLE_DOMAIN_CHIPS = 4
   const visibleDomains = domains.slice(0, VISIBLE_DOMAIN_CHIPS)
   if (domain && !visibleDomains.includes(domain)) visibleDomains.unshift(domain)
@@ -108,8 +98,6 @@ export function MattersRouteView({
 
   function select(matterId: string) {
     setSelectedId(matterId)
-    // The preview sits after the table below 1181px, so a selection must be
-    // brought into view rather than silently changing something off screen.
     requestAnimationFrame(() => {
       document
         .getElementById('matter-preview')
@@ -283,7 +271,6 @@ function FilterChip({
 }: {
   label: string
   count?: number
-  /** Waiting work, in the warning colour the mock-up gives this chip. */
   alert?: boolean
   active: boolean
   onClick: () => void

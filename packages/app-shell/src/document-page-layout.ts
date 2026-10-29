@@ -87,7 +87,6 @@ export function documentPageBox(model: DocumentModelWire): PageBox {
   return pageBoxForSection(documentSectionXml(model))
 }
 
-/** The page box one `w:sectPr` fragment describes, with Word's defaults. */
 export function pageBoxForSection(sect: string): PageBox {
   const size = xmlTagAttrs(sect, 'pgSz')
   const margin = xmlTagAttrs(sect, 'pgMar')
@@ -130,14 +129,6 @@ export function marginStories(
   return matched.length > 0 ? matched : all.slice(0, 1)
 }
 
-/**
- * The story the workspace edits when `kind` is open: the document story for
- * the body, the header/footer story the body's final section references —
- * the same story the margin band paints — or the single footnotes part,
- * whose note bodies paint beneath the body flow. A multi-section document's
- * other header/footer parts are preserved in the package but neither painted
- * nor editable.
- */
 export function editingStoryFor(
   model: DocumentModelWire,
   kind: 'document' | 'header' | 'footer' | 'footnotes',
@@ -160,10 +151,7 @@ export function documentSectionXml(model: DocumentModelWire): string {
   return ''
 }
 
-/** One section in body order: the paragraph it ends at, and its `w:sectPr`. */
 export type DocumentSection = {
-  /** The paragraph whose `w:pPr` carries this section's `w:sectPr`, or null
-   * for the final body-level section. */
   endParagraphId: string | null
   xml: string
 }
@@ -172,12 +160,6 @@ export function sectionXmlInFragment(fragment: string): string {
   return activeSectionXml(fragment)
 }
 
-/**
- * Every section in body order. A paragraph-level `w:sectPr` defines the
- * section that ends at that paragraph; the body-level `w:sectPr` (always the
- * last entry) governs the final section. E5 reads each section's geometry so a
- * section break starts a new page with that section's page setup.
- */
 export function documentSections(model: DocumentModelWire): DocumentSection[] {
   const story = model.stories.find((item) => item.kind === 'document')
   const sections: DocumentSection[] = []

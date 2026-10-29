@@ -25,7 +25,6 @@ describe('E13 review and view controls', () => {
     expect(column()?.getAttribute('spellcheck')).toBe('false')
     fireEvent.click(command('Spelling'))
     expect(column()?.getAttribute('spellcheck')).toBe('true')
-    // The toggle says what it does — local, not a correctness check.
     expect(
       screen.getAllByText(/not a legal correctness check/i).length,
     ).toBeGreaterThan(0)

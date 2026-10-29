@@ -2,13 +2,6 @@ import { X } from '@phosphor-icons/react'
 import { Button } from '@obiter/ui'
 import type { DocumentOutlineEntry } from '../../document-outline'
 
-/**
- * The navigation pane: the document's heading outline. Selecting an entry
- * places the caret at that heading — the same navigation the authority and
- * comment panels perform — so an outline row is a real document action, not a
- * link that only scrolls. A document without headings says so rather than
- * painting an empty frame.
- */
 export function DocumentNavigationPane({
   entries,
   activeParagraphId,

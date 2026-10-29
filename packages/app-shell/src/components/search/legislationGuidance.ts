@@ -6,12 +6,6 @@ export interface LegislationScheduleGuidanceFeedback {
   body: string
 }
 
-/**
- * Corrective copy for an underspecified schedule citation, derived from the
- * structured API diagnostic rather than the server's free-text note. Names
- * the missing schedule, shows the parser-compatible example, and keeps the
- * Act context so a resubmission resolves.
- */
 export function getLegislationScheduleGuidanceFeedback(
   guidance: LegislationScheduleGuidance,
 ): LegislationScheduleGuidanceFeedback {
@@ -26,10 +20,6 @@ export function getLegislationScheduleGuidanceFeedback(
   }
 }
 
-/**
- * The citation to resubmit: the API's path-derived example plus the Act it
- * belongs to. Null when the label path carried no example to name.
- */
 export function getLegislationScheduleResubmitQuery(
   guidance: LegislationScheduleGuidance,
 ): string | null {

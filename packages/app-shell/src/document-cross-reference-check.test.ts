@@ -184,8 +184,6 @@ describe('checkCrossReferences', () => {
   })
 
   it('passes a REF result the target text still contains', () => {
-    // The bookmark need not cover the whole paragraph: a stored result
-    // that still appears in the target's text is not stale.
     const check = checkCrossReferences(
       model(
         textParagraph(
@@ -205,8 +203,6 @@ describe('checkCrossReferences', () => {
   })
 
   it('does not read a PAGEREF or NOTEREF result against the target text', () => {
-    // Their stored results are a page number and a note mark — comparing
-    // either to paragraph text would invent staleness that is not there.
     const check = checkCrossReferences(
       model(
         textParagraph('p1', 'Clause 2.1', bookmark(1, 'Target1')),
@@ -269,8 +265,6 @@ describe('checkCrossReferences', () => {
   })
 
   it('checks a REF field nested inside another field', () => {
-    // A `REF` inside an `IF`'s result is its own field, closed by its own
-    // end — the outer instruction never resolves to the inner target.
     const check = checkCrossReferences(
       model(
         textParagraph('p1', 'Clause 2.1', bookmark(1, 'Target1')),

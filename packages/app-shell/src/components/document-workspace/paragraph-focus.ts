@@ -3,7 +3,6 @@ import type { RefObject } from 'react'
 import type { InlineSlice } from '../../document-inline-changes'
 import { revealTypingLine } from './paragraph-reveal'
 
-/** Synchronise the model's editable selection with the browser's display range. */
 export function useParagraphFocus(input: {
   field: RefObject<HTMLTextAreaElement | null>
   written: RefObject<{ from: number; to: number } | null>
@@ -26,8 +25,6 @@ export function useParagraphFocus(input: {
     to,
     direction,
   } = input
-  // Browser focus and native selection are external state; write before paint
-  // so a save/model swap cannot flash the caret at a display-only revision.
   useLayoutEffect(() => {
     if (!selected) return
     const node = field.current

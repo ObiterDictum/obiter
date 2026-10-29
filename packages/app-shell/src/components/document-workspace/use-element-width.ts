@@ -1,17 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react'
 
-/**
- * The element's content-box width in CSS pixels, kept current by a
- * ResizeObserver — an external browser API, which is the boundary the
- * subscription rule exists for. Returns `null` where ResizeObserver is
- * unavailable (the test DOM) so the caller decides the fallback measure.
- *
- * `attached` is the condition under which the element exists at all: the
- * document column mounts after the model loads, so an observer started on the
- * first render would watch nothing and never report. The caller passes
- * whatever says the element is in the tree; the observer restarts when that
- * flips.
- */
 export function useElementWidth(
   ref: RefObject<HTMLElement | null>,
   attached = true,

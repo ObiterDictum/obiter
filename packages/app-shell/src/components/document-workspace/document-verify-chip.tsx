@@ -15,7 +15,6 @@ import {
 export type VerifyChip = {
   label: string
   tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'
-  /** True only when the run checked the version now on screen. */
   current: boolean
   detail: string
 }
@@ -34,13 +33,6 @@ function checkedLabel(number: number | undefined) {
     : `version ${String(number)}`
 }
 
-/**
- * The Verify chip, tied to the version it looked at. It reads the same run the
- * panel does, so the two cannot disagree, and it uses the same words as the
- * Verify page: Checked · version N, Check out of date, Run stopped, Checking…,
- * Not checked. A run on an older version says so, so the chip can never read as
- * a check of the document on screen.
- */
 export function verifyChipState(
   verification: VerificationWorkspaceValue,
   versions: DocumentVersionRecord[],
@@ -85,7 +77,6 @@ export function verifyChipState(
     }
   }
   const { flaggedCount, reviewRequiredCount, notCheckedCount } = run.summary
-  // Nothing was compared if every finding is unchecked; that is not a pass.
   const matchedCount =
     run.summary.findingCount -
     notCheckedCount -
@@ -138,16 +129,11 @@ export function verifyChipState(
   }
 }
 
-/**
- * The editor header's Verify chip. It reads the same verification context the
- * dock renders, so the two cannot disagree about which version was checked.
- */
 export function DocumentVerifyChip({
   versions,
   onOpen,
 }: {
   versions: DocumentVersionRecord[]
-  /** Opens the docked Verify panel, which holds the findings and Run. */
   onOpen: () => void
 }) {
   const verification = useVerificationWorkspace()
@@ -183,11 +169,6 @@ export function DocumentVerifyChip({
   )
 }
 
-/**
- * The header's Check citations control. It starts the same run the panel's control does,
- * through the same availability gate, and opens the panel so the run's
- * progress, failure or result is never hidden behind a closed panel.
- */
 export function VerifyRunButton({ onOpen }: { onOpen: () => void }) {
   const verification = useVerificationWorkspace()
   if (!verification) return null
@@ -211,11 +192,6 @@ export function VerifyRunButton({ onOpen }: { onOpen: () => void }) {
   )
 }
 
-/**
- * Why the header's Run control is unavailable, in the same words the panel
- * uses. It is the one state the chip cannot carry: unsaved edits, a loading
- * status, or a document that is not ready.
- */
 export function VerifyRunReason() {
   const verification = useVerificationWorkspace()
   if (!verification || verification.runsPending) return null

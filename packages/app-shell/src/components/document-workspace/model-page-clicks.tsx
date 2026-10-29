@@ -13,18 +13,11 @@ import {
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 
-/** The pointer handlers a laid-out page binds around its caret fields. */
 export type ModelPageHandlers = {
   onMouseDown: (event: MouseEvent<HTMLElement>) => void
   onClick: (event: MouseEvent<HTMLElement>) => void
 }
 
-/**
- * The click-to-caret handlers a laid-out page binds. Extracted from the page
- * component, which sits at its source ceiling: the behaviour — a click inside
- * the open story places the caret, a footnote body opens the notes story, a
- * click outside the open margin story leaves it — is one coherent unit.
- */
 export function pageClickHandlers(input: {
   editing?: boolean
   marginEditing?: DocumentStoryWire
@@ -76,10 +69,6 @@ export function pageClickHandlers(input: {
       const paragraphEl = event.target.closest('[data-paragraph-id]')
       if (paragraphEl instanceof HTMLElement) {
         const paragraphId = paragraphEl.dataset.paragraphId
-        // A click on a painted footnote body opens the notes story at
-        // that paragraph — the same open/close contract the margin band
-        // keeps — whether the body or another story was open. An endnote
-        // stays read-only paint.
         if (
           paragraphId &&
           storyOf(paragraphId).kind === 'footnotes' &&
@@ -89,8 +78,6 @@ export function pageClickHandlers(input: {
           onOpenNoteEditing?.(paragraphId)
           return
         }
-        // A click on the body while a margin story is open leaves margin
-        // editing, the way Word does; the same click places the body caret.
         if (marginEditing && paragraphId && !include(paragraphId)) {
           const hit = bodyParagraphCaret(
             paragraphEl,

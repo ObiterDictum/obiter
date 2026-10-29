@@ -8,13 +8,6 @@ import {
   type SelectionEndpoint,
 } from '../../document-selection'
 
-/**
- * The anchor a new comment would take — the live document selection's ordered
- * endpoints, across paragraphs when it spans them, or the caret's format
- * range where a collapse is an insertion point — plus card-to-anchor
- * navigation back to a stored anchor. Lives outside the caret hook because
- * the hook is at its source ceiling.
- */
 export function useCommentAnchors(input: {
   order: readonly string[]
   selection: DocumentSelection | null
@@ -45,11 +38,6 @@ export function useCommentAnchors(input: {
   return { commentTarget, revealCommentAnchor }
 }
 
-/**
- * The anchor a new comment would take. Null when there is no caret, so the
- * panel can say so rather than silently widening a missing target to a whole
- * paragraph.
- */
 function anchorForNewComment(input: {
   order: readonly string[]
   selection: DocumentSelection | null
@@ -78,13 +66,6 @@ function anchorForNewComment(input: {
   return null
 }
 
-/**
- * The range is painted as a document selection with the caret at its end; a
- * collapsed anchor is a plain caret placement. A margin story is left first
- * so the anchor's body paragraphs resolve in the order the selection
- * reconciles against; an anchor outside the reconciled order drops the
- * selection honestly instead of re-anchoring to different text.
- */
 function revealAnchorRange(
   anchor: DocumentCommentAnchor,
   actions: {

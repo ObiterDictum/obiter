@@ -5,11 +5,6 @@ import { formatDate } from '../format'
 import type { MatterRecord } from '../matters'
 import { openWorkParts, type MatterOpenWork } from './matters-rows'
 
-/**
- * The matter's details and what is waiting in it. Facts come from the matter
- * record; open work is the same attention items Home ranks, counted for this
- * matter alone, so the rail and the queue never disagree.
- */
 export function MatterOverview({
   matter,
   openWork,

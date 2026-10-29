@@ -36,7 +36,6 @@ type DocumentWorkspaceProps = {
   documentId: string
   version: DocumentVersionRecord | null | undefined
   layout?: DocumentWorkspaceLayout
-  /** The route's document detail, for the header's `?` panel and Verify chip. */
   document?: MatterDocumentRecord
   versions?: DocumentVersionRecord[]
   headerLinks?: { back?: ReactNode; matter?: ReactNode }
@@ -44,21 +43,9 @@ type DocumentWorkspaceProps = {
   onViewVersion?: (versionId: string) => void
 }
 
-/**
- * The document is the workspace lifecycle boundary: keying the body on
- * documentId remounts it on a switch, so no unsaved draft, pending insert,
- * selection or caret from document A can render, mutate, save or hold focus in
- * document B. Same-document rerenders keep their key and state. A switch is
- * prompt-free when unsaved drafts can be persisted per tab (E45), so returning
- * to A restores A's work. Failed draft storage requires confirmation to leave.
- */
 export function DocumentWorkspace(props: DocumentWorkspaceProps) {
   const kind = workspaceKind(props.version?.fileType)
   return (
-    // The providers own document-scoped interaction state: the verification
-    // selection, open panel, index, marker map and measured reasons. Keying the
-    // outermost provider on the document id means a switch remounts them too,
-    // so no marker, reason or panel from document A can render for document B.
     <DocumentDraftStatusProvider key={props.documentId}>
       <VerificationWorkspaceProvider
         documentId={props.documentId}
@@ -84,9 +71,6 @@ function DocumentWorkspaceBody({
   const ready = version?.documentStatus === 'ready'
 
   if (!version) return null
-  // The stored failureReason is already a curated user-facing sentence (the
-  // API maps internal parser diagnostics to a generic message before
-  // persisting), so it is shown verbatim rather than as an error code.
   if (version.documentStatus === 'failed') {
     return (
       <div className="flex h-full flex-col">
@@ -116,8 +100,6 @@ function DocumentWorkspaceBody({
       </div>
     )
   }
-  // Uploads are limited to DOCX, PDF and TXT, so `other` is only a legacy
-  // row, but it must still be downloadable, never a dead end.
   if (kind === 'other') {
     return (
       <VerifiedViewer>
@@ -184,15 +166,8 @@ function DocumentWorkspaceBody({
   )
 }
 
-/**
- * A viewer with the document-level Verify control above it. The control is part
- * of the document workspace rather than a separate route region, so every
- * surface that opens a document gets the same interaction and none can quietly
- * lose it.
- */
 function VerifiedViewer({
   children,
-  /** The DOCX editor renders its own dock under its header. */
   dock = true,
 }: {
   children: ReactNode
@@ -210,7 +185,6 @@ async function downloadOriginal(documentId: string, filename: string) {
   downloadBlob(filename, await fetchDocumentDownload(documentId))
 }
 
-/** Download affordance shared by the viewers without an export of their own. */
 function useDownloadOriginal(documentId: string, filename: string) {
   const [error, setError] = useState<string | null>(null)
 
@@ -350,14 +324,6 @@ function PdfWorkspace({
   const find = useFindState()
   const { downloadError, download } = useDownloadOriginal(documentId, filename)
 
-  // The shell's key routing only sees chords from focus inside it, but a
-  // control disabled under the pointer — 'Next page' on the last page —
-  // drops focus to the document body, outside the shell, where the
-  // browser's own find would answer the chord over a single mounted page.
-  // Route that dead-focus case at document level while this read-only
-  // surface is mounted: focus owned by anything else — a field, a dialog,
-  // a region outside the workspace — is never claimed, and the listener
-  // leaves with the surface.
   useEffect(() => {
     const route = (event: KeyboardEvent) => {
       if (event.target === document.body) documentWorkspaceKeyDown(event)
@@ -366,9 +332,6 @@ function PdfWorkspace({
     return () => document.removeEventListener('keydown', route)
   }, [])
 
-  // The whole text is searched once per query/options change; only the
-  // current page's slices ever mount, so the DOM stays page-bounded the way
-  // the viewer already is.
   const findHits = useMemo(
     () => (view.data ? pdfFindHits(view.data, find.query, find.options) : []),
     [view.data, find.query, find.options],
@@ -376,12 +339,7 @@ function PdfWorkspace({
   const activeFindIndex = clampFindIndex(find.index, findHits.length)
 
   return (
-    <WorkspaceShell
-      layout={layout}
-      // A read-only surface still routes find; save and the edit commands
-      // simply have no source here.
-      onKeyDown={documentWorkspaceKeyDown}
-    >
+    <WorkspaceShell layout={layout} onKeyDown={documentWorkspaceKeyDown}>
       {/* The same header contract as the Word workspace: where this document
           sits and how to leave it, so a read-only PDF is not a dead end. */}
       <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b border-line px-12 py-2 max-compact:px-8">

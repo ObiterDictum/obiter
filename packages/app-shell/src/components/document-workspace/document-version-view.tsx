@@ -37,19 +37,12 @@ const MIN_ZOOM = 50
 const MAX_ZOOM = 200
 const ZOOM_STEP = 25
 
-/**
- * A stored, non-current version rendered read-only. Nothing here drafts,
- * saves, merges or heartbeats — the component owns no edit state, so a
- * historical view can never write into the version it displays nor into the
- * current one. Returning to the current version is the caller's `onExit`.
- */
 export function DocumentVersionView({
   documentId,
   version,
   onExit,
 }: {
   documentId: string
-  /** The selected version's metadata from the document detail query. */
   version: DocumentVersionRecord
   onExit: () => void
 }) {
@@ -156,11 +149,6 @@ export function DocumentVersionView({
   )
 }
 
-/**
- * The stored model paginated once and painted with `editing` unset: clicks,
- * caret, selection and margin editing are all inert, so the pages are the
- * version's content exactly as stored.
- */
 function HistoricalDocxPages({
   documentId,
   versionId,

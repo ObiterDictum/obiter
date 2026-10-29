@@ -3,12 +3,6 @@ import { Input } from '@obiter/ui'
 import { useState, type ReactNode, type RefObject } from 'react'
 import type { CurrentUser } from '@obiter/contracts'
 
-/**
- * Field primitives shared by the Settings sections: a read-only value, a
- * heading with its description, a password field with a visibility control,
- * and the two message slots every form uses.
- */
-
 export function ReadOnlyField({
   label,
   value,
@@ -36,7 +30,6 @@ export function SectionHeading({
   id: string
   title: string
   description: string
-  /** A group inside a settings section is a level below its heading. */
   level?: 'h2' | 'h3'
 }) {
   return (

@@ -5,24 +5,13 @@ import {
 } from './components/document-workspace/paragraph-arrow'
 import type { WrappedLine } from './document-page-flow'
 
-/**
- * One end of a document selection: a paragraph identifier and a UTF-16 offset
- * into that paragraph's model text. Paragraph ids are model ids, never array
- * positions, so a selection survives a re-layout that reorders fragments.
- */
 export type SelectionEndpoint = { paragraphId: string; offset: number }
 
-/** The single selection state: a stable anchor plus the moving focus. */
 export type DocumentSelection = {
   anchor: SelectionEndpoint
   focus: SelectionEndpoint
 }
 
-/**
- * The document order a selection is resolved against. `order` is the flow of
- * paragraph identifiers and `textOf` reads the text the editor renders for one
- * of them, so an endpoint can be clamped and a range turned into segments.
- */
 export type SelectionOrder = {
   order: readonly string[]
   textOf: (paragraphId: string) => string
@@ -45,11 +34,6 @@ function orderIndex(order: readonly string[], paragraphId: string): number {
   return order.indexOf(paragraphId)
 }
 
-/**
- * Document order as a total order over endpoints: paragraph flow first, then
- * the offset inside the paragraph. Two endpoints in the same paragraph compare
- * by offset, which is what makes a backwards selection distinguishable.
- */
 export function compareEndpoints(
   order: readonly string[],
   a: SelectionEndpoint,
@@ -72,7 +56,6 @@ export function selectionDirection(
   return compared < 0 ? 'forward' : 'backward'
 }
 
-/** The earlier and later endpoint of a selection, in document order. */
 export function orderedSelection(
   order: readonly string[],
   selection: DocumentSelection,
@@ -82,13 +65,6 @@ export function orderedSelection(
     : { start: selection.anchor, end: selection.focus }
 }
 
-/**
- * The selected segment of every paragraph the selection touches. A paragraph
- * strictly between the two endpoints is selected whole, an empty one included:
- * its paragraph break is part of the selection even though it paints no text,
- * which the renderer shows as an empty selected row. A collapsed selection has
- * no segments.
- */
 export function selectionSegments(
   context: SelectionOrder,
   selection: DocumentSelection,
@@ -129,7 +105,6 @@ export function selectionSegments(
   return segments
 }
 
-/** The same segments keyed by paragraph, for a per-paragraph render decision. */
 export function selectionSegmentMap(
   context: SelectionOrder,
   selection: DocumentSelection,
@@ -142,11 +117,6 @@ export function selectionSegmentMap(
   )
 }
 
-/**
- * Plain text for a clipboard write. A paragraph break inside the selection
- * copies as a newline, the way a word processor copies a multi-paragraph
- * range, and an empty intermediate paragraph therefore copies an empty line.
- */
 export function selectionPlainText(
   context: SelectionOrder,
   selection: DocumentSelection,
@@ -158,13 +128,6 @@ export function selectionPlainText(
     .join('\n')
 }
 
-/**
- * Re-resolve a selection against the current document. An endpoint whose
- * paragraph is gone (deleted, or a version switch that changed the paragraph
- * ids) drops the whole selection; an offset past the paragraph's text clamps,
- * because a document that shrank must not leave a focus beyond its own text.
- * Derived rather than stored, so an effect is never needed to reconcile.
- */
 export function reconcileSelection(
   context: SelectionOrder,
   selection: DocumentSelection | null,
@@ -182,7 +145,6 @@ export function reconcileSelection(
   return { anchor, focus }
 }
 
-/** A whole-document selection: offset 0 of the first paragraph to its end. */
 export function wholeDocumentSelection(
   context: SelectionOrder,
 ): DocumentSelection | null {
@@ -218,20 +180,6 @@ function sameEndpoint(a: SelectionEndpoint, b: SelectionEndpoint): boolean {
   return a.paragraphId === b.paragraphId && a.offset === b.offset
 }
 
-/**
- * The endpoint one arrow press moves the focus to, in the same geometry the
- * caret suites establish: horizontal steps move one code point and cross a
- * paragraph edge, vertical steps follow the retained visual column through
- * wrapped lines and then cross into the neighbouring paragraph. Returns
- * undefined when the press cannot move, which is what keeps Shift+Arrow at the
- * document edge a no-op instead of a selection of nothing.
- *
- * Movement follows code points, not graphemes: a step enters or leaves a whole
- * surrogate pair so a focus can never land inside one, and the offsets stay in
- * the UTF-16 code units the rest of the document model uses. That matches the
- * code-unit offsets the repository's spans and edit operations are written in,
- * and it is what a native textarea does with an astral character.
- */
 export function stepSelectionFocus(input: {
   key: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown'
   paragraphId: string
@@ -271,11 +219,6 @@ export function stepSelectionFocus(input: {
   })
 }
 
-/**
- * The editor emits offsets local to the block it renders. A step that stays in
- * this paragraph is therefore base-relative; a step into a neighbour already
- * names a model offset, and the two are told apart by the paragraph id.
- */
 export function toModelEndpoint(
   endpoint: SelectionEndpoint,
   paragraphId: string,
@@ -286,11 +229,6 @@ export function toModelEndpoint(
     : endpoint
 }
 
-/**
- * One horizontal step from `offset`, never landing inside a surrogate pair.
- * A low surrogate is stepped over when moving left and a high surrogate when
- * moving right, so the focus always sits on a code point boundary.
- */
 function stepCodePoint(
   text: string,
   offset: number,

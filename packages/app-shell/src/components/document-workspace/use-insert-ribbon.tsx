@@ -24,19 +24,6 @@ export type InsertRibbonProps = {
   structure: DocumentStructureToolbar & { picturePicker: ReactNode }
 }
 
-/**
- * The Insert ribbon's controls, spread over `DocumentWorkspaceToolbar`: the
- * break pair, the table and picture insertions, and the hidden file input
- * whose change event reads the picked image into an `insert_image` draft.
- * The input mounts inside the ribbon's Tables group — `display: none` — so
- * it exists whenever the Picture button can forward a click to it.
- *
- * Structural anchors are validated against the stored model — a pending
- * paragraph or a folded cell wire has no server-side anchor yet — while the
- * break caret reads the painted model, matching the ribbon's previous
- * behaviour. The cell set is memoised on the stored model so the block
- * partition is not re-parsed per render.
- */
 export function useInsertRibbon(
   model: DocumentModelWire | undefined,
   painted: DocumentModelWire | undefined,
@@ -44,19 +31,14 @@ export function useInsertRibbon(
   offset: number | null,
   trackChanges: boolean,
   margin: {
-    /** The story open for editing, or 'document' for the body. */
     editingKind: 'document' | 'header' | 'footer' | 'footnotes'
-    /** Opens a story; a named paragraph lands the caret there. */
     onOpen: (kind: 'header' | 'footer' | 'footnotes', selectId?: string) => void
     onClose: () => void
   },
   drafts: {
-    /** The batch's effective deletions — the shared set the save partition
-     * and the pending fold read, so availability agrees with the save. */
     deletedParagraphIds: ReadonlySet<string>
     drafts: Record<string, string>
     extraRuns: Record<string, DocumentTextRunWire[]>
-    /** Pending format, break and insert state the refresh block reads. */
     format: FormatDrafts
     breaks: BreakDraft[]
     inserts: LocalInsert[]
@@ -66,8 +48,6 @@ export function useInsertRibbon(
       update: (current: StructuralDraft[]) => StructuralDraft[],
     ) => void
   },
-  /** The citations the workspace reports over stored body paragraphs —
-   * memoised upstream so availability does not rescan the flow. */
   toaFacts: TableOfAuthoritiesFacts,
   onImageError: (message: string) => void,
 ): InsertRibbonProps {
@@ -78,14 +58,10 @@ export function useInsertRibbon(
   )
   const paragraphId = (caret.kind === 'caret' && caret.paragraphId) || null
   const selectionActive = caret.kind === 'selection'
-  // A hyperlink marks a single-paragraph selection; a selection covering
-  // several paragraphs carries one range per paragraph and is refused.
   const selectionRange =
     caret.kind === 'selection' && caret.ranges.length === 1
       ? (caret.ranges[0] ?? null)
       : null
-  // Only the final section's margin story is editable; other parts stay
-  // painted. A document without the part reports why the button is disabled.
   const headerUnavailable =
     model && marginStories(model, 'header').length === 0
       ? 'This document has no header part'
@@ -171,9 +147,6 @@ export function useInsertRibbon(
           onImageError(outcome.reason)
           return
         }
-        // The folded note body is where the note's text is typed: opening
-        // the story lands the caret there so the insertion reads as one
-        // gesture rather than a draft the user has to hunt for.
         margin.onOpen('footnotes', outcome.noteParagraphId)
       },
       onInsertPicture: () => pictureInput.current?.click(),

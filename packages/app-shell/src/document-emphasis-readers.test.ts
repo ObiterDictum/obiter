@@ -15,9 +15,6 @@ import { translateSnapshot } from './document-history-baseline'
 import { documentStory } from './document-model-text'
 import { emptyDraftState, type DraftState } from './document-save-plan'
 
-// Character-formatting reads that feed the emphasis draft. These were split
-// out of document-edits.test.ts and document-history-baseline.test.ts, both
-// already over the source ceiling, rather than growing them further.
 describe('character-formatting readers', () => {
   it('drops an out-of-contract font size instead of carrying it forward', () => {
     for (const value of ['0', '4000']) {
@@ -154,8 +151,6 @@ describe('out-of-contract emphasis reversal', () => {
       lineage,
       versionId: 'ver_2',
     })
-    // The bounded reader returns null, so the reversal cannot emit a value the
-    // persisted emphasis schema or the edit contract would reject.
     expect(translated?.format.emphasis).toEqual([
       expect.objectContaining({ fontFamily: null, fontSize: null }),
     ])

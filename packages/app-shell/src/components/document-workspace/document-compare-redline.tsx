@@ -24,12 +24,6 @@ import { useElementWidth } from './use-element-width'
 import { A4_WIDTH_PX } from '../../document-page-units'
 import { QueryError } from './workspace-chrome'
 
-/**
- * Version comparison as a redline over the document, read-only. The panel
- * lists the differences in order and jumping to one turns the paper to it;
- * the direction is stated in words and can be swapped, because a diff read
- * the wrong way round inverts every decision made from it.
- */
 export function DocumentCompareRedline({
   documentId,
   versions,
@@ -50,8 +44,6 @@ export function DocumentCompareRedline({
     targetVersionId: string
   } | null>(null)
   const [active, setActive] = useState(0)
-  // Versions arrive newest-first; the default pair is the previous version
-  // against the current one — the question "what just changed" asks.
   const resolvedBase = baseId ?? comparable[1]?.id
   const resolvedTarget = targetId ?? comparable[0]?.id
   const options = comparable.map((version) => ({
@@ -167,8 +159,6 @@ function CompareBody({
   onClose: () => void
 }) {
   const compare = useDocumentCompare(documentId, baseVersionId, targetVersionId)
-  // The whole document is the redline's own text: the entry list names where
-  // it changed, and the two stored models are what it changed from and to.
   const base = useDocumentModel(documentId, { versionId: baseVersionId })
   const target = useDocumentModel(documentId, { versionId: targetVersionId })
   if (compare.isLoading) {
@@ -219,7 +209,6 @@ function CompareBody({
   )
 }
 
-/** One row of the redline: body text with its changes marked, or a removal in place. */
 type ComparisonBlock =
   | {
       kind: 'paragraph'
@@ -229,14 +218,6 @@ type ComparisonBlock =
     }
   | { kind: 'removed'; text: string; entryIndex: number }
 
-/**
- * The target document in reading order with each difference marked, and every
- * paragraph the target no longer has placed where it stood in the base. A
- * removal is anchored before the next base paragraph the target still holds,
- * so a deleted clause reads between the clauses that stayed around it instead
- * of vanishing into a list. Changes outside paragraph text (styles, numbering,
- * tracked-change records) are named by the difference list, not the paper.
- */
 export function comparisonBlocks(
   data: DocumentCompareResponse,
   base: DocumentModelWire,
@@ -249,8 +230,6 @@ export function comparisonBlocks(
   const targetParagraphIds = new Set(
     target.stories.flatMap((story) => story.paragraphs.map((item) => item.id)),
   )
-  // A removed paragraph is anchored to the next paragraph of its own story
-  // that the target still has; without one it sorts after that story.
   const removalsByAnchor = new Map<string, ComparisonBlock[]>()
   const trailing: ComparisonBlock[] = []
   data.entries.forEach((entry, index) => {
@@ -295,26 +274,15 @@ export function comparisonBlocks(
   return [...blocks, ...trailing]
 }
 
-/** The word-level change marks a modified paragraph carries, when it has them. */
 function segmentsFor(data: DocumentCompareResponse, index: number | undefined) {
   const entry = index === undefined ? undefined : data.entries[index]
   return entry?.type === 'modified' ? entry.segments : undefined
 }
 
-/** The redline's own reading size, before the desk has to shrink it. */
 const COMPARE_PAGE_ZOOM = 90
-/** Below this the redline is too small to read, so the sheet narrows instead. */
 const COMPARE_MIN_ZOOM = 80
-/** The desk's own gutter (`px-8`) on both sides of the paper. */
 const COMPARE_DESK_GUTTER = 64
 
-/**
- * The size of the redline's sheet in the desk the Differences panel leaves it.
- * Beside a docked panel on a 1024px window the desk is ~390px: shrinking a
- * whole A4 sheet into that makes the text unreadable, so the sheet keeps a
- * readable zoom and narrows instead, and the redline reflows to it. The
- * redline is a reading view of the change, not the printed page.
- */
 export function comparisonPageLayout(deskWidth: number | null) {
   const room = deskWidth === null ? null : deskWidth - COMPARE_DESK_GUTTER
   if (room === null || room >= (A4_WIDTH_PX * COMPARE_PAGE_ZOOM) / 100)
@@ -327,7 +295,6 @@ export function comparisonPageLayout(deskWidth: number | null) {
   }
 }
 
-/** The redline over the paper, with the difference list beside it. */
 export function DocumentComparisonView({
   data,
   base,
@@ -396,11 +363,6 @@ function blockKey(block: ComparisonBlock, index: number) {
     : `${block.kind}-${String(block.entryIndex)}`
 }
 
-/**
- * One block of the redline. A changed paragraph keeps the document's own text
- * — only the change is marked, so the surrounding sentence still reads — and
- * the block is the element a difference in the list scrolls to.
- */
 function ComparisonBlockView({
   block,
   active,

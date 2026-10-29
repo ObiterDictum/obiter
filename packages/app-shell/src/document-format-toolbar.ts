@@ -48,24 +48,16 @@ export type ParagraphRange = {
   to: number
 }
 
-/**
- * What a formatting command acts on. A caret addresses the run it sits in, so
- * a click, a native within-paragraph selection and a selection spanning
- * paragraphs all reach the same controls; a document selection carries one
- * range per paragraph it covers.
- */
 export type FormatTarget =
   | { kind: 'caret'; paragraphId: string; from: number; to: number }
   | { kind: 'selection'; ranges: ReadonlyArray<ParagraphRange> }
 
 const NOTHING_TO_FORMAT = 'Select text to format'
 
-/** A highlight is pressed for any colour but an explicit `none`. */
 function highlightPressed(value: HighlightValue | null) {
   return value !== null && value !== 'none'
 }
 
-/** Where one run starts and ends in the paragraph's own text. */
 function runSpan(
   paragraph: DocumentParagraphWire,
   runId: string,
@@ -120,11 +112,6 @@ export function documentFormatToolbar(
       for (const range of emphasis) {
         const stored = selectedParagraph(model, range.paragraphId)
         if (!stored) continue
-        // The same effective paragraph the cover reads: stored runs plus a
-        // join's appended runs, with text drafts applied. A collapsed caret in
-        // an appended run addresses that run's span, because whole-run
-        // emphasis by id would name a run the save folds into another one and
-        // the paint never overlays.
         const effective = effectiveParagraph(
           stored,
           drafts,
@@ -139,13 +126,6 @@ export function documentFormatToolbar(
         )
         next = toggleEmphasisAtAddress(next, address, patch)
         if (!('runId' in address)) continue
-        // Whole-run emphasis lands in the base model, which every pending
-        // range paints over afterwards. Restate the same answer over the
-        // run's slice of each pending range, behind them, so a range that
-        // covers the caret cannot overwrite the click and leave the button
-        // stuck. A range partly covering the run is restated over the
-        // overlap only; entries carry whole addresses, so the untouched part
-        // keeps its own answer.
         const span = runSpan(effective, address.runId)
         if (!span) continue
         const overlapping = next.emphasis.filter(
@@ -177,11 +157,6 @@ export function documentFormatToolbar(
       controls.paragraphIds.reduce((next, id) => apply(next, id), current),
     )
   }
-  // Paragraph layout is whole-paragraph, so a caret in no paragraph (an empty
-  // id) is not a target; unlike run emphasis it does not need covered text.
-  // A pending insert's clientId is not a stored paragraph, so formatting it
-  // could only write a draft that never paints and blocks the save; the save
-  // plan already excludes a pending insert the same way.
   const formatParagraphIds = controls.paragraphIds.filter(
     (id) => id.length > 0 && selectedParagraph(model, id) !== undefined,
   )
@@ -248,11 +223,6 @@ export function documentFormatToolbar(
     onIndentKind: (kind: IndentKind) => {
       if (formatParagraphIds.length === 0) return
       forEachFormatParagraph((current, id) => {
-        // None cancels the effective indent, writing an explicit
-        // `w:firstLine="0"` when the indent comes from the paragraph's style.
-        // When there is nothing to cancel, restate the draft unchanged so the
-        // reference-equal skip in `setFormat` records no history step and the
-        // save emits no operation.
         if (
           kind === 'none' &&
           paragraphFormatState(model, current, [id]).indent === 'none'
@@ -278,9 +248,6 @@ export function documentFormatToolbar(
     onToggleStrikethrough: () => {
       toggle({ strikethrough: !controls.strikethrough })
     },
-    // Highlight has many values but one control: it applies a default and the
-    // second click releases it. A stored highlight colour reads pressed, so the
-    // release is reachable without a colour picker.
     onToggleHighlight: () => {
       toggle({
         highlight: highlightPressed(controls.highlight) ? 'none' : 'yellow',
@@ -307,9 +274,6 @@ export function documentFormatToolbar(
     onColour: (colour: string | null) => {
       toggle({ colour })
     },
-    // Clear formatting releases every direct character property at once, so
-    // the run inherits its style again. It is the same set_run_emphasis
-    // mechanism, with each property null rather than a new operation.
     onClearFormatting: () => {
       toggle({
         bold: null,
