@@ -529,6 +529,30 @@ describe('verification run persistence', () => {
       ).status,
     ).toBe(404)
 
+    // A decision recorded under an account that is not in this organisation
+    // resolves to no name: the resolver is scoped to the tenant, so a stale id
+    // can never surface somebody else's colleague.
+    await pool.query(
+      `insert into verification_finding_dismissals (
+         run_id, finding_id, organisation_id, reason, dismissed_by, dismissed_at
+       ) values ($1, $2, $3, null, $4, now())`,
+      [runId, review.id, seed.orgA, seed.userB],
+    )
+    expect(
+      verificationFindingsResponseSchema
+        .parse(
+          await (
+            await userA.request(`/api/verification-runs/${runId}/findings`)
+          ).json(),
+        )
+        .findings.find((finding) => finding.id === review.id)?.dismissal
+        ?.dismissedByName,
+    ).toBeNull()
+    await pool.query(
+      'delete from verification_finding_dismissals where run_id = $1 and finding_id = $2',
+      [runId, review.id],
+    )
+
     // A check that found nothing has no decision for a person to record.
     const clearDismissal = await userA.request(
       `/api/verification-runs/${runId}/findings/${encodeURIComponent(clear.id)}/dismiss`,

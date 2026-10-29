@@ -269,8 +269,8 @@ export function VerifyDocument({
                   aria-expanded={matchesShown}
                   onClick={() => setMatchesShown((shown) => !shown)}
                 >
-                  {`${String(matchCount)} ${matchCount === 1 ? 'matches' : 'match'} the checked source`}
-                  <span aria-hidden="true">·</span>
+                  {`${String(matchCount)} ${matchCount === 1 ? 'matches' : 'match'} the checked source`}{' '}
+                  <span aria-hidden="true">·</span>{' '}
                   {matchesShown ? 'Hide' : 'Show'}
                 </Button>
               </div>
