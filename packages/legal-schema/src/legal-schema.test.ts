@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  CaseLawJudgeSchema,
+  CaseLawSummarySchema,
   LegalAuthoritySchema,
   LegalAuthoritySummarySchema,
   LegalParagraphSchema,
@@ -104,5 +106,50 @@ describe('Legal authority schemas', () => {
       'international_instrument',
     )
     expect(() => LegalSourceTypeSchema.parse('legislation')).toThrow()
+  })
+})
+
+describe('Case law metadata provenance', () => {
+  it('tells a field read from Find Case Law metadata apart from a derived one', () => {
+    expect(
+      CaseLawJudgeSchema.parse({
+        name: 'Lord Reed',
+        source: 'fcl_metadata',
+        field: 'judge',
+      }).source,
+    ).toBe('fcl_metadata')
+    expect(
+      CaseLawJudgeSchema.parse({
+        name: 'Lord Reed',
+        source: 'extracted',
+        field: 'judge',
+      }).source,
+    ).toBe('extracted')
+    expect(() =>
+      CaseLawJudgeSchema.parse({
+        name: 'Lord Reed',
+        source: 'inferred',
+        field: 'judge',
+      }),
+    ).toThrow()
+  })
+
+  it('refuses a court summary with no quoted paragraph', () => {
+    expect(() =>
+      CaseLawSummarySchema.parse({
+        paragraphs: [],
+        source: 'fcl_metadata',
+        field: 'summary',
+        sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+      }),
+    ).toThrow()
+    expect(
+      CaseLawSummarySchema.parse({
+        paragraphs: ['The appeal is dismissed.'],
+        source: 'fcl_metadata',
+        field: 'summary',
+        sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+      }).paragraphs,
+    ).toEqual(['The appeal is dismissed.'])
   })
 })

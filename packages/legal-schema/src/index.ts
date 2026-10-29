@@ -46,16 +46,9 @@ export const LegalAuthoritySummarySchema = LegalAuthoritySchema.omit({
 })
 export type LegalAuthoritySummary = z.infer<typeof LegalAuthoritySummarySchema>
 
-/**
- * Where a value stored beside a judgment came from. `fcl_metadata` is a field
- * Find Case Law publishes as structured metadata; `extracted` is reserved for
- * a licensed extractor that derives it from the text, so a reader can always
- * tell which rows were read and which were derived.
- */
 export const CaseLawMetadataSourceSchema = z.enum(['fcl_metadata', 'extracted'])
 export type CaseLawMetadataSource = z.infer<typeof CaseLawMetadataSourceSchema>
 
-/** One member of the bench, with the field it was read from. */
 export const CaseLawJudgeSchema = z.object({
   name: z.string().trim().min(1),
   source: CaseLawMetadataSourceSchema,
@@ -63,10 +56,6 @@ export const CaseLawJudgeSchema = z.object({
 })
 export type CaseLawJudge = z.infer<typeof CaseLawJudgeSchema>
 
-/**
- * The court's own published summary, quoted whole, with the field it was read
- * from and the page it was quoted from.
- */
 export const CaseLawSummarySchema = z.object({
   paragraphs: z.array(z.string().trim().min(1)).min(1),
   source: CaseLawMetadataSourceSchema,

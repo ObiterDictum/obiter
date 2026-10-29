@@ -1,16 +1,3 @@
-/*
- * Assignment scanning shared by the Node services and the Vite config.
- *
- * Vite 8's loadEnv parses every env file with node:util.parseEnv, which
- * collapses a repeated key last-wins, and the services now parse the same file
- * with the same function. A repeated key is a mistake rather than a precedence
- * choice, and parseEnv gives no token list to detect one, so this module scans
- * assignments itself and both runtimes refuse a duplicate before either loader
- * runs.
- *
- * Keep this in step with packages/config/src/index.ts, which is the only
- * caller in the services.
- */
 import { existsSync, readFileSync } from 'node:fs'
 
 export function duplicateEnvKeyMessage(envFile, key) {
@@ -28,12 +15,6 @@ function findClosingQuote(text, from, quote) {
   return -1
 }
 
-/**
- * Return the key of every assignment in `source`, in file order, including a
- * key assigned more than once. A quoted value may span lines, so a `KEY=`
- * inside one is data rather than a second assignment; `export KEY=` is an
- * assignment as node:util.parseEnv reads it.
- */
 export function collectEnvKeys(source) {
   const text = source.replace(/\r\n?/g, '\n')
   const keys = []

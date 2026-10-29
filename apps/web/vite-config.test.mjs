@@ -3,34 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, test } from 'node:test'
 import { resolveConfig } from 'vite'
 
-/*
- * Integration regression for the dev server's API origin.
- *
- * The unit suite pins `resolveDevApiOrigin` in isolation. This suite drives the
- * real Vite configuration lifecycle, so it fails if the resolved origin stops
- * reaching either the `/api` proxy or the SSR `process.env.OBITER_API_ORIGIN`
- * define — the split that let a lane render against one backend and
- * authenticate against the shared one (P1.39).
- *
- * It also pins the two fail-closed paths the first review demonstrated:
- *
- * - shared-default eligibility is decided from the *effective* server port, so
- *   `vite dev --port 3098` on an unconfigured worktree is refused even though
- *   `OBITER_WEB_PORT` is absent; and
- * - a supplied but invalid or zero `OBITER_WEB_PORT` is refused instead of
- *   silently becoming the shared port 3000.
- *
- * No test contacts a server. Refusal is observed at config resolution, before
- * any listener or proxy target exists, and the only API origins named here are
- * synthetic loopback ports — never the real shared :8787.
- */
-
 const CONFIG_FILE = fileURLToPath(new URL('./vite.config.ts', import.meta.url))
 
-// The resolver reads the process environment before the worktree `.env`, and an
-// empty string is "configured but blank", which the resolver treats as absent.
-// That lets the suite neutralise any key a developer's checkout happens to set
-// so the assertions do not depend on the machine it runs on.
 const NEUTRALISED_KEYS = ['OBITER_API_ORIGIN', 'PORT', 'OBITER_WEB_PORT']
 const savedEnv = new Map()
 
@@ -51,8 +25,6 @@ afterEach(() => {
 
 async function resolveDevConfig({ env = {}, port } = {}) {
   setEnv(env)
-  // `logLevel: silent` keeps Vite from printing the expected config-load
-  // failures the refusal tests assert on.
   const inline = { configFile: CONFIG_FILE, logLevel: 'silent' }
   if (port !== undefined) inline.server = { port }
   return resolveConfig(inline, 'serve', 'development')
@@ -77,8 +49,6 @@ test('the proxy target and the SSR define carry the same origin', async () => {
 
   assert.equal(resolved.server.proxy['/api'].target, 'http://localhost:9891')
   assert.equal(definedOrigin(resolved), 'http://localhost:9891')
-  // `vite preview` copies `server.proxy` before `configResolved`; mutating it in
-  // place is what keeps the preview `/api` route on the same origin.
   assert.equal(
     resolved.preview.proxy?.['/api']?.target,
     'http://localhost:9891',
@@ -86,9 +56,6 @@ test('the proxy target and the SSR define carry the same origin', async () => {
 })
 
 test('refuses an unconfigured server moved off the shared port by --port', async () => {
-  // Vite merges `--port 3098` into the resolved server after the config
-  // function has run. The config function still sees an absent OBITER_WEB_PORT
-  // and its shared 3000 default, so only the effective port can catch this.
   await assert.rejects(
     resolveDevConfig({ port: 3098 }),
     /must not fall back to the shared dev API/,

@@ -1,23 +1,3 @@
-/*
- * Which servers the Playwright suite runs against, and proof that they belong
- * to this checkout.
- *
- * The suite starts or reuses a web server and an API. `reuseExistingServer`
- * means a lane that resolves the default ports silently reuses the shared dev
- * stack on 3000/8787 and measures another worktree's code while appearing to
- * test this branch - the failure `scripts/verify-provenance.sh` exists to
- * catch, but which the test run itself had no defence against.
- *
- * So: ports come from the process environment first and the worktree `.env`
- * second, through the same resolver and parser the API, ingestor and Vite use
- * (`@obiter/config/local-env`, which is bounded at the worktree root so one
- * lane can never inherit another's `.env`); a local run refuses the shared
- * ports outright; and before any browser starts we check that the servers
- * actually answer for this checkout.
- *
- * This is a `.mjs` so Node loads it directly in playwright.config.ts,
- * e2e/global-setup.ts and the node:test suite without a transform.
- */
 import { execFileSync } from 'node:child_process'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,22 +6,15 @@ import {
   resolveLocalEnvFile,
 } from '@obiter/config/local-env'
 
-/** The shared dev stack. `AGENTS.md` reserves these for `obiter-live`. */
 export const SHARED_WEB_PORT = 3000
 export const SHARED_API_PORT = 8787
 
-/** `apps/web` sits two levels below the worktree root that holds the `.env`. */
 export const WORKTREE_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '..',
   '..',
 )
 
-/**
- * Resolve the web and API endpoints for this run. The process environment wins
- * over the worktree `.env`, matching `read = process.env[key] ?? fileEnv[key]`
- * in apps/web/vite.config.ts so both halves configure the same port.
- */
 export function resolveLaneTargets({
   startDirectory = WORKTREE_ROOT,
   processEnv = process.env,
@@ -67,12 +40,6 @@ export function resolveLaneTargets({
   }
 }
 
-/**
- * Strict port parser shared by the Playwright target resolver and the Vite dev
- * config: an absent value takes the fallback, but a supplied value that is not
- * a decimal 1..65535 is refused rather than silently replaced. Vite's own dev
- * port must not fall back to the shared 3000 when a lane names a broken port.
- */
 export function readPort(raw, key, fallback) {
   if (raw === undefined || raw === null || raw === '') return fallback
   const value = String(raw)
@@ -86,12 +53,6 @@ export function readPort(raw, key, fallback) {
   return port
 }
 
-/**
- * Refuse the shared ports when the run may reuse an existing server. A lane
- * must target its own stack; the shared stack belongs to `obiter-live` and must
- * not be measured, restarted or even probed from here. CI starts its own
- * servers, where the defaults are the ephemeral runner's own ports.
- */
 export function assertLaneTargets(targets, { reuseExistingServer }) {
   if (!reuseExistingServer) return
 
@@ -112,15 +73,6 @@ export function assertLaneTargets(targets, { reuseExistingServer }) {
   )
 }
 
-/**
- * Prove, before a browser starts, that the servers the suite will talk to serve
- * this checkout. The web check reads the absolute filesystem paths Vite embeds
- * in a served module and requires them to live under `worktreeRoot`; the API
- * check compares the provenance `/api/health` reports in development.
- *
- * Every failure is fatal: a mismatch, an unreadable module or a missing
- * provenance block all mean the run cannot attribute what it is measuring.
- */
 export async function verifyServedCheckout(
   targets,
   { worktreeRoot = WORKTREE_ROOT, fetchImpl = fetch, headSha } = {},
@@ -140,9 +92,6 @@ export async function verifyServedCheckout(
   }
 
   const health = await servedApiHealth(targets.apiOrigin, fetchImpl)
-  // A body of any non-object shape — null included — has no provenance to
-  // compare; it lands on the same refusal as an absent block rather than
-  // crashing on `health.provenance`.
   const provenance =
     health !== null && typeof health === 'object' ? health.provenance : null
   if (!provenance || typeof provenance.checkoutRoot !== 'string') {
@@ -173,7 +122,6 @@ export async function verifyServedCheckout(
   return { webRoot, apiRoot: provenance.checkoutRoot, envFile: targets.envFile }
 }
 
-/** The commit the servers must be running, or null outside a checkout. */
 export function headSha(startDirectory = WORKTREE_ROOT) {
   try {
     return execFileSync('git', ['rev-parse', 'HEAD'], {
@@ -227,7 +175,6 @@ async function servedWebCheckout(webOrigin, fetchImpl) {
   return null
 }
 
-/** The longest common directory of the given absolute paths, or null. */
 export function commonDirectory(paths) {
   if (paths.length === 0) return null
 
