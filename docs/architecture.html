@@ -3082,6 +3082,18 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">GET /api/documents/citation-targets</td>
+                  <td class="id">documents.ts</td>
+                  <td>
+                    The documents &quot;Cite in document&quot; offers: this
+                    person&apos;s opened documents, newest first, each with its
+                    stored file type and whether they may
+                    <code>edit</code> the matter. A row is not an access grant —
+                    the same matter predicate gates the list, and a document
+                    they can no longer reach disappears from it.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">POST /api/documents/:id/opened</td>
                   <td class="id">documents.ts</td>
                   <td>
