@@ -348,9 +348,9 @@ function PublishedSummaryCard({
 }
 
 /** Exhaustive by type: a new published summary kind cannot ship unlabelled. */
-const publishedSummaryLabels: Record<CaseLawSummaryResponse['kind'], string> = {
+const publishedSummaryLabels = {
   press_summary: 'Press summary',
-}
+} satisfies Record<CaseLawSummaryResponse['kind'], string>
 
 function formatNeutralCitation(neutralCitation: string | null) {
   return neutralCitation ?? 'No neutral citation'
