@@ -191,6 +191,26 @@ it('denies document creation when a queued share revocation commits first', asyn
   }
 }, 30_000)
 
+it('creates uploaded versions without edit lineage', async () => {
+  const seed = await seedMatter(pool, 'edit')
+  try {
+    const created = await createDocument(pool, {
+      organisationId: seed.orgId,
+      matterId: seed.matterId,
+      userId: seed.ownerId,
+      filename: 'synthetic.txt',
+      fileType: 'text/plain',
+      sizeBytes: 1,
+      contentSha256: 'a'.repeat(64),
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.version.lineage).toBeNull()
+  } finally {
+    await cleanupMatter(pool, seed)
+  }
+})
+
 afterAll(async () => {
   await pool.end()
 })
