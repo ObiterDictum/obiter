@@ -114,6 +114,34 @@ function normalise(text: string) {
   return decodeHtml(text).replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Inline text, without the separator `collectText` puts between child
+ * elements. A press summary is styled with a `<span>` per phrase, so the
+ * block-level collector would render `(the “ CLRA ”)`; a `<br/>` is the one
+ * inline break that is a space.
+ */
+function collectInlineText(nodes: OrderedNode[]): string {
+  let text = ''
+
+  for (const node of nodes) {
+    for (const key of Object.keys(node)) {
+      if (key === attributeKey) continue
+      if (key === '#text') {
+        text += String(node[key] ?? '')
+        continue
+      }
+      if (key.startsWith('@')) continue
+      if (key === 'br') {
+        text += ' '
+        continue
+      }
+      text += collectInlineText(childrenOf(node, key))
+    }
+  }
+
+  return text
+}
+
 const skipNum: ReadonlySet<string> = new Set(['num'])
 const skipNothing: ReadonlySet<string> = new Set()
 
@@ -234,20 +262,22 @@ export interface LegalDocMlMetadata {
   neutralCitation: string | null
 }
 
+function parseOrdered(xml: string): OrderedNode[] | null {
+  try {
+    const result = parser.parse(xml)
+    return Array.isArray(result) ? result : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Metadata the judgment states about itself. The Atom entry already carries
  * these, so this exists to fill gaps rather than to override the feed.
  */
 export function extractLegalDocMlMetadata(xml: string): LegalDocMlMetadata {
-  let parsed: OrderedNode[]
-  try {
-    const result = parser.parse(xml)
-    if (!Array.isArray(result))
-      return { title: null, dateDecided: null, neutralCitation: null }
-    parsed = result
-  } catch {
-    return { title: null, dateDecided: null, neutralCitation: null }
-  }
+  const parsed = parseOrdered(xml)
+  if (!parsed) return { title: null, dateDecided: null, neutralCitation: null }
 
   const work = findFirst(parsed, 'FRBRWork')
   const attributesOf = (nodes: OrderedNode[] | null, tag: string) => {
@@ -267,5 +297,89 @@ export function extractLegalDocMlMetadata(xml: string): LegalDocMlMetadata {
     neutralCitation: citationNodes
       ? normalise(collectText(citationNodes, skipNothing)) || null
       : null,
+  }
+}
+
+/**
+ * The bench, from the `<judge>` elements The National Archives marks up in the
+ * header. Nothing here reads the cover page prose that names the same people:
+ * the Open Justice Licence does not cover computational analysis of the text,
+ * and a judgment whose bench is only in prose has no `<judge>` element, so it
+ * yields nothing rather than a name scraped from a paragraph.
+ */
+export function extractLegalDocMlJudges(xml: string): string[] {
+  const parsed = parseOrdered(xml)
+  if (!parsed) return []
+  const header = findFirst(parsed, 'header')
+  if (!header) return []
+
+  const names: string[] = []
+  const visit = (nodes: OrderedNode[]) => {
+    for (const node of nodes) {
+      for (const key of Object.keys(node)) {
+        if (key === attributeKey || key === '#text' || key.startsWith('@'))
+          continue
+        const children = childrenOf(node, key)
+        if (key === 'judge') {
+          const name = normalise(collectInlineText(children))
+          if (name && !names.includes(name)) names.push(name)
+          continue
+        }
+        visit(children)
+      }
+    }
+  }
+  visit(header)
+
+  return names
+}
+
+export interface LegalDocMlPressSummary {
+  /** The judgment this summary is published for, as `<uk:summaryOf>` states. */
+  summaryOf: string | null
+  paragraphs: string[]
+}
+
+/**
+ * Find Case Law publishes a court's press summary as its own LegalDocML
+ * document (`<doc name="pressSummary">`), with `<uk:summaryOf>` naming the
+ * judgment it belongs to. The paragraphs are the published summary, quoted
+ * whole: this is not a headnote derived from the judgment.
+ */
+export function extractLegalDocMlPressSummary(
+  xml: string,
+): LegalDocMlPressSummary | null {
+  const parsed = parseOrdered(xml)
+  if (!parsed) return null
+  const body = findFirst(parsed, 'mainBody')
+  if (!body) return null
+
+  const paragraphs: string[] = []
+  const visit = (nodes: OrderedNode[]) => {
+    for (const node of nodes) {
+      for (const key of Object.keys(node)) {
+        if (key === attributeKey || key === '#text' || key.startsWith('@'))
+          continue
+        const children = childrenOf(node, key)
+        if (key === 'p') {
+          const text = normalise(collectInlineText(children))
+          if (text) paragraphs.push(text)
+          continue
+        }
+        visit(children)
+      }
+    }
+  }
+  visit(body)
+
+  if (paragraphs.length === 0) return null
+
+  const summaryOfNodes = findFirst(parsed, 'summaryOf')
+
+  return {
+    summaryOf: summaryOfNodes
+      ? normalise(collectText(summaryOfNodes, skipNothing)) || null
+      : null,
+    paragraphs,
   }
 }

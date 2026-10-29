@@ -109,6 +109,16 @@ export type ProviderDocumentResult =
 export type LegalDocMlFallbackReason =
   'no_xml_uri' | 'xml_unavailable' | 'xml_unparsable' | 'xml_off_origin'
 
+/**
+ * The one way this package fetches an upstream URL: same-origin, redirects not
+ * followed. Narrower than `typeof fetch` so a caller can pass a paced wrapper
+ * without reproducing runtime-specific members of the global.
+ */
+export type ProviderFetch = (
+  url: URL,
+  init: { redirect: 'manual' },
+) => Promise<Response>
+
 export interface DetailFetchOptions {
   /**
    * Read the judgment from LegalDocML `data.xml` instead of the HTML page.
@@ -123,7 +133,7 @@ export interface DetailFetchOptions {
    * HTTP implementation. Defaults to the global fetch; bulk ingestion passes
    * its own so the whole ingest walk, body included, runs against one seam.
    */
-  fetchImpl?: typeof fetch
+  fetchImpl?: ProviderFetch
 }
 
 /**
@@ -263,7 +273,7 @@ async function fetchLegalDocMlParagraphs(
   env: FindCaseLawEnv,
   entry: AtomEntry,
   documentId: string,
-  fetchImpl: typeof fetch,
+  fetchImpl: ProviderFetch,
   budget: MojRequestBudget,
 ): Promise<
   | { status: 'ok'; paragraphs: LegalParagraph[] }
