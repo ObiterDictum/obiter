@@ -138,6 +138,25 @@ describe('createApiApp', () => {
     })
   })
 
+  it('keeps health available when git metadata is absent', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'obiter-health-'))
+    const previousDirectory = process.cwd()
+    try {
+      process.chdir(directory)
+      const response = await createApiApp(
+        { ...testEnv, nodeEnv: 'development' },
+        createPool(async () => ({ rows: [] })),
+        { auth: authWithRole('member') },
+      ).request('/api/health')
+
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({ status: 'ok' })
+    } finally {
+      process.chdir(previousDirectory)
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('reports a missing session organisation as an integrity error', async () => {
     const response = await createApiApp(
       testEnv,
