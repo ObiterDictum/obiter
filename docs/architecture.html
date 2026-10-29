@@ -7058,13 +7058,16 @@
                   >Unsaved document drafts are browser state with a boundary.</b
                 >
                 The DOCX workspace persists unsaved edits to
-                <code>localStorage</code> so a reload cannot destroy them. The
-                payload is a versioned schema, keyed by schema version,
-                organisation, user, document and tab, validated on every read,
-                held against a recorded <code>baseVersionId</code> and cleared
-                on successful save, explicit discard and sign-out. Matter text
-                in it is never logged, and a payload that fails validation or
-                names another scope is dropped rather than applied. See
+                <code>localStorage</code> so a reload cannot destroy them. If
+                draft storage fails, unsaved work blocks browser unload and
+                requires confirmation before route navigation; saving removes
+                that guard. The payload is a versioned schema, keyed by schema
+                version, organisation, user, document and tab, validated on
+                every read, held against a recorded
+                <code>baseVersionId</code> and cleared on successful save,
+                explicit discard and sign-out. Matter text in it is never
+                logged, and a payload that fails validation or names another
+                scope is dropped rather than applied. See
                 <code>document-draft-store.ts</code> and
                 <code>document-save-plan.ts</code>. A successful save is also
                 the undo/redo baseline:
