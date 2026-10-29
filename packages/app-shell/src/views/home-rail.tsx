@@ -3,6 +3,8 @@ import { ArrowRight, FileText } from '@phosphor-icons/react'
 import { Card, CardBody, CardHead, Skeleton } from '@obiter/ui'
 import { formatDate } from '../format'
 import { matterInitials } from '../matters'
+import type { VersionRedaction } from '../documents'
+import { RedactedMark } from '../redacted-mark'
 
 export interface RecentDocument {
   documentId: string
@@ -10,6 +12,10 @@ export interface RecentDocument {
   matterName: string
   filename: string
   updatedAt: string
+  /** The Redact run that produced the version, when Redact made it. */
+  redaction: VersionRedaction | null
+  /** When that version was created: the moment Redact produced the copy. */
+  versionCreatedAt: string
 }
 
 export interface MatterSummary {
@@ -48,41 +54,50 @@ export function RecentDocumentsCard({
               key={document.documentId}
               className="[&+li]:border-t [&+li]:border-line"
             >
-              <Link
-                to="/matters/$matterId/documents/$documentId"
-                params={{
-                  matterId: document.matterId,
-                  documentId: document.documentId,
-                }}
-                className="flex min-h-row items-center gap-3 px-6 py-4 hover:bg-hover"
-              >
-                <span
-                  className="grid size-7 shrink-0 place-items-center rounded-sm bg-fill text-subtle"
-                  aria-hidden="true"
+              {/* The mark links to the run, so it sits beside the row's own
+                  link rather than inside it: an anchor inside an anchor is not
+                  a control a browser can follow. */}
+              <div className="flex min-h-row items-center gap-3 px-6 py-4 hover:bg-hover">
+                <Link
+                  to="/matters/$matterId/documents/$documentId"
+                  params={{
+                    matterId: document.matterId,
+                    documentId: document.documentId,
+                  }}
+                  className="flex min-w-0 flex-1 items-center gap-3"
                 >
-                  <FileText size={16} />
-                </span>
-                <span className="min-w-0 flex-1">
                   <span
-                    className="block truncate text-item text-ink"
-                    title={document.filename}
+                    className="grid size-7 shrink-0 place-items-center rounded-sm bg-fill text-subtle"
+                    aria-hidden="true"
                   >
-                    {document.filename}
+                    <FileText size={16} />
                   </span>
-                  {/* One line, as the mock-up has it: a wrapped matter name
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className="block truncate text-item text-ink"
+                      title={document.filename}
+                    >
+                      {document.filename}
+                    </span>
+                    {/* One line, as the mock-up has it: a wrapped matter name
                       made every row two lines taller and pushed the date out of
                       sight. The full name stays available as a tooltip. */}
-                  <span
-                    className="mt-1 block truncate text-meta text-muted"
-                    title={document.matterName}
-                  >
-                    {document.matterName}
+                    <span
+                      className="mt-1 block truncate text-meta text-muted"
+                      title={document.matterName}
+                    >
+                      {document.matterName}
+                    </span>
+                    <span className="mt-1 block text-caption text-subtle">
+                      {formatDate(document.updatedAt)}
+                    </span>
                   </span>
-                  <span className="mt-1 block text-caption text-subtle">
-                    {formatDate(document.updatedAt)}
-                  </span>
-                </span>
-              </Link>
+                </Link>
+                <RedactedMark
+                  redaction={document.redaction}
+                  producedAt={document.versionCreatedAt}
+                />
+              </div>
             </li>
           ))}
         </ul>

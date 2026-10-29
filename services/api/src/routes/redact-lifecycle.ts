@@ -10,6 +10,10 @@ import { saveRedactionOutputToMatter } from '../redaction-save-to-matter'
 import { requireManageRole } from '../authz'
 import { buildAuditReport } from '../redaction-audit-report'
 import {
+  shareableAuditBytes,
+  shareableAuditFilename,
+} from '../redaction-audit-shareable'
+import {
   renderScheduleDocx,
   renderSchedulePdf,
   scheduleExportFilename,
@@ -308,6 +312,18 @@ export function createRedactLifecycleRoutes(
     const report = buildAuditReport(run, await listRedactionAuditLog(pool, run))
     const format = c.req.query('format') ?? 'json'
     if (format === 'json') return c.json(report)
+    if (format === 'json-shareable') {
+      const bytes = await shareableAuditBytes(pool, storage, run, user, report)
+      return c.body(Uint8Array.from(bytes), 200, {
+        'content-type': 'application/json',
+        'content-disposition': downloadContentDisposition(
+          safeDownloadFilename(shareableAuditFilename(), {
+            fallback: 'redaction-audit',
+            extension: '.json',
+          }),
+        ),
+      })
+    }
     if (format === 'pdf' || format === 'docx') {
       const bytes =
         format === 'pdf'
@@ -329,7 +345,7 @@ export function createRedactLifecycleRoutes(
     return errorResponse(
       c,
       'validation_failed',
-      'Schedule format must be json, pdf, or docx.',
+      'Schedule format must be json, json-shareable, pdf, or docx.',
       400,
     )
   })

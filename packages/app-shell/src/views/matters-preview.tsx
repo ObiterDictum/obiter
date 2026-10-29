@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { buttonClassName } from '@obiter/ui'
 import type { MatterDocumentRecord } from '../documents'
 import { formatDate } from '../format'
+import { RedactedMark } from '../redacted-mark'
 import { DocumentIcon } from './matter-documents-table'
 import type { MatterRow } from './matters-rows'
 import { MatterTile } from './matters-table'
@@ -63,24 +64,36 @@ export function MatterPreview({
           files.map((document) => {
             const version = document.currentVersion
             return (
-              <Link
+              // The mark links to the run, so it sits beside the row's link
+              // rather than inside it.
+              <div
                 key={document.id}
-                to="/matters/$matterId/documents/$documentId"
-                params={{ matterId: matter.id, documentId: document.id }}
                 className="flex min-w-0 items-center gap-3 py-2"
               >
-                <DocumentIcon />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-meta break-words text-ink">
-                    {version?.filename ?? document.logicalKey}
+                <Link
+                  to="/matters/$matterId/documents/$documentId"
+                  params={{ matterId: matter.id, documentId: document.id }}
+                  className="flex min-w-0 flex-1 items-center gap-3"
+                >
+                  <DocumentIcon />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-meta break-words text-ink">
+                      {version?.filename ?? document.logicalKey}
+                    </span>
+                    <span className="mt-1 block text-caption text-subtle">
+                      {version
+                        ? `Version ${version.versionNumber} · ${formatDate(version.createdAt)}`
+                        : 'No version'}
+                    </span>
                   </span>
-                  <span className="mt-1 block text-caption text-subtle">
-                    {version
-                      ? `Version ${version.versionNumber} · ${formatDate(version.createdAt)}`
-                      : 'No version'}
-                  </span>
-                </span>
-              </Link>
+                </Link>
+                {version ? (
+                  <RedactedMark
+                    redaction={version.redaction}
+                    producedAt={version.createdAt}
+                  />
+                ) : null}
+              </div>
             )
           })
         )}

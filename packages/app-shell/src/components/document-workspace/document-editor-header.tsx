@@ -15,6 +15,7 @@ import {
   VerifyRunReason,
 } from './document-verify-chip'
 import { useOffline } from '../../shell-states'
+import { RedactedMark } from '../../redacted-mark'
 import type { DocumentSave, SaveState } from './use-document-save'
 import { FloppyDisk } from '@phosphor-icons/react'
 
@@ -92,6 +93,7 @@ function DocumentEditorHeader({
   onToggleTrackChanges,
   verify,
   saveButton,
+  mark,
   infoOpen,
   onToggleInfo,
   back,
@@ -107,6 +109,8 @@ function DocumentEditorHeader({
   onToggleTrackChanges?: () => void
   verify?: ReactNode
   saveButton?: ReactNode
+  /** Redact's mark for the version on screen; nothing for an ordinary one. */
+  mark?: ReactNode
   infoOpen?: boolean
   /** Absent where the route did not load the document detail to show. */
   onToggleInfo?: () => void
@@ -122,9 +126,12 @@ function DocumentEditorHeader({
     <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b border-line px-12 py-2 max-compact:px-8">
       {back}
       <div className="flex min-w-0 flex-1 flex-col">
-        <h1 className="truncate text-item text-ink" title={filename}>
-          {filename}
-        </h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="truncate text-item text-ink" title={filename}>
+            {filename}
+          </h1>
+          {mark}
+        </div>
         <div className="flex min-w-0 items-center gap-2 text-caption text-subtle">
           <span
             className="inline-flex items-center gap-1.5 whitespace-nowrap"
@@ -252,10 +259,21 @@ export function DocxEditorHeader({
 }) {
   const offline = useOffline()
   const versionLabel = `version ${String(versionNumber ?? 1)}`
+  const current = versions.find(
+    (version) => version.versionNumber === versionNumber,
+  )
   return (
     <DocumentEditorHeader
       filename={filename}
       versionLabel={versionLabel}
+      mark={
+        current?.redaction ? (
+          <RedactedMark
+            redaction={current.redaction}
+            producedAt={current.createdAt}
+          />
+        ) : null
+      }
       save={{
         state: save.saveState,
         versionLabel,

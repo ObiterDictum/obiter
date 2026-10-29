@@ -21,6 +21,7 @@ import {
   useDocumentText,
 } from '../../document-workspace-api'
 import type { DocumentVersionRecord } from '../../documents'
+import { RedactedMark } from '../../redacted-mark'
 import { DocumentDesk, DocumentPage } from './document-page'
 import { DocumentModelPage } from './model-view'
 import { DocumentPdfPages } from './pdf-view'
@@ -67,6 +68,10 @@ export function DocumentVersionView({
         <span className="truncate text-sm font-medium text-ink">
           {version.filename}
         </span>
+        <RedactedMark
+          redaction={version.redaction}
+          producedAt={version.createdAt}
+        />
         <span className="text-xs text-muted">Read only</span>
         <span className="flex-1" />
         {kind !== 'other' ? (
