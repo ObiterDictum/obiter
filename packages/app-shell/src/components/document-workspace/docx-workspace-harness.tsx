@@ -9,6 +9,7 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { ApiError } from '../../api'
+import { requestCitation } from '../../pending-citation'
 
 const hooks = vi.hoisted(() => ({
   useDocumentModel: vi.fn(),
@@ -312,6 +313,8 @@ export function mountWorkspace(
     reopenComment?: ReturnType<typeof vi.fn>
     /** Overrides the signed-in user's id and organisation role. */
     user?: { id?: string; role?: 'owner' | 'admin' | 'member' }
+    /** Leaves a citation for this document, as a source page does. */
+    pendingCitation?: string
   } = {},
 ) {
   hooks.useCurrentUser.mockReturnValue({
@@ -393,6 +396,9 @@ export function mountWorkspace(
     }),
   )
 
+  if (options.pendingCitation !== undefined) {
+    requestCitation(options.documentId ?? 'doc_1', options.pendingCitation)
+  }
   return render(
     <DocxWorkspace
       documentId={options.documentId ?? 'doc_1'}

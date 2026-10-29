@@ -162,14 +162,13 @@ test('a footnote typed into its opened story survives save, reload and export', 
   await page
     .getByRole('menuitemcheckbox', { name: 'Footnote', exact: true })
     .click()
-  await expect(
-    page.getByRole('menuitemcheckbox', { name: 'Close footnotes' }),
-  ).toBeVisible()
-  // A menu row returns focus to its trigger when the menu closes; the note
-  // body is opened and empty, and clicking it lands the caret there.
+  // The menu closes on the row and the caret goes to the note body, which is
+  // opened and empty but for the mark: typing goes straight into the note
+  // rather than onto the menu trigger the row came from.
+  await expect(page.getByRole('menu')).toHaveCount(0)
   await expect(editor(page)).toBeVisible()
   await expect(editor(page)).toHaveValue('')
-  await editor(page).click()
+  await expect(editor(page)).toBeFocused()
   await shot(page, '01-note-story-open')
 
   await page.keyboard.type(MARKER)

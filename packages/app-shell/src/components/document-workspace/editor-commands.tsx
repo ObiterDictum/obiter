@@ -57,7 +57,9 @@ export type EditorChromeProps = InsertRibbonProps & {
   onToggleChanges: () => void
   onToggleAuthorities: () => void
   onToggleInfo?: () => void
-  onInsertAuthority: () => void
+  onInsertAuthorityText: (citation: string) => void
+  /** Whether a citation has somewhere to go: a caret or a first paragraph. */
+  canInsertAuthority: boolean
   citationStyle: CitationStyle
   onCitationStyle?: (style: CitationStyle) => void
   legalChecks?: {
@@ -105,6 +107,7 @@ export type EditorChromeActions = {
   openTable: () => void
   openLink: () => void
   openCrossReference: () => void
+  openAuthority: () => void
   closeStory: () => void
 }
 
@@ -358,7 +361,6 @@ export function editorMenus(
           commands: [
             {
               id: 'footnote',
-              stayOpen: true,
               label: story === 'footnotes' ? 'Close footnotes' : 'Footnote',
               pressed: story === 'footnotes',
               disabled:
@@ -366,6 +368,9 @@ export function editorMenus(
                 (story !== 'footnotes' &&
                   Boolean(structure.footnoteUnavailable)),
               disabledReason: structure?.footnoteUnavailable,
+              // Not `stayOpen`: opening or closing the notes pane is a move to
+              // the notes, so the menu closes and the caret goes there — the
+              // toggle is not one a reader repeats from the same menu.
               run: () => {
                 if (story === 'footnotes') actions.closeStory()
                 else structure?.onInsertFootnote()
@@ -431,7 +436,7 @@ export function editorMenus(
               stayOpen: true,
               opensSurface: true,
               label: 'Insert authority',
-              run: props.onInsertAuthority,
+              run: actions.openAuthority,
             },
             {
               id: 'table-of-authorities',

@@ -471,6 +471,42 @@ describe('finalised output variants', () => {
     expect(screen.getByText('Pseudonymised editable copy')).toBeTruthy()
     expect(screen.getByText(/It is not a disclosure-safe copy/u)).toBeTruthy()
   })
+
+  it('labels a pseudonymised text output as text, not as a Word document', () => {
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: {
+        ...baseRun,
+        summary: summary({
+          outputMode: 'pseudonymised',
+          outputMimeType: 'text/plain',
+          outputFilename: 'brief-pseudonymised.txt',
+          securePdf: false,
+        }),
+      },
+    })
+    hooks.useRedactionOutput.mockReturnValue({
+      isPending: false,
+      data: {
+        mimeType: 'text/plain',
+        filename: 'brief-pseudonymised.txt',
+        text: 'PERSON_1 shall pay PERSON_2.',
+        outputId: 'out_1',
+        sha256: null,
+        securePdf: false,
+      },
+    })
+    hooks.useRedactionOutputFile.mockReturnValue({
+      isPending: false,
+      data: undefined,
+      error: null,
+    })
+
+    renderView()
+    expect(screen.getByText('Pseudonymised copy')).toBeTruthy()
+    expect(screen.getByText('Plain text (.txt)')).toBeTruthy()
+    expect(screen.queryByText(/Word document/u)).toBeNull()
+  })
 })
 
 describe('redaction schedule', () => {

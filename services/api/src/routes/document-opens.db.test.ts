@@ -131,4 +131,68 @@ describe('document opens', () => {
       await cleanupMatter(pool, seed)
     }
   })
+
+  it('offers an opened document to Cite in document with its edit permission', async () => {
+    const seed = await seedMatter(pool, 'edit')
+    try {
+      const app = documentsApp(editorUser(seed))
+      await app.request(`/api/documents/${seed.documentId}/opened`, {
+        method: 'POST',
+      })
+
+      const response = await app.request('/api/documents/citation-targets')
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as {
+        documents: Array<Record<string, unknown>>
+      }
+      expect(body.documents).toHaveLength(1)
+      expect(body.documents[0]).toMatchObject({
+        documentId: seed.documentId,
+        matterId: seed.matterId,
+        filename: 'synthetic.docx',
+        fileType: 'docx',
+        canEdit: true,
+      })
+    } finally {
+      await cleanupMatter(pool, seed)
+    }
+  })
+
+  it('marks a view-only share as not editable rather than hiding it', async () => {
+    const seed = await seedMatter(pool, 'view')
+    try {
+      const app = documentsApp(editorUser(seed))
+      await app.request(`/api/documents/${seed.documentId}/opened`, {
+        method: 'POST',
+      })
+
+      const body = (await (
+        await app.request('/api/documents/citation-targets')
+      ).json()) as { documents: Array<Record<string, unknown>> }
+      expect(body.documents).toHaveLength(1)
+      expect(body.documents[0]).toMatchObject({ canEdit: false })
+    } finally {
+      await cleanupMatter(pool, seed)
+    }
+  })
+
+  it('stops offering a document once the person loses access to it', async () => {
+    const seed = await seedMatter(pool, 'edit')
+    try {
+      const app = documentsApp(editorUser(seed))
+      await app.request(`/api/documents/${seed.documentId}/opened`, {
+        method: 'POST',
+      })
+      await pool.query(`delete from matter_shares where id = $1`, [
+        seed.shareId,
+      ])
+
+      const afterRevocation = (await (
+        await app.request('/api/documents/citation-targets')
+      ).json()) as { documents: Array<Record<string, unknown>> }
+      expect(afterRevocation.documents).toEqual([])
+    } finally {
+      await cleanupMatter(pool, seed)
+    }
+  })
 })

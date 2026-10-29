@@ -40,6 +40,9 @@ mock.module('@tanstack/react-router', () =>
           {children}
         </a>
       ),
+      // "Cite in document" navigates; the source page never reads the
+      // router's location.
+      useNavigate: () => () => undefined,
     }))(),
   ),
 )
@@ -89,6 +92,9 @@ function mockFetch(): ReturnType<typeof vi.fn> {
       url.includes(`/api/search/documents/${encodeURIComponent('uksc-2024-3')}`)
     ) {
       return jsonResponse(DOCUMENT_PAYLOAD)
+    }
+    if (url.includes('/api/documents/citation-targets')) {
+      return jsonResponse({ documents: [] })
     }
     return jsonResponse({})
   })

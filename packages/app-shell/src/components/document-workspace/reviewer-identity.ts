@@ -1,4 +1,5 @@
 import { initialsOf } from '../../format'
+import { PAPER_REVIEWER_MARKS } from './tracked-marks'
 
 /**
  * Who made a tracked change, as something a reader can see: a stable hue from
@@ -7,18 +8,44 @@ import { initialsOf } from '../../format'
  * follow one reviewer through a long document at a glance.
  */
 const CLASSES = [
-  { text: 'text-reviewer-1', surface: 'bg-reviewer-1-surface' },
-  { text: 'text-reviewer-2', surface: 'bg-reviewer-2-surface' },
-  { text: 'text-reviewer-3', surface: 'bg-reviewer-3-surface' },
-  { text: 'text-reviewer-4', surface: 'bg-reviewer-4-surface' },
-  { text: 'text-reviewer-5', surface: 'bg-reviewer-5-surface' },
-  { text: 'text-reviewer-6', surface: 'bg-reviewer-6-surface' },
+  {
+    text: 'text-reviewer-1',
+    surface: 'bg-reviewer-1-surface',
+    paperText: PAPER_REVIEWER_MARKS[0],
+  },
+  {
+    text: 'text-reviewer-2',
+    surface: 'bg-reviewer-2-surface',
+    paperText: PAPER_REVIEWER_MARKS[1],
+  },
+  {
+    text: 'text-reviewer-3',
+    surface: 'bg-reviewer-3-surface',
+    paperText: PAPER_REVIEWER_MARKS[2],
+  },
+  {
+    text: 'text-reviewer-4',
+    surface: 'bg-reviewer-4-surface',
+    paperText: PAPER_REVIEWER_MARKS[3],
+  },
+  {
+    text: 'text-reviewer-5',
+    surface: 'bg-reviewer-5-surface',
+    paperText: PAPER_REVIEWER_MARKS[4],
+  },
+  {
+    text: 'text-reviewer-6',
+    surface: 'bg-reviewer-6-surface',
+    paperText: PAPER_REVIEWER_MARKS[5],
+  },
 ] as const
 
 /** The class names carry the hue; they must stay literal for Tailwind. */
 export type ReviewerStyle = {
   text: string
   surface: string
+  /** The same hue, held dark enough for the fixed white sheet in both themes. */
+  paperText: string
   initials: string
   /** Index 1-6, for a `data-reviewer` attribute in tests and styling. */
   slot: number
@@ -45,6 +72,7 @@ export function reviewerStyle(author: string | undefined): ReviewerStyle {
   return {
     text: classes.text,
     surface: classes.surface,
+    paperText: classes.paperText,
     initials: reviewerInitials(author),
     slot,
   }

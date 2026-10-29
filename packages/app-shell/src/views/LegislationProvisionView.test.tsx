@@ -32,6 +32,9 @@ mock.module('@tanstack/react-router', () =>
           {children}
         </a>
       ),
+      // "Cite in document" navigates; the source page never reads the
+      // router's location.
+      useNavigate: () => () => undefined,
     }))(),
   ),
 )
