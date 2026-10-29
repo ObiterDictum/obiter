@@ -5,20 +5,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openRibbonTab } from './editor-chrome'
 
-/*
- * E6b browser journey: the Insert ribbon's Link and Cross-reference controls
- * must paint their pending drafts — a styled range and a zero-width marker —
- * without touching the editable text, then write a real `w:hyperlink` and a
- * real `REF` field on save so a fresh context reads the stored document back.
- * Only a real browser decides the overlay alignment, the chooser, and the
- * re-parse; the mounted suites cover the drafts, the save plan and the
- * writer round-trip.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; verification is marked directly in the task-owned test database,
- * never the shared one. The fixture is the repo's synthetic demo document.
- */
-
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
   HERE,
@@ -57,10 +43,6 @@ async function focusHeading(page: Page) {
       .then(() => true)
       .catch(() => false)
     if (focused) {
-      // A centre-click can land the caret at the paragraph end, from where a
-      // shift-extended selection crosses into the next paragraph and the
-      // Link control correctly refuses it. Pin the caret to the paragraph
-      // start so the selection stays inside one paragraph.
       await page.keyboard.press('Home')
       return
     }
@@ -98,8 +80,6 @@ test('hyperlink and cross-reference paint, save and reload', async ({
     }
   })
 
-  // A selection inside one paragraph takes the pending hyperlink, painted as
-  // a styled range carrying its target.
   await focusHeading(page)
   for (let index = 0; index < 6; index += 1) {
     await page.keyboard.press('Shift+ArrowRight')
@@ -111,10 +91,6 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   await expect(linkedText(page)).toBeVisible()
   await shot(page, '01-pending-link')
 
-  // A collapsed caret takes the pending cross-reference as a zero-width chip
-  // labelled with the target's text — no result text enters the stream. The
-  // caret sits in a different paragraph so the reload can tell the stored
-  // field result apart from the heading itself.
   await page.keyboard.press('Escape')
   const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
   await caretParagraph.click()
@@ -130,9 +106,6 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   await expect(fieldMarkers(page)).toHaveCount(1)
   await shot(page, '02-pending-reference')
 
-  // Undo reverts each pending draft snapshot-first, so both overlays clear.
-  // Undo and Redo live on the Home tab; the draft insertions above leave the
-  // Insert tab active, where no Undo control exists.
   await openRibbon(page, 'Home')
   await undo(page).click()
   await expect(fieldMarkers(page)).toHaveCount(0)
@@ -154,8 +127,6 @@ test('hyperlink and cross-reference paint, save and reload', async ({
     expect.objectContaining({ type: 'insert_cross_reference' }),
   )
 
-  // A fresh context reads the stored document back: the field's result is
-  // real text now — the heading's words appear where the marker stood.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
@@ -164,8 +135,6 @@ test('hyperlink and cross-reference paint, save and reload', async ({
       HEADING,
       { timeout: 30_000 },
     )
-    // The stored w:hyperlink reads back: the linked range repaints with its
-    // target rather than falling back to plain text.
     await expect(linkedText(reloaded)).toContainText('IN THE')
     await shot(reloaded, '05-reloaded')
   } finally {

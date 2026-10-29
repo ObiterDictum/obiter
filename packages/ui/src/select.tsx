@@ -10,7 +10,6 @@ export interface SelectOption {
 
 export interface SelectProps {
   options: SelectOption[]
-  /** The control's name when no visible label is shown beside it. */
   ariaLabel?: string
   value?: string
   defaultValue?: string
@@ -20,7 +19,6 @@ export interface SelectProps {
   invalid?: boolean
   name?: string
   disabled?: boolean
-  /** `compact` is the toolbar measure: one short row beside icon buttons. */
   size?: 'default' | 'compact'
   className?: string
 }
@@ -29,10 +27,6 @@ function optionLabel(options: SelectOption[], value: string) {
   return options.find((option) => option.value === value)?.label ?? value
 }
 
-/**
- * Select — a labeled dropdown built on Base UI Select (keyboard, focus,
- * positioning). Single-value; value is string.
- */
 export function Select({
   options,
   ariaLabel,

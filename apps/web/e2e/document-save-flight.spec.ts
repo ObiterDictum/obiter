@@ -17,20 +17,6 @@ import {
   runMenuCommand,
 } from './editor-chrome'
 
-/*
- * Save-flight regression journey: a keystroke typed while a save is landing
- * used to be silently dropped. The saved model reloads with canonical
- * paragraph ids, so the focused editor's subtree remounts; while the caret
- * retarget and refocus waited on passive effects, keys delivered in that
- * window fell through to `document.body` and never reached the draft state.
- * The stored version then held a contiguous slice short of what was typed.
- *
- * Only a real browser decides this: the loss is DOM focus, invisible to the
- * mounted suites. Each test holds the model refetch so the reload lands in
- * the middle of the typed burst — some characters precede the swap, some
- * cross it — then a fresh context proves every character was stored.
- */
-
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
@@ -50,7 +36,6 @@ async function createAccount(request: APIRequestContext) {
   return { email, password }
 }
 
-/** Opens the fixture document through the product's own navigation. */
 async function openFixtureDocument(
   page: Page,
   email: string,
@@ -61,10 +46,6 @@ async function openFixtureDocument(
   await openMatterDocument(page, matterName)
 }
 
-/**
- * The post-sign-in leg, shared by the first tab and by sibling tabs in the
- * same context, which are already authenticated.
- */
 async function openMatterDocument(page: Page, matterName: string) {
   await page.getByRole('link', { name: 'Matters' }).first().click()
   await expect(
@@ -97,12 +78,6 @@ async function openMatterDocument(page: Page, matterName: string) {
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     await fileInput.setInputFiles(FIXTURE)
   }
-  // getByText resolves to the mode rail's document link first (the rail sits
-  // before the matter list in DOM order), so the click navigates to the
-  // document route. That navigation remounts the workspace ~200-500ms later;
-  // typing into the matter pane's workspace meanwhile is the flake this pins
-  // down. Await the route commit and the detail chrome so the paragraph probe
-  // can only see the surviving workspace, not the outgoing pane's.
   const documentRow = page.getByRole('link', { name: fixtureName }).first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
   await documentRow.click()
@@ -134,11 +109,6 @@ async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'References') {
   await openRibbonTab(page, name)
 }
 
-/**
- * Holds the first model refetch of the next save until released, so the
- * reload — and the paragraph-id swap it carries — lands in the middle of a
- * typed burst rather than before or after it.
- */
 async function holdNextModelFetch(page: Page) {
   let release = () => {}
   const held = new Promise<void>((resolve) => {
@@ -158,15 +128,6 @@ async function holdNextModelFetch(page: Page) {
   return release
 }
 
-/**
- * Activates Save and types through the flight, returning the characters that
- * were sent. `activate` is the input path under test — a pointer click or
- * keyboard focus plus Enter. A few keys land while the request is out;
- * releasing the held model then starts the reload mid-burst and typing
- * continues until the save boundary has resolved — `data-save-state` leaves
- * `saving` — plus two more characters, so the burst provably straddles the
- * model swap on a document of any size.
- */
 async function typeThroughFlight(
   page: Page,
   marker: string,
@@ -212,8 +173,6 @@ test('typing through the save flight keeps every character', async ({
     save(page).click(),
   )
 
-  // The burst landed after the request was planned, so it must stay pending
-  // and dirty — never silently lost — and the follow-up save persists it.
   await expect
     .poll(() => saveState(page), { message: 'flight settled' })
     .not.toBe('saving')
@@ -245,10 +204,6 @@ test('typing through a keyboard-activated save flight keeps every character', as
   await page.keyboard.type(' E7CKEYSb')
   await expect(editor(page)).toHaveValue(/E7CKEYSb$/)
 
-  // Tab+Enter is the keyboard save path: activation leaves DOM focus on the
-  // button, and `saving` disables it, so the browser would drop focus to
-  // document.body and lose the whole burst. The save must hand focus back to
-  // the caret's field before the flight starts.
   const typed = await typeThroughFlight(page, ' kEYS9876543210', async () => {
     await save(page).focus()
     await page.keyboard.press('Enter')
@@ -286,8 +241,6 @@ test('typing through a keyboard-activated banner retry keeps every character', a
   await page.keyboard.type(' E7CBANNEd')
   await expect(editor(page)).toHaveValue(/E7CBANNEd$/)
 
-  // Abort the first edit request so the failure banner and its Retry save
-  // control appear; the retry itself reaches the real API.
   let aborted = false
   await page.route('**/api/documents/*/edit', async (route) => {
     if (aborted) {
@@ -304,9 +257,6 @@ test('typing through a keyboard-activated banner retry keeps every character', a
     .poll(() => saveState(page), { message: 'failure banner shown' })
     .toBe('failed')
 
-  // Enter on the focused retry used to leave focus on the button while the
-  // retry cleared the failure and unmounted it, dropping focus to
-  // document.body and losing the whole burst.
   const typed = await typeThroughFlight(page, ' baNNER1234567890', async () => {
     await retry.focus()
     await page.keyboard.press('Enter')
@@ -340,10 +290,6 @@ test('typing after a keyboard-activated discard confirm keeps every character', 
   const matter = `E7F discard ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  // An unsaved draft parked against the opened version. A sibling tab sharing
-  // this context's storage commits the next version, so this tab's reload
-  // surfaces the stale-draft banner — a pure discard: confirming unmounts
-  // the banner that holds the dialog's trigger.
   await caretAtEnd(page, BODY)
   await page.keyboard.type(' E7CPARKED')
   await expect(editor(page)).toHaveValue(/E7CPARKED$/)
@@ -378,9 +324,6 @@ test('typing after a keyboard-activated discard confirm keeps every character', 
     await expect(trigger).toBeVisible({ timeout: 30_000 })
     await caretAtEnd(page, 'Delta paragraph E7CSAVED')
 
-    // Enter on the focused confirm disables it for the flight, so the browser
-    // drops focus to document.body; the close then restores focus to a trigger
-    // the discard already unmounted. Without a rescue the typed burst is lost.
     await trigger.click()
     const confirm = page.getByRole('button', {
       name: 'Discard parked changes',
@@ -424,8 +367,6 @@ test('typing after a keyboard-activated reload-and-discard confirm keeps every c
   await page.keyboard.type(' E7CDROP')
   await expect(editor(page)).toHaveValue(/E7CDROP$/)
 
-  // Abort the edit so the failure banner carries the reload-and-discard
-  // dialog; the reload itself is real and remounts the editor.
   await page.route('**/api/documents/*/edit', (route) => route.abort())
   await save(page).click()
   const trigger = page.getByRole('button', {
@@ -437,9 +378,6 @@ test('typing after a keyboard-activated reload-and-discard confirm keeps every c
     .poll(() => saveState(page), { message: 'failure banner shown' })
     .toBe('failed')
 
-  // Keep a caret so the rescue has a target, then keyboard-activate the
-  // confirm: pending disables it mid-flight, the close restores to a trigger
-  // the banner unmounted, and the reload remounts the caret's field.
   await caretAtEnd(page, BODY)
   await trigger.click()
   const confirm = page.getByRole('button', {
@@ -477,8 +415,6 @@ test('typing through the save flight beside a stored table of contents and page 
   const matter = `E7F flight toc ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  // Two headings for real entries and a page break so the body repaginates:
-  // the structural save reshapes every paragraph id this flight crosses.
   for (const text of [HEADING, 'Beta paragraph']) {
     await focusParagraph(page, text)
     await openMenu(page, 'Format')

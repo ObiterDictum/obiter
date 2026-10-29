@@ -71,10 +71,6 @@ export type VerificationSeverity = z.infer<typeof verificationSeveritySchema>
 const draftLocationSchema = z
   .object({
     paragraphId: z.string().min(1),
-    // Paragraph ids are only unique inside their story, so the story kind and
-    // part name are part of a location's identity. They are optional here so
-    // V1-V4 findings, whose fixtures predate story coverage, still parse; V5
-    // extraction always sets both.
     storyKind: documentStoryKindSchema.optional(),
     storyPartName: z.string().min(1).optional(),
     start: z.number().int().nonnegative(),
@@ -86,13 +82,6 @@ const draftLocationSchema = z
     path: ['end'],
   })
 
-/**
- * Where one piece of evidence can be read. `url` is the stored upstream source
- * and is the only thing the source's name is read from; `canonicalUrl` is the
- * in-app source page built in stage 7; `pinpoint` is the human location inside
- * it and `anchor` the fragment that lands on it. A missing pin cite is null,
- * never an invented one.
- */
 export const verificationEvidenceSourceSchema = z
   .object({
     url: z.string().min(1).nullable(),
@@ -117,18 +106,10 @@ export type VerificationEvidenceView = z.infer<
   typeof verificationEvidenceViewSchema
 >
 
-/**
- * A finding a person has dismissed, with who and when. It is a recorded human
- * decision about one finding in one run, so it never rewrites the check's own
- * outcome: the finding keeps its state and the dismissal is shown beside it.
- */
 export const verificationFindingDismissalSchema = z
   .object({
     reason: z.string().min(1).nullable(),
     dismissedBy: z.string().min(1),
-    /** The dismissing person's member name, for everyone in the matter. Null
-     * when the account is no longer an organisation member; the UI then names
-     * nobody rather than showing an internal id. */
     dismissedByName: z.string().min(1).nullable(),
     dismissedAt: z.string().datetime({ offset: true }),
   })
@@ -167,12 +148,6 @@ export const verificationFindingViewSchema = z
     excerpt: z.string().min(1),
     location: draftLocationSchema,
     authorityLabel: z.string().min(1),
-    /**
-     * The stored source's own short title, when the source carries one. It is
-     * the case name a citation is read with ("Wood v Capita Insurance Services
-     * Ltd [2017] UKSC 24"); null means the store holds no title, and the UI
-     * then shows the citation alone rather than inventing a name.
-     */
     authorityName: z.string().min(1).nullable(),
     evidence: z.array(verificationEvidenceViewSchema),
   })
@@ -181,14 +156,6 @@ export type VerificationFindingView = z.infer<
   typeof verificationFindingViewSchema
 >
 
-/**
- * `findingCount` is every persisted finding. The outcome counts are findings
- * still waiting on a person, so a dismissed finding is counted only in
- * `dismissedCount` and never reads as attention outstanding. A check that did
- * not run is counted apart from one that ran and could not conclude: they are
- * different answers, and folding them together was how "needs review" came to
- * cover findings nothing had been compared against.
- */
 export const verificationRunSummarySchema = z
   .object({
     findingCount: z.number().int().nonnegative(),
@@ -245,11 +212,6 @@ export const verificationListMaxLimit = 100
 export const verificationFindingsDefaultLimit = 50
 export const verificationFindingsMaxLimit = 200
 
-/**
- * A run and finding list is keyset-paginated on `(created_at desc, id desc)`.
- * The cursor is an opaque base64url token the API encodes and validates; the
- * client only echoes it back, so the shape may change without a contract bump.
- */
 export const verificationCursorSchema = z.string().min(1)
 export type VerificationCursor = z.infer<typeof verificationCursorSchema>
 

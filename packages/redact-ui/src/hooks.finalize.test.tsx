@@ -9,9 +9,6 @@ import type { FinalizeResponse, RedactionRun, RedetectResponse } from './types'
 
 const apiFetch = vi.hoisted(() => vi.fn())
 
-// The real module's export names as undefined: bun links named imports
-// statically and rejects a mock that omits one, while vitest left an
-// unlisted export undefined. Overrides win.
 const obiterAppShellModuleKeys = Object.fromEntries(
   Object.keys(await import('@obiter/app-shell')).map((key) => [key, undefined]),
 )
@@ -24,9 +21,6 @@ mock.module('@obiter/app-shell', () =>
   ),
 )
 
-// Loaded after the registrations above: bun does not hoist mock.module the
-// way vi.mock was hoisted, and these modules capture mocked imports at
-// module scope, so they must evaluate once the mocks are in place.
 const { useFinalizeRun, useRedetectRun } = await import('./hooks')
 
 const baseRun: RedactionRun = {

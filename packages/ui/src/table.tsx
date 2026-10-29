@@ -1,10 +1,6 @@
 import type { TdHTMLAttributes, ThHTMLAttributes, HTMLAttributes } from 'react'
 import { cn } from './lib/cn'
 
-/**
- * Table — styled semantic table elements (no headless lib; native tables carry
- * the correct semantics). Use for dense, reviewable data.
- */
 export function Table({
   className,
   ...props

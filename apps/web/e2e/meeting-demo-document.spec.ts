@@ -11,14 +11,6 @@ import { openMenu } from './editor-chrome'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 
-/**
- * The document workspace is where the demo actually happens. These tests seed a
- * real synthetic account, matter and DOCX through the real API and assert the
- * rendered controls: the ribbon entries reveal the one real action, the
- * document-level Redact button is a deliberate size, the review keyboard cannot
- * record a decision from a modified chord, and the 390px layout keeps controls
- * and finalized output inside the viewport.
- */
 async function seedDocument(page: Page, request: APIRequestContext) {
   const runId = randomUUID().slice(0, 8)
   const email = `e2e-demo-${runId}@obiter.test`
@@ -38,8 +30,6 @@ async function seedDocument(page: Page, request: APIRequestContext) {
   await page.getByLabel('Password').click()
   await page.getByLabel('Password').pressSequentially(password, { delay: 10 })
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  // Navigation is client-side: the router changes the path without a document
-  // load, so wait for the path itself rather than for a navigation.
   await page.waitForFunction(() => !location.pathname.startsWith('/sign-in'), {
     timeout: 15_000,
   })
@@ -86,7 +76,6 @@ test('the ribbon entries reveal the one real document action', async ({
 }) => {
   await seedDocument(page, request)
 
-  // Review ▸ Verify citations is live and moves focus to the dock control.
   await openMenu(page, 'Review')
   const verifyCitations = page.getByRole('menuitem', {
     name: 'Verify citations',
@@ -96,7 +85,6 @@ test('the ribbon entries reveal the one real document action', async ({
   await verifyCitations.click()
   await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
 
-  // File ▸ Redact this document reveals the real document-level action.
   await openMenu(page, 'File')
   const ribbonRedact = page.getByRole('menuitem', {
     name: 'Redact this document',
@@ -106,7 +94,6 @@ test('the ribbon entries reveal the one real document action', async ({
   await ribbonRedact.click()
   await expect(page.locator('#document-redaction-runs')).toBeFocused()
 
-  // The document-level button is a deliberate size, not a content-wide bar.
   const createRedact = page
     .getByRole('button', { name: 'Redact this document' })
     .last()
@@ -124,7 +111,6 @@ test('a modified chord cannot record a redaction decision', async ({
 }) => {
   await seedDocument(page, request)
 
-  // Create the document-linked run through the real action.
   await page.locator('#document-redaction-runs').scrollIntoViewIfNeeded()
   await page
     .getByRole('button', { name: 'Redact this document' })
@@ -134,13 +120,10 @@ test('a modified chord cannot record a redaction decision', async ({
   const listbox = page.locator('[role="listbox"]')
   await expect(listbox).toBeVisible({ timeout: 30_000 })
 
-  // Select the first span so a decision would land on it.
   const firstOption = listbox.getByRole('option').first()
   await firstOption.click()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
 
-  // Dispatch the chords as real keydown events on the focused list. A synthetic
-  // event proves the handler, without the browser's own reload on Ctrl+R.
   await listbox.evaluate((element) => {
     for (const [key, modifier] of [
       ['k', 'ctrlKey'],
@@ -159,10 +142,8 @@ test('a modified chord cannot record a redaction decision', async ({
     }
   })
 
-  // The decision is unchanged: the row still reads Needs review.
   await expect(firstOption.getByText('Needs review')).toBeVisible()
 
-  // Ctrl+K still opens app search, so the fix did not disable it.
   await listbox.focus()
   await listbox.evaluate((element) => {
     element.dispatchEvent(
@@ -179,7 +160,6 @@ test('a modified chord cannot record a redaction decision', async ({
   ).toBeFocused()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
 
-  // The unmodified shortcut still records a decision, so the fix is scoped.
   await listbox.press('r')
   await expect(firstOption.getByText('Kept visible').first()).toBeVisible({
     timeout: 10_000,
@@ -192,8 +172,6 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
 }) => {
   await seedDocument(page, request)
 
-  // Start verification from the header's Check citations control, which opens
-  // the Verify panel so the run's progress and findings are visible.
   await page
     .getByRole('button', { name: 'Check citations', exact: true })
     .click()
@@ -205,8 +183,6 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
   await page.waitForTimeout(300)
   await page.getByRole('button', { name: 'Go to finding' }).click()
 
-  // The marker layer scrolls the active marker into view, horizontally too, so
-  // a finding is reachable on a narrow viewport even though the A4 page is wider.
   await expect
     .poll(
       async () => {
@@ -253,9 +229,6 @@ test('the finalised output and its controls fit a 390px viewport', async ({
   const listbox = page.locator('[role="listbox"]')
   await expect(listbox).toBeVisible({ timeout: 30_000 })
 
-  // Every span has to carry a decision before the run can be finalised, so the
-  // reviewer records one for each. The list shortcuts act on the selected span,
-  // and ArrowDown moves to the next, exactly as a person would work the queue.
   const progress = page.getByText(/of \d+ detected spans decided/)
   await expect(progress).toBeVisible({ timeout: 30_000 })
   const decided = async () => {
@@ -278,8 +251,6 @@ test('the finalised output and its controls fit a 390px viewport', async ({
   const complete = await decided()
   expect(complete.done).toBe(complete.total)
 
-  // Finalise through the real gates: the reviewer confirms the page review, and
-  // acknowledges a limited detection mode where the run used one.
   await page.getByRole('button', { name: 'Finalise', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await expect(
@@ -313,12 +284,9 @@ test('the finalised output and its controls fit a 390px viewport', async ({
     }
   })
   expect(layout.pageOverflow).toBeLessThanOrEqual(0)
-  // The disclosure copy is the reason for the screen: it stays on the page, at
-  // full height, rather than being squeezed to nothing on a narrow viewport.
   expect(layout.outputHeight).toBeGreaterThan(200)
   expect(layout.outputRight).toBeLessThanOrEqual(layout.clientWidth + 1)
 
-  // Its controls are reachable at 390px without leaving the viewport.
   const download = page.getByRole('button', { name: /^Download/ }).first()
   await expect(download).toBeVisible()
   const box = await download.boundingBox()

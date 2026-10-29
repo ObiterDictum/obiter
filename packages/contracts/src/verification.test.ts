@@ -60,8 +60,6 @@ describe('verification contracts', () => {
         evidence: [{ id: 'src:judgment_paragraph:1', sourceId: 'src' }],
       }).success,
     ).toBe(false)
-    // The view also refuses evidence with no source location block: a finding
-    // whose evidence cannot be opened is not a complete evidence view.
     expect(
       verificationFindingViewSchema.safeParse({
         id: 'vf:1',
@@ -149,7 +147,6 @@ describe('verification contracts', () => {
       evidence: [],
     })
     expect(parsed.dismissal?.dismissedBy).toBe('usr_1')
-    // A dismissal never rewrites what the check found.
     expect(parsed.state).toBe('review_required')
     expect(
       verificationFindingViewSchema.safeParse({

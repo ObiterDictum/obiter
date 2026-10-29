@@ -26,12 +26,6 @@ const clientKeySchema = z
   .min(1)
   .max(DOCUMENT_COMMENT_CLIENT_KEY_MAX_LENGTH)
 
-/**
- * A half-open UTF-16 range into the model's concatenated paragraph run text.
- * `endParagraphId` carries the paragraph the range ends in when it is not the
- * start paragraph; absent or equal to `paragraphId` keeps the range inside one
- * paragraph. A collapsed `startOffset === endOffset` is an insertion point.
- */
 export const documentCommentAnchorSchema = z
   .object({
     paragraphId: z.string().trim().min(1).max(255),
@@ -57,10 +51,6 @@ export const documentCommentCreateRequestSchema = z
   .object({
     body: commentBodySchema,
     anchor: documentCommentAnchorSchema,
-    /**
-     * Per-intent idempotency key: a retry of the same submit returns the
-     * comment already created rather than storing a duplicate.
-     */
     clientKey: clientKeySchema.optional(),
   })
   .strict()
@@ -79,12 +69,6 @@ const documentCommentUserSchema = z
   })
   .strict()
 
-/**
- * A thread reply, discriminated by provenance: a `imported: false` reply was
- * authored in Obiter and stored in the database; an `imported: true` entry was
- * read out of the package's own comments part (an author name or date it does
- * not carry stays null rather than being invented).
- */
 export const documentCommentReplySchema = z.discriminatedUnion('imported', [
   z
     .object({
@@ -117,7 +101,6 @@ export type DocumentCommentReplyCreateRequest = z.infer<
   typeof documentCommentReplyCreateRequestSchema
 >
 
-/** The stored comment row: no model-derived honesty fields belong here. */
 export const documentCommentRecordSchema = z
   .object({
     id: z.string().min(1),
@@ -134,11 +117,6 @@ export const documentCommentRecordSchema = z
   .strict()
 export type DocumentCommentRecord = z.infer<typeof documentCommentRecordSchema>
 
-/**
- * The comment the API serves: the stored row plus replies and whether its
- * stored anchor still resolves in the current document version. An orphaned
- * anchor stays listed as unresolved; it is never re-anchored by content.
- */
 export const documentCommentSchema = documentCommentRecordSchema
   .extend({
     replies: z.array(documentCommentReplySchema),
@@ -147,14 +125,6 @@ export const documentCommentSchema = documentCommentRecordSchema
   .strict()
 export type DocumentComment = z.infer<typeof documentCommentSchema>
 
-/**
- * A comment read out of the package's own `word/comments.xml`. Identity is
- * `ooxml-<w:id>`, which cannot collide with database `cmt_` ids; `ooxmlId` is
- * null when the source element carries no usable `w:id`, and such a comment
- * cannot accept replies because it has no stable identity to key them to.
- * `anchor` is null when the comment's range markers do not resolve to model
- * paragraphs; the comment still displays rather than being dropped.
- */
 export const documentImportedCommentSchema = z
   .object({
     id: z.string().min(1).max(64),
@@ -163,12 +133,9 @@ export const documentImportedCommentSchema = z
     createdAt: z.string().max(64).nullable(),
     body: z.string().max(DOCUMENT_IMPORTED_COMMENT_BODY_MAX_LENGTH),
     bodyTruncated: z.boolean(),
-    /** The `w14:paraId` of the comment's own paragraph, kept so a product reply can thread under it on export. */
     paraId: z.string().max(64).nullable(),
     anchor: documentCommentAnchorSchema.nullable(),
-    /** The file's own `w15:done` state; the version is immutable, so Obiter does not write it. */
     resolved: z.boolean(),
-    /** The imported id of this comment's thread head when it is a reply. */
     parentId: z.string().max(64).nullable(),
   })
   .strict()
@@ -176,7 +143,6 @@ export type DocumentImportedComment = z.infer<
   typeof documentImportedCommentSchema
 >
 
-/** An imported comment with its product-authored replies attached. */
 export const documentImportedCommentThreadSchema = documentImportedCommentSchema
   .extend({ replies: z.array(documentCommentReplySchema) })
   .strict()
@@ -188,10 +154,6 @@ export const documentCommentListResponseSchema = z
   .object({
     comments: z.array(documentCommentSchema),
     importedComments: z.array(documentImportedCommentThreadSchema),
-    /**
-     * Product replies whose imported thread is absent from the current
-     * version: surfaced honestly instead of disappearing with it.
-     */
     orphanedReplies: z.array(documentCommentReplySchema),
   })
   .strict()

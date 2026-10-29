@@ -1,10 +1,6 @@
 import type { HTMLAttributes } from 'react'
 import { cn } from './lib/cn'
 
-/**
- * KeyboardHint — a key or shortcut shown beside a control's label. Hidden
- * inside a disabled control, which cannot run the shortcut it advertises.
- */
 export function KeyboardHint({
   className,
   ...props

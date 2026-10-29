@@ -73,7 +73,6 @@ describe('RedactionRunsRegion', () => {
     expect(screen.getByText('Ready for review')).toBeTruthy()
     expect(screen.getByText('Finalised')).toBeTruthy()
     expect(screen.getAllByText('1 of 4 decided')).toHaveLength(2)
-    // Raw ids must never appear in the product.
     expect(screen.queryByText(/red_8e990bd2/u)).toBeNull()
     expect(screen.getByRole('button', { name: 'View' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Review' })).toBeTruthy()
@@ -92,7 +91,6 @@ describe('RedactionRunsRegion', () => {
             summary: {
               totalSpans: 0,
               reviewedCount: 0,
-              // A reason recorded by a PDF run must not be shown for a .docx.
               failureReason: 'No text layer was found in this PDF.',
             },
           }),

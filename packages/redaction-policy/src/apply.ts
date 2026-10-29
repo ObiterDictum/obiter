@@ -26,14 +26,6 @@ export interface RedactionRange {
   spanId: string
 }
 
-/**
- * Horizontal whitespace that may sit inside one output region: ordinary
- * spaces and tabs only. A CR/LF or any visible character ends the region, so a
- * bar can never bridge a line or absorb unredacted text. A non-breaking space
- * (U+00A0) is deliberately excluded: it is a non-ASCII separator, so it
- * produces separate bars rather than widening a merge on a character the
- * source did not prove was ordinary spacing.
- */
 const REGION_GAP = /^[ \t]*$/
 
 export function affectsOutput(decision: Decisions[string] | undefined) {
@@ -44,14 +36,6 @@ export function affectsOutput(decision: Decisions[string] | undefined) {
   )
 }
 
-/**
- * Merge located output ranges into contiguous regions. Ranges may overlap,
- * touch, or be separated solely by horizontal whitespace; anything else starts
- * a new region. Shared by text, DOCX and PDF planning so all three agree on
- * which spans form one bar. `text` is the coordinate space the ranges are
- * expressed in, so a caller with paragraph-local ranges gets paragraph-local
- * regions and cannot bridge its own structural boundary.
- */
 export function coalesceRanges(
   text: string,
   ranges: readonly RedactionRange[],
@@ -81,13 +65,6 @@ export function coalesceRanges(
   return regions
 }
 
-/**
- * Plan contiguous redaction regions for finalized output. Only
- * output-affecting spans participate, and every span is verified against the
- * source before any region is produced, so a stale offset refuses instead of
- * redacting the wrong bytes. Original spans and decisions are never mutated:
- * the region is a presentation plan, not a replacement for the audit record.
- */
 export function coalesceRedactionRegions(
   text: string,
   spans: RedactionSpan[],

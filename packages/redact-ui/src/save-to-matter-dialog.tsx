@@ -13,12 +13,6 @@ import { useMattersList } from '@obiter/app-shell'
 import { useSaveToMatter } from './hooks'
 import type { RedactionRun } from './types'
 
-/**
- * Filing a copy that belongs to no matter. The run was started from pasted text
- * or a loose upload, so there is no document version to return to: saving it
- * creates version 1 of a new document in the matter the reviewer chooses, and
- * the copy stops being a file on a screen and becomes part of the record.
- */
 export function SaveToMatterDialog({
   run,
   onOpenDocument,

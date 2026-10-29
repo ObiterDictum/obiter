@@ -6,21 +6,12 @@ export interface SidePanelProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: ReactNode
-  /** Header affordance, usually a close button. */
   action?: ReactNode
   footer?: ReactNode
   children: ReactNode
   className?: string
 }
 
-/**
- * SidePanel — a right-hand panel over the page (details, versions, changes).
- *
- * Built on Base UI Dialog rather than a bare aside: a panel that covers content
- * needs a focus trap, Escape to dismiss and focus returned to its opener, and
- * those are the parts Base UI already gets right. The screen owns `open`, the
- * title and any close control, so the panel itself stays presentational.
- */
 export function SidePanel({
   open,
   onOpenChange,

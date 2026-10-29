@@ -2,14 +2,6 @@ import { expect, test } from '@playwright/test'
 import { createAccount, openDocx, openRibbonTab } from './e13-support'
 import { closeMenu, menuItem } from './editor-chrome'
 
-/*
- * E13 browser coverage, accessibility family: reduced-motion and forced
- * colours keep the ribbon usable, a tablet viewport introduces no horizontal
- * overflow, and the coarse-pointer describe proves the touch-target classes
- * compute to at least 44px under a real coarse pointer and a zoom-scale
- * viewport. Shared journey helpers live in e13-support.ts.
- */
-
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test('reduced-motion and forced-colours keep the ribbon usable', async ({
@@ -25,14 +17,12 @@ test('reduced-motion and forced-colours keep the ribbon usable', async ({
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  // The View menu's toggles still drive panels under both platform modes.
   await openRibbonTab(page, 'View')
   await menuItem(page, 'Navigation pane').click()
   await expect(page.locator('[data-navigation-pane]')).toBeVisible()
   await menuItem(page, 'Ruler').click()
   await expect(page.locator('[data-document-ruler]')).toBeVisible()
   await closeMenu(page)
-  // Focus stays visibly outlined: focus a chrome control and check the outline.
   const menuTrigger = page.getByRole('button', { name: 'Review', exact: true })
   await menuTrigger.focus()
   const outlineWidth = await menuTrigger.evaluate(
@@ -57,16 +47,11 @@ test('the workspace holds together at tablet width with no horizontal overflow',
       document.documentElement.clientWidth,
   )
   expect(overflow).toBeLessThanOrEqual(4)
-  // The ribbon wraps rather than clipping its controls off the edge.
   await openRibbonTab(page, 'View')
   await expect(menuItem(page, 'Navigation pane')).toBeVisible()
 })
 
 test.describe('coarse pointer and zoomed viewport', () => {
-  // `isMobile`/`hasTouch` make Chromium report a coarse primary pointer — the
-  // media query the pointer-coarse utilities answer to — and the shrunken
-  // viewport stands in for a ~200% browser zoom, which Playwright cannot
-  // drive directly.
   test.use({
     hasTouch: true,
     isMobile: true,
@@ -83,8 +68,6 @@ test.describe('coarse pointer and zoomed viewport', () => {
       timeout: 30_000,
     })
 
-    // The media the pointer-coarse utilities respond to is genuinely active,
-    // so the assertions below measure the coarse-pointer classes, not hope.
     expect(
       await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches),
     ).toBe(true)
@@ -111,8 +94,6 @@ test.describe('coarse pointer and zoomed viewport', () => {
 
     await assertTargets()
 
-    // A ~200%-zoomed 820px window is a ~410px CSS viewport: controls must
-    // stay reachable and sized, and the document column must not overflow.
     await page.setViewportSize({ width: 410, height: 500 })
     await expect(page.locator('[data-paragraph-id]').first()).toBeVisible()
     await assertTargets()

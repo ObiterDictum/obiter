@@ -10,13 +10,6 @@ import type {
   RedactionSpan,
 } from '@obiter/redaction-policy'
 
-/**
- * What a reviewer is told about one detected span. Kept in one place so the
- * panel, the decision bar and the document marks cannot describe the same span
- * differently — a span whose confidence reads "high" in the list and "needs
- * review" on the page is a disclosure risk, not a cosmetic bug.
- */
-
 export const categoryLabel = {
   person_name: 'Person name',
   email: 'Email address',
@@ -53,11 +46,6 @@ export const confidenceExplanation = {
   low: 'a weak match — check it before deciding',
 } satisfies Record<SpanConfidence, string>
 
-/**
- * Detection confidence describes detection only. REVIEW-professional found
- * "High confidence" read as confidence that disclosure is safe, so every
- * confidence statement carries this qualifier.
- */
 export const CONFIDENCE_CAVEAT =
   'Detection confidence is not a disclosure decision.'
 
@@ -83,7 +71,6 @@ export const decisionDescription = {
 export type SpanDecisionState =
   'accepted' | 'rejected' | 'pseudonymised' | 'pending'
 
-/** What the document paints for a span: decided for removal, kept, or open. */
 export function spanDecisionState(
   decision: SpanDecision | undefined,
 ): SpanDecisionState {
@@ -93,11 +80,6 @@ export function spanDecisionState(
   return 'rejected'
 }
 
-/**
- * What detection did, in plain words: how many spans were found automatically
- * and how many matched a pattern. The detector split behind it (model, fixed
- * patterns, UK supplement) is provenance, not something a reviewer can act on.
- */
 export function detectionSummary(bySource: {
   rampartModel: number
   rampartDeterministic: number
@@ -134,12 +116,6 @@ export const decisionStateTone = {
   'success' | 'neutral' | 'info' | 'warning'
 >
 
-/**
- * Marks differ by decision state, never by hue alone: an accepted span keeps
- * its category fill and solid presence, a kept span fades back to plain text
- * with a dashed baseline, and an undecided span carries a warning outline.
- * Before this, accepted and rejected spans were painted identically.
- */
 export const decisionMarkClass = {
   accepted: '',
   rejected: 'opacity-55',
@@ -161,7 +137,6 @@ const dateTimeFormat = new Intl.DateTimeFormat('en-GB', {
   hour12: false,
 })
 
-/** One date format across the product: 26 Oct 2026, 14:32. */
 export function formatDate(value: string) {
   return dateFormat.format(new Date(value))
 }
@@ -170,12 +145,6 @@ export function formatDateTime(value: string) {
   return dateTimeFormat.format(new Date(value))
 }
 
-/**
- * The decision stores the deciding user's id and the API resolves the member
- * name beside it. A name that does not resolve (the account is no longer a
- * member) falls back to "another reviewer": showing the raw id would leak an
- * internal identifier, and inventing a name would falsify an audit record.
- */
 function reviewerName(
   record: DecisionRecord,
   currentUserId: string | undefined,
@@ -184,7 +153,6 @@ function reviewerName(
   return record.decidedByName ?? 'another reviewer'
 }
 
-/** "Redacted by Priya Shah · 26 Oct 2026, 14:42", for one stored decision. */
 export function decisionRecord(
   record: DecisionRecord,
   currentUserId: string | undefined,
@@ -198,7 +166,6 @@ export function decisionRecord(
   return `${verb} by ${reviewerName(record, currentUserId)} · ${formatDateTime(record.decidedAt)}`
 }
 
-/** Counts per decision state, used by the filter tabs and the finalise gate. */
 export function decisionCounts(spans: RedactionSpan[], decisions: Decisions) {
   const counts = {
     accepted: 0,

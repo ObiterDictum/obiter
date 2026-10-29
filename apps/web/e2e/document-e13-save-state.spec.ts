@@ -11,13 +11,6 @@ import {
   saveState,
 } from './e13-support'
 
-/*
- * E13 browser coverage, save-state family: the unresolved-lineage reload and
- * the remote-edit conflict reload. Failure states are induced at the network
- * boundary (a rewritten edit response) or through a real sibling-tab save.
- * Shared journey helpers live in e13-support.ts.
- */
-
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test('an edit response without lineage surfaces the unresolved-history reload', async ({
@@ -29,8 +22,6 @@ test('an edit response without lineage surfaces the unresolved-history reload', 
 
   await caretAtEnd(page, BODY)
   await page.keyboard.type(' E13LINEAGE')
-  // The save commits but its lineage is stripped at the network boundary:
-  // history cannot be reconciled, so the client must refuse further saves.
   await page.route('**/api/documents/*/edit', async (route) => {
     const response = await route.fetch()
     const body = (await response.json()) as Record<string, unknown>
@@ -48,7 +39,6 @@ test('an edit response without lineage surfaces the unresolved-history reload', 
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  // The irreconcilable history is gone and saving is possible again.
   await expect.poll(() => saveState(page)).not.toBe('blocked')
   await expect(page.getByText('Delta paragraph')).toBeVisible()
 })

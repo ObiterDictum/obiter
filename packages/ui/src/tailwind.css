@@ -1,38 +1,11 @@
-/*
- * Tailwind v4 entry for Obiter. Apps import this once from their root CSS:
- *   @import "@obiter/ui/tailwind.css";
- *
- * - tokens.css holds the --obiter-* custom properties (light default, dark
- *   under [data-theme="dark"]).
- * - @theme inline maps those into Tailwind's namespace so utilities reference
- *   the live custom properties (theme switching works at runtime).
- *
- * Generated utility families (examples):
- *   bg-canvas  bg-surface  bg-raised  text-ink  text-muted  border-line
- *   bg-brand  text-brand  text-brand-fg  ring-ring  bg-overlay
- *   bg-info  text-success  text-warning-fg  ...
- *   bg-span-person-name  text-span-person-name-fg  ...
- *   rounded-md  shadow-md  font-sans  font-mono
- *
- * - source(none) turns automatic source detection off. Detection scans whatever
- *   is on disk (honouring .gitignore only when one is present), so each build
- *   pass compiled a different stylesheet: in the production image build, which
- *   ships no .gitignore, the SSR pass rescanned the client pass's dist/ output,
- *   hashed its stylesheet differently, and named a styles-*.css the client pass
- *   never emitted. Every app must therefore declare its own source trees with
- *   @source in its root CSS (see apps/web and the desktop renderer).
- */
 @import 'tailwindcss' source(none);
 @import './tokens.css';
 @import './fonts.css';
 @import './print.css';
 
-/* `dark:` follows the product's own theme attribute, not the operating
-   system: the shell's choice is a stored preference on <html data-theme>. */
 @custom-variant dark (&:where([data-theme='dark'] *));
 
 @theme inline {
-  /* Surfaces + text */
   --color-canvas: var(--obiter-bg);
   --color-surface: var(--obiter-surface);
   --color-raised: var(--obiter-surface-raised);
@@ -42,14 +15,12 @@
   --color-muted: var(--obiter-text-muted);
   --color-subtle: var(--obiter-text-subtle);
 
-  /* Brand */
   --color-brand: var(--obiter-brand);
   --color-brand-fg: var(--obiter-brand-fg);
   --color-brand-pressed: var(--obiter-brand-pressed);
   --color-ring: var(--obiter-ring);
   --color-overlay: var(--obiter-overlay);
 
-  /* Status */
   --color-info: var(--obiter-status-info);
   --color-info-fg: var(--obiter-status-info-fg);
   --color-success: var(--obiter-status-success);
@@ -73,13 +44,9 @@
   --color-warning-soft: var(--obiter-status-warning-soft);
   --color-danger-soft: var(--obiter-status-danger-soft);
   --font-serif: var(--obiter-font-serif);
-  /* The frame's compact breakpoint. The mock-ups go compact AT 1024px, and
-     Tailwind's `max-*` variants are exclusive (`max-lg` is `width < 1024px`),
-     so the design's boundary needs its own key one pixel above it. */
+
   --breakpoint-compact: 1025px;
-  /* The dashboard and matter mock-ups go single-column AT 1180px, where the
-     320px rail plus the 1120px content max stop fitting. Tailwind's `xl` is
-     1280, so the design's own boundary needs a key. */
+
   --breakpoint-wide: 1181px;
   --height-control-compact: var(--obiter-control-compact);
   --height-control: var(--obiter-control-default);
@@ -121,7 +88,6 @@
   --text-caption--font-weight: var(--obiter-text-caption-weight);
   --text-caption--letter-spacing: var(--obiter-text-caption-tracking);
 
-  /* Redaction span categories — bg + fg per contract §2.3 */
   --color-reviewer-1: var(--obiter-reviewer-1);
   --color-reviewer-1-surface: var(--obiter-reviewer-1-surface);
   --color-reviewer-2: var(--obiter-reviewer-2);
@@ -166,28 +132,20 @@
   --color-span-organisation-name: var(--obiter-span-organisation-name-bg);
   --color-span-organisation-name-fg: var(--obiter-span-organisation-name-fg);
 
-  /* Type */
   --font-sans: var(--obiter-font-sans);
   --font-mono: var(--obiter-font-mono);
 
-  /* Radius */
   --radius-sm: var(--obiter-radius-sm);
   --radius-md: var(--obiter-radius-md);
   --radius-lg: var(--obiter-radius-lg);
   --radius-xl: var(--obiter-radius-xl);
   --radius-pill: var(--obiter-radius-pill);
 
-  /* Elevation */
   --shadow-sm: var(--obiter-shadow-sm);
   --shadow-md: var(--obiter-shadow-md);
   --shadow-lg: var(--obiter-shadow-lg);
 }
 
-/* Base element defaults so every screen inherits the token system.
-   Body copy is 14px, but the root stays at the browser default: every rem —
-   Tailwind's spacing and breakpoints included — is then the size the design
-   names it (1024px is `lg`, 4px is one step). Setting the root to 14px shrank
-   every rem by 12.5%, so `lg` landed at 896px and a 36px row drew at 31.5px. */
 @layer base {
   html {
     background-color: var(--obiter-bg);
@@ -208,9 +166,6 @@
     outline-offset: 2px;
   }
 
-  /* Motion users asked the platform to reduce: every animation and
-     transition completes immediately, so nothing essential is lost —
-     the app has no motion-only affordances. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -222,10 +177,6 @@
     }
   }
 
-  /* Forced colours: the platform overrides custom backgrounds, which strips
-     the secondary fill a pressed ribbon control uses. The outline keeps a
-     pressed toggle distinguishable, and focus stays visible, under Windows
-     High Contrast and the forced-colors media query generally. */
   @media (forced-colors: active) {
     [aria-pressed='true'] {
       outline: 1px solid Highlight;

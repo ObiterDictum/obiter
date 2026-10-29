@@ -35,12 +35,7 @@ export interface RedactionRun {
   detectionMode: DetectionMode
   replacesRunId: string | null
   replacementRunId: string | null
-  /**
-   * Document version this run's finalized output became (E12 return, or a
-   * standalone run saved to a matter). Present only after it succeeded.
-   */
   returnedDocumentVersionId?: string | null
-  /** Where that version lives, so the copy can be opened after it is filed. */
   returnedMatterId?: string | null
   returnedDocumentId?: string | null
   returnedDocumentVersionNumber?: number | null
@@ -65,17 +60,11 @@ export interface FinalizeResponse {
   }
 }
 
-/**
- * Metadata for a finalized redaction output. Bytes are fetched once from
- * `/output/file` and used for preview, download and share alike. Shared with
- * the API response contract rather than duplicated here.
- */
 export type RedactionOutput = RedactionOutputResponse
 
 export interface SpanDecisionInput {
   spanId: string
   decision: SpanDecision
-  /** Repeat the decision on every span reading the same text in this run. */
   applyToSameText?: boolean
 }
 export type FinalizeInput = RedactionFinalizeInput

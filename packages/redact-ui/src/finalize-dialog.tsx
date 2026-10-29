@@ -22,11 +22,6 @@ import type { RedactionRun } from './types'
 
 const outputModeOrder: OutputMode[] = ['redacted', 'pseudonymised']
 
-/**
- * The repeated text a reviewer has decided both ways. Stated with the words
- * that leak, because "2 spans disagree" is not something a reviewer can act on:
- * the group names the text, its category and which occurrence decided what.
- */
 function MixedTextBlock({
   groups,
   onShow,
@@ -93,20 +88,11 @@ const outputModes = {
   },
 } satisfies Record<OutputMode, { title: string; body: string }>
 
-/**
- * Finalise. Every gate on this dialog is a disclosure decision the reviewer has
- * to make deliberately: undecided spans block the action rather than being
- * waved through, a limited detection mode has to be acknowledged, and the
- * reviewer confirms they have checked every page themselves, because detection
- * cannot see everything.
- */
 export function FinalizeDialog({
   run,
   onShowSpan,
 }: {
   run: RedactionRun
-  /** Selects one span in the document and the list; absent where the host
-   * cannot select one. */
   onShowSpan?: (spanId: string) => void
 }) {
   const [open, setOpen] = useState(false)

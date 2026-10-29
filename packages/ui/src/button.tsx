@@ -19,16 +19,12 @@ export interface ButtonProps {
   onClick?: React.MouseEventHandler<HTMLButtonElement>
   children?: ReactNode
   className?: string
-  /** React 19 passes `ref` as a prop; declared so a caller can focus the button. */
   ref?: Ref<HTMLButtonElement>
-  /** Polymorphic render (e.g. `render={<Link to="/x" />}`). See Base UI render prop. */
   render?: BaseButtonRender
-  /** Whether the rendered element is a real `<button>`. Pass false for a link. */
   nativeButton?: boolean
   'aria-label'?: string
   'aria-pressed'?: boolean
   'aria-describedby'?: string
-  /** Native tooltip text: a short reason a control is disabled, and the like. */
   title?: string
   'data-testid'?: string
 }
@@ -38,12 +34,6 @@ const baseClasses =
   'transition-[background-color,border-color,transform,box-shadow] duration-150 ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 
-/**
- * A disabled control that is not working looks muted; one that is working keeps
- * its own colour, because a button that goes grey while it works is
- * indistinguishable from a button you may not press. `loading` also disables
- * the button, so the two states are chosen here rather than fought over in CSS.
- */
 const stateClasses = {
   idle: 'disabled:cursor-not-allowed disabled:opacity-45',
   loading: 'cursor-progress',
@@ -63,11 +53,6 @@ const sizeClasses = {
   lg: 'h-control-large px-4 text-item gap-2',
 } satisfies Record<ButtonSize, string>
 
-/**
- * The button's visual classes, for a control that must stay something else —
- * a navigation `Link`, which is a link to a screen reader and to the browser's
- * own menu, not a button. Use `Button` for actions.
- */
 export function buttonClassName({
   variant = 'primary',
   size = 'md',
@@ -88,10 +73,6 @@ export function buttonClassName({
   )
 }
 
-/**
- * Button — the single interactive element style. Calm, tactile, keyboard-first.
- * Built on Base UI Button (focus management + render prop).
- */
 export function Button({
   variant = 'primary',
   size = 'md',

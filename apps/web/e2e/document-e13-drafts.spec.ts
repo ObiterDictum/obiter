@@ -10,15 +10,6 @@ import {
   seedDraft,
 } from './e13-support'
 
-/*
- * E13 browser coverage, draft family: the conditionally-rendered
- * recoverable-draft banner (restore + discard dialogs), the blocked-change
- * and held-change dialogs. The held change is seeded as the legacy draft
- * payload the restore path exists to carry; the blocked change is a payload
- * addressed to a run the model no longer has. Shared journey helpers live in
- * e13-support.ts.
- */
-
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test('two abandoned drafts surface the recoverable banner: dialog exits and restore', async ({
@@ -27,11 +18,8 @@ test('two abandoned drafts surface the recoverable banner: dialog exits and rest
 }) => {
   const { email, password } = await createAccount(request)
   const matter = `E13 recoverable ${Date.now()}`
-  // This tab only opens the document; the drafts belong to sibling tabs.
   await openDocx(page, email, password, matter)
 
-  // Both siblings stay open while they type: a writer whose claim is live
-  // cannot be auto-adopted by the other, so each lands its own payload.
   const siblings: Page[] = []
   for (const suffix of ['E13TABONE', 'E13TABTWO']) {
     const sibling = await page.context().newPage()
@@ -47,7 +35,6 @@ test('two abandoned drafts surface the recoverable banner: dialog exits and rest
     )
     siblings.push(sibling)
   }
-  // The draft write is async — prove each landed before closing its writer.
   for (const [index, sibling] of siblings.entries()) {
     await expect
       .poll(
@@ -64,8 +51,6 @@ test('two abandoned drafts surface the recoverable banner: dialog exits and rest
     await sibling.close()
   }
 
-  // Both writer claims must lapse before their payloads become recoverable
-  // (claims renew every second and die after two).
   await page.waitForTimeout(3000)
   await page.reload()
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
@@ -75,8 +60,6 @@ test('two abandoned drafts surface the recoverable banner: dialog exits and rest
     page.getByText(/More than one unsaved draft exists/i),
   ).toBeVisible({ timeout: 30_000 })
 
-  // The discard dialog's three exits: Cancel keeps the draft, the close
-  // button keeps it, and Confirm deletes it — proven against the banner.
   const trigger = page
     .getByRole('button', { name: 'Discard this draft', exact: true })
     .first()
@@ -91,7 +74,6 @@ test('two abandoned drafts surface the recoverable banner: dialog exits and rest
     .getByRole('button', { name: 'Discard this draft', exact: true })
     .last()
     .click()
-  // One draft was discarded; the other still shows in the banner.
   await expect(
     page.getByText(/More than one unsaved draft exists/i),
   ).toBeVisible()
@@ -115,8 +97,6 @@ test('a draft naming a missing paragraph surfaces the blocked-change discard', a
   const { email, password } = await createAccount(request)
   await openDocx(page, email, password, `E13 blocked ${Date.now()}`)
 
-  // A payload keyed to a run the model does not carry: the save partition
-  // marks it unsendable instead of dropping it.
   await seedDraft(page, {
     ...EMPTY_DRAFT_STATE,
     drafts: { 'run-gone': 'orphaned text' },

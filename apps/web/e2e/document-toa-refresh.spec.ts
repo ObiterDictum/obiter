@@ -13,22 +13,6 @@ import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { openMenu, runMenuCommand } from './editor-chrome'
 
-/*
- * E11 browser journey for the table of authorities refresh: the References
- * ribbon's field controls must generate the field's paint, write the stored
- * `TOA` field on save, update the stored field in place — one field, no
- * duplicate `TA` marks — and prove the result in the exported DOCX. Only a
- * real browser decides the pending fold's paint, the ribbon's shared
- * refusal reasons and the re-parse; the mounted suites cover the writer's
- * range replacement and mark deduplication.
- *
- * The fixture is the repo's synthetic demo document: it carries a neutral
- * citation in prose, so the field has an authority to list before the
- * journey adds a second one. The account is synthetic and created through
- * the product's own sign-up endpoint; verification is marked directly in
- * the task-owned test database, never the shared one.
- */
-
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
@@ -108,14 +92,10 @@ test('table of authorities paints, saves, updates and exports', async ({
     }
   })
 
-  // Caret outside every field: the update control is a real refusal, not a
-  // silent no-op — the disabled name carries the honest reason.
   await focusParagraph(page, STORED_CITATION)
   await openReferences(page)
   await expect(updateButton(page)).toBeDisabled()
 
-  // The field inserts at the caret: the pending fold paints the heading
-  // and the entry the stored citation produces.
   const anchorParagraph = page.locator('[data-paragraph-id]').nth(1)
   await anchorParagraph.click()
   await openReferences(page)
@@ -135,8 +115,6 @@ test('table of authorities paints, saves, updates and exports', async ({
     expect.objectContaining({ type: 'insert_table_of_authorities' }),
   )
 
-  // Reload: the stored field paints its generated paragraphs, and the
-  // update control arms once the caret sits inside the field.
   await page.reload({ waitUntil: 'networkidle' })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
@@ -146,9 +124,6 @@ test('table of authorities paints, saves, updates and exports', async ({
   await openReferences(page)
   await expect(updateButton(page)).toBeEnabled()
 
-  // The field's boundary paragraphs cannot be deleted piecemeal: the
-  // heading holds the `begin`, so Delete paragraph refuses with the shared
-  // field reason rather than leaving `fldChar` runs Word cannot pair.
   await focusParagraph(page, 'Table of Cases')
   await openMenu(page, 'Edit')
   const deleteParagraph = page.getByRole('menuitem', {
@@ -158,8 +133,6 @@ test('table of authorities paints, saves, updates and exports', async ({
   await expect(deleteParagraph).toBeDisabled()
   await shot(page, '03-field-boundary-refused')
 
-  // A new citation in an ordinary paragraph, then the refresh: the painted
-  // model lists both authorities before the save lands.
   await focusParagraph(page, 'IN THE HIGH COURT OF JUSTICE')
   await openReferences(page)
   await page
@@ -182,7 +155,6 @@ test('table of authorities paints, saves, updates and exports', async ({
     expect.objectContaining({ type: 'update_table_of_authorities' }),
   )
 
-  // The stored answer after reload: one heading, both entries.
   await page.reload({ waitUntil: 'networkidle' })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
@@ -196,9 +168,6 @@ test('table of authorities paints, saves, updates and exports', async ({
   ).toBeVisible()
   await shot(page, '06-reloaded-refresh')
 
-  // The exported DOCX proves the write: exactly one `TOA` field, one `TA`
-  // mark per citing paragraph — the refresh did not accrete marks — and
-  // both entries in the generated result.
   const downloadPromise = page.waitForEvent('download')
   await runMenuCommand(page, 'File', 'Export')
   const download = await downloadPromise

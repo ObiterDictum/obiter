@@ -6,11 +6,6 @@ export interface ListRowProps extends HTMLAttributes<HTMLDivElement> {
   trailing?: ReactNode
 }
 
-/**
- * ListRow — one row of a divided list (attention items, search results,
- * documents). Presentation only: the caller owns the link/button and its
- * hover and selected state, so a row never becomes an unlabelled control.
- */
 export function ListRow({
   leading,
   trailing,

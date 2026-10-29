@@ -112,8 +112,6 @@ describe('document collaboration contracts', () => {
   })
 
   it('accepts a settings-only merge and rejects an empty one', () => {
-    // Same rule as the direct edit: empty operations are only meaningful when
-    // the request carries the toggle they flip.
     expect(
       documentCollaborationMergeRequestSchema.parse({
         baseVersionId: 'ver_1',

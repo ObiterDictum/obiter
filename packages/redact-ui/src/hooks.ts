@@ -42,10 +42,6 @@ export function useCreateRedactionRun() {
   })
 }
 
-/**
- * Soft-delete a standalone redaction run (owner/admin only). On success the
- * run detail is removed from cache and the runs list invalidated.
- */
 export function useDeleteRedactionRun() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -122,13 +118,6 @@ export function useRedactionOutput(runId: string, enabled: boolean) {
   })
 }
 
-/**
- * The redaction schedule is the run's own audit report: every decision with its
- * category, reviewer and time, plus the audit log, and never the removed words.
- * PDF and Word are generated server-side on demand — the API serves a schedule
- * only for a finalised run. `json-shareable` is the same audit without the span
- * text or the source filename, for handing to the other side.
- */
 export function useRedactionScheduleExport(runId: string) {
   return useMutation({
     mutationFn: (format: 'pdf' | 'docx' | 'json-shareable') =>
@@ -181,13 +170,6 @@ export function useRedetectRun(runId: string) {
   })
 }
 
-/**
- * Return a finalized document-linked run's output to its source document as a
- * new immutable version (E12). `baseVersionId` is the version the run redacted
- * — the server refuses when the head has moved, so a stale document fails
- * closed rather than silently overwriting newer work. A successful retry
- * reports `already_returned` with the same version, never a duplicate.
- */
 export function useReturnToDocument(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -209,11 +191,6 @@ export function useReturnToDocument(runId: string) {
   })
 }
 
-/**
- * File a finalized standalone run's copy into a matter. The server creates the
- * document and its version, access-checked against the matter (edit) and
- * audited; the run records the version it became, so a retry resolves to it.
- */
 export function useSaveToMatter(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -241,9 +218,7 @@ export function useFinalizeRun(runId: string) {
         body: JSON.stringify(input),
       }),
     onSuccess: ({ run }) => {
-      // Immediate run detail update (status → finalized, outputId, summary).
       queryClient.setQueryData(runKey(runId), run)
-      // Reconcile with server + enable/refetch output; refresh list surfaces.
       void queryClient.invalidateQueries({ queryKey: runKey(runId) })
       void queryClient.invalidateQueries({
         queryKey: ['redaction-run-output', runId],

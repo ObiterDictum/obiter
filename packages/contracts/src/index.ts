@@ -14,11 +14,9 @@ export * from './document-lineage'
 export * from './document-markings'
 export * from './document-model'
 export * from './document-tracked-changes'
-// Citation honesty shapes for legal search (additive, optional at the boundary).
 export * from './legal-search'
 export * from './legislation-paths'
 export * from './neutral-citation'
-// Organisation, membership and the authenticated-user view.
 export * from './organisation'
 export * from './saved-sources'
 export * from './xml-text'
@@ -220,16 +218,13 @@ export const documentTextLayoutSegmentSchema = z
     height: positiveFiniteNumberSchema,
     ascent: nonNegativeFiniteNumberSchema.optional(),
     descent: nonNegativeFiniteNumberSchema.optional(),
-    /** Origin-to-origin displacement in the run's writing direction. */
     advances: z.array(nonNegativeFiniteNumberSchema).optional(),
-    /** Drawn-advance overrides where kerning makes placement differ. */
     glyphWidthOverrides: z
       .record(
         z.string().regex(/^(?:0|[1-9]\d*)$/u),
         nonNegativeFiniteNumberSchema,
       )
       .optional(),
-    /** Unit writing direction. Omitted for ordinary left-to-right text. */
     baselineX: finiteNumberSchema.optional(),
     baselineY: finiteNumberSchema.optional(),
   })
@@ -290,11 +285,6 @@ const documentTextLayoutPageSchema = z.object({
   height: positiveFiniteNumberSchema,
 })
 
-/**
- * Version 1 remains readable and deliberately falls back to interpolation.
- * Version 2 separates origin placement (`advances`) from sparse drawn-extent
- * overrides so kerning cannot shorten a redaction cover.
- */
 export const documentTextLayoutSchema = z
   .object({
     version: z.union([z.literal(1), z.literal(2)]),
@@ -358,11 +348,6 @@ export const documentTextResponseSchema = z.object({
 })
 export type DocumentTextResponse = z.infer<typeof documentTextResponseSchema>
 
-/**
- * "Continue where you left off": the document a person opened most recently,
- * resolved with its matter and current version so the dashboard can name all
- * three without a second read. Null until they open one.
- */
 export const recentlyOpenedDocumentSchema = z.object({
   documentId: z.string().min(1),
   matterId: z.string().min(1),
@@ -387,12 +372,6 @@ export const documentOpenResponseSchema = z.object({
 })
 export type DocumentOpenResponse = z.infer<typeof documentOpenResponseSchema>
 
-/**
- * A document "Cite in document" can offer: one the person has opened, newest
- * first, with what the editor needs before the citation can go there — the
- * stored file type, and whether the person may edit the matter it belongs to.
- * A row is not an access grant; the read is gated by the matter boundary.
- */
 export const citationTargetSchema = z.object({
   documentId: z.string().min(1),
   matterId: z.string().min(1),
@@ -420,13 +399,6 @@ export type RedactionFinalizeInput = z.infer<
   typeof redactionFinalizeInputSchema
 >
 
-/**
- * Metadata for a finalized redaction output. The bytes are served separately
- * by `/output/file` so preview and download read the same stored object; this
- * response only describes it. `securePdf` marks a hard-redaction PDF produced
- * by the current rasterized path; a legacy hard-redaction DOCX/TXT output
- * reports `securePdf: false` and keeps its true MIME type and filename.
- */
 export const redactionOutputResponseSchema = z.object({
   mimeType: z.string().min(1),
   filename: z.string().min(1),
@@ -442,13 +414,6 @@ export type RedactionOutputResponse = z.infer<
   typeof redactionOutputResponseSchema
 >
 
-/**
- * E12 redaction handoff: `baseVersionId` is the document head the caller
- * believes it is returning onto. The server requires it to equal both the
- * current version and the version the run redacted — the output is a
- * complete content replacement, so a moved head is a stale-source conflict,
- * not something to paper over.
- */
 export const redactionReturnRequestSchema = z
   .object({
     baseVersionId: z.string().min(1).max(255),
@@ -470,11 +435,6 @@ export type RedactionReturnResponse = z.infer<
   typeof redactionReturnResponseSchema
 >
 
-/**
- * Filing a finalized run's copy into a matter. A run that is not linked to a
- * document has no version to return to, so the copy becomes version 1 of a new
- * document in the matter the reviewer chooses.
- */
 export const redactionSaveToMatterRequestSchema = z
   .object({ matterId: z.string().min(1).max(255) })
   .strict()

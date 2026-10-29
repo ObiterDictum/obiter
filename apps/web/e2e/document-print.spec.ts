@@ -5,16 +5,6 @@ import { test, expect, type Page } from '@playwright/test'
 import { mockSession } from './shell-harness'
 import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
 
-/**
- * Headless proof that Print uses the document state on screen.
- *
- * The synthetic DOCX carries an unsaved edit, a pending inserted paragraph, a
- * deleted paragraph and a table, and the compressed PDF is read back through
- * unpdf so the assertions are about what a printer would receive, not the DOM
- * alone. No print job leaves the machine: `page.pdf()` renders the print media
- * in-process.
- */
-
 const MATTER = {
   id: 'mtr_print',
   organisationId: 'org_shell_test',
@@ -63,7 +53,6 @@ function paragraph(id: string, text: string) {
   }
 }
 
-/** Enough body text that the engine paginates past one printed sheet. */
 const BODY_PARAGRAPHS = Array.from({ length: 70 }, (_, index) =>
   paragraph(
     `p${String(index + 1)}`,
@@ -136,7 +125,6 @@ async function mockWorkspace(page: Page) {
       },
     }),
   )
-  // The detail route (and the `?` panel's version list) read this on open.
   await page.route('**/api/documents/doc_print', (route) =>
     route.fulfill({
       json: {
@@ -179,12 +167,6 @@ async function mockWorkspace(page: Page) {
   )
 }
 
-/**
- * Reach the document workspace through the app. The matter/document loaders
- * guard during SSR, where a mocked session does not apply, so a direct
- * `page.goto` would serve the sign-in page; client-side navigation from the
- * public search route runs those loaders in the browser, where the mocks apply.
- */
 async function openWorkspace(page: Page) {
   await page.goto('/search')
   const nav = page.getByRole('navigation', { name: 'Workspace' })
@@ -194,7 +176,6 @@ async function openWorkspace(page: Page) {
     .getByRole('main')
     .getByRole('link', { name: /Print Matter/ })
     .click()
-  // Stage 5 lists a matter's documents as links, not buttons.
   await page
     .getByRole('link', { name: /print-fixture\.docx/ })
     .first()
@@ -202,7 +183,6 @@ async function openWorkspace(page: Page) {
   await expect(page.locator('[data-document-desk]')).toBeVisible()
 }
 
-/** Read the generated PDF back through PDF.js (via unpdf) from the API package. */
 function readPdf(pdfPath: string) {
   const script = `
     import { getDocumentProxy, extractText } from 'unpdf'
@@ -243,33 +223,26 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
   const desk = page.locator('[data-document-desk]')
   await expect(desk).toContainText('Paragraph 1 of the print fixture.')
 
-  // Unsaved formatting and text on paragraph 1.
   await page.getByText('Paragraph 1 of the print fixture.').first().click()
   await page.getByRole('button', { name: 'Bold' }).click()
   const editor = page.getByLabel('Paragraph text')
   await editor.fill('Edited paragraph one')
 
-  // A pending inserted paragraph, typed but never saved.
   await editor.press('Enter')
   await page.getByLabel('Pending paragraph text').fill('Inserted paragraph')
 
-  // A deleted paragraph: select paragraph 2 and delete it from the ribbon.
   await page.getByText('Paragraph 2 of the print fixture.').first().click()
   await runMenuCommand(page, 'Edit', 'Delete paragraph')
   await expect(desk).not.toContainText('Paragraph 2 of the print fixture.')
 
-  // The page rule is the document's own page box, not an assumed A4.
   expect(
     await page
       .locator('style[data-document-print]')
       .evaluate((element) => element.textContent),
   ).toBe('@page{size:8.2708in 11.6979in;margin:0}')
 
-  // A review panel is private workspace chrome: open one before printing so
-  // the run proves panels inside the desk do not reach the printer.
   await page.getByRole('button', { name: 'Comments', exact: true }).click()
 
-  // Print media: chrome is out, the painted document (drafts included) stays.
   await page.emulateMedia({ media: 'print' })
   await expect(
     page.getByRole('toolbar', { name: 'Document toolbar' }),
@@ -280,8 +253,6 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
   await expect(desk).toContainText('Inserted paragraph')
   await expect(desk).toContainText('Cell one')
   await expect(desk).toContainText('Cell two')
-  // The pending insert prints from static content; the form control it is
-  // edited in is not part of the printed sheet.
   await expect(page.getByLabel('Pending paragraph text')).toBeHidden()
   await expect(desk.locator('[data-pending-insert-print]')).toBeVisible()
 
@@ -312,9 +283,6 @@ test('printing from the web layout paginates onto the stored paper size', async 
   await mockWorkspace(page)
   await openWorkspace(page)
 
-  // The continuous web layout is one unbounded sheet; Chromium's printToPDF
-  // dispatches beforeprint, which must repaginate the painted DOM onto paper
-  // sheets before the snapshot is taken.
   await openMenu(page, 'View')
   await menuItem(page, 'Web layout').click()
   await closeMenu(page)
@@ -333,9 +301,6 @@ test('printing from the web layout paginates onto the stored paper size', async 
   })
   const pdf = readPdf(pdfPath)
 
-  // More than one real page — the continuous sheet cannot be the answer —
-  // and every page is the document's stored A4 box (595.3 × 841.9 pt), not
-  // the web flow's internal unbounded frame.
   expect(pdf.totalPages).toBeGreaterThan(1)
   for (const size of pdf.sizes) {
     expect(Math.abs(size.width - 595.28)).toBeLessThan(1)
@@ -352,8 +317,6 @@ test('the Print control reports an absent print capability', async ({
 }) => {
   await mockSession(page)
   await mockWorkspace(page)
-  // Remove the platform print entry point before the app mounts so the control
-  // must surface the absence rather than look inert.
   await page.addInitScript(() => {
     Object.defineProperty(window, 'print', {
       value: undefined,

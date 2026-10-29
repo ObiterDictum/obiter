@@ -7,27 +7,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runMenuCommand } from './editor-chrome'
 
-/*
- * E8 browser journey: comments must survive the whole product path. A real
- * browser decides the native selection the caret mirror reports, the panel's
- * rendered state, and the download the export endpoint produces; the mounted
- * suites cover the anchor math and the wire shapes.
- *
- * The fixture is generated at runtime into /tmp from the OOXML builder so the
- * imported Word comment is a real comments.xml part, not a committed file. The
- * account is synthetic, created through the product's own sign-up endpoint, and
- * email verification is marked in the task-owned test database.
- */
-
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../..',
 )
 const FIXTURE_PATH = '/tmp/e8-comments-fixture.docx'
 const FIXTURE_NAME = path.basename(FIXTURE_PATH)
-/** The fixture paragraph carrying the imported Word comment's range markers. */
 const COMMENTED = 'Commented text'
-/** Nine code units, so the selection never cuts a surrogate pair. */
 const SELECTED = 'Commented'
 const IMPORTED_BODY = 'Fictional review comment'
 const IMPORTED_AUTHOR = 'Alice Example'
@@ -44,7 +30,6 @@ function buildFixture() {
   )
 }
 
-/** Opens the generated comment fixture through the product's own navigation. */
 async function openFixtureDocument(
   page: Page,
   email: string,
@@ -92,7 +77,6 @@ async function openFixtureDocument(
   })
 }
 
-/** A native within-paragraph selection the custom selection mirrors. */
 async function selectFirst(page: Page, text: string, units: number) {
   await focusParagraph(page, text)
   await page.keyboard.press('Home')
@@ -102,14 +86,8 @@ async function selectFirst(page: Page, text: string, units: number) {
 }
 
 async function openCommentsPanel(page: Page) {
-  // The chrome mounts once the document model arrives, so a click that lands
-  // during that transition can be lost. Retry the open. The toolbar's own
-  // Comments control carries the thread count; the review list's filter
-  // segment is also called "Comments 1", so match the toolbar's parentheses.
   const panel = page.getByRole('complementary', { name: 'Comments' })
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    // The control toggles, so a second click while the panel is up would close
-    // it again: only click while it is hidden.
     if (!(await panel.isVisible())) {
       await page
         .getByRole('button', { name: /^Comments( \(\d+\))?$/u })
@@ -177,8 +155,6 @@ test('comments anchor, navigate, reply, resolve and export', async ({
 
   await openCommentsPanel(page)
 
-  // The imported Word comment renders with its own author and body, not the
-  // uploader's identity.
   const importedCard = page.locator('li', { hasText: IMPORTED_BODY }).first()
   await expect(importedCard).toBeVisible({ timeout: 15_000 })
   await expect(importedCard).toContainText(IMPORTED_AUTHOR)
@@ -186,7 +162,6 @@ test('comments anchor, navigate, reply, resolve and export', async ({
     page.getByRole('heading', { name: 'From the Word file' }),
   ).toBeVisible()
 
-  // A real selected range anchors the product comment — not the paragraph.
   await selectFirst(page, COMMENTED, SELECTED.length)
   await page.getByLabel('New comment').fill('Tighten this clause')
   const createResponse = page.waitForResponse(
@@ -209,14 +184,12 @@ test('comments anchor, navigate, reply, resolve and export', async ({
   expect(createBodies[0]?.anchor?.paragraphId).toBeTruthy()
   expect(createBodies[0]?.anchor).not.toHaveProperty('endParagraphId')
 
-  // Clicking away clears the selection; the card restores it on navigation.
   await page.keyboard.press('Escape')
   await card.getByRole('button', { name: 'Show in document' }).click()
   await expect(page.locator('[data-selected-text="true"]').first()).toHaveText(
     SELECTED,
   )
 
-  // Replies and resolve/reopen are author-owned controls on the same thread.
   await card.getByLabel('Reply').fill('Second voice on the clause')
   const replyResponse = page.waitForResponse(
     (incoming) =>
@@ -235,7 +208,6 @@ test('comments anchor, navigate, reply, resolve and export', async ({
   await card.getByRole('button', { name: 'Reopen' }).click()
   await expect(card).toContainText('Open', { timeout: 15_000 })
 
-  // An insertion-point comment anchors at the caret with equal offsets.
   await focusParagraph(page, COMMENTED)
   await page.keyboard.press('End')
   await page.getByLabel('New comment').fill('Caret note')
@@ -247,8 +219,6 @@ test('comments anchor, navigate, reply, resolve and export', async ({
   const caretAnchor = createBodies[1]?.anchor
   expect(caretAnchor?.startOffset).toBe(caretAnchor?.endOffset)
 
-  // Export produces a DOCX whose comments part carries the foreign comment,
-  // the product comments, and the product reply.
   const downloadPromise = page.waitForEvent('download')
   await runMenuCommand(page, 'File', 'Export')
   const download = await downloadPromise
@@ -260,8 +230,6 @@ test('comments anchor, navigate, reply, resolve and export', async ({
   expect(commentsXml).toContain('Second voice on the clause')
   expect(commentsXml).toContain('Alice Example')
 
-  // A fresh context reads the stored state back: the product comments and the
-  // imported thread render without the first session.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {

@@ -18,7 +18,6 @@ export interface ToastInput {
   title: ReactNode
   description?: ReactNode
   tone?: ToastTone
-  /** ms before auto-dismiss. 0 keeps it until dismissed. Default 5000. */
   timeout?: number
 }
 
@@ -38,8 +37,6 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
-/* A tone dot, like StatusDot: the title carries the meaning, so the dot is
- * decoration and no icon font weight rides on it. */
 const toneDot = {
   info: 'bg-info',
   success: 'bg-success',
@@ -49,16 +46,6 @@ const toneDot = {
 
 const DEFAULT_TIMEOUT = 5000
 
-/**
- * Toast — accessible notifications. The frame wraps the app in <ToastProvider>
- * and mounts <Toaster /> once; feature screens call useToast().
- *
- * NOTE: self-contained rather than Base UI's toast manager. Base UI 1.0.0-rc.0
- * does not export the manager hooks (useToastManager/createToastManager) as
- * runtime values from the toast module, so we ship a lightweight, accessible
- * implementation (aria-live region, per-toast timer) that matches the contract.
- * Revisit when Base UI's toast API stabilises.
- */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastRecord[]>([])
   const counter = useRef(0)
@@ -104,7 +91,6 @@ export function useToast(): UseToastReturn {
   return { toast: context.toast, dismiss: context.dismiss }
 }
 
-/** Renders the notification viewport. Mount once inside <ToastProvider>. */
 export function Toaster() {
   const context = useContext(ToastContext)
   if (
@@ -142,7 +128,6 @@ function ToastItem({
 }) {
   const isDanger = record.tone === 'danger'
 
-  // Auto-dismiss timer — a legitimate external-timer use of useEffect.
   useEffect(() => {
     if (record.timeout <= 0) return
     const timer = window.setTimeout(() => onDismiss(record.id), record.timeout)

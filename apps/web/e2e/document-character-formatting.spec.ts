@@ -8,25 +8,9 @@ import { fileURLToPath } from 'node:url'
 import { mockSession } from './shell-harness'
 import { openFormatting, setTrackChanges } from './editor-chrome'
 
-/*
- * E53 browser journey: Strikethrough, Highlight, Superscript and Subscript
- * must agree end to end. Only a real browser decides the painted run CSS, the
- * native text selection the custom selection mirrors, and a fresh context
- * reading the stored version back; the mounted suites cover the projection and
- * the save plan.
- *
- * The account is synthetic and created through the product's own sign-up
- * endpoint; email verification is marked directly in the task-owned test
- * database, never the shared one. The fixture is the repo's synthetic DOCX.
- */
-
 const FIXTURE_REL = '../../../data/evals/redact/demo-fixture.docx'
-/** The fixture's first paragraph; stable across a save. */
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
-/** Six code units, so the selection never cuts a surrogate pair. */
 const SELECTED = 'IN THE'
-// Set to a directory to capture the journey stage by stage; a normal run
-// writes nothing.
 const shots = process.env.E53_E2E_SHOTS
 
 function shot(page: Page, name: string) {
@@ -39,7 +23,6 @@ function fixturePath() {
   return path.resolve(here, FIXTURE_REL)
 }
 
-/** A native within-paragraph selection the custom selection mirrors. */
 async function selectFirst(page: Page, text: string, units: number) {
   await focusParagraph(page, text)
   await page.keyboard.press('Home')
@@ -64,7 +47,6 @@ async function paintedStyle(page: Page, text: string) {
   }, text)
 }
 
-/** The painted state each control's aria-pressed must agree with. */
 async function expectPressedAgreesWithPaint(page: Page, text: string) {
   const style = await paintedStyle(page, text)
   const pressed = async (name: string) =>
@@ -140,8 +122,6 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
   expect((await paintedStyle(page, SELECTED))?.backgroundColor).not.toBe('')
   await expectPressedAgreesWithPaint(page, SELECTED)
 
-  // Superscript and subscript are one slot: choosing subscript releases
-  // superscript, and choosing superscript back restores it for the save.
   await page.getByRole('button', { name: 'Subscript' }).click()
   await expect(
     page.getByRole('button', { name: 'Superscript' }),
@@ -168,8 +148,6 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
     }),
   )
 
-  // A fresh context reads the stored version back: the pressed state and the
-  // painted CSS come only from the saved run properties.
   const fresh = await browser.newContext()
   const reloaded = await fresh.newPage()
   try {
@@ -219,8 +197,6 @@ test('queues partial character formatting under track changes and saves it', asy
   await selectFirst(page, HEADING, SELECTED.length)
   await openFormatting(page)
 
-  // A tracked range split is recorded as a w:rPrChange, so every character
-  // control stays available and queues a draft instead of refusing.
   for (const label of [
     'Strikethrough',
     'Highlight',
@@ -247,8 +223,6 @@ test('queues partial character formatting under track changes and saves it', asy
 
   await saveAndWait(page)
 
-  // The batch flew tracked and addressed the selection as a paragraph range,
-  // the address a mid-run split has to carry.
   expect(editBodies.at(-1)?.trackChanges).toBe(true)
   const operations = editBodies.flatMap((body) => body.operations ?? [])
   expect(operations).toContainEqual(
@@ -263,19 +237,6 @@ test('queues partial character formatting under track changes and saves it', asy
   )
 })
 
-/*
- * Tracked property history must never paint as current state. The story
- * parser drops a paragraph `w:pPr` that carries a `w:pPrChange`, so the
- * product-reachable path for this leak is a style's sourceFragment — the
- * journey therefore mocks the wire model with the real fragments rather than
- * uploading a DOCX whose pPr the parser would discard.
- *
- * `Normal` carries two kinds of history: a `w:pPrChange` holding the old
- * paragraph mark's strike/highlight/subscript, and a self-closing
- * `w:rPrChange` immediately before the current `w:b`. Before the repair the
- * first seeded every run with dead properties and the second swallowed the
- * bold flag entirely.
- */
 const TRACKED_MATTER_ID = 'mtr_tracked_format'
 const TRACKED_DOC_ID = 'doc_tracked_format'
 const TRACKED_FILENAME = 'tracked-format.docx'
@@ -296,7 +257,6 @@ function trackedRun(id: string, text: string, fragments: string[] = []) {
   return { id, text, preservedXmlFragments: fragments }
 }
 
-/** The wire model; `saved` answers the refetch after the edit lands. */
 function trackedModel(saved: boolean) {
   return {
     documentId: TRACKED_DOC_ID,
@@ -443,10 +403,6 @@ async function mockTrackedWorkspace(page: Page, editBodies: EditBody[]) {
         documentId: TRACKED_DOC_ID,
         versionId: 'ver_2',
         versionNumber: 2,
-        // The real edit route returns the accepted batch's cross-version
-        // lineage; without it the workspace cannot reconcile the history
-        // baseline and the save lands blocked rather than saved. Run indexes
-        // address the result model below, which splits p1-r at offset 5.
         lineage: {
           version: 1,
           baseVersionId: 'ver_1',
@@ -506,12 +462,6 @@ async function mockTrackedWorkspace(page: Page, editBodies: EditBody[]) {
   )
 }
 
-/**
- * Client-side navigation, as in the print journey: the route loaders guard
- * during SSR where the mocked session does not apply, so the document is
- * reached through the app shell. Calling it a second time re-reads the model
- * the way a reload would.
- */
 async function openTrackedDocument(page: Page) {
   await page.goto('/search')
   const nav = page.getByRole('navigation', { name: 'Workspace' })
@@ -521,7 +471,6 @@ async function openTrackedDocument(page: Page) {
     .getByRole('main')
     .getByRole('link', { name: /Tracked Format Matter/ })
     .click()
-  // Stage 5 lists a matter's documents as links, not buttons.
   await page
     .getByRole('link', { name: /tracked-format\.docx/ })
     .first()
@@ -536,9 +485,6 @@ test('tracked property history never paints, presses or saves as current', async
   await mockTrackedWorkspace(page, editBodies)
   await openTrackedDocument(page)
 
-  // The historical paragraph mark seeds nothing: no strike, no highlight, no
-  // subscript. The self-closing rPrChange left the current bold alone. The
-  // painted run spans exist once the paragraph holds the caret.
   await focusParagraph(page, TRACKED_TEXT)
   const before = await paintedStyle(page, TRACKED_TEXT)
   expect(before?.textDecoration ?? '').not.toContain('line-through')
@@ -568,7 +514,6 @@ test('tracked property history never paints, presses or saves as current', async
     (await paintedStyle(page, TRACKED_SELECTED))?.textDecoration,
   ).toContain('line-through')
 
-  // Undo agrees with paint and controls: the toggle reverses, not the history.
   await page.getByRole('button', { name: 'Undo', exact: true }).click()
   await expect(
     page.getByRole('button', { name: 'Strikethrough' }),
@@ -577,21 +522,15 @@ test('tracked property history never paints, presses or saves as current', async
     (await paintedStyle(page, TRACKED_TEXT))?.textDecoration ?? '',
   ).not.toContain('line-through')
 
-  // Re-select 'Plain' before striking again: clicking Undo moved DOM focus to
-  // the toolbar, so the paragraph selection no longer stands.
   await selectFirst(page, TRACKED_TEXT, TRACKED_SELECTED.length)
   await page.getByRole('button', { name: 'Strikethrough' }).click()
   await saveAndWait(page)
-  // The committed save is only landed once the history boundary resolves
-  // against the reloaded model; navigating away before then would persist the
-  // covered draft and reopen it as unsaved work.
   await expect
     .poll(() =>
       page.locator('[data-save-state]').getAttribute('data-save-state'),
     )
     .toBe('saved')
 
-  // Only the current change was saved; history never entered the baseline.
   const operations = editBodies.flatMap((body) => body.operations ?? [])
   expect(operations).toContainEqual(
     expect.objectContaining({
@@ -607,10 +546,6 @@ test('tracked property history never paints, presses or saves as current', async
     expect(operation.vertAlign ?? 'baseline').toBe('baseline')
   }
 
-  // Reopening re-reads the stored model: strike and bold still agree. The
-  // paint is read with the caret on the selection's boundary: parked inside
-  // the run it would split the painted span there and no overlay span would
-  // carry exactly 'Plain'.
   await openTrackedDocument(page)
   await selectFirst(page, TRACKED_TEXT, TRACKED_SELECTED.length)
   await openFormatting(page)
