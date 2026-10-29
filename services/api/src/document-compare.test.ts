@@ -533,6 +533,17 @@ describe('compareDocumentModels', () => {
     expect(compareDocumentModels(base, target).entries).toEqual([])
   })
 
+  it('reports a package change when style multiplicities differ', () => {
+    const first = { styleId: 'First', sourceFragment: '<w:style first/>' }
+    const second = { styleId: 'Second', sourceFragment: '<w:style second/>' }
+    const base = model([], { styles: [first, first, second] })
+    const target = model([], { styles: [first, second, second] })
+
+    expect(compareDocumentModels(base, target).entries).toEqual([
+      { type: 'package', area: 'styles' },
+    ])
+  })
+
   it('reports a one-sided story part its paragraphs cannot', () => {
     const body = [paragraph('p1', 'Body.', { sourceParaId: 'a' })]
     const header = story([], {
