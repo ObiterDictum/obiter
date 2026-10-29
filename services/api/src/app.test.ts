@@ -124,6 +124,20 @@ describe('createApiApp', () => {
     })
   })
 
+  it('keeps health available with a null database name when the URL is malformed', async () => {
+    const response = await createApiApp(
+      { ...testEnv, nodeEnv: 'development', databaseUrl: 'invalid' },
+      createPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    ).request('/api/health')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      status: 'ok',
+      provenance: { databaseName: null },
+    })
+  })
+
   it('reports the serving adapter when the entry point declares one', async () => {
     const auth = {
       api: {
