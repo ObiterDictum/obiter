@@ -216,7 +216,7 @@ function VerificationExplanation({
   )
 }
 
-export function AttentionAction({
+function AttentionAction({
   item,
   variant = 'button',
 }: {

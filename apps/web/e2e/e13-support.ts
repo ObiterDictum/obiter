@@ -18,7 +18,7 @@ export { openRibbonTab }
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-export const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
+const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
 export const HEADING = 'E4 Heading'
 export const BODY = 'Delta paragraph'
 
@@ -156,7 +156,7 @@ export async function openFind(page: Page) {
 }
 
 /** The draft scope a seeded payload must match: tab writer, org, user, doc. */
-export async function draftScope(page: Page) {
+async function draftScope(page: Page) {
   const writerId = await page.evaluate(() =>
     window.sessionStorage.getItem('obiter.document-draft.tab'),
   )

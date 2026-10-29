@@ -24,12 +24,9 @@ import {
 } from './document-draft-identity'
 
 export {
-  DOCUMENT_DRAFT_CLAIM_TTL_MS,
-  DOCUMENT_DRAFT_KEY_PREFIX,
   DOCUMENT_DRAFT_SCHEMA_VERSION,
   documentDraftKey,
   documentDraftTabId,
-  documentStaleDraftKey,
   releaseDocumentDraftWriterClaim,
   resolveDocumentDraftWriter,
   touchDocumentDraftWriterClaim,
@@ -48,12 +45,7 @@ export {
  */
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000
 
-export {
-  draftStateSchema,
-  localInsertSchema,
-  type DocumentDraftSnapshot,
-  type HeldChange,
-} from './document-draft-schema'
+export type { HeldChange } from './document-draft-schema'
 
 let writesSuspended = false
 let rememberedUserId: string | null = null
@@ -299,10 +291,7 @@ export function clearAllDocumentDrafts(storage: DraftStorage) {
   clearDocumentDraftsMatching(storage, () => true)
 }
 
-export function clearDocumentDraftsForUser(
-  storage: DraftStorage,
-  userId: string,
-) {
+function clearDocumentDraftsForUser(storage: DraftStorage, userId: string) {
   clearDocumentDraftsMatching(storage, (key) => keyIncludesUser(key, userId))
 }
 

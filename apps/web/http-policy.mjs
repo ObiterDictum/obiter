@@ -21,7 +21,7 @@ export const COMPRESSIBLE_EXTENSIONS = new Set([
   '.txt',
 ])
 
-export const GZIP = 'gzip'
+const GZIP = 'gzip'
 const IDENTITY = 'identity'
 
 /**

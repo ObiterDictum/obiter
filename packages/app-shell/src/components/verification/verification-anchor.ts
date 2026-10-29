@@ -24,7 +24,7 @@ export function panelPlacement(viewportWidth: number): 'floating' | 'drawer' {
   return viewportWidth >= minimumFloatingViewportPx ? 'floating' : 'drawer'
 }
 
-export type TextPoint = { node: Text; offset: number }
+type TextPoint = { node: Text; offset: number }
 
 function isDecoration(node: Node): boolean {
   const parent = node.parentElement
