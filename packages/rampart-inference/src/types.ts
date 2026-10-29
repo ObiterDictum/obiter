@@ -64,7 +64,7 @@ export interface Span {
 }
 
 /** Resolve a caller keep-set; omitted → {@link KEEP_LABELS}. */
-export function resolveKeepLabels(keepLabels?: readonly PiiLabel[]): ReadonlySet<PiiLabel> {
+function resolveKeepLabels(keepLabels?: readonly PiiLabel[]): ReadonlySet<PiiLabel> {
   return keepLabels === undefined ? KEEP_LABELS : new Set(keepLabels);
 }
 

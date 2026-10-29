@@ -16,7 +16,7 @@ export const FOOTNOTES_PART_NAME = 'word/footnotes.xml'
 export const RELATIONSHIPS_NAMESPACE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
-export const EMU_PER_PX = 9525
+const EMU_PER_PX = 9525
 
 const TABLE_WIDTH_TWIPS = 9000
 

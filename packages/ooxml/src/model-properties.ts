@@ -109,11 +109,11 @@ export function writePropertyChildren(
 
 // CT_PPr/CT_RPr (ECMA-376) element sequences: a missing child lands after its
 // last present predecessor, shared by overlay writes and tracked patches.
-export interface PropertyChildPredecessors {
+interface PropertyChildPredecessors {
   [localName: string]: readonly string[]
 }
 
-export const PROPERTY_CHILD_PREDECESSORS: PropertyChildPredecessors = {
+const PROPERTY_CHILD_PREDECESSORS: PropertyChildPredecessors = {
   numPr: [
     'pStyle',
     'keepNext',

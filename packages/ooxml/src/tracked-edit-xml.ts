@@ -107,7 +107,7 @@ export function wordPrefix(
   return qualified.slice(0, qualified.indexOf(':'))
 }
 
-export function insertedRunFragment(value: string, prefix: string) {
+function insertedRunFragment(value: string, prefix: string) {
   // The tracked-text replacement's property host is the inserted run when one
   // exists; a granular pure deletion emits only `w:del`, so the host falls
   // back to the deleted run — the property change belongs to the run the text
@@ -288,11 +288,7 @@ export function appendPropertyChange(
   return properties.replace(/(<\/[^>]+>)$/u, `${marker}$1`)
 }
 
-export function styleInstruction(
-  prefix: string,
-  name: string,
-  styleId: string,
-) {
+function styleInstruction(prefix: string, name: string, styleId: string) {
   return `<${prefix}:${name} ${prefix}:val="${escapeXmlAttribute(styleId)}"/>`
 }
 
@@ -377,7 +373,7 @@ export function paragraphMarkDeletionReplacement(
   }
 }
 
-export function insertParagraphMarkDeletion(
+function insertParagraphMarkDeletion(
   fragment: string,
   prefix: string,
   del: string,
