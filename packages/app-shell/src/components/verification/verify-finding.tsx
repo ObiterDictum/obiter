@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import {
   CheckCircle,
+  MinusCircle,
   Flag,
   Info,
   Question,
@@ -107,13 +108,13 @@ export function VerifyFinding({
   /** Open the finding beside its text, where the document can show it. */
   onOpen?: () => void
 }) {
-  const Icon = markIcon[finding.state]
   const story = verificationStoryLabel(finding.location.storyKind)
   const uncertainty = verificationUncertainty(finding)
   const dismissal = finding.dismissal
   // A dismissed finding is settled work: it keeps the outcome the check
   // recorded, and it stops competing for attention with what is still open.
   const settled = dismissal != null
+  const Icon = settled ? MinusCircle : markIcon[finding.state]
   return (
     <article
       className={cn(
