@@ -89,7 +89,9 @@ export const BUDGETS = {
   // 1,046,214 B (pdf.worker.min).
   workerPayloadBytes: 1_150_000,
   // 404,572 B shipped (Inter and IBM Plex Mono, woff and woff2 subsets).
-  productAssetsBytes: 445_000,
+  // 753,618 B with the sign-in artwork (29 Oct 2026): one WebP engraving per
+  // theme, 154 kB and 195 kB, under the 200 kB each the panel allows.
+  productAssetsBytes: 790_000,
   // 7,703 B. Absolute, not a percentage: under 8 kB, one import dwarfs a
   // percentage, and a bundler mistake that pulls a library in is far larger.
   mainBundleBytes: 12_000,
@@ -103,7 +105,9 @@ export const BUDGETS = {
   // for the same reason as the CSS entry above.
   // 5,922,329 B after the Redact redesign (28 Oct 2026); its new start,
   // review and finalise screens net +42 kB. 2% headroom.
-  applicationPayloadBytes: 6_040_000,
+  // 6,380,816 B with the sign-in artwork (29 Oct 2026), the same 349 kB as
+  // the product assets above. 2% headroom.
+  applicationPayloadBytes: 6_510_000,
 }
 
 const MANIFEST_PARTS = ['renderer', '.vite', 'manifest.json']
