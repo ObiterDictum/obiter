@@ -126,6 +126,10 @@ export const verificationFindingDismissalSchema = z
   .object({
     reason: z.string().min(1).nullable(),
     dismissedBy: z.string().min(1),
+    /** The dismissing person's member name, for everyone in the matter. Null
+     * when the account is no longer an organisation member; the UI then names
+     * nobody rather than showing an internal id. */
+    dismissedByName: z.string().min(1).nullable(),
     dismissedAt: z.string().datetime({ offset: true }),
   })
   .strict()
@@ -163,6 +167,13 @@ export const verificationFindingViewSchema = z
     excerpt: z.string().min(1),
     location: draftLocationSchema,
     authorityLabel: z.string().min(1),
+    /**
+     * The stored source's own short title, when the source carries one. It is
+     * the case name a citation is read with ("Wood v Capita Insurance Services
+     * Ltd [2017] UKSC 24"); null means the store holds no title, and the UI
+     * then shows the citation alone rather than inventing a name.
+     */
+    authorityName: z.string().min(1).nullable(),
     evidence: z.array(verificationEvidenceViewSchema),
   })
   .strict()

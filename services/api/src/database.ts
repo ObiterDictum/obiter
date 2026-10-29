@@ -72,6 +72,7 @@ export interface AuditRecordInput {
     | 'verification.run_create'
     | 'verification.run_complete'
     | 'verification.run_fail'
+    | 'verification.finding_undismissed'
     | 'user.profile_update'
     | 'auth.password_changed'
   metadata: Record<string, string | number | boolean | null | string[]>

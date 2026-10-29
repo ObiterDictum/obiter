@@ -454,6 +454,7 @@ describe('verification run persistence', () => {
       dismissal: {
         reason: 'The paragraph quotes the judgment directly.',
         dismissedBy: seed.userA,
+        dismissedByName: 'Isolation User A',
       },
     })
 
@@ -487,6 +488,70 @@ describe('verification run persistence', () => {
       notCheckedCount: 0,
       dismissedCount: 1,
     })
+
+    // Reopening puts the finding back in the queue. Deleting the dismissal is
+    // the only thing that survives it in the log, so it is audited.
+    const reopen = await userA.request(
+      `/api/verification-runs/${runId}/findings/${encodeURIComponent(review.id)}/dismiss`,
+      { method: 'DELETE' },
+    )
+    expect(reopen.status).toBe(204)
+    const reopened = verificationFindingsResponseSchema.parse(
+      await (
+        await userA.request(`/api/verification-runs/${runId}/findings`)
+      ).json(),
+    )
+    expect(
+      reopened.findings.find((finding) => finding.id === review.id)?.dismissal,
+    ).toBeNull()
+    const audit = await pool.query(
+      `select user_id from audit_logs
+       where entity_id = $1 and action = 'verification.finding_undismissed'`,
+      [runId],
+    )
+    expect(audit.rows).toEqual([{ user_id: seed.userA }])
+    // Reopening an open finding is a no-op rather than an error, and another
+    // tenant cannot reopen this organisation's finding.
+    expect(
+      (
+        await userA.request(
+          `/api/verification-runs/${runId}/findings/${encodeURIComponent(review.id)}/dismiss`,
+          { method: 'DELETE' },
+        )
+      ).status,
+    ).toBe(204)
+    expect(
+      (
+        await app(pool, seed.userB, seed.orgB).request(
+          `/api/verification-runs/${runId}/findings/${encodeURIComponent(review.id)}/dismiss`,
+          { method: 'DELETE' },
+        )
+      ).status,
+    ).toBe(404)
+
+    // A decision recorded under an account that is not in this organisation
+    // resolves to no name: the resolver is scoped to the tenant, so a stale id
+    // can never surface somebody else's colleague.
+    await pool.query(
+      `insert into verification_finding_dismissals (
+         run_id, finding_id, organisation_id, reason, dismissed_by, dismissed_at
+       ) values ($1, $2, $3, null, $4, now())`,
+      [runId, review.id, seed.orgA, seed.userB],
+    )
+    expect(
+      verificationFindingsResponseSchema
+        .parse(
+          await (
+            await userA.request(`/api/verification-runs/${runId}/findings`)
+          ).json(),
+        )
+        .findings.find((finding) => finding.id === review.id)?.dismissal
+        ?.dismissedByName,
+    ).toBeNull()
+    await pool.query(
+      'delete from verification_finding_dismissals where run_id = $1 and finding_id = $2',
+      [runId, review.id],
+    )
 
     // A check that found nothing has no decision for a person to record.
     const clearDismissal = await userA.request(

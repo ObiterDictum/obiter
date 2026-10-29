@@ -121,6 +121,7 @@ function finding(
       end: 4,
     },
     authorityLabel: `Authority ${index}`,
+    authorityName: null,
     dismissal: null,
     evidence: [],
     ...overrides,
@@ -132,6 +133,7 @@ const pageTwo = [
   finding(51, {
     explanation: 'Page two explanation',
     authorityLabel: 'Page two authority',
+    authorityName: null,
   }),
   finding(52, { state: 'flagged', authorityLabel: 'Page two flagged one' }),
   finding(53, { state: 'flagged', authorityLabel: 'Page two flagged two' }),

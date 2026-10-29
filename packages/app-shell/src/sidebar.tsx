@@ -10,14 +10,11 @@ import {
   resolveSection,
   type ModuleId,
 } from './navigation'
-import {
-  redactionRunNeedsDecision,
-  useRedactionRunsList,
-  type RedactionRunListItem,
-} from './redaction-runs'
+import { useRedactionRunsList } from './redaction-runs'
 import { MatterRow, ModuleRow } from './sidebar-rows'
 import { useMediaQuery } from './use-media-query'
 import type { VerificationRunSummary } from '@obiter/contracts'
+import { latestRunsPerDocument, openWorkCount } from './open-work'
 import { useOrganisationVerificationRuns } from './verification-runs'
 
 const COLLAPSE_STORAGE_KEY = 'obiter.sidebar.collapsed'
@@ -29,30 +26,20 @@ const COLLAPSE_STORAGE_KEY = 'obiter.sidebar.collapsed'
 const NARROW_QUERY = '(max-width: 1023px)'
 const RECENT_MATTERS_LIMIT = 4
 
-/** Runs a person still has to decide, by the rule `redaction-runs` owns, so the
- * sidebar count and the Home queue never disagree about what is pending. */
-export function redactionAttentionCount(
-  runs: Array<Pick<RedactionRunListItem, 'status' | 'summary'>>,
-): number {
-  return runs.filter(redactionRunNeedsDecision).length
-}
-
 /**
- * Findings from completed Verify runs that nobody has resolved yet. A check
- * that did not run is unfinished work too, so it counts here even though the
- * run summary reports it apart from a check that ran and could not conclude.
+ * How serious the waiting work is, so the sidebar never shows a softer colour
+ * than the page it leads to. Read from the same newest-run-per-document rule
+ * the counts come from, so the dot and the number describe one set of runs.
  */
-export function verificationAttentionCount(runs: VerificationRun[]): number {
-  return runs
+function verificationAttentionTone(
+  runs: VerificationRun[],
+): 'danger' | 'warning' | 'success' {
+  const tones = latestRunsPerDocument(runs)
     .filter((run) => run.status === 'completed')
-    .reduce(
-      (total, run) =>
-        total +
-        run.summary.flaggedCount +
-        run.summary.reviewRequiredCount +
-        run.summary.notCheckedCount,
-      0,
-    )
+    .map((run) => verificationAttentionToneFor(run.summary))
+  if (tones.includes('danger')) return 'danger'
+  if (tones.includes('warning')) return 'warning'
+  return 'success'
 }
 
 /**
@@ -65,21 +52,6 @@ function verificationAttentionToneFor(summary: VerificationRunSummary) {
   if (summary.reviewRequiredCount > 0 || summary.notCheckedCount > 0)
     return 'warning' as const
   return 'success' as const
-}
-
-/**
- * How serious the waiting work is, so the sidebar never shows a softer colour
- * than the page it leads to.
- */
-export function verificationAttentionTone(
-  runs: VerificationRun[],
-): 'danger' | 'warning' | 'success' {
-  const tones = runs
-    .filter((run) => run.status === 'completed')
-    .map((run) => verificationAttentionToneFor(run.summary))
-  if (tones.includes('danger')) return 'danger'
-  if (tones.includes('warning')) return 'warning'
-  return 'success'
 }
 
 /**
@@ -122,10 +94,12 @@ export function Sidebar({
   const verificationRuns = useOrganisationVerificationRuns(true).runs
 
   // Modules without a cheap source of truth show no count rather than a zero.
+  // Verify and Redact read the one open-work rule Home and a matter also read.
+  const work = openWorkCount({ verificationRuns, redactionRuns: runs })
   const counts = new Map<ModuleId, number>([
     ['matters', matters.filter((matter) => matter.status === 'active').length],
-    ['verify', verificationAttentionCount(verificationRuns)],
-    ['redact', redactionAttentionCount(runs)],
+    ['verify', work.verify],
+    ['redact', work.redact],
   ])
   const verifyTone = verificationAttentionTone(verificationRuns)
   const recent = recentMatters(matters)

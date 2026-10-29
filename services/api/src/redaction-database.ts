@@ -21,6 +21,7 @@ import type {
   SpanDecision,
 } from '@obiter/contracts'
 import type { AuthenticatedOrgUser } from './authz'
+import { reviewerNames } from './reviewer-names'
 import type {
   Decisions,
   RedactionSpan,
@@ -283,6 +284,48 @@ export function computeSummary(
     reviewedCount,
     unreviewedCount: spans.length - reviewedCount,
   }
+}
+
+/**
+ * Decisions name the person who made them. The stored record holds the id, so
+ * the organisation's member names are joined in where a run is read for
+ * display; they are never written back, because a name inside `decisions_json`
+ * would freeze somebody's name into an audit record and drift from the account
+ * it names.
+ */
+export async function withDecisionNames(
+  queryable: Pick<Pool, 'query'>,
+  organisationId: string,
+  decisions: Decisions,
+): Promise<Decisions> {
+  const records = Object.values(decisions)
+  if (records.length === 0) return decisions
+  const names = await reviewerNames(
+    queryable,
+    organisationId,
+    records.map((record) => record.decidedBy),
+  )
+  const named: Decisions = {}
+  for (const [spanId, record] of Object.entries(decisions)) {
+    named[spanId] = {
+      ...record,
+      decidedByName: names.get(record.decidedBy) ?? null,
+    }
+  }
+  return named
+}
+
+/** The stored shape of a set of decisions: the id, never the joined name. */
+function storedDecisions(decisions: Decisions): Decisions {
+  const stored: Decisions = {}
+  for (const [spanId, record] of Object.entries(decisions)) {
+    stored[spanId] = {
+      decision: record.decision,
+      decidedBy: record.decidedBy,
+      decidedAt: record.decidedAt,
+    }
+  }
+  return stored
 }
 
 export function publicRun(run: RedactionRunRecord) {
@@ -651,7 +694,7 @@ export async function recordSpanDecision(input: {
       return { kind: 'span_not_found' as const }
     }
     const decisions: Decisions = {
-      ...run.decisions,
+      ...storedDecisions(run.decisions),
       [span.id]: {
         decision: input.decision,
         decidedBy: input.userId,
