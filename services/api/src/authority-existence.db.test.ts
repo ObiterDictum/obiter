@@ -580,6 +580,31 @@ describe('authority existence against the stored legal source record', () => {
     expect(finding.explanation.toLowerCase()).toContain('held')
   })
 
+  it('logs a failed store read by its code, never by a message that can carry the cited text', async () => {
+    const failure = Object.assign(
+      new Error('invalid input syntax: "Wood v Capita [2099] UKSC 1"'),
+      { code: '22P02' },
+    )
+    const warned: unknown[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]) => warned.push(args)
+    try {
+      await lookupAuthorityExistence(
+        {
+          query: async () => {
+            throw failure
+          },
+        } as unknown as Pick<Pool, 'query'>,
+        caseLaw('[2099] UKSC 1', 'db-test-v2-uksc-1'),
+      )
+    } finally {
+      console.warn = warn
+    }
+    const logged = JSON.stringify(warned)
+    expect(logged).toContain('22P02')
+    expect(logged).not.toContain('Wood v Capita')
+  })
+
   it('turns a store failure into an inconclusive check, never not-held', async () => {
     const failingPool = {
       query: async () => {
