@@ -65,7 +65,8 @@ The schedule is served as PDF or DOCX from `GET
 /api/redaction-runs/:runId/audit?format=pdf|docx` and is generated server-side.
 It lists each decision with its category, reviewer and time, and the audit log,
 but never reproduces the removed words: the file is meant to be emailed and
-printed.
+printed. Disclosure copies use generic filenames; schedules identify the run
+without reproducing the confidential source filename.
 
 ## Filing a standalone copy
 
@@ -74,3 +75,7 @@ to. `POST /api/redaction-runs/:runId/save-to-matter` files its finalised copy as
 version 1 of a new document in a chosen matter: edit access on that matter is
 checked, the stored bytes are re-hashed against the SHA-256 recorded at
 finalisation, extraction runs, and the file, version and run are audited.
+The destination matter and run are locked before filing. The document, version,
+run link and audit events commit together; failed writes roll back and remove
+staged objects. Concurrent requests resolve to the same saved version, and retries
+re-check edit access to the destination matter.
