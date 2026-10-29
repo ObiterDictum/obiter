@@ -877,6 +877,28 @@ describe('document comment routes', () => {
     expect(database.comments.size).toBe(1)
   })
 
+  it('replays the same comment intent after the anchor version changes', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    database.seedComment({
+      anchorVersionId: 'ver_old',
+      authorId: 'usr_actor',
+      clientKey: 'submit-old-version',
+      body: 'Same intent',
+      paragraphId: 'para-1',
+      startOffset: 0,
+      endOffset: 1,
+    })
+
+    const response = await createComment(routeApp(database).app, {
+      body: 'Same intent',
+      anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 1 },
+      clientKey: 'submit-old-version',
+    })
+
+    expect(response.status).toBe(200)
+    expect(database.comments.size).toBe(1)
+  })
+
   it('does not replay a comment client key whose stored row is another organisation', async () => {
     const database = new TestDatabase({ access: 'edit' })
     database.seedComment({
