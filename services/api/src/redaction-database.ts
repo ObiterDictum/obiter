@@ -942,7 +942,7 @@ export async function listRedactionAuditLog(
 }
 
 export async function getRedactionOutputKey(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
   run: RedactionRunRecord,
 ) {
   if (!run.outputId) return null

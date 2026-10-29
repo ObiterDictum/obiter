@@ -231,6 +231,57 @@ describe('matter saved sources', () => {
     }
   })
 
+  it('rolls back source saves and removals when the audit insert fails', async () => {
+    const seed = await seedMatter()
+    const triggerName = `qa_audit_${seed.matterId}`
+    try {
+      const asOwner = app(pool, owner(seed))
+      const path = `/api/matters/${seed.matterId}/saved-sources`
+      await pool.query(`create function ${triggerName}() returns trigger language plpgsql as $$
+        begin
+          if new.organisation_id = TG_ARGV[0] then raise exception 'synthetic audit failure'; end if;
+          return new;
+        end $$`)
+      await pool.query(`create trigger ${triggerName} before insert on audit_logs
+        for each row execute function ${triggerName}('${seed.orgId}')`)
+      const failedSave = await asOwner.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(sourceBody),
+      })
+      expect(failedSave.status).toBe(500)
+      const afterFailure = await pool.query(
+        'select id from matter_saved_sources where matter_id = $1',
+        [seed.matterId],
+      )
+      expect(afterFailure.rows).toHaveLength(0)
+      await pool.query(`drop trigger ${triggerName} on audit_logs`)
+      const created = await asOwner.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(sourceBody),
+      })
+      expect(created.status).toBe(201)
+      const body = (await created.json()) as { savedSource: { id: string } }
+      await pool.query(`create trigger ${triggerName} before insert on audit_logs
+        for each row execute function ${triggerName}('${seed.orgId}')`)
+      const failedRemove = await asOwner.request(
+        `${path}/${body.savedSource.id}`,
+        { method: 'DELETE' },
+      )
+      expect(failedRemove.status).toBe(500)
+      const kept = await pool.query(
+        'select id from matter_saved_sources where matter_id = $1 and deleted_at is null',
+        [seed.matterId],
+      )
+      expect(kept.rows).toHaveLength(1)
+    } finally {
+      await pool.query(`drop trigger if exists ${triggerName} on audit_logs`)
+      await pool.query(`drop function if exists ${triggerName}()`)
+      await cleanup(seed)
+    }
+  })
+
   it('rejects a malformed source instead of storing it', async () => {
     const seed = await seedMatter()
     try {

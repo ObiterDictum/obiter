@@ -90,3 +90,20 @@ describe('buildAuditReport', () => {
     expect(schedule).toContain('usr_1')
   })
 })
+
+it('counts an override_keep as visible in the schedule totals', () => {
+  const report = buildAuditReport(run, [])
+  report.spanDecisions = [
+    {
+      spanId: 'span_keep',
+      spanText: 'Synthetic name',
+      category: 'person_name',
+      decision: 'override_keep',
+      decidedBy: 'usr_1',
+      decidedAt: '2026-07-01T12:00:00.000Z',
+    },
+  ]
+  expect(scheduleLines(report)).toContain(
+    'Decisions: 0 removed, 1 kept visible',
+  )
+})

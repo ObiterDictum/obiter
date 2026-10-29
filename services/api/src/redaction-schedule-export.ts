@@ -35,7 +35,10 @@ function when(value: string) {
  */
 export function scheduleLines(report: AuditReport): string[] {
   const decisions = report.spanDecisions
-  const kept = decisions.filter((entry) => entry.decision === 'reject').length
+  const kept = decisions.filter(
+    (entry) =>
+      entry.decision === 'reject' || entry.decision === 'override_keep',
+  ).length
   const removed = decisions.length - kept
   return [
     'Obiter redaction schedule',
