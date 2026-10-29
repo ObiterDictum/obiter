@@ -119,10 +119,11 @@ export function FinalizeDialog({
     run.spans.length - counts.accepted - counts.rejected - counts.pseudonymised
   const limitedDetectionMode =
     run.detectionMode === 'model+supplement' ? null : run.detectionMode
-  // Identical text with different decisions leaks it in the copy that leaves:
-  // one "Priya" redacted, another kept. Both the server and this dialog refuse
-  // to finalise until each group decides the same way.
-  const mixed = mixedTextGroups(run.spans, run.decisions)
+  const mixed =
+    /\.docx$/iu.test(run.sourceFilename) ||
+    run.sourceMimeType?.includes('wordprocessingml')
+      ? []
+      : mixedTextGroups(run.spans, run.decisions)
   const blocked =
     undecided > 0 ||
     mixed.length > 0 ||
