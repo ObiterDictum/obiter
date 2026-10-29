@@ -11,6 +11,7 @@ import type {
   DocumentStoryWire,
 } from '@obiter/contracts'
 import { compareDocumentModels } from './document-compare'
+import { wordDiff } from './document-compare-word-diff'
 
 function paragraph(
   id: string,
@@ -720,5 +721,21 @@ describe('compareDocumentModels', () => {
       }
     }
     expect(modifiedCount).toBeGreaterThan(0)
+  })
+})
+
+describe('word diff', () => {
+  it('keeps the common edges while collapsing an oversized changed middle', () => {
+    const baseMiddle = `${'old '.repeat(260)}shared ${'before '.repeat(260)}`
+    const targetMiddle = `${'new  '.repeat(260)}shared  ${'after  '.repeat(260)}`
+
+    expect(
+      wordDiff(`start ${baseMiddle}end`, `start ${targetMiddle}end`),
+    ).toEqual([
+      { kind: 'same', text: 'start ' },
+      { kind: 'removed', text: baseMiddle },
+      { kind: 'added', text: targetMiddle },
+      { kind: 'same', text: 'end' },
+    ])
   })
 })
