@@ -5,6 +5,7 @@ import type {
 } from '@obiter/contracts'
 import {
   formatRunTime,
+  verificationAuthority,
   verificationCountsLabel,
   verificationDismissalRecord,
   verificationFindingCounts,
@@ -31,6 +32,7 @@ function finding(
     excerpt: '[2017] UKSC 24',
     location: { paragraphId: 'p1', start: 0, end: 13 },
     authorityLabel: '[2017] UKSC 24',
+    authorityName: null,
     evidence: [],
     ...overrides,
   }
@@ -61,31 +63,38 @@ describe('finding state wording', () => {
     ).toBe('Authority is held in the stored sources')
   })
 
-  it('states what a review reason does and does not establish', () => {
+  // A finding that needs review states its limit once, in the explanation the
+  // check wrote; a second sentence saying the same thing was noise on the card.
+  it('adds no second sentence to a finding that needs review', () => {
+    for (const reviewReason of [
+      'citation_unresolved',
+      'authority_not_held',
+      'evidence_unavailable',
+      'check_inconclusive',
+      'citation_ambiguous',
+    ] as const) {
+      expect(
+        verificationUncertainty(
+          finding({ state: 'review_required', reviewReason }),
+        ),
+      ).toBeNull()
+    }
+  })
+
+  it('names an authority by its stored case name, never by its citation alone', () => {
     expect(
-      verificationUncertainty(
-        finding({
-          state: 'review_required',
-          reviewReason: 'citation_unresolved',
-        }),
-      ),
-    ).toContain('may be wrong')
+      verificationAuthority({
+        authorityLabel: '[2017] UKSC 24',
+        authorityName: 'Wood v Capita Insurance Services Ltd',
+      }),
+    ).toBe('Wood v Capita Insurance Services Ltd [2017] UKSC 24')
+    // No stored title: the citation is shown alone rather than a name invented.
     expect(
-      verificationUncertainty(
-        finding({
-          state: 'review_required',
-          reviewReason: 'authority_not_held',
-        }),
-      ),
-    ).toContain('not a finding that it does not exist')
-    expect(
-      verificationUncertainty(
-        finding({
-          state: 'review_required',
-          reviewReason: 'evidence_unavailable',
-        }),
-      ),
-    ).toContain('nothing was compared')
+      verificationAuthority({
+        authorityLabel: '[2099] UKSC 9',
+        authorityName: null,
+      }),
+    ).toBe('[2099] UKSC 9')
   })
 
   it('says a check that did not run compared nothing', () => {
@@ -112,6 +121,7 @@ describe('finding state wording', () => {
         dismissal: {
           reason: 'Quoted directly from the judgment.',
           dismissedBy: 'usr_1',
+          dismissedByName: 'Priya Shah',
           dismissedAt: '2026-10-26T14:52:00.000Z',
         },
       }),
@@ -151,12 +161,23 @@ describe('finding state wording', () => {
     const dismissal = {
       reason: null,
       dismissedBy: 'usr_1',
+      dismissedByName: 'Priya Shah',
       dismissedAt: '2026-10-26T14:52:00.000Z',
     }
     expect(verificationDismissalRecord(dismissal, 'usr_1')).toBe(
       `Dismissed by you · ${formatRunTime(dismissal.dismissedAt)}`,
     )
+    // A colleague reads the decider's name, not "another reviewer".
     expect(verificationDismissalRecord(dismissal, 'usr_2')).toBe(
+      `Dismissed by Priya Shah · ${formatRunTime(dismissal.dismissedAt)}`,
+    )
+    // A name the organisation no longer holds is not replaced by an id or a guess.
+    expect(
+      verificationDismissalRecord(
+        { ...dismissal, dismissedByName: null },
+        'usr_2',
+      ),
+    ).toBe(
       `Dismissed by another reviewer · ${formatRunTime(dismissal.dismissedAt)}`,
     )
   })

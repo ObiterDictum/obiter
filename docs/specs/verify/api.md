@@ -27,10 +27,14 @@
   (1-200, default 50) and an opaque `cursor`. Returns `{ run, findings,
 nextCursor }`.
 - Each finding carries `dismissal` (`null`, or `{ reason, dismissedBy,
-dismissedAt }`) and each evidence item carries `source` (`url`,
+dismissedByName, dismissedAt }`) and each evidence item carries `source` (`url`,
   `canonicalUrl`, `pinpoint`, `anchor`): the stored URL the source is named
   from, and the in-app source page with its paragraph or provision pinpoint.
   A source the store does not hold yields `null`s, never an invented page.
+- `dismissedByName` is the dismissing person's organisation member name, read
+  from that member's account for everybody the run is visible to. An id that no
+  longer resolves to a member of this organisation yields `null`: the API never
+  serves an email address or an internal id in its place.
 - The run summary separates `flaggedCount`, `reviewRequiredCount`,
   `notCheckedCount` and `dismissedCount`. Dismissed findings are excluded from
   the first three, because the summary reports work still waiting on a person.
@@ -44,6 +48,14 @@ dismissedAt }`) and each evidence item carries `source` (`url`,
   decide. An unknown finding is `verification_finding_not_found` (404), and
   another tenant's run is concealed as not found.
 - The dismissal never changes the finding's own state or the document.
+
+`DELETE /api/verification-runs/:runId/findings/:findingId/dismiss`
+
+- Edit-gated. Puts a dismissed finding back in the queue. `204`, idempotent: a
+  finding that is already open is a no-op, not an error. The dismissal row was
+  the only record of the decision, so a removal that changes something appends
+  a `verification.finding_undismissed` audit record; another tenant's run is
+  concealed as not found (404).
 
 A malformed cursor or an out-of-range limit is a `400 validation_failed`, never
 an unbounded query.

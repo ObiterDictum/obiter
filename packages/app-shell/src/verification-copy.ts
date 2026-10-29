@@ -115,35 +115,31 @@ export function verificationWhatCompared(type: VerificationFindingType) {
 }
 
 /**
- * Exactly what is uncertain, and nothing more. Each reason names a limit of the
- * check, never an outcome: an unresolved citation is not a wrong one, and a
- * source Obiter does not hold is not a source that does not exist.
+ * The one limit a reader must know beyond the check's own explanation. A
+ * finding that needs review already states its limit in `explanation`, in the
+ * words of the check that reached it, so adding a second sentence here said the
+ * same thing twice; the note is kept only where nothing else says it.
  */
 export function verificationUncertainty(
-  finding: Pick<VerificationFindingView, 'type' | 'state' | 'reviewReason'>,
+  finding: Pick<VerificationFindingView, 'state'>,
 ) {
-  if (finding.state === 'not_checked') {
-    return 'This check did not run, so nothing was compared.'
-  }
-  if (finding.state !== 'review_required') return null
-  switch (finding.reviewReason) {
-    case 'citation_ambiguous':
-      return 'More than one stored source could answer this text, so no single authority was chosen.'
-    case 'citation_unresolved':
-      return 'The citation did not match a stored source. It may be wrong, or it may name a source Obiter does not hold.'
-    case 'authority_not_held':
-      return 'Obiter does not hold this authority. That is not a finding that it does not exist.'
-    case 'evidence_unavailable':
-      return 'The source exists, but its stored text could not be read, so nothing was compared.'
-    case 'check_inconclusive':
-      return 'The check could not reach a conclusion. It confirmed nothing and refuted nothing.'
-    case null:
-      return 'This finding needs a person to decide what it means.'
-    default: {
-      const unhandled: never = finding.reviewReason
-      return unhandled
-    }
-  }
+  return finding.state === 'not_checked'
+    ? 'This check did not run, so nothing was compared.'
+    : null
+}
+
+/**
+ * The authority a finding was attributed to, as a citation is read aloud: the
+ * case name when the stored source carries one, then the citation. The name is
+ * never derived from the citation itself, so a source with no stored title is
+ * shown as the citation alone.
+ */
+export function verificationAuthority(
+  finding: Pick<VerificationFindingView, 'authorityName' | 'authorityLabel'>,
+) {
+  return finding.authorityName
+    ? `${finding.authorityName} ${finding.authorityLabel}`
+    : finding.authorityLabel
 }
 
 /**
@@ -346,13 +342,19 @@ export function verificationVersionNote(
 
 /**
  * The stored-version boundary, stated wherever evidence is shown. A reader must
- * never take a checked result as covering work that has not been saved.
+ * never take a checked result as covering work that has not been saved. The
+ * version is named by its number, as every other surface names it: an internal
+ * version id is not something a lawyer can match to the file in front of them.
  */
 export function verificationStoredVersionNote(
-  versionId: string,
+  versionNumber: number | undefined,
   options: { unsaved: boolean; stale: boolean },
 ) {
-  const parts = [`Checked stored version ${versionId}.`]
+  const parts = [
+    versionNumber === undefined
+      ? 'Checked the stored version.'
+      : `Checked version ${String(versionNumber)}.`,
+  ]
   if (options.stale) {
     parts.push('A newer version is stored, so this evidence is earlier.')
   }
@@ -365,21 +367,19 @@ export function verificationStoredVersionNote(
 }
 
 /**
- * The decisions table stores the dismissing user's id, not their name. Naming
- * the user we can identify and saying "another reviewer" otherwise is the
- * honest option: an internal id is not a name, and inventing one would falsify
- * a record of who decided.
+ * Who dismissed a finding, by their member name. The id is the recorded fact
+ * and the name is resolved beside it for the matter's own readers, so a name
+ * that no longer resolves (the account left the organisation) falls back to
+ * "another reviewer" rather than to an internal id or an invented name.
  */
 export function verificationDismissalRecord(
   dismissal: VerificationFindingDismissal,
   currentUserId: string | undefined,
 ) {
   const time = formatRunTime(dismissal.dismissedAt)
-  // Without the signed-in id the person cannot be named truthfully, so the
-  // record states only what it knows rather than calling everyone "another
-  // reviewer".
-  if (!currentUserId) return `Dismissed · ${time}`
   const who =
-    dismissal.dismissedBy === currentUserId ? 'you' : 'another reviewer'
+    currentUserId && dismissal.dismissedBy === currentUserId
+      ? 'you'
+      : (dismissal.dismissedByName ?? 'another reviewer')
   return `Dismissed by ${who} · ${time}`
 }

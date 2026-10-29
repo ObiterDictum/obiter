@@ -129,12 +129,7 @@ export function DecisionBar({
           </div>
           {record ? (
             <p className="mt-0.5 text-caption text-ink">
-              {decisionRecord(
-                record.decision,
-                record.decidedBy,
-                record.decidedAt,
-                currentUserId,
-              )}
+              {decisionRecord(record, currentUserId)}
             </p>
           ) : null}
           <p className="mt-0.5 max-w-[68ch] text-caption text-subtle">

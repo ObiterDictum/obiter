@@ -14,13 +14,9 @@ import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
 import type { MatterRecord } from './matters'
 import { matterInitials } from './matters'
 import type { RedactionRunListItem } from './redaction-runs'
-import { buildAttentionItems } from './views/home-attention'
-import {
-  Sidebar,
-  recentMatters,
-  redactionAttentionCount,
-  verificationAttentionCount,
-} from './sidebar'
+import { buildAttentionItems, summariseAttention } from './views/home-attention'
+import { Sidebar, recentMatters } from './sidebar'
+import { openWorkCount } from './open-work'
 
 const mocks = vi.hoisted(() => ({
   matters: [] as MatterRecord[],
@@ -152,24 +148,27 @@ afterEach(() => {
 
 describe('sidebar data helpers', () => {
   it('counts only the redaction runs that still need a decision', () => {
+    const count = (runs: RedactionRunListItem[]) =>
+      openWorkCount({ verificationRuns: [], redactionRuns: runs }).redact
     expect(
-      redactionAttentionCount([
-        { status: 'reviewing' },
-        { status: 'pending' },
-        { status: 'finalized' },
+      count([
+        redactionRun({ id: 'reviewing' }),
+        redactionRun({ id: 'queued', status: 'pending' }),
+        redactionRun({ id: 'done', status: 'finalized' }),
       ]),
     ).toBe(1)
     // Every span decided: the run needs finalising, not a decision.
     expect(
-      redactionAttentionCount([
-        {
+      count([
+        redactionRun({
+          id: 'decided',
           status: 'ready_for_review',
           summary: { totalSpans: 4, byDecision: { accept: 4, undecided: 0 } },
-        },
+        }),
       ]),
     ).toBe(0)
     // A failed run also waits on a person: the same rule the Redact list uses.
-    expect(redactionAttentionCount([{ status: 'failed' }])).toBe(1)
+    expect(count([redactionRun({ id: 'failed', status: 'failed' })])).toBe(1)
   })
 
   // The count and the queue are two views of one rule; this fails if they drift.
@@ -196,25 +195,37 @@ describe('sidebar data helpers', () => {
     }).filter((item) => item.kind.startsWith('redact'))
 
     expect(queued).toHaveLength(3)
-    expect(redactionAttentionCount(runs)).toBe(queued.length)
+    expect(
+      openWorkCount({ verificationRuns: [], redactionRuns: runs }).redact,
+    ).toBe(queued.length)
   })
 
-  it('counts unresolved findings on completed Verify runs only', () => {
+  // The count and the Home header are two views of one rule, which is why the
+  // badge and the header can no longer disagree about a re-run.
+  it('counts exactly the finding the Home header counts', () => {
+    const runs = [
+      run({
+        summary: {
+          findingCount: 3,
+          flaggedCount: 2,
+          reviewRequiredCount: 1,
+          dismissedCount: 0,
+          notCheckedCount: 0,
+        },
+      }),
+      run({ id: 'vrun_running', status: 'running' }),
+      run({ id: 'vrun_clean' }),
+    ]
+    const items = buildAttentionItems({
+      verificationRuns: runs,
+      redactionRuns: [],
+      documentFilenames: new Map(),
+      matters: new Map(),
+    })
     expect(
-      verificationAttentionCount([
-        run({
-          summary: {
-            findingCount: 3,
-            flaggedCount: 2,
-            reviewRequiredCount: 1,
-            dismissedCount: 0,
-            notCheckedCount: 0,
-          },
-        }),
-        run({ id: 'vrun_running', status: 'running' }),
-        run({ id: 'vrun_clean' }),
-      ]),
+      openWorkCount({ verificationRuns: runs, redactionRuns: [] }).verify,
     ).toBe(3)
+    expect(summariseAttention(items).total).toBe(3)
   })
 
   it('labels a matter tile from its client reference, else its initials', () => {

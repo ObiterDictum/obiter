@@ -30,6 +30,7 @@ import type { RedactionRenderer } from '../redaction-renderer'
 import { sha256 } from '../redaction-secure-pdf'
 import {
   finalizeRedactionRun,
+  withDecisionNames,
   getRedactionOutputKey,
   getRedactionRun,
   getRunLayoutObjectKey,
@@ -218,6 +219,22 @@ export function createRedactReviewRoutes(
   storage: StorageService,
   renderer: RedactionRenderer | null = null,
 ) {
+  /**
+   * A run read for a reviewer names the person behind each decision. The read is
+   * scoped to the run's organisation, so a name only ever reaches a colleague in
+   * that organisation — never across tenants, and never an email address.
+   */
+  async function namedReviewers(pool: Pool, run: RedactionRunRecord) {
+    return {
+      ...run,
+      decisions: await withDecisionNames(
+        pool,
+        run.organisationId,
+        run.decisions,
+      ),
+    }
+  }
+
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs/:runId', async (c) => {
@@ -231,7 +248,7 @@ export function createRedactReviewRoutes(
         'Redaction run not found.',
         404,
       )
-    return c.json({ run: publicRun(run) })
+    return c.json({ run: publicRun(await namedReviewers(pool, run)) })
   })
 
   routes.get('/api/redaction-runs/:runId/document-text', async (c) => {
@@ -408,7 +425,9 @@ export function createRedactReviewRoutes(
         },
         requestId: c.get('requestId'),
       })
-      return c.json({ run: publicRun(result.run) })
+      return c.json({
+        run: publicRun(await namedReviewers(pool, result.run)),
+      })
     },
   )
 
