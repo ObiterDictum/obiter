@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { SealCheck } from '@phosphor-icons/react'
+import { EyeSlash } from '@phosphor-icons/react'
 import { Badge, Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
 import type { VersionRedaction } from './documents'
 import { formatDate } from './format'
@@ -23,7 +23,7 @@ export function RedactedMark({
   const line = `Produced by Redact on ${formatDate(producedAt)} by ${redaction.producedBy ?? 'another reviewer'}`
   const badge = (
     <Badge tone="info">
-      <SealCheck size={12} aria-hidden />
+      <EyeSlash size={12} aria-hidden />
       Redacted
     </Badge>
   )
