@@ -1,17 +1,3 @@
-/*
- * Synthetic origin for the proxy-boundary checks.
- *
- * This is not the product API. It exists because a real upload or download
- * cannot be paced to a chosen duration on demand, and the proxy's deadlines
- * must be tested at exact byte and time boundaries. The product's own
- * behaviour through the same proxy is proved separately against the real
- * images; this file only isolates what Traefik does.
- *
- * Size and pacing arrive as query parameters so the harness declares them and
- * the origin reports what it actually saw, rather than the two agreeing by
- * assumption. It has no filesystem access and holds nothing, and it is mounted
- * into its container as a single file, so it depends on nothing else.
- */
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
 
@@ -28,7 +14,6 @@ function json(res, status, body) {
   res.end(payload)
 }
 
-/** Read the whole body, reporting the byte count the server observed. */
 function readBody(req) {
   return new Promise((resolve) => {
     let bytes = 0
@@ -69,19 +54,12 @@ export const server = createServer(async (req, res) => {
 
   if (url.pathname === '/upload' && req.method === 'POST') {
     const result = await readBody(req)
-    // A body the proxy cut never finishes; answering would hide that from the
-    // client as a partial success.
     if (!result.complete) return
     json(res, 201, { bytes: result.bytes })
     return
   }
 
   if (url.pathname === '/stream') {
-    // Bound every parameter before it reaches Buffer.alloc or a timer. The
-    // checks sit here, around the sinks, rather than in a helper, and an
-    // out-of-range value fails explicitly rather than being clamped: a
-    // mistyped probe is visible instead of silently changing what was
-    // measured. The upper bounds are what the checks need; none asks for more.
     const param = (name, fallback) => {
       const raw = url.searchParams.get(name)
       if (raw === null) return fallback
@@ -143,8 +121,6 @@ export const server = createServer(async (req, res) => {
   json(res, 404, { error: 'not_found' })
 })
 
-// Listen only when run as the container entry point, so the handler can be
-// imported by its tests without starting a server.
 if (
   process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(process.argv[1]).href

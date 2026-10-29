@@ -4,23 +4,6 @@ import { parseDocx } from '../../packages/ooxml/src/parse'
 import { sha256 } from './manifest'
 import { documentBodyText } from './summary'
 
-/**
- * The evidence an operator-supplied `--word-output` file can carry, and the
- * honesty limit on what it means.
- *
- * Nothing this harness can observe proves a Word execution happened: the
- * file and `--word-version` are manual reports, and `docProps/app.xml` is
- * operator-mutable metadata — the test suite itself writes the Word producer
- * string into a package Word never touched. So the passing status names the
- * evidence (`observed-producer-evidence`), never the conclusion, and the
- * manifest's release gate stays `not-checked` until recorded external
- * evidence — open without repair, save, visual comparison — exists.
- *
- * The rejections are real constraints on the story: a byte-identical copy of
- * an input artifact cannot have been re-saved by anything, a file that is
- * not the same document cannot be this document's Word save, and a
- * producer string naming another application is evidence against Word.
- */
 export type WordEvidence =
   | {
       status: 'rejected'
@@ -36,7 +19,6 @@ export type WordEvidence =
       inputSha256: string
     }
 
-/** What the manifest records for the operator-supplied Word leg. */
 export type WordRecord =
   | {
       status: 'rejected'
@@ -48,11 +30,6 @@ export type WordRecord =
       correlatedWith: { artifact: string; sha256: string }
     }
   | {
-      /**
-       * The file and version are manual reports carrying observed producer
-       * metadata — evidence consistent with a Word save, not verification of
-       * one.
-       */
       status: 'manual-reported'
       verification: 'externally-unverified'
       claimedVersion: string
@@ -67,14 +44,8 @@ export type WordProbe =
   | { status: 'word-detected'; path: string }
   | { status: 'not-checked'; reason: string }
 
-/**
- * The release-gate verdict. `checked` requires recorded external evidence of
- * a real Word run — open without repair, save, visual comparison — which the
- * operator instructions ask for and nothing in this process can produce.
- */
 export type WordAcceptance = 'not-checked' | 'checked'
 
-/** The producer string Word desktop writes into docProps/app.xml on save. */
 const WORD_PRODUCER = /^microsoft office word$/i
 
 export function detectWord(): WordProbe {
@@ -83,9 +54,7 @@ export function detectWord(): WordProbe {
       try {
         const found = execFileSync('where', [command], { encoding: 'utf8' })
         if (found.trim()) return { status: 'word-detected', path: found.trim() }
-      } catch {
-        /* not on PATH */
-      }
+      } catch {}
     }
   } else if (process.platform === 'darwin') {
     try {
@@ -95,9 +64,7 @@ export function detectWord(): WordProbe {
         { encoding: 'utf8' },
       )
       if (found.trim()) return { status: 'word-detected', path: found.trim() }
-    } catch {
-      /* no Word */
-    }
+    } catch {}
   }
   for (const command of ['libreoffice', 'soffice']) {
     try {
@@ -106,9 +73,7 @@ export function detectWord(): WordProbe {
         status: 'not-checked',
         reason: `Only ${command} was found; LibreOffice is not Microsoft Word and does not satisfy the gate.`,
       }
-    } catch {
-      /* continue */
-    }
+    } catch {}
   }
   return {
     status: 'not-checked',
@@ -116,12 +81,6 @@ export function detectWord(): WordProbe {
   }
 }
 
-/**
- * Inspect the operator-supplied DOCX for evidence Microsoft Word saved it.
- * `known` holds what this run produced: the input artifacts' hashes (a
- * byte-identical file cannot have been re-saved) and the cycle-1 export's
- * body text (a different document cannot be this document's Word save).
- */
 export async function inspectWordOutput(
   bytes: Uint8Array,
   known: {
@@ -197,11 +156,6 @@ export async function inspectWordOutput(
   }
 }
 
-/**
- * Build the manifest's word record. Passing evidence produces a
- * `manual-reported` record — the strongest claim a mutable-metadata check can
- * honestly carry — and never a verified one.
- */
 export function wordRecord(
   evidence: WordEvidence,
   claimedVersion: string,
@@ -234,7 +188,6 @@ export function wordRecord(
   }
 }
 
-/** The operator instructions file written while the Word leg is pending. */
 export function wordStepInstructions(probe: WordProbe): string {
   return [
     '# Microsoft Word step (manual)',

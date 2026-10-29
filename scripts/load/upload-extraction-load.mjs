@@ -1,22 +1,4 @@
 #!/usr/bin/env node
-/*
- * Measure the upload/extraction envelope of one lane's API, and what extraction
- * concurrency does to unrelated authenticated requests.
- *
- * This is a manual instrument, not a gate. It publishes an observed envelope
- * with its conditions and its limitations; it does not assert a production
- * capacity, and no result from one server run should be turned into a CI
- * threshold.
- *
- * Usage (from the lane worktree, with that lane's API running):
- *
- *   node scripts/load/upload-extraction-load.mjs \
- *     --sizes small,medium --ramp 1,2,4 --requests 12 --duration-ms 20000 \
- *     --out /tmp/q3-upload-extraction.json
- *
- * See scripts/load/README.md for what each bound means, what the harness
- * refuses, and how to read the report.
- */
 import { writeFile } from 'node:fs/promises'
 import { loadavg } from 'node:os'
 import { basename, resolve } from 'node:path'
@@ -86,13 +68,9 @@ export async function main({
 
   const runTag = newRunTag()
   const ids = fixtureIds(runTag)
-  // Resolved inside the try so a target refusal is written to `--out` like any
-  // other refusal; before that point the path itself is unvalidated.
   let cells = []
   let target = null
   let querier = null
-  // Created inside the try, so a failure anywhere in setup still runs the
-  // cleanup that removes it.
   let scratch = null
   const controller = new AbortController()
 
@@ -105,17 +83,8 @@ export async function main({
   let failure = null
   let exitCode = EXIT_OK
 
-  /**
-   * Soft-delete both fixture matters through the product's own routes. Safe to
-   * call twice, and called from the failure path too: a refusal that happens
-   * after provisioning must not leave a matter full of synthetic documents
-   * behind for someone else's run to trip over.
-   */
   async function deleteFixtures() {
     if (fixturesDeleted || !target) return
-    // `provisioned` is null when provisioning itself failed, but the SQL
-    // fixtures (including tenant B's matter) may already exist, so the base
-    // ids are the fallback rather than a reason to skip cleanup.
     try {
       const softDeletedMatters = await softDeleteFixtures({
         target,
@@ -133,9 +102,6 @@ export async function main({
     fixturesDeleted = true
   }
 
-  // A first signal stops the run and cleans up; a second exits. A synchronous
-  // psql call blocks the event loop, so a `once` handler would leave the
-  // interrupt queued and a second signal ignored, and a hung run needs SIGKILL.
   let signals = 0
   const onSignal = (signal) => {
     signals += 1
@@ -178,12 +144,7 @@ export async function main({
 
     const cgroupPath = await resolveUnitCgroup(unitName)
     const observer = createHostObserver({ cgroupPath, diskPath: worktreeRoot })
-    // Refused rather than degraded: without a first sample there is no
-    // resource bound and no recovery comparison, so a run here would publish a
-    // number with none of its conditions.
     const baseline = await firstSample(observer)
-    // Captured either side of the load, not at report time: a 1-minute load
-    // average read twice afterwards would describe nothing.
     const loadAverageBefore = loadavg()
     const hostCpuBefore = await hostCpuTicks()
     const activeUnitsBefore = activeObiterUnits()
@@ -297,8 +258,6 @@ export async function main({
       contended,
     })
   } catch (error) {
-    // Recorded rather than rethrown: the report has to be written either way,
-    // and the refusal is rethrown once it has been.
     failure = error
     await deleteFixtures()
   } finally {
@@ -320,15 +279,11 @@ export async function main({
     )
   }
   if ((sqlWritten || provisioned) && (!fixturesDeleted || cleanup.failed)) {
-    // Say exactly what remains rather than let a reader assume the run
-    // cleaned up after itself.
     console.error(
       `retained for run tag ${runTag}: synthetic organisation, user, session and matter rows ` +
         '(soft delete did not complete); audit rows and stored objects are retained by design',
     )
   }
-  // A refusal is the more useful failure and keeps its documented exit code;
-  // an unwritable report is reported on stderr above either way.
   if (failure) throw failure
   if (writeError) throw writeError
 
@@ -351,7 +306,6 @@ function checkOnlyLoad(cells, baseline) {
   }
 }
 
-/** The baseline sample, refused rather than skipped when it cannot be taken. */
 async function firstSample(observer) {
   try {
     return await observer.sample()

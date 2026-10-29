@@ -1,15 +1,3 @@
-/*
- * Synthetic DOCX fixtures for the load run, generated per run rather than
- * committed. Measured byte size is the thing under control, so the fixture is
- * described by its own manifest (size, paragraphs, sha256) and that manifest
- * is re-checked against the bytes on disk before the run trusts it.
- *
- * Bounds are enforced here, before any request is sent: this harness measures
- * the envelope for documents the product accepts, so it must not quietly turn
- * into a near-cap payload experiment. The API's multipart cap is 25 MiB
- * (`DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES` in services/api); the default fixture
- * bound sits well under it.
- */
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
@@ -30,7 +18,6 @@ export class FixtureError extends Error {
   }
 }
 
-/** Parse and shape-check the generator's manifest. */
 export function parseFixtureManifest(text, { sizes }) {
   let parsed
   try {
@@ -93,11 +80,6 @@ export function assertFixtureBounds(
   return entries
 }
 
-/**
- * Generate the requested sizes into `outDir` and return them with their bytes
- * loaded once. The buffer is reused for every request: re-reading a 4 MiB file
- * per request would put the harness's own I/O inside the measurement.
- */
 export async function buildFixtures({
   sizes,
   outDir,
@@ -149,7 +131,6 @@ export async function buildFixtures({
   return withContent
 }
 
-/** The filename the upload declares, carrying the fixture's own identity. */
 export function fixtureFilename(entry) {
   return `load-fixture-${entry.size}.docx`
 }

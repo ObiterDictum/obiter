@@ -1,22 +1,3 @@
-/*
- * The one database the API runtime harness may touch, resolved and proved
- * before any connection, migration, port allocation or child process.
- *
- * The API applies migrations to whatever `DATABASE_URL` names at boot, so a
- * guard that accepts a lane's development database does not merely write
- * fixtures to it: it migrates it. That is what happened to
- * `obiter_lane_security` before this module existed.
- *
- * A name is not proof a host is ours, and neither is a URL a connection: pg
- * and psql resolve the same URL differently. pg reads `PGPORT`/`PGUSER`/
- * `PGPASSWORD` from the environment when the URL omits them, while psql is
- * pinned to the port the harness sets, and a query parameter such as `host` or
- * `service` can move one consumer and not the other. So the guard resolves the
- * whole target once and returns every component explicitly: host, port,
- * database, user and password. Callers hand the canonical `url` to the API
- * child and psql alike, and the child environment pins the same values, so no
- * ambient `PG*` variable can move a connection the guard did not validate.
- */
 export class FixtureRefusal extends Error {
   constructor(code, message) {
     super(message)
@@ -25,13 +6,6 @@ export class FixtureRefusal extends Error {
   }
 }
 
-/**
- * Databases this harness may target without --allow-database. `obiter_test` is
- * the CI/local test database; `obiter_api_runtime`/`obiter_api_ingress` are
- * created by this repository's own harnesses; a lane counts only through its
- * test database. A lane's development database (`obiter_lane_security`) is
- * deliberately absent.
- */
 const OWNED_DATABASES = [
   /^obiter_test$/,
   /^obiter_api_runtime(_test)?$/,
@@ -39,11 +13,6 @@ const OWNED_DATABASES = [
   /^obiter_lane_[a-z0-9_]+_test$/,
 ]
 
-/**
- * Databases that are never a harness target, whatever `--allow-database` says.
- * `obiter` and `obiter_corpus` are shared, and `postgres`/`template*` belong to
- * the cluster, so naming one is a migration of data this run does not own.
- */
 const PROTECTED_DATABASES = new Set([
   'obiter',
   'obiter_corpus',
@@ -52,13 +21,8 @@ const PROTECTED_DATABASES = new Set([
   'template1',
 ])
 
-// Names that psql reads as-is and node-postgres decodes identically. A name
-// outside this set is either ambiguous between the two or not a name this
-// harness uses.
 const DATABASE_NAME_PATTERN = /^[A-Za-z0-9_]+$/
 
-// pg's own default when the URL omits a port. Pinned here so a portless URL is
-// serialized into a canonical one that names the port explicitly.
 const DEFAULT_PORT = '5432'
 
 function isProtectedDatabase(name) {
@@ -79,23 +43,6 @@ function decodeComponent(value, code, label) {
   }
 }
 
-/**
- * Resolve the one database this run may touch, and refuse everything else.
- *
- * The returned target names `host`, `port`, `database`, `user` and `password`
- * explicitly, and `url` is a canonical URL carrying exactly those values. That
- * URL is the one handed to the launched API, the psql fixtures and the corpus
- * boots. Validating a copy of the argument while the child still receives the
- * raw string is the defect this function exists to prevent, so callers use
- * `target.url`, `target.host`, `target.port`, `target.database`, `target.user`
- * and `target.password` and nothing else.
- *
- * Refused: missing, unparseable or non-`postgres` URLs, any connection query
- * parameter, non-loopback or bracketed IPv6 hosts, missing/encoded/oddly-named
- * databases, missing user or password, shared/cluster/lane-development
- * databases (even with `--allow-database`), and any database outside this
- * harness's owned set.
- */
 export function resolveDatabaseTarget({ databaseUrl, allowDatabase = null }) {
   if (typeof databaseUrl !== 'string' || databaseUrl.trim() === '') {
     throw new FixtureRefusal(
@@ -190,10 +137,6 @@ export function resolveDatabaseTarget({ databaseUrl, allowDatabase = null }) {
         'The API applies migrations to whatever DATABASE_URL names at boot, and --allow-database cannot override this.',
     )
   }
-  // `--allow-database` is an explicit owner override, not proof of ownership:
-  // an exact name match says "I meant this database", not "this database is
-  // disposable". It admits a non-owned name, but never a protected one, and it
-  // can only ever confirm the resolved name, so it cannot redirect the target.
   if (allowDatabase) {
     if (
       typeof allowDatabase !== 'string' ||

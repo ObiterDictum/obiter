@@ -93,15 +93,6 @@ await writeFile(
   createPdf([[]]),
 )
 
-// P2.25 claim-form pair (synthetic reproductions of the lost /tmp probe,
-// never real legal text): the same all-caps lines once with real spaces
-// and once with inter-word spaces stripped at the content level — the
-// byte-level equivalent of zero inter-word advance, which renders with no
-// gaps so extraction sees no boundaries either way. Pre-fix, the spaced
-// form collapsed to INTHECOUNTY COURTATCENTRAL LONDON / PARTICULARSOFCLAIM
-// (letter-run signal); post-fix it extracts clean, while the fused form
-// still extracts fused (token signal). Written to the upload corpus next
-// to the P2.24 .docx fixtures so upload/coverage tests stay hermetic.
 const uploadCorpusDirectory = new URL(
   '../services/api/test-fixtures/upload-corpus/',
   import.meta.url,

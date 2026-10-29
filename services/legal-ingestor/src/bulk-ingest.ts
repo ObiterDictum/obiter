@@ -17,36 +17,10 @@ import {
 } from '@obiter/legal-source-provider'
 import { readLegalIngestorEnv } from './env'
 
-/**
- * Bulk ingestion from Find Case Law into Postgres `legal_source_documents`
- * only. The Meilisearch product index stays derived: `bun run
- * rebuild:search-index` reads these rows afterwards. This module never touches
- * Meilisearch, so there is exactly one writer to the derived index.
- *
- * Polite by construction: one sequential loop, a fixed gap between upstream
- * requests (~1.5-2/s, well under the published 1000 per rolling 5 minutes so
- * a shared office IP never gets blocked), the shared sliding-window limiter
- * as a backstop, and `retry-after` honoured on 429.
- *
- * Resumable: `legal_ingestor_progress` records the last completed atom page
- * per scope, and ingestion is idempotent on `content_hash`, so a re-run
- * skips already-stored documents without re-fetching their bodies.
- *
- * Size note: this stays one module (~600 lines, over the 500 ceiling) on
- * purpose. Catch-up, forward walk, progress flush and idempotency share one
- * report/flush state, and there is no second caller; splitting would scatter
- * that state across modules for no reuse.
- */
-
-// Provenance recorded on every row before the campaign, because retrofitting
-// it afterwards is harder. The serving-side acknowledgement, noindex handling
-// and partial-coverage notice are follow-ups, not part of this writer.
+// Legal: every ingested row records the licence it was taken under.
 export const licenceClass = 'tna-transactional-2026-07-15' as const
 const licenceProvider = 'find-case-law'
 
-// ~1.8 requests/s sequential: full scope (~39k requests) takes ~6h, well
-// under the 1000-per-5-minute cap. Slow is the point; a blocked office IP
-// costs more than a slow ingest.
 export const settledRequestGapMs = 600
 const maxAttemptsPerItem = 5
 const maxRetryAfterMs = 5 * 60 * 1000
@@ -71,9 +45,6 @@ const ewhcDivisions = [
   'ewhc-tcc',
 ] as const
 
-// Measured scope: UKSC, UKPC, both EWCA divisions complete; EWHC decided
-// from 2020-01-01 only. Older EWHC output is lower-value for a trial and is
-// backfilled later by moving one date parameter.
 export const defaultScopes: IngestScope[] = [
   { court: 'uksc' },
   { court: 'ukpc' },
@@ -155,7 +126,6 @@ function retryAfterMs(value: string | number | null) {
   return Math.min(seconds * 1000, maxRetryAfterMs)
 }
 
-/** Pacing plus the shared sliding-window limiter: never fire faster than the gap. */
 async function takePolitely(deps: IngestDeps) {
   await deps.sleep(deps.gapMs)
   for (;;) {
@@ -204,7 +174,6 @@ export async function fetchAtomPage(
     }
     if (!response.ok)
       return { error: `atom page ${page} returned ${response.status}` }
-    // Client-side date/court filtering; rel=last arithmetic is untrusted.
     return parseFindCaseLawAtom(await response.text(), {
       query: '',
       court: scope.court,
@@ -276,8 +245,6 @@ async function upsertSummaryOnly(
   providerJson: string,
   provider: ProviderSourceMetadata,
 ) {
-  // Same shape as the API source store: document_json is untouched, so a
-  // summary-only conflict never wipes a stored body.
   await pool.query(
     `
       insert into legal_source_documents (
@@ -357,11 +324,6 @@ export async function ingestOne(
       )
       return { status: 'stored', documentId }
     }
-    // Skipped: the provider said why. off_origin and http_error mean we asked
-    // for a body and did not receive one, so write nothing and let the next
-    // run retry; the failure counters show it rather than a benign skip.
-    // unparsable means the body arrived and cannot be read, which a retry
-    // cannot change.
     if (result.reason !== 'unparsable') {
       return {
         status: 'failed',
@@ -372,13 +334,6 @@ export async function ingestOne(
             : 'provider returned a non-OK body response',
       }
     }
-    // An unreadable body is not worth re-fetching, but the citation, name and
-    // date are. Store the summary so the judgment stays findable by those (the
-    // index deliberately carries summary-only rows) and stamp the hash so the
-    // next run skips it. The text is lost; the record is not. Stamping the
-    // upstream content hash, not a body hash, is what makes this safe: a
-    // corrected or re-issued judgment arrives with a new hash and is fetched
-    // again on that run.
     const summary = atomEntryToAuthoritySummary(
       { mojFindCaseLawBaseUrl: deps.baseUrl },
       entry,
@@ -414,13 +369,6 @@ export async function ingestOne(
   }
 }
 
-// TODO(withdrawals, follow-up): judgments get withdrawn, replaced or
-// corrected upstream and nothing deletes today. Corrections land
-// automatically via the content_hash re-poll path above; true withdrawals
-// need a pass that re-fetches stored document_ids, and on upstream
-// absence/404 marks provider_json.withdrawn with an audit log instead of
-// deleting (soft-delete default), then removes the row from publication via
-// the rebuild. Deferred, not forgotten.
 export async function ingestScope(
   deps: IngestDeps,
   scope: IngestScope,
@@ -443,9 +391,6 @@ export async function ingestScope(
     failures: [],
   }
   let docsThisRun = 0
-  // Counters already flushed to the progress table; each flush writes only
-  // the delta since the previous one, so cumulative report totals are never
-  // double-counted across pages.
   const flushed = {
     stored: 0,
     skippedUnchanged: 0,
@@ -453,8 +398,6 @@ export async function ingestScope(
     failed: 0,
   }
 
-  // One page of entries tallied into the report. Returns true when the
-  // maxDocs cap stopped the run.
   const ingestEntries = async (entries: AtomEntry[]): Promise<boolean> => {
     for (const entry of entries) {
       if (limits.maxDocs !== undefined && docsThisRun >= limits.maxDocs)
@@ -487,11 +430,6 @@ export async function ingestScope(
   }
 
   const cursor = progress.rows[0]?.last_completed_page ?? 0
-  // Catch-up: the feed is newest-first, so judgments published since the
-  // last run land on page 1, ahead of the cursor. Re-poll pages 1..cursor
-  // before continuing; the content_hash check skips stored bodies, so this
-  // costs atom fetches plus one hash lookup per document. The cursor stays
-  // put until the forward walk advances it.
   for (
     let catchUpPage = 1;
     catchUpPage <= Math.min(cursor, maxPages);

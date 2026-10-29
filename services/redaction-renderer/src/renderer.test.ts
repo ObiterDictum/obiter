@@ -28,10 +28,8 @@ import {
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
-/** Denying writes needs a non-root user; root bypasses the directory mode. */
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
 
-/** Fails a test instead of hanging when a leaked slot never settles. */
 async function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
@@ -55,7 +53,6 @@ async function demoFixtureBytes(): Promise<Uint8Array> {
   )
 }
 
-/** A synthetic sanitised document: one paragraph that is only a black bar. */
 async function blackBarDocx(): Promise<Uint8Array> {
   const document = await parseDocx(await createSyntheticDocx(['[REDACTED]']))
   const story = document.model.stories.find((item) => item.kind === 'document')
@@ -79,7 +76,6 @@ async function manyParagraphDocx(count: number): Promise<Uint8Array> {
   )
 }
 
-/** One embedded 1x1 PNG, enough to prove the worker wires package images. */
 async function imageDocx(): Promise<Uint8Array> {
   const png = new Uint8Array([
     137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
@@ -118,7 +114,6 @@ async function pdfSummary(pdf: Uint8Array) {
   }
 }
 
-/** Longest horizontal run of opaque black pixels on page one. */
 async function longestBlackRun(pdf: Uint8Array): Promise<number> {
   const CanvasFactory = await createIsomorphicCanvasFactory(
     () => import('@napi-rs/canvas'),
@@ -257,8 +252,6 @@ describe('redaction renderer', () => {
     const code = await failureCode(() =>
       renderer.render(docx, controller.signal),
     )
-    // The 60s default timeout would hold the single slot if the abort were
-    // only observed by raceRender; an already-aborted signal must fail now.
     expect(performance.now() - start).toBeLessThan(1000)
     expect(code).toBe('render_cancelled')
     expect(await renderDirCount(baseDir)).toBe(0)
@@ -353,9 +346,6 @@ describe('redaction renderer limits', () => {
     async () => {
       await withRenderer({}, async (renderer, baseDir) => {
         try {
-          // `mkdtemp` refuses, which is the same shape as EACCES/ENOSPC/EMFILE
-          // in production. A slot leaked on that path wedges every later
-          // render, so the second render must still settle.
           await chmod(baseDir, 0o500)
           await expect(
             renderer.render(await demoFixtureBytes()),

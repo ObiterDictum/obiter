@@ -14,9 +14,6 @@ export interface BoundedIndexingReport {
   errors: Array<{ recordId: string | null; message: string }>
 }
 
-// Product index owned by the rebuild path. The fixture seeder writes its
-// own index and refuses this one, so dev seeding can never narrow or widen
-// what product search serves.
 const productLegalAuthoritiesIndex = 'legal_authorities'
 
 export async function runBoundedSampleIndexing(

@@ -21,11 +21,6 @@ interface RecordedQuery {
   params: unknown[]
 }
 
-/**
- * Postgres is an external boundary here; the behaviour under test is the queue
- * selection, the write and the report. Rows are pending until the UPDATE that
- * stamps `metadata_fetched_at` arrives.
- */
 function fakePool(pendingRows: Array<Record<string, unknown>>) {
   const queries: RecordedQuery[] = []
   const pool = {
@@ -115,7 +110,6 @@ describe('backfillPublishedMetadata', () => {
         query.text.includes('update legal_source_documents'),
       ),
     ).toBe(false)
-    // Still pending, so a later run retries it rather than recording "none".
     expect(report).toMatchObject({ fetched: 0, remaining: 1 })
     expect(report.failed).toEqual([
       { documentId: 'uksc-2026-31', reason: 'provider http_error' },

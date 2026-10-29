@@ -65,10 +65,6 @@ function readSecret(
   return trimmed
 }
 
-// `dev-key` is a working local placeholder, so it is reachable only in
-// development. An ingest run that reaches a real Meilisearch must name its key.
-// A missing key anywhere else fails at startup rather than writing with a
-// default credential.
 function readAdminApiKey(nodeEnv: LegalIngestorEnv['nodeEnv']) {
   if (nodeEnv === 'development') {
     return readSecret('MEILISEARCH_ADMIN_API_KEY', 'dev-key', nodeEnv)
@@ -99,8 +95,6 @@ function readIndexName(key: string, fallback: string) {
   return trimmed
 }
 
-// Fixture default: the sample seeder must never write the product index,
-// which the rebuild owns. runBoundedSampleIndexing refuses it outright.
 function readLegalAuthoritiesIndexName() {
   return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities_fixtures')
 }

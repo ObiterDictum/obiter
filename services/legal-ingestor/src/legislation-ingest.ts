@@ -18,52 +18,13 @@ import {
 } from './legislation-effects'
 import { withConcurrencyRetry } from './db-retry'
 
-/**
- * Stage 1 legislation ingest: UK Public General Acts into Postgres
- * `legislation_documents` / `legislation_provisions` only. This module never
- * touches Meilisearch: `rebuild-legislation-index.ts` in services/api derives
- * the legislation_provisions index from these rows afterwards, so there is
- * exactly one writer to the derived index (the second-writer defect the
- * judgment pipeline already fixed once).
- *
- * Source is the CLML `data.xml` for each Act, not `data.akn`. The XML
- * response declares its contract inline (`xsi:schemaLocation` pointing at
- * the published legislation.xsd), and every addressable provision carries a
- * stable version-neutral `/id/` URI plus RestrictExtent metadata as
- * attributes. The AKN rendition is offered without that documented identity
- * and extent surface, so reading it would mean re-deriving what CLML states.
- *
- * Polite by construction: one sequential loop, a fixed gap honouring the
- * site's `Crawl-delay: 5` (robots.txt is re-fetched at the start of every
- * run and the gap only ever grows towards it, never below 5s), a contact
- * user agent, and exponential backoff on 429/503/5xx. The published
- * 1500-requests-per-5-minutes figure is an abuse ceiling, not a target: at
- * 5s spacing a full ~200-Act scope plus year feeds and effects pages lands
- * in the low hundreds of requests over several hours, two orders of
- * magnitude under it.
- *
- * Resumable per Act: `legislation_ingest_progress` records the last
- * completed Act number per year scope. Re-runs re-fetch every listed Act's
- * data.xml and compare the content hash: unchanged Acts report
- * skipped-unchanged without re-parsing, changed Acts re-store. Nothing is
- * skipped on stored row presence alone, so updates are picked up.
- *
- * Size note: this stays one orchestration module (~450 lines, over the 300
- * target) on purpose. Politeness, effects paging, per-act progress, and the
- * entrypoint share one deps/flush shape with a single caller; splitting
- * would scatter that state across modules for no reuse. The pure CLML
- * parse already lives separately in legislation-clml.ts.
- */
-
 export const ingestUserAgent =
   'Obiter-Stage1-Ingest (research prototype; contact: admin@obiter.dev)'
-/** Floor: the site's Crawl-delay is 5, so this never goes below it. */
 export const settledRequestGapMs = 5000
 const maxAttemptsPerRequest = 6
 const backoffBaseMs = 5000
 const maxBackoffMs = 5 * 60 * 1000
 const scopeActType = 'ukpga'
-/** Earliest year in Stage 1 scope; secondary legislation is not scope. */
 export const scopeStartYear = 2020
 
 export type LegislationDocOutcome =
@@ -91,10 +52,6 @@ export interface LegislationScopeReport {
   skippedNoFulltext: number
   failed: number
   failures: Array<{ identity: string; reason: string }>
-  /** Stored documents whose P1 extraction diverged from the declared
-   * count. A gap fully explained by BlockAmendment inserts is healthy
-   * and never lands here; the list exists so a systematic unexplained
-   * gap shows as a pattern across a year. */
   provisionCountMismatches: Array<{
     identity: string
     declaredProvisions: number | null
@@ -112,37 +69,18 @@ export interface LegislationIngestDeps {
   pool: Db
   gapMs: number
   skipEffects: boolean
-  /** Re-parse and re-store even when the content hash is unchanged. The
-   * forced path goes through the same effects pass as a changed Act, so
-   * withheld flags survive the row rewrite. Verification/rescue runs only. */
   forceReparse: boolean
   maxActs?: number
   sleep: (ms: number) => Promise<void>
   fetchImpl: typeof fetch
 }
 
-/** Effects are per-provision state. Container rows (Part, Chapter, Schedule,
- * crossheading) are headings: never withheld, never flagged, excluded from
- * the effects pass, so banner counts stay honest and their always-visible
- * identity does not depend on feed state. Kinds are shared from
- * legislation-clml.ts rather than re-listed here. */
 export function isProvisionRow(kind: LegislationProvisionKind): boolean {
   return !containerProvisionKinds.has(kind)
 }
 
-/** Withheld/due state for a document's provision rows, computed from a
- * successfully read effects feed (label path -> has-unapplied), or null
- * when the feed could not be read. Null is "no information", never "no
- * effects": the replacement then preserves known-good flags and defaults
- * new rows to withheld, so text can only ever move towards
- * amended-not-held, never towards servable. */
 export type EffectsWithheldMap = Map<string, boolean> | null
 
-/** Whether a provision carries an unapplied effect. Matching is
- * bidirectional (an amendment to s. 13 makes s. 13(2) stale, and an
- * amendment to s. 13(2)(a) makes the served s. 13 text stale), so it
- * recomputes from full effect references rather than testing the unapplied
- * set for the exact path. */
 function hasUnappliedEffect(
   unappliedLabelPaths: Set<string>,
   labelPath: string,
@@ -158,7 +96,6 @@ function hasUnappliedEffect(
   return unappliedEffectsForProvision(effects, labelPath).length > 0
 }
 
-/** Withheld flag per provision row, from a successfully read effects feed. */
 export function withheldByLabelPath(
   doc: IngestDocument,
   unappliedLabelPaths: Set<string>,
@@ -179,12 +116,6 @@ export async function upsertLegislationDocument(
   doc: IngestDocument,
   effects: EffectsWithheldMap = null,
 ) {
-  // Retried as a whole transaction. A serialisation failure or a deadlock has
-  // already rolled this one back, so the only correct retry starts a new one;
-  // retrying single statements would resume a transaction Postgres discarded.
-  // Both writers here take the document row first and its provisions second, so
-  // a deadlock is unlikely rather than impossible, and "unlikely" is not a
-  // reason to lose an Act.
   await withConcurrencyRetry(() => writeLegislationDocument(pool, doc, effects))
 }
 
@@ -193,13 +124,6 @@ async function writeLegislationDocument(
   doc: IngestDocument,
   effects: EffectsWithheldMap,
 ) {
-  // One transaction: a crash between the document row and its provisions
-  // must never leave a document with half its provisions (or none, after
-  // the delete). Pool.query would spread these across connections, so
-  // checkout one client for the whole BEGIN/COMMIT.
-  // The extraction-completeness note persists on the row (never a separate
-  // lookup): a mismatch stores flagged, it never fails the document, so
-  // the flag is what makes that decision auditable per Act.
   const note = provisionCountNote(doc)
   const client = await pool.connect()
   try {
@@ -226,11 +150,6 @@ async function writeLegislationDocument(
         note ?? '',
       ],
     )
-    // The rewrite deletes and recreates every row, so the effects flags
-    // must come from the staged effects pass, never from the column
-    // default (migration default is false): without a successful read,
-    // matching label paths keep their flag only when it carries a check
-    // timestamp, otherwise the row withholds (fail-closed).
     const existing = await client.query<{
       label_path: string
       has_unapplied_effects: boolean
@@ -251,12 +170,6 @@ async function writeLegislationDocument(
       [doc.identity],
     )
     for (const provision of doc.provisions) {
-      // Three decision branches, matched on effects availability so no
-      // non-null assertion is needed: checked read wins; otherwise a
-      // provision keeps its known-good flag only when that flag came from
-      // a real check (non-null timestamp) — a legacy default-false row
-      // with no check never stays servable, it withholds. New rows
-      // withhold too.
       const oldFlag = oldFlags.get(provision.labelPath) ?? true
       const oldChecked = oldCheckedAt.get(provision.labelPath) ?? null
       const hasUnapplied = isProvisionRow(provision.kind)
@@ -306,39 +219,13 @@ async function writeLegislationDocument(
   } catch (error) {
     try {
       await client.query('ROLLBACK')
-    } catch {
-      // Rollback failure must not mask the original write error.
-    }
+    } catch {}
     throw error
   } finally {
     client.release()
   }
 }
 
-/** Pages the whole affected-changes feed and returns the set of provision
- * label paths carrying at least one unapplied effect. Returns null ONLY
- * when the FIRST page is a 404: the feed is absent, "no information", not
- * "no effects" — the caller preserves known-good flags instead of clearing
- * them.
- *
- * Every other pagination outcome throws, so the caller aborts before
- * replacing any rows. A later-page 404, any non-OK page, a cycling feed,
- * or a feed longer than the 100-page cap would each yield a PARTIAL effect
- * set, and a partial set clears the flag on every provision whose effects
- * live on an unread page. Fail-closed is no writes, never a partial read
- * treated as complete.
- *
- * Paging is capped at 100 pages (50 results each) as a cycle guard: the
- * feed is finite, an uncapped `rel=next` walk would loop forever on a
- * cycling server, and reaching the cap aborts instead of truncating.
- *
- * The feed has NO server-side provision filter: a query param naming a
- * provision (e.g. `data.feed?affected-provision=s.40`) is silently ignored
- * and the whole-Act feed returns, so 16 whole-Act effects were once misread
- * as one section's. Never add a filter param here; page the whole feed and
- * scope client-side on ukm:AffectedProvisions/ukm:Section URIs, which is
- * what makes the flags honest. Same whole-Act trap as the HTML
- * yet-to-be-applied heading one layer down, which is why neither is read. */
 export async function readUnappliedEffects(
   deps: LegislationIngestDeps,
   doc: IngestDocument,
@@ -354,14 +241,9 @@ export async function readUnappliedEffects(
       throw new Error(
         `effects feed exceeded ${maxEffectsPages} pages (last: ${url})`,
       )
-    // A cycling feed re-issues a page it already read (next round-trips
-    // to an earlier URL): without this guard it walks to the cap and the
-    // guard would otherwise misread the resulting partial set as complete.
     if (seenUrls.has(url)) throw new Error(`effects feed cycled back to ${url}`)
     seenUrls.add(url)
     const response = await fetchPolitely(deps, url)
-    // Only the first 404 means "no feed". A later-page 404 is a partial
-    // read: aborting beats clearing flags from a truncated walk.
     if (response.status === 404 && pagesRead === 0) return null
     if (response.status === 404)
       throw new Error(
@@ -391,10 +273,6 @@ async function fetchPolitely(
   deps: LegislationIngestDeps,
   url: string,
 ): Promise<Response> {
-  // Every legislation URL reaching here can carry an upstream-supplied
-  // rel="next" href, and the feeds publish those as plaintext http on the same
-  // host. Resolve once, before any retry, so an off-origin link aborts
-  // instead of being retried, and so the request is never made in the clear.
   const target = resolveProviderUrl(legislationBaseUrl, url)
   if (!target) throw new Error(`refusing off-origin provider URL: ${url}`)
   let backoff = backoffBaseMs
@@ -435,7 +313,6 @@ async function fetchPolitely(
   throw new Error(`GET ${url} exhausted retries`)
 }
 
-/** Re-read robots.txt every run; the gap only grows towards Crawl-delay. */
 export async function readCrawlDelaySeconds(
   fetchImpl: typeof fetch,
 ): Promise<number | null> {
@@ -467,12 +344,6 @@ export async function readCrawlDelaySeconds(
   }
 }
 
-/**
- * Re-derives the extraction-completeness note from an unchanged Act's
- * re-fetched body and updates the row only when the note moved. Never
- * touches provisions and never fails the Act: an unparseable re-fetch of
- * unchanged content leaves the stored note alone.
- */
 async function refreshCountNote(pool: Db, identity: string, xml: string) {
   const [actType = '', yearText = '', numberText = ''] = identity.split('/')
   const parsed = parseClmlDocument(xml, {
@@ -535,14 +406,6 @@ export async function ingestOneAct(
   }
   const hash = sha256Hex(xml)
   if (stored.rows[0]?.content_hash === hash && !deps.forceReparse) {
-    // Content unchanged: provisions stay untouched, but the
-    // extraction-completeness note is re-derived from the re-fetched
-    // body. The count check changed (BlockAmendment-explained gaps went
-    // quiet), and without this refresh a stale loud note from the old
-    // check would sit on a healthy document forever. A forced re-parse
-    // (parser change under test) bypasses this branch and re-stores,
-    // going through the same effects pass as a changed Act so the
-    // withheld flags survive the row rewrite.
     await refreshCountNote(deps.pool, identity, xml)
     return { status: 'skipped-unchanged', identity }
   }
@@ -550,12 +413,6 @@ export async function ingestOneAct(
   if ('skipped' in parsed) {
     return { status: 'skipped-no-fulltext', identity, reason: parsed.skipped }
   }
-  // Effects before rows: the replacement deletes and recreates every
-  // provision row, so a row must never land servable before its effects
-  // state is known. A failed feed aborts before any write (old rows and
-  // known-good flags stay intact); an unreadable feed (404 is "no
-  // information", not "no effects") preserves old flags and defaults new
-  // rows to withheld — text can only move towards amended-not-held.
   let effects: EffectsWithheldMap = null
   if (!deps.skipEffects) {
     try {
@@ -627,9 +484,6 @@ export async function ingestYear(
     report.failed += 1
     return report
   }
-  // Year feeds page at 20 entries: follow rel=next until it runs out, or
-  // low-numbered Acts silently fall out of scope (2020 lists 29 over two
-  // pages; page 1 alone ends at c.10).
   const acts: IngestActRef[] = []
   const firstPageXml = await feedResponse.text()
   acts.push(...parseYearFeed(firstPageXml, year))
@@ -649,16 +503,10 @@ export async function ingestYear(
     feedUrl = nextFeedPageUrl(pageXml)
   }
   acts.sort((a, b) => a.number - b.number)
-  // Year feeds should not repeat an Act across pages, but dedupe anyway so
-  // a repeated entry re-validates by hash instead of ingesting twice.
   const deduped = acts.filter(
     (act, index) => index === 0 || acts[index - 1]!.number !== act.number,
   )
   report.actsListed = deduped.length
-  // No stored-number skip: every listed Act is re-fetched and compared on
-  // content hash inside ingestOneAct (unchanged reports skipped-unchanged
-  // without re-parsing, changed re-stores). Skipping on row presence alone
-  // is what made year re-runs dead to updates.
   let processed = 0
   for (const act of deduped) {
     if (deps.maxActs !== undefined && processed >= deps.maxActs) break
@@ -778,12 +626,6 @@ function defaultScopeYears(): number[] {
   return years
 }
 
-/**
- * Pure argv parse so --help and bad flags never reach env, network, or
- * the database. Unknown flags and positionals fail rather than being
- * silently ignored (a bare --skip-effects once ran the full effects
- * pass because only --skip-effects=1 was read).
- */
 export function parseLegislationIngestArgs(
   argv: string[],
 ): LegislationIngestCliParse {
@@ -894,8 +736,6 @@ export function parseLegislationIngestArgs(
   }
 }
 
-/** Request gap with a finite-number guard: a non-numeric --gap-ms falls
- * back to the 5s floor instead of propagating NaN into the sleep loop. */
 export function resolveRequestGapMs(
   raw: string | undefined,
   crawlDelaySeconds: number | null,
@@ -906,8 +746,6 @@ export function resolveRequestGapMs(
 }
 
 async function main() {
-  // Parse before env, pool, or network: --help must print usage and
-  // exit with no DATABASE_URL, no database, and no upstream contact.
   const parsed = parseLegislationIngestArgs(process.argv.slice(2))
   if (!parsed.ok) {
     console.error(parsed.error)

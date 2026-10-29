@@ -1,19 +1,3 @@
-/*
- * Sample aggregation and upload-outcome classification for the load harness.
- *
- * Pure by construction: no clock, no network, no filesystem. The accounting
- * rules that decide "was this request a success" are the part of a load test
- * that silently lies, so they are unit-tested directly rather than inferred
- * from a real run.
- */
-
-/**
- * Nearest-rank percentile over an ascending-sorted array.
- *
- * Returns `null` for an empty sample set. A p95 of zero samples is not
- * "0 ms": it is "no data", and an arithmetic result here would be read as a
- * measured fast path.
- */
 export function percentile(sortedAscending, fraction) {
   const count = sortedAscending.length
   if (count === 0) return null
@@ -22,7 +6,6 @@ export function percentile(sortedAscending, fraction) {
   return sortedAscending[index]
 }
 
-/** `null` rather than `NaN`/`0` for every statistic of an empty set (P14). */
 export function summarise(values) {
   if (values.length === 0)
     return { count: 0, min: null, max: null, mean: null, p50: null, p95: null }
@@ -39,11 +22,6 @@ export function summarise(values) {
   }
 }
 
-/**
- * Outcome categories. Every non-`ok` category is a failure: an upload that
- * was expected to be accepted and was not is a defect or a bound, never
- * throughput.
- */
 export const UPLOAD_CATEGORIES = {
   ok: 'stored, extracted and reported ready in one request',
   extraction_failed:
@@ -67,11 +45,6 @@ export const UPLOAD_FAILURE_CATEGORIES = Object.keys(UPLOAD_CATEGORIES).filter(
   (category) => category !== 'ok' && category !== 'cancelled',
 )
 
-/**
- * Classify one completed upload attempt. `result` is the transport's raw
- * observation, never a pre-judged success flag, so the classification is the
- * single place that decides what counts.
- */
 export function classifyUploadResult(result) {
   if (result.outcome === 'error') {
     const name = result.errorName ?? ''
@@ -131,17 +104,11 @@ export function classifyUploadResult(result) {
   }
 }
 
-/** The API's own error code when present; the message is never retained. */
 function errorCode(body) {
   const code = body?.error?.code
   return typeof code === 'string' ? code : null
 }
 
-/**
- * Classify one probe attempt. The probe has to answer 200: a redirect, an error
- * or a stall on the unrelated read is the finding this harness exists to
- * surface, so anything else fails the cell.
- */
 export function classifyProbeResult(attempt, runSignal) {
   if (runSignal?.aborted)
     return { ok: false, category: 'cancelled', status: null }
@@ -162,7 +129,6 @@ export function classifyProbeResult(attempt, runSignal) {
   }
 }
 
-/** Counts by category, including zeros, so a table row is never missing. */
 export function countByCategory(attempts) {
   const counts = { ok: 0, cancelled: 0 }
   for (const category of UPLOAD_FAILURE_CATEGORIES) counts[category] = 0
@@ -170,16 +136,11 @@ export function countByCategory(attempts) {
   return counts
 }
 
-/**
- * Throughput in requests per second, or `null` when the cell observed no
- * wall-clock span. `Math.round` to 2dp keeps the JSON report stable.
- */
 export function throughputPerSecond(count, observedMs) {
   if (!(observedMs > 0)) return null
   return Math.round((count / observedMs) * 1000 * 100) / 100
 }
 
-/** Values that occur more than once, for partial/duplicate record checks. */
 export function duplicates(values) {
   const seen = new Set()
   const repeated = new Set()

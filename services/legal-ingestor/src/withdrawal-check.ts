@@ -13,71 +13,9 @@ import { createClient, deleteDocuments } from '@obiter/search-client'
 import { readLegalIngestorEnv } from './env'
 import { settledRequestGapMs, type Db } from './bulk-ingest'
 
-/**
- * Withdrawal checker: re-fetches stored judgments' own URIs and marks rows
- * withdrawn upstream, never deleting (Postgres is the record, Meilisearch
- * derived). Corrections land via the normal content_hash upsert path, so this
- * module acts only on the one safe withdrawal signal.
- *
- * Safe signal, and the only one: a definitive 404 — HTTP 404 whose body is
- * the Find Case Law "Page not found" page — on the document's own URIs, seen
- * twice on separate runs at least 24h apart with clean (non-429, non-5xx)
- * responses. Never withdrawal: feed absence, a single 404, timeouts/DNS
- * throws, 429, 5xx, interrupted runs, skipped/parse failures, or
- * content-hash changes.
- *
- * Dual-URI rows confirm only on a double-404 (both URIs gone). A one-gone /
- * one-present split becomes a candidate but can never confirm. Single-URI
- * rows (xml_uri IS NULL) carry one check, so a repeated single-404 on a
- * later run past the gap confirms them (single_uri_confirmed); the same
- * two-observation bar, just one URI wide.
- *
- * A verified present clears a stale candidate: if the document is back, the
- * earlier 404 was transient and must not count toward a later withdrawal. An
- * inconclusive run preserves the candidate — ambiguity is not recovery, so
- * the two-run clock keeps waiting for fresh evidence either way.
- *
- * Withdrawal is reversible only by hand (no automatic healing, so a flaky
- * probe can never resurrect a deliberately removed judgment into the derived
- * index silently). Manual un-withdraw after verifying the judgment is
- * republished upstream:
- *   update legal_source_documents
- *     set provider_json = provider_json - 'withdrawn', updated_at = now()
- *     where document_id = '<id>';
- * then rebuild the derived index. Audit rows are kept as the evidence trail.
- *
- * Fetch safety: stored URIs are resolved against the provider base URL and
- * fetched only when the resolved origin matches it — an absolute URI stored
- * in the row can never pull the checker off-host. Redirects are not
- * followed (manual): a 3xx is inconclusive, never present, so a redirect to
- * a live page cannot mask a withdrawn judgment and a redirect to a 404 page
- * cannot fabricate one.
- *
- * Resumable: audit rows keyed by run_id record which URIs were already
- * checked, so a restart with the same run id skips them; an interrupted run
- * only ever wrote audit rows and candidate flags, nothing was deleted
- * anywhere.
- *
- * Size note: this stays one module (~540 lines, over the 500 ceiling) on
- * purpose. Probe/apply share one report state and there is no second
- * caller; splitting would scatter the two-phase commit for no reuse.
- */
-
 export const confirmGapMs = 24 * 60 * 60 * 1000
 const requestTimeoutMs = 15_000
 const notFoundBodyMarker = 'Page not found'
-// Run-level circuit breaker: a systemic upstream change (URI-scheme
-// reorganisation, corpus move) or a base-URL misconfiguration 404s every
-// stored document at once, and two such runs would mark the whole corpus
-// with only manual per-document recovery. Genuine withdrawals arrive in
-// ones and twos against tens of thousands (<0.01%); systemic confirms in
-// the tens of percent — so 1% sits ~100x above genuine and well below
-// systemic. The floor of 10 keeps small dev corpora from aborting on one
-// genuine withdrawal. Only mark_withdrawn decisions count (candidates are
-// still skipped on abort: they would advance the two-run clock toward mass
-// confirmation next run), so transient 404 bursts alone never trip it.
-// Upper bound kept from any single fetch: the 404 marker sits in the page
-// head, so truncating only bounds a misbehaving upstream, never the signal.
 const maxBodyChars = 65_536
 
 export type {
@@ -114,7 +52,6 @@ export interface WithdrawalReport {
 export const withdrawalConfirmationFloor = 10
 export const withdrawalConfirmationRate = 0.01
 
-/** Max confirmations tolerated in one run: max(10, ceil(1% of checked)). */
 export function withdrawalConfirmationLimit(checked: number): number {
   if (checked <= 0) return withdrawalConfirmationFloor
   return Math.max(
@@ -123,7 +60,6 @@ export function withdrawalConfirmationLimit(checked: number): number {
   )
 }
 
-/** True when confirmations exceed the limit — the run must abort unmarked. */
 export function shouldAbortWithdrawalRun(
   checked: number,
   confirmations: number,
@@ -131,9 +67,6 @@ export function shouldAbortWithdrawalRun(
   return confirmations > withdrawalConfirmationLimit(checked)
 }
 
-/** Classifies one fetched URI. Anything ambiguous is inconclusive: only a 404
- * carrying the provider's own "Page not found" page counts as definitive,
- * because a bare status without the marker could be a misbehaving proxy. */
 export function classifyUriResponse(
   status: number,
   bodyText: string | null,
@@ -160,14 +93,6 @@ export function combineUriChecks(checks: UriCheck[]): WithdrawalSignal {
   return 'present'
 }
 
-/**
- * Dual-URI single loss (one gone, one present) becomes a candidate but never
- * confirms: confirming needs a double-404 on a later run, so a half-missing
- * document stays flagged for a human rather than vanishing from the derived
- * index on thin evidence. Single-URI rows (xml_uri IS NULL) cannot produce a
- * double-404, so a repeated single-404 on a later run past the gap confirms
- * them instead (single_uri_confirmed) — pass singleUri for one-URI rows.
- */
 export function evaluateWithdrawal(
   candidate: WithdrawalCandidate | null,
   signal: WithdrawalSignal,
@@ -252,17 +177,11 @@ async function checkUri(
     httpStatus,
     bodySnippetHash: null,
   })
-  // SSRF guard: a stored absolute URI could point anywhere, so resolve and
-  // fetch only when the row stays on the provider origin. Off-origin rows
-  // are inconclusive without a single byte fetched.
   const target = resolveProviderUrl(deps.baseUrl, uri)
   if (!target) return failed(null)
   await takePolitely(deps)
   let response: Response
   try {
-    // Redirects are never followed: a 3xx classifies inconclusive below, so
-    // neither a redirect to live content (fake present) nor to a 404 page
-    // (fake withdrawal) can move the two-run clock.
     response = await deps.fetchImpl(target.toString(), {
       signal: AbortSignal.timeout(deps.timeoutMs),
       redirect: 'manual',
@@ -333,9 +252,6 @@ async function probeOne(
     },
   )
 
-  // Evidence only: audit inserts stay even when the run later aborts, so the
-  // aborted run still proves what was seen. UPDATEs and index deletions wait
-  // for phase two, after the abort check.
   for (const check of checks) {
     await deps.pool.query(
       `insert into legal_source_withdrawal_audits
@@ -398,9 +314,6 @@ async function applyOne(
     try {
       await deps.deleteFromIndex([row.document_id])
     } catch (error) {
-      // The record is already marked: Postgres stays the source of truth and
-      // the parity reconciler flags the leftover derived copy, so the run
-      // continues and reports the failure instead of rolling anything back.
       report.indexRemovalFailures.push({
         documentId: row.document_id,
         reason: error instanceof Error ? error.message : String(error),
@@ -408,9 +321,6 @@ async function applyOne(
     }
     report.withdrawn.push(row.document_id)
   } else if (signal === 'present') {
-    // The document is back: drop a stale candidate so an old transient 404
-    // cannot combine with a future one into a false withdrawal. Inconclusive
-    // deliberately preserves the candidate — ambiguity is not recovery.
     if (candidate) {
       await deps.pool.query(
         `update legal_source_documents
@@ -443,15 +353,8 @@ export async function runWithdrawalCheck(
     aborted: false,
     abortReason: null,
   }
-  // Two-phase commit within the run. Phase one probes every row (fetches +
-  // audit inserts only) and tallies mark_withdrawn decisions; phase two
-  // applies UPDATEs and index deletions only when the tally stays within
-  // the breaker limit. An interrupt in phase one leaves audits alone —
-  // nothing was marked or deleted anywhere, same guarantee as before.
   const pending: PendingWithdrawal[] = []
   for (;;) {
-    // Resume: rows already audited on both URIs under this run id are done.
-    // Already-withdrawn rows are never re-checked.
     const page = await deps.pool.query<StoredWithdrawalRow>(
       `select d.document_id, d.source_uri, d.xml_uri, d.provider_json
         from legal_source_documents d
@@ -473,10 +376,6 @@ export async function runWithdrawalCheck(
     (entry) => entry.decision === 'mark_withdrawn',
   ).length
   if (shouldAbortWithdrawalRun(pending.length, confirmations)) {
-    // Systemic change suspected: skip ALL writes including candidates (they
-    // would advance the two-run clock toward mass confirmation next run).
-    // Audit rows stay as the evidence trail; present/inconclusive tallies
-    // are observations, not applied writes — no candidate clearing ran.
     const limit = withdrawalConfirmationLimit(pending.length)
     report.checked = pending.length
     report.present = pending.filter(

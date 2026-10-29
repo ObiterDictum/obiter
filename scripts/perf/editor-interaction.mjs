@@ -1,35 +1,4 @@
 #!/usr/bin/env node
-/*
- * Editor interaction measurement: the costs a page-load journey cannot see.
- *
- * `web-load-runner.mjs` measures opening a document. This measures using one:
- * typing-to-paint latency, scrolling frame health, the save round-trip and
- * whether the saved text survives a reload. It reuses that runner's target
- * lifecycle (`withTarget`) rather than starting a second harness stack, so the
- * same provenance gates apply: the API must name the expected checkout and the
- * served artifact must match the build marker on disk.
- *
- * Each sample is bounded by `--sample-timeout`, and the browser context it
- * creates is closed and awaited before the next sample starts (see
- * `probe-lifecycle.mjs`). A sample that exceeds the bound is recorded as a
- * bound, not a measurement; a sample whose resources cannot be confirmed closed
- * stops the campaign.
- *
- * Usage:
- *   Q18_PERF_EMAIL=... Q18_PERF_PASSWORD=... \
- *     node scripts/perf/editor-interaction.mjs \
- *       --serve-prod "$PWD" --expect-artifact-commit "$(git rev-parse HEAD)" \
- *       --web-url http://localhost:3003 --api-url http://localhost:8790 \
- *       --expect-checkout "$PWD" --fixtures fixtures.json \
- *       --modes typing,scroll,save --samples 5 --keys 30 \
- *       --sample-timeout 300 --out /tmp/editor-interaction.json
- *
- * `--fixtures` needs `matterId`, `documentId` and, for `--modes save`,
- * `saveDocumentId` — a separate document, so saved versions never accumulate on
- * the one whose opening time is being reported. Every id the selected modes use
- * is resolved and then confirmed against the API through the signed-in session
- * before any probe starts, so a bad target fails named instead of timing out.
- */
 import { readFile, writeFile } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 import { signIn } from './page-metrics.mjs'
@@ -67,10 +36,8 @@ for (const mode of modes)
   if (!MODES.includes(mode)) throw new Error(`unknown mode "${mode}"`)
 
 const fixtures = JSON.parse(await readFile(fixturesPath, 'utf8'))
-// CLI overrides win, as they always have, and are validated with the fixtures.
 const documentId = arg('document-id', fixtures.documentId)
 const saveDocumentId = arg('save-document-id', fixtures.saveDocumentId)
-// Resolve every id the selected modes read before anything expensive starts.
 const targets = resolveProbeTargets(
   { ...fixtures, documentId, saveDocumentId },
   modes,
@@ -80,8 +47,6 @@ const ids = Object.fromEntries(
 )
 
 const browser = await chromium.launch()
-// Register the browser in the same ledger as the owned servers, so an
-// interrupt closes it along with them rather than orphaning it.
 const releaseBrowser = ownResource(() => browser.close())
 let target
 try {
@@ -107,8 +72,6 @@ let aborted = null
 try {
   const authContext = await browser.newContext()
   await signIn(await authContext.newPage(), { webUrl, email, password })
-  // The context's own request client carries the session cookie, so this is the
-  // same boundary the editor crosses and never a wider one.
   await assertTargetsReachable({
     get: (url) => authContext.request.get(url),
     apiUrl,

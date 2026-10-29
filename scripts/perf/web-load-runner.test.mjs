@@ -1,18 +1,3 @@
-/*
- * Process-cleanup regressions for the page-load runner.
- *
- * The rule under test is that the runner owns the `serve.mjs` it spawns: on a
- * preflight failure, a journey failure, a normal exit or an interrupt, the
- * listener must be gone and the port reusable — while a listener the runner did
- * not spawn is never touched. A "kill was called" assertion would not prove
- * that, so every case checks the actual port.
- *
- * The SSR child here is a stub `serve.mjs` that serves the marker on disk and
- * the sign-in copy `assertWebRenders` needs; the runner's real serve.mjs is
- * covered by apps/web/serve.test.mjs. No Chromium is launched: the failing
- * cases stop before a browser, and the success path is exercised through the
- * runner's own `withTarget` lifecycle.
- */
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
@@ -49,8 +34,6 @@ afterAll(async () => {
   )
 })
 
-// Serves the build marker the runner cross-checks against disk (read from the
-// cwd the runner sets) and the sign-in copy `assertWebRenders` requires.
 const STUB_SERVE = `
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
@@ -71,7 +54,6 @@ process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
 `
 
-/** A worktree-shaped fixture with a real build marker written into dist. */
 async function makeFixture({ commit = COMMIT, dirty = '0' } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'obiter-runner-'))
   tempDirs.push(dir)
@@ -88,8 +70,6 @@ async function makeFixture({ commit = COMMIT, dirty = '0' } = {}) {
   )
   await writeFile(join(web, 'serve.mjs'), STUB_SERVE)
 
-  // writeBuildProvenance prefers the environment; set it for determinism and
-  // restore it so a test never leaks identity into the next one.
   const saved = {
     commit: process.env.OBITER_BUILD_COMMIT,
     dirty: process.env.OBITER_BUILD_DIRTY,
@@ -107,7 +87,6 @@ async function makeFixture({ commit = COMMIT, dirty = '0' } = {}) {
   return dir
 }
 
-/** A stand-in API whose /api/health names a provenance. Returns its port. */
 async function startApiStub() {
   const server = createServer((_req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' })
@@ -122,7 +101,6 @@ async function startApiStub() {
   return server.address().port
 }
 
-/** Bind :0 to learn a free port, then release it for the runner to own. */
 async function freePort() {
   const server = createServer()
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -164,7 +142,6 @@ async function serveConfig(dir, { ssrPort, webPort, apiPort, expected }) {
   }
 }
 
-/** A fresh fixture, API stub and two free ports, for one scenario. */
 async function scenario({ expected, commit, dirty } = {}) {
   const dir = await makeFixture({ commit, dirty })
   const apiPort = await startApiStub()
@@ -250,7 +227,6 @@ test('a journey that cannot run exits nonzero and leaves no listener', async () 
     config.apiUrl,
     '--ssr-port',
     String(ssrPort),
-    // No --fixtures: matterId is unset, so the journey fails before a browser.
     '--journeys',
     'matter-detail',
     '--samples',

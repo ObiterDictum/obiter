@@ -15,14 +15,6 @@ import { serialiseDocx } from '../../packages/ooxml/src/serialise'
 import { planCycle2Edit, type Cycle2EditPlan } from './cycle2-edit'
 import { compare, summarise } from './summary'
 
-/*
- * The cycle-2 edit leg: one deterministic replace_run_text through the real
- * edit surface between the Word-labelled upload and the second export, and a
- * body-text expectation derived from the model and the declared operation —
- * never from the exported output itself. A missing edit, a stale-version
- * export or an edit that landed on the wrong run all fail the named check.
- */
-
 function run(id: string, text: string): DocumentTextRunWire {
   return { id, text, preservedXmlFragments: [] }
 }
@@ -130,8 +122,6 @@ describe('word-roundtrip cycle-2 edit planning', () => {
       runId: 'r-body',
       text: 'Hello [round-trip edit]',
     })
-    // The oracle is positional: only the addressed run's text changes, every
-    // other paragraph's text carries through verbatim.
     expect(plan?.expectedBodyText).toBe(
       'field carrier tracked carrier Hello [round-trip edit] World',
     )
@@ -150,9 +140,6 @@ describe('word-roundtrip cycle-2 edit planning', () => {
 
 describe('word-roundtrip cycle-2 edit oracle', () => {
   it('derives expected text the real edit pipeline then produces', async () => {
-    // The oracle is not self-referential: the expected text comes from the
-    // model plus the declared operation, and the assertion is that the real
-    // apply -> serialise -> parse -> summarise path lands on exactly it.
     const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const first = await summarise(fixture)
     const parsed = await parseDocx(fixture)
@@ -169,8 +156,6 @@ describe('word-roundtrip cycle-2 edit oracle', () => {
   })
 
   it('fails the named check when the export carries no edit', async () => {
-    // A stale-version export — or an edit that never reached it — leaves the
-    // body text at the cycle-1 shape, which is not the expectation.
     const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const first = await summarise(fixture)
     const plan = requirePlan(planCycle2Edit((await parseDocx(fixture)).model))
@@ -211,8 +196,6 @@ describe('word-roundtrip cycle-2 edit oracle', () => {
     applyDocumentEdits(parsed, [plan.operation])
     const second = await summarise(await serialiseDocx(parsed))
 
-    // No expectation: the comparison stays the plain cycle-1 identity and
-    // the applied edit shows up as a body-text difference.
     const checks = compare(first, second)
     expect(namedCheck(checks, 'body text identical').pass).toBe(false)
   })

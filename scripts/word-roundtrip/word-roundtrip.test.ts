@@ -14,7 +14,6 @@ import { inspectWordOutput, wordRecord, type WordEvidence } from './word-step'
 
 const encoder = new TextEncoder()
 
-/** The reason a rejected verdict carries; undefined on any other verdict. */
 function rejectedReason(evidence: WordEvidence) {
   return evidence.status === 'rejected' ? evidence.reason : undefined
 }
@@ -25,7 +24,6 @@ function appXml(application: string | null) {
   }<AppVersion>16.0000</AppVersion></Properties>`
 }
 
-/** A serialised copy of the fixture, optionally carrying a doctored app.xml. */
 async function docxWithApplication(application: string | null | undefined) {
   const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
   const doc = await parseDocx(fixture)
@@ -80,18 +78,9 @@ describe('word-roundtrip lane targets', () => {
   })
 })
 
-/*
- * The composition R1 added: the attestation that turns a lane argument into
- * a refusal before any account or document exists. The HTTP boundary is
- * faked — the same seam verifyServedCheckout exposes — while the worktree,
- * HEAD and .env resolution run for real, so a regression in the comparison
- * itself fails here.
- */
 const LANE_API = 'http://127.0.0.1:8797'
 const LANE_WEB = 'http://localhost:3005'
 const LANE_DB = 'obiter_e0_test'
-// These tests prove this checkout's lane rules; a tree without git metadata
-// cannot run them at all.
 const HEAD = headSha(WORKTREE_ROOT)
 if (!HEAD) throw new Error('word-roundtrip tests require a git checkout')
 
@@ -105,11 +94,6 @@ type HealthBody =
   | 'stale-sha'
   | 'foreign-checkout'
 
-/**
- * Fake lane servers. `health` answers /api/health on every call; `secondHealth`
- * answers the second call (the database attestation after the checkout proof),
- * so a server that drops or mutates between the two reads is covered.
- */
 function fakeLaneServers({
   health = 'valid' as HealthBody,
   secondHealth,
@@ -151,8 +135,6 @@ function fakeLaneServers({
         status: 200,
       })
     }
-    // Vite dev module candidates: embedded absolute paths inside this
-    // worktree prove the web server serves this checkout.
     return new Response(
       `/@fs${WORKTREE_ROOT}/packages/app-shell/src/index.ts\n` +
         `${WORKTREE_ROOT}/apps/web/src/routes/__root.tsx\n`,
@@ -267,12 +249,6 @@ describe('word-roundtrip resolveLane composition', () => {
   })
 })
 
-/**
- * The refusal must precede every mutating call: sign-up, psql verification,
- * matter and document writes all happen after resolveLane returns, so a
- * refused run may only ever have asked for health and the web modules the
- * checkout proof reads.
- */
 function assertNoMutation(fetched: string[]) {
   for (const url of fetched) {
     expect(url).toMatch(/\/api\/health$|\/src\/routes\//)
@@ -344,8 +320,6 @@ describe('word-roundtrip Word producer evidence', () => {
   })
 
   it('rejects a Word-named package whose body text is a different document', async () => {
-    // A different real DOCX carrying a doctored app.xml: the producer names
-    // Word yet the body is a court filing, not the round-trip document.
     const unrelated = new Uint8Array(
       readFileSync('data/evals/redact/demo-fixture.docx'),
     )
@@ -374,8 +348,6 @@ describe('word-roundtrip Word producer evidence', () => {
   it('reads a Word-named package as observed evidence, never a verified gate', async () => {
     const { bytes } = await docxWithApplication('Microsoft Office Word')
     const evidence = await inspectWordOutput(bytes, await knownFor(bytes))
-    // A hand-edited app.xml passes the same check a real Word save does —
-    // which is exactly why the status names the observation, not a verdict.
     expect(evidence.status).toBe('observed-producer-evidence')
     expect(evidence.status).not.toBe('checked')
     expect(evidence.producer).toBe('Microsoft Office Word')
@@ -390,8 +362,6 @@ describe('word-roundtrip Word producer evidence', () => {
       artifact: 'cycle-1-obiter-export.docx',
       sha256: 'c'.repeat(64),
     })
-    // The strongest record mutable metadata can earn: a manual report that
-    // stays externally unverified. No status value claims a Word run.
     expect(record).toMatchObject({
       status: 'manual-reported',
       verification: 'externally-unverified',

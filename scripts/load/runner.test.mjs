@@ -26,7 +26,6 @@ const quietBounds = {
   probeTimeoutMs: 2000,
 }
 
-/** Waits `ms`, rejecting with an AbortError the moment the signal fires. */
 function wait(ms, signal) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(resolve, ms)
@@ -290,8 +289,6 @@ describe('runLoad safety stops', () => {
     const result = await runLoad({
       cells: cellsFor(1, 10),
       transport: makeTransport({ uploadMs: 5 }),
-      // Healthy for the baseline and the escalation gate, pressured once the
-      // cell is running: the abort has to come from the tick, not the gate.
       observer: makeObserver([
         healthySample,
         healthySample,
@@ -406,8 +403,6 @@ describe('recovery sampling', () => {
 
 describe('per-cell resource attribution', () => {
   it('measures growth within the cell, not from the run baseline', async () => {
-    // Two cells on one observer: the second must not inherit the first's
-    // growth, or a cell's memory and CPU figures double-count earlier cells.
     const samples = [
       { ...healthySample, apiAnonBytes: 300 * 1024 * 1024, apiCpuUsec: 0 },
       {
@@ -443,8 +438,6 @@ describe('per-cell resource attribution', () => {
 
     expect(result.perCell).toHaveLength(2)
     const [first, second] = result.perCell
-    // A cell's baseline is its own first sample, not the run's: otherwise the
-    // second cell would report the whole run's growth as its own.
     expect(first.resources.apiAnonBaselineBytes).not.toBe(
       result.baselineResources.apiAnonBytes,
     )

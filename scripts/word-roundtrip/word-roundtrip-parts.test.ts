@@ -9,13 +9,6 @@ import { compare, summarise } from './summary'
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
-/*
- * The cycle-1 vs cycle-2 semantic comparison. Every case stands in for what
- * the harness really sees: two Obiter exports parsed back into summaries.
- * The cycle-2 side is built by mutating a parsed package's source parts and
- * serialising, which is exactly what a Word save's extra or missing parts
- * look like after the Obiter export preserves them.
- */
 type Parsed = Awaited<ReturnType<typeof parseDocx>>
 
 async function cycledDocx(mutate?: (doc: Parsed) => void) {
@@ -61,9 +54,6 @@ function namedCheck(checks: ReturnType<typeof compare>, name: string) {
 
 describe('word-roundtrip source-part preservation', () => {
   it('passes a conforming Word-labelled output that only adds metadata', async () => {
-    // The defect R3 proved live: the producer evidence the harness requires
-    // (docProps/app.xml naming Word) is itself a part the cycle-1 export
-    // lacks, so a part-count comparison can never pass a conforming leg.
     const { checks } = await summaries((doc) => {
       doc.sourceParts.set('docProps/app.xml', wordAppXml())
     })
@@ -84,8 +74,6 @@ describe('word-roundtrip source-part preservation', () => {
   })
 
   it('fails an equal-count substitution — a count is not preservation proof', async () => {
-    // One opaque part out, one in: the totals agree and only the identities
-    // expose the dropped content.
     const { first, second, checks } = await summaries((doc) => {
       doc.sourceParts.delete('customXml/item1.xml')
       doc.sourceParts.set('docProps/app.xml', wordAppXml())
@@ -97,9 +85,6 @@ describe('word-roundtrip source-part preservation', () => {
   })
 
   it('fails when a surviving part changes role', async () => {
-    // Removing the header relationship demotes header1.xml to an orphan the
-    // parser no longer types — the part survives but its preservation role
-    // changed, which a name-only check would miss.
     const { checks } = await summaries(
       relsPart(DOCUMENT_RELS, (xml) =>
         xml.replace(/<Relationship Id="rId3"[^>]+\/>/, ''),
@@ -133,8 +118,6 @@ describe('word-roundtrip source-part preservation', () => {
   })
 
   it('fails on an external relationship addition inside a surviving part', async () => {
-    // No part is added or dropped: the injection lives inside an existing
-    // .rels payload, which only the binding comparison can see.
     const { checks } = await summaries(
       relsPart(DOCUMENT_RELS, (xml) =>
         xml.replace(
@@ -151,14 +134,6 @@ describe('word-roundtrip source-part preservation', () => {
   })
 })
 
-/*
- * Relationship bindings are a multiset, not a set: two elements can carry the
- * same source, type and target under different ids — real packages do this —
- * and ids are excluded because producers renumber them. A set diff collapses
- * the duplicates, so a dropped or added second copy is invisible to it; only
- * multiplicities expose the change. The duplicated fixture binding is
- * document.xml's styles reference under a second id.
- */
 const DUPLICATE_STYLES_BINDING =
   '<Relationship Id="rId101" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
 
@@ -202,8 +177,6 @@ describe('word-roundtrip relationship multiplicities', () => {
   })
 
   it('passes when both cycles carry the same duplicates under renumbered ids', async () => {
-    // Producer renumbering is the reason ids are excluded: the .rels ids all
-    // change while every binding — duplicates included — stays identical.
     const renumber = relsPart(DOCUMENT_RELS, (xml) =>
       xml.replaceAll('Id="rId', 'Id="rId9'),
     )

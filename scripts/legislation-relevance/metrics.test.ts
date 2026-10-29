@@ -68,9 +68,6 @@ function baseline(
 
 describe('legislation relevance metrics', () => {
   it('builds the canonical identity from the retrieval-stable fields', () => {
-    // Keyword hits carry an engine id and a label path; exact hits carry a
-    // slashed id. Both serve documentIdentity and labelPath, so scoring reads
-    // those and the retrieval path cannot move a score.
     expect(
       canonicalLegislationId({
         documentIdentity: 'ukpga/2010/15',
@@ -105,7 +102,6 @@ describe('legislation relevance metrics', () => {
         'subject',
       ),
     ).toBe(1)
-    // Exact lookups name one entity: a subsection is a different provision.
     expect(
       rankOf(
         ['ukpga/2010/15/section/20/3'],
@@ -247,8 +243,6 @@ describe('legislation relevance metrics', () => {
   })
 
   it('does not score a control on its keyword hit count', () => {
-    // A control's result set is not enumerable, so growth in the served hits
-    // is not a regression. Only the absent case is scored on hit count.
     const current = baseline({
       expectedCaseCount: 1,
       byQuery: {
@@ -262,8 +256,6 @@ describe('legislation relevance metrics', () => {
     expect(
       failures.filter((failure) => failure.startsWith('absent_hits_up')),
     ).toEqual([])
-    // The only failures left are the headline-metric no_data entries a
-    // control-only result set always produces; nothing names the control.
     expect(
       failures.filter((failure) => failure.includes('control-example')),
     ).toEqual([])
@@ -296,9 +288,6 @@ describe('legislation relevance metrics', () => {
   })
 
   it('fails an absent case that receives an ambiguous legislation terminal', () => {
-    // Ambiguity is the polarity opposite of an absent expectation: it claims
-    // more than one stored Act satisfied the title. It is neither a not-held
-    // verdict nor an unresolved title, so it must not borrow either label.
     const ambiguous = scoreCase(absentCase, [], {
       legislationAmbiguous: true,
     })
@@ -322,7 +311,6 @@ describe('legislation relevance metrics', () => {
           failure.includes('title_unresolved'),
       ),
     ).toEqual([])
-    // The absent hit-count ceiling is untouched: no noise was served.
     expect(
       failures.filter((failure) =>
         failure.startsWith('absent_hits_up:absent-example'),
@@ -343,8 +331,6 @@ describe('legislation relevance metrics', () => {
       legislationAmbiguous: true,
     })
     expect(ambiguous.failureLabels).toContain('held_ambiguous')
-    // The held path keeps its recall/rank checks, and ambiguity must not be
-    // relabelled as an unsupported not-held or an unresolved title.
     expect(ambiguous.failureLabels).toContain('held_miss')
     expect(ambiguous.failureLabels).not.toContain('held_false_not_held')
     expect(ambiguous.failureLabels).not.toContain('held_title_unresolved')

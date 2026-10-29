@@ -1,23 +1,3 @@
-/*
- * Synthetic fixtures for one load run: a tenant, a session, a matter to fill,
- * and a second tenant that exists only to be refused.
- *
- * The session is written straight into the lane database because every route
- * that mints one needs email (sign-up verification, magic link, reset), and
- * this harness must not send mail or read one-time URLs from a log. That is
- * fixture provisioning, not an auth bypass: the token is an ordinary
- * `sessions` row that better-auth validates on every request, and the run
- * stops unless `GET /api/me` answers with exactly this synthetic user and
- * organisation. That check is also what proves the database psql writes and
- * the database the API reads are the same one.
- *
- * Reads go through `psql` with a JSON aggregate rather than a delimited one:
- * `failure_reason` is free-ish text, and a tab-delimited read that shifts a
- * column would misreport which uploads failed.
- *
- * psql is invoked synchronously and only outside the measured window; the
- * blocking call must never run while uploads are in flight.
- */
 import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,8 +5,6 @@ import { join } from 'node:path'
 import { duplicates } from './metrics.mjs'
 import { ProvisionError } from './psql.mjs'
 
-// Re-exported so existing consumers keep importing the harness's error type
-// from the module that describes the operation they were running.
 export { ProvisionError }
 
 const TAG_PATTERN = /^[a-z0-9]{4,32}$/
@@ -36,7 +14,6 @@ export function sqlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`
 }
 
-/** A tag that names every row this run creates, so leftovers are obvious. */
 export function newRunTag() {
   return randomBytes(8).toString('hex')
 }
@@ -47,9 +24,6 @@ export function fixtureIds(tag) {
       'invalid_run_tag',
       `Run tag "${tag}" is not a lowercase alphanumeric tag; refusing to build fixture SQL from it.`,
     )
-  // No separator characters in the token: better-auth treats a token
-  // containing a dot as a signed value and answers 401 rather than a
-  // distinguishable error. Found by running this harness against the lane.
   const token = (label) =>
     `q3load${label}${tag}${randomBytes(16).toString('hex')}`
   return {
@@ -70,10 +44,6 @@ export function fixtureIds(tag) {
   }
 }
 
-/**
- * Tenant A (the measured one) and tenant B (the refused one) in one
- * transaction: either both exist or neither does.
- */
 export function provisionSql(ids) {
   return `
 begin;
@@ -126,10 +96,6 @@ from (
 ) rows`.trim()
 }
 
-/**
- * Create the fixtures, then prove the session works against the API under
- * test. Returns the ids the run reports (never the tokens).
- */
 export async function provisionFixtures({
   target,
   querier,
@@ -139,13 +105,8 @@ export async function provisionFixtures({
   onSqlWritten = null,
 }) {
   querier.exec(provisionSql(ids))
-  // The caller cleans up on any later failure; it needs to know whether the
-  // tenant rows exist yet before it can say what was left behind.
   onSqlWritten?.()
 
-  // Prove the session before creating anything through the API: a failure here
-  // leaves only the SQL fixtures, and a matter that was never created is a
-  // matter that never has to be cleaned up.
   const me = await fetchJson(`${target.apiOrigin}/api/me`, {
     token: ids.sessionToken,
     fetchImpl,
@@ -214,17 +175,6 @@ async function fetchJson(url, { token, fetchImpl, method = 'GET', body } = {}) {
   }
 }
 
-/**
- * Post-run verification from the database, independent of what the API
- * claimed. `storageRoot` is the root the API itself resolves, from
- * `OBITER_STORAGE_ROOT` or its default (`resolveStorageRoot` in `target.mjs`).
- *
- * Counts are scoped to rows this run created: the matter for documents and
- * versions, the organisation for audit rows. The expected audit shape is
- * asserted here rather than left to a reader, because a run where
- * `document.upload` or `document.version_create` stopped being written would
- * otherwise exit clean.
- */
 export async function verifyRun({
   querier,
   ids,
@@ -255,8 +205,6 @@ export async function verifyRun({
   const auditByAction = Object.fromEntries(
     audit.map((row) => [row.action, row.count]),
   )
-  // One upload writes one document, one version and one version-create row;
-  // the fixture organisation exists only for this run, so the shape is exact.
   const auditExpected = {
     'document.upload': expectedReady,
     'document.version_create': expectedReady,
@@ -271,9 +219,6 @@ export async function verifyRun({
     expectedReady,
     readyMatchesExpected: ready.length === expectedReady,
     versionCountMatchesDocuments: versions.length === documents.length,
-    // A document with no version row, or a document carrying two versions of
-    // one upload run, is a partial or duplicated write even when the counts
-    // happen to add up.
     documentsWithoutVersion: documents.filter(
       (row) => !versionedDocumentIds.has(row.document_id),
     ).length,
@@ -312,11 +257,6 @@ async function fileExists(path, statFile) {
   }
 }
 
-/**
- * Clean up through the product's own soft-delete routes, with the session that
- * owns each matter. Audit rows and storage objects are deliberately retained:
- * the harness must not remove audit history or delete storage out of band.
- */
 export async function softDeleteFixtures({ target, ids, fetchImpl = fetch }) {
   const deleted = []
   for (const [matterId, token] of [
@@ -333,12 +273,6 @@ export async function softDeleteFixtures({ target, ids, fetchImpl = fetch }) {
   return deleted
 }
 
-/**
- * Tenant and matter isolation, checked with the measured session against
- * fixtures it does not own. The assertions are on status codes and on the
- * absence of the other tenant's names — never on private content, and nothing
- * here deletes or mutates another tenant's data.
- */
 export async function verifyIsolation({ target, ids, fetchImpl = fetch }) {
   const checks = []
   const missingMatter = `mtr_q3loadabsent${ids.tag}`
@@ -383,7 +317,6 @@ export async function verifyIsolation({ target, ids, fetchImpl = fetch }) {
       expectedStatus: probe.expect,
       status: response.status,
       passed: response.status === probe.expect,
-      // A denial that echoes the other tenant's name would be a content leak.
       leakedOtherName:
         probe.name === 'other_matter_read' &&
         response.text.includes(ids.otherMatterName),
@@ -421,7 +354,6 @@ async function rawFetch(url, { token, fetchImpl, method = 'GET' } = {}) {
   }
 }
 
-/** Scratch directory for generated fixtures; removed by the caller. */
 export async function createScratchDirectory() {
   return mkdtemp(join(tmpdir(), 'obiter-q3-load-'))
 }

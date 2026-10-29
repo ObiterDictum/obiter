@@ -1,11 +1,3 @@
-/*
- * HTTP helpers for the runtime harness.
- *
- * `rawRequest` writes bytes and headers directly over `node:http` so a check can
- * declare an exact `Content-Length`, send a malformed boundary, or truncate a
- * multipart body — the request shapes that must not be built out of `fetch`,
- * which would normalise them.
- */
 import { request as httpRequest } from 'node:http'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
@@ -77,7 +69,6 @@ export function rawRequest({
   })
 }
 
-/** Exact multipart bytes, so the declared length and the body agree. */
 export function multipartBody({ fields = {}, file = null, boundary }) {
   const parts = []
   for (const [name, value] of Object.entries(fields)) {
@@ -101,11 +92,6 @@ export function multipartBody({ fields = {}, file = null, boundary }) {
   return Buffer.concat(parts)
 }
 
-/**
- * Sign a session token the way better-auth does, using better-auth's own
- * HMAC helper rather than reimplementing it. The harness supplies the same
- * `BETTER_AUTH_SECRET` the server runs with, so this signs a real cookie.
- */
 export function signSessionCookie({ apiDirectory, token, secret }) {
   const require = createRequire(join(apiDirectory, 'package.json'))
   const crypto = require('better-auth/crypto')

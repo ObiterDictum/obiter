@@ -66,8 +66,6 @@ interface RecordedQuery {
   params: unknown[]
 }
 
-// The pool is an external storage boundary; the behaviour under test is the
-// ingest walk, so a recording fake stands in for Postgres here.
 function fakePool(
   handler: (text: string, params: unknown[]) => { rows: unknown[] },
 ) {
@@ -211,7 +209,6 @@ describe('ingestOne', () => {
       query.text.includes('insert into legal_source_documents'),
     )
     expect(insert?.text).not.toContain('document_json')
-    // Stamped: the next run must not re-fetch a body that cannot be read.
     expect(insert?.params[3]).toBe('abc123')
   })
 
@@ -261,11 +258,6 @@ describe('ingestOne', () => {
   })
 
   it('retries instead of stamping when the body redirects', async () => {
-    // A judgment moved to a canonical URI: the provider answers every URL with
-    // a same-origin 301 and, because redirects are manual, the body is refused.
-    // This is the skipped path that used to stamp content_hash and permanently
-    // suppress the retry. The default fetchDetail from createDeps runs the real
-    // provider against the injected fetch, so the 3xx drives the whole path.
     const redirectingFetch = vi.fn(
       async (_input: unknown, _init?: RequestInit) =>
         new Response(null, {
@@ -291,8 +283,6 @@ describe('ingestOne', () => {
       documentId: 'uksc-2024-1',
       reason: 'provider returned a non-OK body response',
     })
-    // Nothing is written, so no content_hash is stamped for a later run to
-    // short-circuit on.
     expect(
       queries.some((query) =>
         query.text.includes('insert into legal_source_documents'),
@@ -416,8 +406,6 @@ describe('ingestScope', () => {
     })
     const report = await ingestScope(testDeps, { court: 'uksc' })
     expect(report.pagesCompleted).toBe(0)
-    // Newest-first feed: page 1 is re-polled for catch-up (empty here, so
-    // catch-up stops), then the forward walk continues past the cursor.
     expect(requested).toHaveLength(2)
     expect(requested[0]).toContain('page=1')
     expect(requested[1]).toContain('page=4')
@@ -450,8 +438,6 @@ describe('ingestScope', () => {
       },
     )
     const report = await ingestScope(testDeps, { court: 'uksc' })
-    // Without the catch-up re-poll the run would start at page 2 (empty)
-    // and store nothing.
     expect(requested[0]).toContain('page=1')
     expect(report.stored).toBe(1)
     expect(report.skippedUnchanged).toBe(1)

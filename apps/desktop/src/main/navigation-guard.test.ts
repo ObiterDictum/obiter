@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { isAllowedNavigation, parseAllowedOrigin } from './navigation-guard'
 
-/**
- * isAllowedNavigation is the privilege-escape boundary for the desktop window.
- * It must allow only the renderer's own origin and deny everything else —
- * especially the 'null'-origin trap where URL.origin on a non-special scheme
- * collapses to "null" and would match file:// or any arbitrary scheme.
- */
 describe('isAllowedNavigation', () => {
   const packaged = parseAllowedOrigin('obiter://desktop-auth')
   const dev = parseAllowedOrigin('http://localhost:5173')
@@ -25,15 +19,12 @@ describe('isAllowedNavigation', () => {
   })
 
   it('denies a file:// navigation (the null-origin trap)', () => {
-    // new URL('file:///C:/Windows/system.ini').origin === 'null' on every
-    // non-special scheme; the old .origin guard allowed this.
     expect(isAllowedNavigation(packaged, 'file:///Windows/system.ini')).toBe(
       false,
     )
   })
 
   it('denies a foreign custom scheme that shares the "null" origin', () => {
-    // evil://desktop-auth/x has origin 'null' too; must not match obiter.
     expect(isAllowedNavigation(packaged, 'evil://desktop-auth/x')).toBe(false)
   })
 

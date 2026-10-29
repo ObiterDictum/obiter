@@ -1,8 +1,3 @@
-/**
- * Command-line shape for the word-roundtrip harness. Flags are whitelisted
- * against KNOWN_FLAGS verbatim so a misspelt flag is ignored rather than
- * silently landing on an Args field.
- */
 export type Args = {
   api?: string
   web?: string
@@ -37,7 +32,6 @@ export function parseArgs(argv: string[]): Args {
       .replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())
     if (!KNOWN_FLAGS.has(key)) continue
     // SAFETY: `key` is whitelisted against KNOWN_FLAGS, which names every
-    // optional Args property verbatim.
     args[key as keyof Args] = value
   }
   return args

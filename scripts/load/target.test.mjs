@@ -15,7 +15,6 @@ import {
 const scratch = await mkdtemp(join(tmpdir(), 'q3-target-test-'))
 afterAll(() => rm(scratch, { recursive: true, force: true }))
 
-/** A lane-shaped worktree whose `.env` is the only source of its ports. */
 async function laneWorktree(name, env = {}) {
   const root = join(scratch, name)
   await mkdir(root, { recursive: true })
@@ -201,8 +200,6 @@ describe('resolveLoadTarget', () => {
     const target = resolveFor(root, envFile, {
       fetchImpl: async () => healthResponse({ checkoutRoot: root, envFile }),
     })
-    // The configured root is outside the worktree, so the target refuses it
-    // rather than verify object keys in another lane's or the host's storage.
     await expect(target).rejects.toThrow(TargetRefusal)
   })
 

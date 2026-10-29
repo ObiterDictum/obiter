@@ -36,10 +36,6 @@ describe('parseClmlDocument', () => {
     expect(parsed.identity).toBe('ukpga/2020/1')
     expect(parsed.title).toBe('Sample Act 2020')
     expect(parsed.extent).toBe('E+W')
-    // The sample Schedule carries an IdURI, so the container emits too:
-    // Act pages render Schedule rows as headings that carry their
-    // paragraphs. The sample Pblock carries no IdURI and is not a row
-    // (addressability is the row criterion everywhere).
     expect(parsed.provisions.map((provision) => provision.labelPath)).toEqual([
       'section/13',
       'section/13/2',
@@ -61,27 +57,17 @@ describe('parseClmlDocument', () => {
       'schedule',
       'P1',
     ])
-    // Parents come from CLML nesting: the paragraph belongs to its
-    // Schedule container even though its label path is not a prefix of
-    // the paragraph's (schedule/2 vs schedule/2/paragraph/4 is a prefix
-    // here; the real reason is inserted provisions, see the part-prefix
-    // test below). Roots are sections not in any part or crossheading.
     expect(
       parsed.provisions.map((provision) => provision.parentLabelPath),
     ).toEqual([null, 'section/13', 'section/13/2', null, 'schedule/2'])
-    // A container row's text is its heading; provisions keep descendant text.
     expect(parsed.provisions[3]?.text).toBe('Lists')
     expect(parsed.provisions[0]?.text).toBe(
       'Main duties apply. Duties extend to agents. Agents acting openly.',
     )
-    // The declaration counts P1 opens (both are P1 here), not total rows:
-    // P2/P3 sub-provisions are rows but never declared provisions, and the
-    // Schedule container is not a P1 either.
     expect(parsed.declaredProvisions).toBe(2)
     expect(parsed.p1Seen).toBe(2)
     expect(parsed.p1Rows).toBe(2)
     expect(provisionCountNote(parsed)).toBeNull()
-    // Nested text is included so a section row answers subsection terms.
     expect(parsed.provisions[1]?.text).toContain('Agents acting openly.')
     expect(
       parsed.provisions.map((provision, index) => provision.docOrder === index),
@@ -142,29 +128,20 @@ describe('parseClmlDocument', () => {
       'Scheduled',
       'Scheduled matter.',
     ])
-    // Section 2 nests in Chapter 1 in the Part; section 3 sits under the
-    // crossheading inside the Part; the P1group heading above section 2 is
-    // not addressable and never becomes a row.
     expect(rows[4]?.parentLabelPath).toBe('part/1/chapter/1')
     expect(rows[6]?.parentLabelPath).toBe('part/1/crossheading/misc')
     expect(rows[3]?.parentLabelPath).toBe('part/1')
     expect(rows[5]?.parentLabelPath).toBe('part/1')
     expect(rows[8]?.parentLabelPath).toBe('schedule/1')
-    // Document order interleaves containers with their content.
     expect(rows.map((row, index) => row.docOrder === index)).toEqual(
       rows.map(() => true),
     )
-    // Census untouched by containers: all three sections and the schedule
-    // paragraph are the four declared P1 opens.
     expect(parsed.p1Seen).toBe(4)
     expect(parsed.p1Rows).toBe(4)
     expect(provisionCountNote(parsed)).toBeNull()
   })
 
   it('keeps inserted provisions parented by nesting, not label prefixes', () => {
-    // Base provisions carry flat IdURIs (section/100); inserted-amendment
-    // lettered paragraphs carry hierarchical ones (part/2/section/100/kn1).
-    // The parent of both is the innermost addressable ancestor in the XML.
     const xml = `<?xml version="1.0"?>
 <Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/3" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/3" NumberOfProvisions="1">
 <ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Insertion Act</dc:title></ukm:Metadata>
@@ -182,18 +159,10 @@ describe('parseClmlDocument', () => {
       ['P1', 'section/100'],
       ['P3', 'part/2/section/100/kn1'],
     ])
-    // The inserted P3 nests under the section that physically contains it,
-    // never under the part even though its label path starts with part/2.
     expect(rows[2]?.parentLabelPath).toBe('section/100')
   })
 
   it('stores the section heading and each row’s own text, without dot leaders', () => {
-    // A section's heading arrives on the enclosing P1group's Title, one level
-    // above the P1 that carries the citation: without capturing it the
-    // contents can only read "s. 13". `ownText` keeps a row's own words so a
-    // nested render does not repeat the section's concatenated text, and the
-    // king's-printer dot run for a repealed subsection keeps its published
-    // meaning as one ellipsis instead of raw leader noise.
     const xml = `<?xml version="1.0"?>
 <Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2021/3" IdURI="http://www.legislation.gov.uk/id/ukpga/2021/3" NumberOfProvisions="1" RestrictExtent="E+W">
 <ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Headings Act 2021</dc:title></ukm:Metadata>
@@ -215,8 +184,6 @@ describe('parseClmlDocument', () => {
       ['section/13/1/a', '', 'An exception.'],
       ['section/13/5', '', '. . .'],
     ])
-    // The row still carries descendant text for search, with the section's
-    // trailing leader run dropped and nothing invented in its place.
     expect(parsed.provisions[0]?.text).toBe('First duty. An exception')
   })
 
@@ -228,9 +195,6 @@ describe('parseClmlDocument', () => {
   })
 
   it('strips comments whole, even with > inside', () => {
-    // The old tag regex stopped at the first `>`, leaving ` comment -->`
-    // residue in the text. Comments arrive in character data (the tag
-    // tokenizer does not match `<!--`), so the stripper must skip them.
     const xml = `<?xml version="1.0"?>
 <Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9" NumberOfProvisions="1">
 <ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Comment Act</dc:title></ukm:Metadata>
@@ -243,11 +207,6 @@ describe('parseClmlDocument', () => {
   })
 
   it('stays quiet on the BlockAmendment-insert gap', () => {
-    // Two P1 opens declared, one addressable: the bare P1 is a quoted
-    // insert for another Act (no document IdURI, correctly never a row).
-    // Real Acts look like this (ukpga/2020/7: 579 declared, 15 inserts),
-    // so the fully-explained gap stores unflagged, it never fails the
-    // document and never lands in the mismatch list.
     const xml = `<?xml version="1.0"?>
 <Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9" NumberOfProvisions="2">
 <ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Gap Act</dc:title></ukm:Metadata>
@@ -264,7 +223,6 @@ describe('parseClmlDocument', () => {
     expect(parsed.p1BlockAmendment).toBe(1)
     expect(parsed.p1NoIdUriOther).toBe(0)
     expect(parsed.p1EmptyText).toBe(0)
-    // The gap is fully explained by the quoted insert: quiet.
     expect(provisionCountNote(parsed)).toBeNull()
   })
 
@@ -291,7 +249,6 @@ describe('parseClmlDocument', () => {
 <Primary><P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9/section/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9/section/1" id="section-1"><Pnumber>1</Pnumber><P1para></P1para></P1></Primary>
 </Legislation>`
     const parsed = parseClmlDocument(xml, { ...ref, year: 2020, number: 9 })
-    // No rows at all: the document-level skip fires before the census.
     expect(parsed).toEqual({
       skipped: 'no addressable provision text in data.xml',
     })
@@ -339,8 +296,6 @@ describe('formatContainerLabel', () => {
         'part/1/chapter/1',
       ),
     ).toBe('Chapter 1')
-    // ECHR-style schedules number chapters as "Article 2": the verbatim
-    // published label wins over the forced prefix.
     expect(
       formatContainerLabel(
         'chapter',

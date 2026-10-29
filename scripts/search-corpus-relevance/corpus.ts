@@ -220,9 +220,6 @@ async function runOneCase(
   try {
     const body = await fetchSearch(apiBase, testCase.query)
     const hits = body.hits ?? []
-    // Absent citations honestly serve labelled citing judgments (status
-    // not_held); those are the distinguished answer, not false positives.
-    // Score only hits that could read as the judgment itself.
     if (testCase.kind === 'absent') {
       const { violatingIds, exemptLabelledCitingCount } =
         splitAbsentScoringIds(hits)

@@ -1,118 +1,23 @@
 #!/usr/bin/env node
-/*
- * Deterministic desktop size budget over the electron-vite build output.
- *
- * Counts the application payload electron-builder places in the asar, from the
- * renderer's own Vite manifest (`out/renderer/.vite/manifest.json`) rather than
- * from source imports. The manifest traversal lives in ./desktop-manifest.mjs;
- * this module reads the emitted bytes and compares the buckets with ceilings:
- *
- *   renderer initial js/css — the entry chunk, its static-import closure, and
- *                             the CSS those chunks use.
- *   lazy chunks             — chunks reached only through dynamic imports, and
- *                             their lazy CSS.
- *   largest lazy chunk      — catches a single lazy surface ballooning.
- *   worker payload          — scripts referenced as assets (the PDF worker).
- *   product assets          — fonts and other non-script assets.
- *   main / preload          — the Electron entry bundles.
- *   application payload     — every emitted file the packager reads, so a bucket
- *                             this script does not name still cannot grow
- *                             unnoticed.
- *
- * Sizes are raw bytes on disk, not gzip: a packaged renderer is read from the
- * local asar over the custom `obiter://` protocol, never transferred over HTTP,
- * so network compression is not part of the cost being guarded. That differs
- * from scripts/perf/bundle-budget.mjs, which budgets gzip bytes because the
- * browser downloads them. The two must not be compared as if they measured the
- * same thing.
- *
- * Run `bun run --filter @obiter/desktop build` first. A missing build, a missing or
- * malformed manifest, a manifest entry with no file on disk, or a zero-byte
- * file fails the check rather than measuring as a passing zero.
- *
- *   node scripts/perf/desktop-budget.mjs [--out apps/desktop/out]
- *
- * Known limitation: this measures the `out/` on disk, so run it on a fresh
- * build. CI builds immediately before it runs. It does not cover the Electron
- * runtime or the platform installer; see scripts/perf/README.md.
- */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { classifyManifest } from './desktop-manifest.mjs'
 
-/*
- * Baselines measured on a production build at origin/dev 29034f3c on Linux x64
- * (`bun run --filter @obiter/desktop build`). Ceilings carry roughly 10% headroom,
- * the same ratchet margin the web budget uses, so an ordinary addition passes
- * while a return to a larger shape fails. main and preload are contract-sized
- * entry bundles where a percentage is meaningless and are given absolute limits.
- * An entry re-measured since the file was written states its own margin, because
- * a bucket that has grown steadily needs a re-record rather than an ever-larger
- * ratchet.
- */
 export const BUDGETS = {
-  // 3,444,435 B, re-measured when the shell's account menu and rail labels
-  // moved to Base UI Menu and Tooltip (decided 27 Oct 2026). The floating/menu
-  // code Base UI already shipped for Dialog and Select moves from the lazy
-  // graph into the entry, so every page load pays for it; the menu and tooltip
-  // themselves are the rest. 1.9% headroom rather than the usual 10%, matching
-  // the CSS entry below: the previous ceiling carried 0.04%, 1,345 B, so any
-  // addition larger than that would have failed the build for a reason
-  // unrelated to its own change.
-  // 3,529,143 B, re-measured on the review pass of stage 6a (29 Oct 2026):
-  // the Verify band became a docked panel, the ribbon gained a compact "More"
-  // popover and the track-changes switch, while the strip's own markup left the
-  // entry. 1.4% headroom, inside the 2% this record allows: the previous
-  // ceiling carried 543 B, so any addition at all would have failed the build
-  // for a reason unrelated to its own change. Stage 6b (review panel, decision
-  // bar) is expected to trim the panel chrome it replaces; if it does not, it
-  // needs its own decision rather than another squeeze.
-  // 3,500,235 B after the Redact redesign (28 Oct 2026) moved the review desk
-  // into a lazy chunk; lowered to keep the same 2% headroom, so the bytes that
-  // left the entry cannot quietly come back.
-  // 3,559,963 B after the UI review fixes (29 Oct 2026), the search breadcrumb
-  // naming its source among them; raised to keep about 1% headroom.
   rendererInitialJsBytes: 3_600_000,
-  // 90,525 B, re-recorded after the editor programme grew it from the recorded
-  // 83,069 B. 2.7% headroom rather than the usual 10%, which is what the JS
-  // entry above settled on for the same reason: the previous ceiling carried
-  // 0.5%, 475 B, so any addition larger than that would have failed the build for
-  // a reason unrelated to its own change.
   rendererInitialCssBytes: 93_000,
-  // 907,699 B, re-recorded after the UI review fixes (29 Oct 2026): the editor
-  // menu bar and docked panels, Redact's legend and schedule export, and
-  // Verify's reviewer names together. Room left for the search fixes' date
-  // picker; the PDF viewer is still 774,344 B of it.
   lazyChunksBytes: 935_000,
   largestLazyChunkBytes: 850_000,
-  // 1,046,214 B (pdf.worker.min).
   workerPayloadBytes: 1_150_000,
-  // 404,572 B shipped (Inter and IBM Plex Mono, woff and woff2 subsets).
-  // 753,618 B with the sign-in artwork (29 Oct 2026): one WebP engraving per
-  // theme, 154 kB and 195 kB, under the 200 kB each the panel allows.
   productAssetsBytes: 790_000,
-  // 7,703 B. Absolute, not a percentage: under 8 kB, one import dwarfs a
-  // percentage, and a bundler mistake that pulls a library in is far larger.
   mainBundleBytes: 12_000,
-  // 456 B. Absolute: the preload bridge is a small fixed contract surface, and
-  // a deliberate addition of a few methods should pass.
   preloadBundleBytes: 2_000,
-  // 5,795,780 B, re-recorded for the UI redesign's auth and settings screens
-  // (27 Oct 2026): everything the packager reads from out/. The previous
-  // ceiling already sat at 0.04% headroom (5,767,785 B measured, not the
-  // recorded 5,655,726 B), so any screen would have failed it. 2.0% headroom,
-  // for the same reason as the CSS entry above.
-  // 5,922,329 B after the Redact redesign (28 Oct 2026); its new start,
-  // review and finalise screens net +42 kB. 2% headroom.
-  // 6,380,816 B with the sign-in artwork (29 Oct 2026), the same 349 kB as
-  // the product assets above. 2% headroom.
   applicationPayloadBytes: 6_510_000,
 }
 
 const MANIFEST_PARTS = ['renderer', '.vite', 'manifest.json']
 
-/** The renderer manifest for `outDir`, or a failure that names how to build it. */
 export async function readManifest(outDir) {
   const path = join(outDir, ...MANIFEST_PARTS)
   let source
@@ -149,10 +54,6 @@ async function rendererAssetSizes(outDir) {
   return sizes
 }
 
-/**
- * The renderer is a static asset set; the development React runtime in any
- * emitted chunk would inflate its bytes and never belong in a release build.
- */
 async function assertProductionReact(outDir) {
   const assetsDir = join(outDir, 'renderer', 'assets')
   for (const name of await readdir(assetsDir)) {
@@ -165,7 +66,6 @@ async function assertProductionReact(outDir) {
   }
 }
 
-/** Relative posix paths of every file under `dir`, or null when it is absent. */
 async function walkFiles(dir, prefix = '') {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => null)
   if (!entries) return null
@@ -194,8 +94,6 @@ async function directoryBytes(dir, label) {
 async function payloadBytes(outDir) {
   const files = await walkFiles(outDir)
   if (!files) throw new Error(`no build output at ${outDir}`)
-  // The Vite manifest is measurement metadata. electron-builder.yml excludes it
-  // from the asar, so it is not part of the payload this budget guards.
   const shipped = files.filter((file) => !file.split('/').includes('.vite'))
   let bytes = 0
   for (const file of shipped) bytes += (await stat(join(outDir, file))).size
@@ -203,7 +101,6 @@ async function payloadBytes(outDir) {
   return { bytes, fileCount: shipped.length }
 }
 
-/** Measure every budgeted bucket from the build output in `outDir`. */
 export async function measureDesktopBuild(outDir) {
   const sizes = await rendererAssetSizes(outDir)
   const manifest = await readManifest(outDir)
@@ -222,10 +119,6 @@ export async function measureDesktopBuild(outDir) {
   }
 }
 
-/**
- * Compare measured buckets with the ceilings. A non-positive or unmeasurable
- * bucket is a failure, never a pass: that is the shape a missing build takes.
- */
 export function evaluateBudgets(buckets, budgets = BUDGETS) {
   const measured = {
     rendererInitialJsBytes: buckets.initialJs.bytes,

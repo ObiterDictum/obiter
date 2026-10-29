@@ -19,10 +19,8 @@ export interface RendererLogEvent {
 }
 
 export interface RendererServerConfig {
-  /** The live renderer, or null between startup and Chromium being warm. */
   getRenderer: () => DocxRenderer | null
   limits?: RendererLimits
-  /** Structured only: request line, status and error code; never a body. */
   log?: (event: RendererLogEvent) => void
 }
 
@@ -64,7 +62,6 @@ export function messageForErrorCode(code: RedactionRendererErrorCode): string {
   return MESSAGE_BY_CODE[code]
 }
 
-/** Reads the body with a byte ceiling, refusing rather than buffering past it. */
 export async function readRequestBody(
   request: IncomingMessage,
   maxBytes: number,
@@ -143,8 +140,6 @@ export function createRendererServer(config: RendererServerConfig): Server {
       const body = await readRequestBody(request, limits.maxInputBytes)
       const pdf = await renderer.render(body, abort.signal)
       if (response.writableEnded) return
-      // An abort after the render resolved must still end the request; the
-      // headers are unsent, so a typed 499 is safe to write.
       if (abort.signal.aborted) {
         respondError(request, response, 499, 'render_cancelled')
         return

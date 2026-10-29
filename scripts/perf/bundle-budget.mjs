@@ -1,23 +1,4 @@
 #!/usr/bin/env node
-/*
- * Deterministic web bundle-size budget.
- *
- * Counts what the browser actually downloads, from the build's own manifest
- * rather than from source imports:
- *
- *   initial  — the files the root route preloads (`__root__.preloads`, which
- *              includes the client entry). Every document load pays these.
- *   lazy     — every other emitted client chunk, gzipped. These are paid only
- *              when a route or interaction needs them, so they are budgeted as
- *              a total rather than per file.
- *
- * Sizes are gzip bytes of the files on disk, which is what a compressing
- * server sends and what the budgets are stated in. The numbers are stable
- * across repeated builds of the same source. Run `bun run --filter @obiter/web
- * build` first.
- *
- *   node scripts/perf/bundle-budget.mjs [--dist apps/web/dist]
- */
 import { execFileSync } from 'node:child_process'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
@@ -25,61 +6,6 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 
-// Measured on origin/dev at 13587cd after the initial-load change: initial
-// 186.4 kB gzip, lazy route chunks 348.2 kB gzip, PDF worker 283.1 kB gzip,
-// largest lazy chunk (the document workspace) 146.6 kB gzip. Budgets carry
-// roughly 10% headroom so an ordinary addition does not fail the check, while
-// a return to the previous shape (initial 409.9 kB gzip) is refused.
-//
-// The lazy budget was re-baselined from 385 kB to 400 kB on 2026-10-05. The
-// document-editor programme landed a large amount of client code in the lazy
-// workspace chunk, which the 385 kB figure predated: the base head 3e95127
-// already measured 388.1 kB against it, and the E6a head a475354 measures
-// 391.2 kB, with the workspace chunk at 169.5 kB and still inside its own
-// budget. 400 kB was chosen deliberately: it leaves roughly 2.2% headroom
-// over the measurement, enough that an ordinary addition does not fail the
-// check, while anything beyond a few kilobytes more still does. The initial
-// budget is deliberately unchanged: an E6a defect briefly pushed it to
-// 236.2 kB, the fix restored it to 183.0 kB, so 212 kB retains real headroom
-// and is not being loosened. E6b (links and cross-references) measured at its
-// head is initial 184.0 kB, lazy 392.7 kB, largest chunk 171.1 kB, pdf worker
-// 286.6 kB — inside every budget.
-//
-// E7c (table of contents) measures initial 182.9 kB, lazy 400.7 kB, largest
-// chunk (the document workspace) 179.1 kB, pdf worker 286.6 kB. The lazy total
-// is 0.7 kB over the 400 kB figure E6a set, so the lazy budget is re-baselined
-// to 405 kB. The growth is spread across the route chunks the document-editor
-// programme adds — E7a/E7b/E7c contribute header/footer and page-number,
-// footnote and table-of-contents client code — not one dominant chunk: the
-// largest chunk is still inside its own budget. 405 kB keeps roughly 1%
-// headroom over the measurement; the initial, per-chunk and PDF-worker budgets
-// are unchanged.
-//
-// Re-baselined to 410 kB on 2026-10-23. origin/dev at e287b47 measures lazy
-// 405.0 kB exactly, after inline tracked changes (#331), the document-first
-// page (#337) and paragraph numbers (#338). Two open features need more:
-// Verify source evidence (#333, about +1.2 kB: the stored passage and a
-// word diff, so a lawyer sees what a quote was checked against) and the
-// matter overview (#339, about +1.0 kB). Both were trimmed before this
-// change. Expected after both land is about 407.3 kB, leaving roughly 0.7%
-// headroom; initial, per-chunk and PDF-worker budgets are unchanged.
-//
-// The initial budget was re-baselined to 236 kB on 2026-10-27. The shell's
-// account menu and collapsed-rail labels are Base UI Menu and Tooltip
-// (decided 27 Oct 2026; contract §1 makes Base UI the headless layer), and the
-// floating/menu machinery Base UI already ships for Dialog and Select now
-// belongs to the entry graph because the shell is on every page: initial
-// measures 237,570 B gzip (232.0 kB, up from 187.7 kB). That is a move, not a
-// copy — lazy route chunks fall from 407.9 kB to 368.5 kB and the chunks that
-// need the shared code import the entry — so the net cost is about 5 kB gzip,
-// the menu and tooltip themselves. 236 kB leaves 1.7% headroom over the
-// measurement; the lazy, per-chunk and PDF-worker budgets are unchanged.
-//
-// The lazy budget was re-baselined to 425 kB on 2026-10-29, after the UI review
-// fixes (#364-#368): the editor menu bar and docked panels, Redact's legend and
-// schedule export, Verify's reviewer names, and search's provision structure,
-// saved sources and dd/mm/yyyy date picker measure 417.6 kB together. 425 kB
-// leaves 1.8% headroom; initial, per-chunk and PDF-worker budgets are unchanged.
 export const BUDGETS = {
   initialGzipBytes: 236 * 1024,
   lazyGzipBytes: 425 * 1024,
@@ -87,19 +13,8 @@ export const BUDGETS = {
   pdfWorkerGzipBytes: 320 * 1024,
 }
 
-// The PDF worker is a fixed third-party asset fetched only when a PDF is
-// viewed, so it is budgeted on its own line rather than dominating the lazy
-// total and hiding a route-chunk regression.
 const PDF_WORKER_PREFIX = 'pdf.worker'
 
-/*
- * Distinctive strings from route views that must not be reachable from the root
- * preloads. A view that a lazy route imports through the barrel becomes part of
- * the entry chunk without changing any source import, so the emitted membership
- * is the only honest check. These two are the largest surfaces the initial-load
- * change moved off the entry; if either reappears, the split has regressed even
- * though the byte budget may still pass.
- */
 const FORBIDDEN_INITIAL_MARKERS = [
   ['Checking legal sources', 'LegalSearchView'],
   ['Search within case', 'CaseLawDocumentView'],
@@ -113,12 +28,6 @@ function arg(name, fallback) {
 const dist = arg('dist', 'apps/web/dist')
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 
-/**
- * Refuse a dist built from a different commit than the checkout: a stale
- * build measures the previous source while reporting this head's budget.
- * The build stamps `.obiter-build.json` with its commit, so this is a read
- * and a compare.
- */
 async function requireCheckoutArtifact() {
   const marker = await readBuildProvenance(dist)
   const rebuild = 'run `bun run --filter @obiter/web build` and retry'
@@ -132,9 +41,7 @@ async function requireCheckoutArtifact() {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
-  } catch {
-    // git unavailable or not a checkout: provenance cannot be compared.
-  }
+  } catch {}
   if (!head)
     throw new Error(
       `cannot resolve the checkout commit to compare ${dist}'s provenance (${marker.commit}) against`,
@@ -145,7 +52,6 @@ async function requireCheckoutArtifact() {
     )
 }
 
-/** The root route's preloads are the files loaded on every page. */
 async function rootPreloads(dist_) {
   const serverAssets = join(dist_, 'server', 'assets')
   const files = (await readdir(serverAssets)).filter((name) =>

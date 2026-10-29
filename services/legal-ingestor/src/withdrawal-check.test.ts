@@ -370,8 +370,6 @@ describe('runWithdrawalCheck', () => {
     expect(report.candidates).toBe(0)
     expect(report.withdrawn).toEqual([])
     expect(deleteFromIndex).not.toHaveBeenCalled()
-    // The candidate is dropped, so a later double-404 restarts the
-    // two-run clock instead of withdrawing on the stale observation.
     const [update] = updates(queries)
     expect(update.text).toContain(`- 'withdrawalCandidate'`)
     expect(
@@ -527,8 +525,6 @@ describe('run-level confirmation cap', () => {
     xml_uri: `/test/2024/${index}/data.xml`,
     provider_json: confirming ? oldCandidateJson() : {},
   })
-  // First `confirming` rows double-404 against an old candidate (so they
-  // would confirm); the rest are present. Limit for 20 checked is 10.
   const mixedRun = (confirming: number, total = 20) => {
     const rows = Array.from({ length: total }, (_, index) =>
       row(index, index < confirming),
@@ -562,7 +558,6 @@ describe('run-level confirmation cap', () => {
     expect(report.candidates).toBe(0)
     expect(updates(queries)).toEqual([])
     expect(deleteFromIndex).not.toHaveBeenCalled()
-    // Read-only evidence stays: two audit rows per document prove the run.
     expect(audits(queries)).toHaveLength(40)
   })
 

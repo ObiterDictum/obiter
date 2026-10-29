@@ -1,11 +1,3 @@
-/*
- * The run report: one JSON document carrying its own provenance, bounds,
- * results, verification and limitations, so a number cannot be read without the
- * conditions it was measured under.
- *
- * Also owns the exit code, because "what does this run's result mean" belongs in
- * exactly one place.
- */
 import { cpus, release, totalmem } from 'node:os'
 import { summarise } from './metrics.mjs'
 import { resourceSummary } from './host-observation.mjs'
@@ -55,9 +47,6 @@ export function buildReport(context) {
       memTotalBytes: totalmem(),
       apiCgroup: context.cgroupPath,
       apiBaseline: context.baseline,
-      // Captured once around the load, never re-read here: the report says what
-      // was observed, and a systemctl call at report time could disagree with
-      // the window it is describing (or fail after the fact).
       activeObiterUnits: context.activeUnits ?? [],
       activeObiterUnitsAfter: context.activeUnitsAfter ?? [],
       neighbourLaneUsage: {
@@ -111,7 +100,6 @@ export function buildReport(context) {
     results: load.perCell,
     skippedCells: load.skipped,
     cancelled: load.cancelled,
-    /** Whether the API's memory came back after the load stopped, not only its latency. */
     recoveryResources: recoverySummary(load, context.baseline),
     probes: {
       idle,
@@ -150,15 +138,11 @@ export function decideExitCode({
 }) {
   if (!isolation.allPassed) return EXIT_RUN_FAILED
   if (options.checkOnly) return EXIT_OK
-  // A contended window measured the machine, not this lane.
   if (contended) return EXIT_RUN_FAILED
   if (observationAvailability(load) !== 'complete') return EXIT_RUN_FAILED
   if (load.cancelled || load.perCell.length === 0) return EXIT_RUN_FAILED
   if (load.perCell.some((cell) => !cell.accepted)) return EXIT_RUN_FAILED
   if (!verification.readyMatchesExpected) return EXIT_RUN_FAILED
-  // The upload path writes one document, one version and one version-create
-  // audit row per accepted upload, so any gap is a partial or duplicated write
-  // even when the ready count happens to line up.
   if (verification.versionCount !== verification.documentCount)
     return EXIT_RUN_FAILED
   if (verification.documentCount !== verification.expectedReady)
@@ -173,12 +157,6 @@ export function decideExitCode({
   return EXIT_OK
 }
 
-/**
- * Whether host/cgroup observation is trustworthy enough to state a resource
- * bound. `resourceBreach(null)` deliberately fails open, so a missing sample
- * has to be visible here instead: a run with any failed sample, or with no
- * baseline at all, never claims its memory and disk bounds were verified.
- */
 export function observationAvailability(load) {
   if ((load.samplerErrors ?? 0) > 0) return 'degraded'
   if (!load.baselineResources) return 'unavailable'
@@ -205,12 +183,6 @@ function round(value) {
     : null
 }
 
-/**
- * The report written when a run is refused before any observation. It carries
- * the refusal code and reason so automation can tell a refusal from a run that
- * never started, and it never carries a connection URL: a psql or target
- * message can name one, and a report is not the place for a password.
- */
 export function refusalReport(error = null) {
   return {
     refused: true,

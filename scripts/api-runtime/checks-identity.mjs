@@ -1,10 +1,3 @@
-/*
- * Identity, isolation and limit checks for one runtime.
- *
- * These describe behaviour the API must keep whatever serves it: who is
- * authenticated, who is refused, and what a body may weigh before the app says
- * so. Nothing here asserts a timing.
- */
 import {
   DOCX_CONTENT_TYPE,
   bearer,
@@ -16,12 +9,6 @@ import {
 } from './http.mjs'
 import { documentCountSql, foreignReadyDocumentSql } from './fixtures.mjs'
 
-/**
- * `auth.ts` sets `advanced.useSecureCookies: env.nodeEnv === 'production'`, and
- * the harness always runs the API with NODE_ENV=production. better-auth's
- * session middleware reads that prefixed name, not the plain one, so the cookie
- * assertion must use the name the deployed server actually issues.
- */
 const SESSION_COOKIE_NAME = '__Secure-better-auth.session_token'
 
 export async function checkHealthAndAuth(ctx) {
@@ -37,10 +24,6 @@ export async function checkHealthAndAuth(ctx) {
     { runtime: health.body?.runtime ?? null },
   )
 
-  // This run sets no corpus variables, so the corpus is the application
-  // database: colocated and writable. The configured modes (separate
-  // read-only corpus, dedicated writer) are booted per adapter in
-  // checks-corpus.mjs. No connection detail may appear beside the booleans.
   const corpus = health.body?.corpus ?? null
   recorder.record(
     'health reports the compatibility corpus mode',
@@ -231,11 +214,6 @@ export async function checkRequestLimits(ctx) {
     `status=${oversizedJson.status}`,
   )
 
-  // The size gate, from under it: a body below DOCUMENT_UPLOAD_MAX_BYTES must
-  // pass the 413 gate and reach content validation, or the cap boundary is not
-  // where the code says it is. The bytes are not a DOCX, so a non-413
-  // rejection from validation is the expected outcome, and its status is
-  // recorded for the cross-runtime parity comparison.
   const underBoundary = `----obiterapi${Date.now()}under`
   const underCap = multipartBody({
     boundary: underBoundary,
@@ -296,9 +274,6 @@ export async function checkRequestLimits(ctx) {
     `status=${oversizedUpload.status} bytes=${oversized.byteLength}`,
   )
 
-  // P1.41: a complete HTTP request whose multipart body is malformed is a
-  // client error at the parse boundary. Assert the status and the contract
-  // envelope, not just survival, and prove nothing persisted.
   const documentsBeforeMalformed = ctx.querier.rows(
     documentCountSql(ids.matterId),
   )[0].count

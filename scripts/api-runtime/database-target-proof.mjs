@@ -1,31 +1,4 @@
 #!/usr/bin/env node
-/*
- * Task-owned end-to-end proof that ambient PGPORT cannot move the API child or
- * the psql fixtures off the validated target.
- *
- * Two controlled loopback listeners stand in for two clusters: `intended` and
- * `wrong`. The guard resolves a target that names the intended listener's
- * port, and ambient PGPORT names the wrong one. The proof then runs
- *
- *   - the real psql querier (scripts/load/psql.mjs) against `target.url`, and
- *   - the real Node API child through the harness's own `startServer` and
- *     `childEnvironment`,
- *
- * and asserts both dialled `intended` at least once and `wrong` never. It
- * touches no real Postgres: the listeners accept and close, so the consumers
- * error early and the proof is about which socket they opened, not what they
- * got back.
- *
- * When port 5432 is free the intended listener takes it and the target is
- * passed as a *portless* URL, which is the exact shape of the reproduced defect.
- * When 5432 is occupied (for example a CI Postgres service) the intended
- * listener takes an ephemeral port and the URL carries it explicitly.
- *
- * This is the manual evidence companion to the fail-first regressions in
- * database-target.test.mjs. Run it with:
- *
- *   node scripts/api-runtime/database-target-proof.mjs
- */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -74,8 +47,6 @@ async function main() {
   const wrong = await startRecorder(0)
   const scratch = await mkdtemp(join(tmpdir(), 'obiter-target-proof-'))
 
-  // Pass the portless form when the intended listener owns the default port:
-  // that is the URL the reviewer reproduced the defect with.
   const portSegment = intended.port === 5432 ? '' : `:${intended.port}`
   const target = resolveDatabaseTarget({
     databaseUrl:
@@ -83,8 +54,6 @@ async function main() {
       '/obiter_api_runtime_test',
   })
 
-  // A conflicting ambient environment, exactly what a shell or a lane .env
-  // could leave behind. Every one of these names a different target.
   Object.assign(process.env, {
     PGHOST: 'wrong.internal',
     PGPORT: String(wrong.port),
@@ -97,15 +66,9 @@ async function main() {
   const results = []
   let server = null
   try {
-    // psql: the fixtures path. execFileSync blocks this event loop, so the
-    // listener's connection event is delivered only after it returns; wait for
-    // it before reading the counter.
     try {
       createQuerier({ databaseUrl: target.url }).exec('select 1')
-    } catch {
-      // The listener closes before the handshake completes. The connection is
-      // the evidence; the failure is expected.
-    }
+    } catch {}
     results.push([
       'psql',
       await waitFor(() => intended.connections.length > 0, {
@@ -114,7 +77,6 @@ async function main() {
     ])
     const afterPsql = intended.connections.length
 
-    // The real API child, composed the way the harness composes it.
     const port = await allocatePort()
     server = startServer({
       runtime: 'node',

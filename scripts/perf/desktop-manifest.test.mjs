@@ -1,12 +1,6 @@
-/*
- * Tests for the desktop manifest classifier. Exercised against manifests rather
- * than the real build so each rule (initial vs lazy, shared chunks, workers vs
- * assets, missing files) is pinned on its own.
- */
 import { expect, test } from 'bun:test'
 import { classifyManifest } from './desktop-manifest.mjs'
 
-/** A sizeOf that returns 1000 bytes for every file the manifest references. */
 function uniformSizes(manifest) {
   const files = new Set()
   for (const record of Object.values(manifest))

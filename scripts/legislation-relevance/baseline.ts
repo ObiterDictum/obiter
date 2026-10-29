@@ -1,31 +1,5 @@
 import type { LegislationRelevanceBaseline } from './metrics'
 
-// Observed floors from POST /api/search/fetch on the product corpus at
-// documentCount 184772. These record today's behaviour; ranking work ratchets
-// them, it does not tidy failing cases out of the set.
-//
-// heldPrecision is computed over complete-answer (exact) held cases only: a
-// subject-matter query's relevant set is a lower bound, so there is no honest
-// precision to score for it. Subject recall is reported separately.
-//
-// The floors are not targets. absentPrecision is 1: every absent Act, chapter,
-// provision and concept query is answered with no hits, because a recognised
-// citation the corpus does not hold is named as not held instead of being
-// filled with provisions that merely share its words. Held recall is 0.8854;
-// the remaining gap is subject recall, 0.3125, where the served top five are an
-// insertion-order tie broken on identifier path. That is what L23 has to argue
-// from.
-//
-// heldNotHeldViolations is the invariant this suite exists to protect: a held
-// expectation must never receive an authoritative not-held verdict. The
-// resolved title states (a terminal `(repealed)` annotation, dropped
-// apostrophes and hyphens, `&` as `and`, dropped `etc`) and the control queries
-// (prose clauses and the underspecified "Act 2020") are scored so a future fold
-// regression fails here rather than shipping a false claim. A control query is
-// never scored for hits; its invariant is that it makes no unsupported claim.
-// The controls include the sentence-initial and uppercase twins of prose
-// clauses (L35), so casing-led routing fails here rather than shipping.
-
 export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
   expectedCaseCount: 90,
   expectedIndexDocumentCount: 184772,

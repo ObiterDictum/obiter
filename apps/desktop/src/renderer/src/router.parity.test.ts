@@ -23,15 +23,11 @@ function collectSources(directory: string): string[] {
 
 describe('desktop router parity with web shared views', () => {
   it('renders the shared LegalSearchView on the desktop search page', () => {
-    // The schedule-corrective fix lands in app-shell; desktop must inherit it
-    // rather than carry a parallel search view (as web does at /search).
     const element = DesktopSearchPage()
     expect(element.type).toBe(LegalSearchView)
   })
 
   it('renders the shared VerifyRouteView on the desktop verify page', () => {
-    // Verification is one surface: the run panel and findings list must be the
-    // app-shell implementation on desktop, not a desktop copy.
     const element = DesktopVerifyRoute()
     expect(element.type).toBe(VerifyRouteView)
   })
@@ -48,9 +44,6 @@ describe('desktop router parity with web shared views', () => {
   })
 
   it('renders the shared document detail view, with verification inside it', () => {
-    // The verification interaction lives in the shared document workspace, so
-    // the desktop document route must delegate to the app-shell view rather
-    // than grow its own findings UI.
     const source = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), './router.tsx'),
       'utf8',
@@ -62,9 +55,6 @@ describe('desktop router parity with web shared views', () => {
   })
 
   it('inherits the shared document selection instead of a desktop copy', () => {
-    // A cross-paragraph selection has one owner in the shared workspace: the
-    // desktop renderer must not grow a parallel selection model, paragraph
-    // editor or selection painting.
     const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
     const files = collectSources(resolve(root, './src'))
     for (const file of files) {

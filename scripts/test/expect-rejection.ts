@@ -1,13 +1,5 @@
 import { expect } from 'bun:test'
 
-/**
- * The same assertion as vitest's `expect(promise).rejects.toSatisfy(predicate)`.
- *
- * bun:test has no working form of that chain: `.rejects.toSatisfy` hands the
- * predicate the rejected Promise instead of the rejection reason and returns
- * undefined, so it can never pass. Await the rejection here and apply the
- * predicate to the reason, failing the test outright if the promise resolves.
- */
 export async function expectRejection(
   promise: Promise<unknown>,
   predicate: (error: unknown) => boolean | object,

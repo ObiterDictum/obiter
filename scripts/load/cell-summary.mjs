@@ -1,9 +1,3 @@
-/*
- * The per-cell record: what one fixture size at one concurrency produced.
- *
- * Shaped as data, with no clock and no I/O, so a cell's numbers can be asserted
- * directly from a test instead of being read out of a live run.
- */
 import { countByCategory, summarise, throughputPerSecond } from './metrics.mjs'
 import { countFailures } from './bounds.mjs'
 import { resourceSummary } from './host-observation.mjs'
@@ -47,10 +41,6 @@ export function summariseCell({
     failures,
     probeDuring: summarise(duringProbes.map((entry) => entry.latencyMs)),
     probeFailures: duringProbes.filter((entry) => !entry.ok).length,
-    // Per cell, not cumulative: the baseline is this cell's own first sample,
-    // so `apiAnonGrowthBytes` and `apiCpuUsecDelta` describe what this cell did.
-    // The run-level comparison against the pre-load baseline is
-    // `recoverySamples`.
     resources: resourceSummary(samples[0] ?? baselineResources, samples),
     aborted: abortReason !== null,
     abortReason,

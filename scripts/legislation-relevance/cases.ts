@@ -1,31 +1,3 @@
-/**
- * Labelled queries for the legislation relevance suite.
- *
- * These are queries a solicitor would type against the provision corpus:
- * statute short titles, chapter numbers, section and schedule lookups, and
- * subject-matter phrases. Every held expectation is verified against Postgres
- * before a run (corpus.ts), so an expectation that has drifted fails loudly
- * instead of quietly scoring.
- *
- * Two scoring models, because the two kinds of query are not the same problem:
- *
- * - `exact`: the query names one entity, so `expectedIds` is the complete
- *   answer. Recall, precision, and MRR are all scored. A stray provision in
- *   the served group is a false positive.
- * - `subject`: the query names a concept. `expectedIds` lists the provisions
- *   that establish it — the definition and the operative right or duty — in
- *   each held Act that legislates it, and is a verified lower bound on the
- *   relevant set, not the whole of it. Recall and MRR are scored; precision
- *   is not, because a concept query's complete relevant set is not
- *   enumerable and a hand-labelled set would make precision meaningless.
- *
- * Absent cases are the point of the set. A query whose correct answer is
- * nothing either names an entity the corpus does not hold, a provision that
- * does not exist, a chapter number with no stored Act, or a legal concept no
- * provision states. With matchingStrategy 'all' the engine can still return
- * provisions that merely mention the words, and on a short provision those
- * mentions are how a plausible non-answer gets served as if it were one.
- */
 export type LegislationRelevanceKind = 'held' | 'absent' | 'control'
 
 export type LegislationRelevanceCategory =
@@ -39,7 +11,6 @@ export type LegislationRelevanceCategory =
 
 export type LegislationRelevanceScoring = 'exact' | 'subject'
 
-/** What makes an absent expectation correct, checked against Postgres. */
 export type LegislationAbsentCheck =
   | { kind: 'act_not_held'; title: string }
   | { kind: 'provision_not_held'; provisionId: string }
@@ -51,11 +22,6 @@ export interface LegislationRelevanceCase {
   kind: LegislationRelevanceKind
   category: LegislationRelevanceCategory
   query: string
-  /**
-   * Canonical identity paths that must appear in the served legislation
-   * group: `ukpga/1998/42` for an Act, `ukpga/1998/42/section/6` for a
-   * provision. Held cases only; empty for absent.
-   */
   expectedIds: string[]
   scoring: LegislationRelevanceScoring
   absentCheck?: LegislationAbsentCheck
@@ -103,12 +69,6 @@ function absent(
   }))
 }
 
-/**
- * A control query's correct behaviour is a *negative*: it must not make a
- * legislation claim it cannot support. It is not scored for hits, because the
- * right outcome is an ordinary keyword search whose result set is not
- * enumerable here. The invariant is checked by the metrics module.
- */
 function control(
   rows: readonly [id: string, query: string][],
 ): LegislationRelevanceCase[] {
@@ -148,18 +108,12 @@ const actNameHeld = held('act_name', 'exact', [
     ['ukpga/2024/21'],
   ],
   ['act-hra-alias', 'HRA 1998', ['ukpga/1998/42']],
-  // The stored title carries a curly apostrophe (Renters’ Rights Act 2025).
-  // Both surface forms are typed, and both name the same Act; the straight
-  // apostrophe is the one a UK keyboard produces.
   ['act-renters-rights-curly', 'Renters’ Rights Act 2025', ['ukpga/2025/26']],
   [
     'act-renters-rights-straight',
     "Renters' Rights Act 2025",
     ['ukpga/2025/26'],
   ],
-  // Finding 1: stored titles carrying a terminal `(repealed)` status
-  // annotation the canonical citation never has. Each chapter citation
-  // resolves the same document, so a title miss is unambiguously false.
   [
     'act-health-social-care-levy-2021',
     'Health and Social Care Levy Act 2021',
@@ -190,9 +144,6 @@ const actNameHeld = held('act_name', 'exact', [
     'Safety of Rwanda (Asylum and Immigration) Act 2024',
     ['ukpga/2024/8'],
   ],
-  // Orthographic variants a lawyer types that must converge on the stored
-  // title: a dropped apostrophe, a dropped or spaced hyphen, `&` as `and`,
-  // and a dropped `etc`.
   [
     'act-childrens-wellbeing-2026',
     'Childrens Wellbeing and Schools Act 2026',
@@ -285,8 +236,6 @@ const sectionHeld = held('section_lookup', 'exact', [
     's. 1 Employment Rights Act 2025',
     ['ukpga/2025/36/section/1'],
   ],
-  // Finding 1: the section form inherits the title miss. The Act resolves
-  // before the provision is checked, so the held provision is served.
   [
     'section-health-social-care-levy-s5',
     's. 5 Health and Social Care Levy Act 2021',
@@ -295,58 +244,36 @@ const sectionHeld = held('section_lookup', 'exact', [
 ])
 
 const subjectHeld = held('subject_matter', 'subject', [
-  // Spans the Employment Relations (Flexible Working) Act 2023 and the
-  // consolidating Employment Rights Act 2025.
   [
     'subject-flexible-working',
     'flexible working',
     ['ukpga/2023/33/section/1', 'ukpga/2025/36/section/9'],
   ],
-  // Spans the Carer's Leave Act 2023 and the Employment Rights Act 2025
-  // consequential amendments. The entitlement itself is created by
-  // paragraph 2 of the 2023 Act's Schedule; the Schedule is unnumbered, so
-  // the label path has no schedule number.
   [
     'subject-carers-leave',
     "carer's leave",
     ['ukpga/2023/18/section/1', 'ukpga/2023/18/schedule/paragraph/2'],
   ],
-  // Spans the Neonatal Care (Leave and Pay) Act 2023 and the Employment
-  // Rights Act 2025.
   [
     'subject-neonatal-care-leave',
     'neonatal care leave',
     ['ukpga/2023/20/section/1', 'ukpga/2023/20/schedule/paragraph/2'],
   ],
-  // Spans the Equality Act 2010 and the Acts that use the term; section 4
-  // is the definition.
   [
     'subject-protected-characteristic',
     'protected characteristic',
     ['ukpga/2010/15/section/4'],
   ],
-  // Sections 20 and 21 are the reasonable-adjustments duty; section 22 is
-  // supplementary and does not carry the phrase, so it is not matched by an
-  // 'all' strategy query at all.
   [
     'subject-reasonable-adjustments',
     'reasonable adjustments',
     ['ukpga/2010/15/section/20', 'ukpga/2010/15/section/21'],
   ],
-  // Spans the Leasehold Reform (Ground Rent) Act 2022 and the Leasehold and
-  // Freehold Reform Act 2024. Sections 1 and 3 of the 2022 Act define the
-  // regulated lease and prohibit the prohibited rent. Neither provision's
-  // text contains the word "ground": under matchingStrategy 'all' this case
-  // can never score above zero. It is a structural zero, not a ranking zero,
-  // and it is the cleanest exhibit for the recall cost of term-exact
-  // matching.
   [
     'subject-ground-rent',
     'ground rent',
     ['ukpga/2022/1/section/1', 'ukpga/2022/1/section/3'],
   ],
-  // Spans the Building Safety Act 2022 and the Leasehold and Freehold
-  // Reform Act 2024; section 65 defines a higher-risk building.
   [
     'subject-higher-risk-building',
     'higher-risk building',
@@ -415,10 +342,6 @@ const absentAct = absent('absent_act', [
     'Criminal Justice Act 2003',
     { kind: 'act_not_held', title: 'Criminal Justice Act 2003' },
   ],
-  // Connector-bearing unheld titles. The joining word is what makes the run a
-  // title rather than a clause, and the closed grammar must supply it from
-  // outside the stored directory, so dropping the stored title that happens to
-  // carry `the` or `from` cannot turn these into keyword searches.
   [
     'absent-act-offences-against-person-1861',
     'Offences Against the Person Act 1861',
@@ -429,10 +352,6 @@ const absentAct = absent('absent_act', [
     'Protection from Harassment Act 1997',
     { kind: 'act_not_held', title: 'Protection from Harassment Act 1997' },
   ],
-  // Fail-first on 846fefa. A standalone outer Act title that embeds a held
-  // Act was routed to prose by inner-title containment, so the keyword path
-  // served provisions of the held 2023 Act (or, for `, as amended`, of an
-  // unrelated Act) as the answer. Both cases must suppress with no hits.
   [
     'absent-act-worker-protection-nested-2010',
     'Worker Protection (Amendment of Equality Act 2010) Act 2010',
@@ -450,11 +369,6 @@ const absentAct = absent('absent_act', [
         'Worker Protection (Amendment of Equality Act 2010 and Human Rights Act 1998) Act 1999',
     },
   ],
-  // Fail-first on the attached-opener defect. `(Equality` is one raw token, so
-  // the token-boundary depth test read the held run as an unbracketed separate
-  // mention and served provisions of an unrelated Act; `[Equality` and
-  // `{Equality` behaved the same way. Each must now suppress with no hits, and
-  // the spaced twins must classify identically.
   [
     'absent-act-amendment-of-equality-2010-attached',
     'Amendment of (Equality Act 2010) Act 2020',
@@ -520,10 +434,6 @@ const absentProvision = absent('absent_provision', [
   ],
 ])
 
-// Concepts no held provision states. These are the absent queries that should
-// pass today; they keep absent precision from being measured only on the
-// entity-not-held class, and they fail the moment a ranking change widens the
-// matched set enough to reach boilerplate.
 const absentConcept = absent('absent_concept', [
   [
     'absent-concept-proportionality',
@@ -557,9 +467,6 @@ const absentConcept = absent('absent_concept', [
   ],
 ])
 
-// A sentence that merely contains an Act and a trailing year is not a
-// whole-title request. It must stay on the keyword path and must never make a
-// not-held claim about an Act it cannot verify.
 const controlQueries = control([
   ['control-defences-children-1989', 'defences under the Children Act 1989'],
   [
@@ -567,10 +474,6 @@ const controlQueries = control([
     'offences contrary to the Computer Misuse Act 1990',
   ],
   ['control-act-2020', 'Act 2020'],
-  // Determiner-free prose (finding 1). The old whole-title gate rejected only
-  // runs containing the/a/an, so these realistic subject queries failed title
-  // resolution and short-circuited on unresolved_title before keyword search
-  // ran. The determiner-bearing twin of the first is control-defences-children-1989.
   ['control-duties-equality-2010', 'duties under Equality Act 2010'],
   [
     'control-offences-misuse-drugs-1971',
@@ -585,10 +488,6 @@ const controlQueries = control([
     'changes introduced by Companies Act 2006',
   ],
   ['control-defences-children-1989-plain', 'defences under Children Act 1989'],
-  // L35: sentence-initial capitalisation must not decide routing. Each of these
-  // is the capitalised form of a prose query already listed above, and must
-  // reach the same keyword path. The uppercase pair exercises a held Act
-  // (Equality Act 2010) so the held-title branch is scored too.
   [
     'control-defences-children-1989-sentence-initial',
     'Defences under Children Act 1989',
@@ -598,10 +497,6 @@ const controlQueries = control([
     'Sentencing powers in Criminal Justice Act 2003',
   ],
   ['control-duties-equality-2010-uppercase', 'DUTIES UNDER EQUALITY ACT 2010'],
-  // Attached-opener straddling token (finding 6): the prose word and the held
-  // Act share one raw token (`under(Equality`). The covered title word's
-  // capital must not promote the residue into a title phrase, or the query
-  // suppresses as an outer title instead of keyword-searching.
   [
     'control-duties-under-attached-equality-2010',
     'Duties under(Equality Act 2010)',
@@ -620,10 +515,4 @@ export const legislationRelevanceCases: LegislationRelevanceCase[] = [
   ...controlQueries,
 ]
 
-/**
- * Served legislation keyword hits per query. The API requests
- * `keywordLimit ?? 5` from the index, so five is what a caller receives and
- * what the suite scores; measuring more would measure a result page the
- * product does not serve.
- */
 export const legislationRelevanceTopK = 5
