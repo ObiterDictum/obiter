@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowsLeftRight, X } from '@phosphor-icons/react'
+import { X } from '@phosphor-icons/react'
 import { Button, Select, cn } from '@obiter/ui'
 import type {
   DocumentComparisonSegment,
@@ -100,7 +100,6 @@ export function DocumentCompareRedline({
             setPair(null)
             setActive(0)
           }}
-          iconStart={<ArrowsLeftRight size={12} aria-hidden />}
         >
           Swap
         </Button>
