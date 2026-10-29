@@ -47,6 +47,7 @@ function routeApp(
   return routes
 }
 
+/** All three real route groups over one pool, for positive controls. */
 export function fullApp(
   pool: Pool,
   storage: StorageService,
