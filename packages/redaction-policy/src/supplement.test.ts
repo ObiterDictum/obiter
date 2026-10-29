@@ -278,7 +278,7 @@ describe('UK supplement — realistic mixed-PII paragraph', () => {
     const emailEnd = emailStart + 'james.cartwright@personal.co.uk'.length
     const rampart: RedactionSpan = {
       id: 'span_r',
-      start: emailStart - 6, // "reach … <email>" wider region
+      start: emailStart - 6,
       end: emailEnd,
       text: paragraph.slice(emailStart - 6, emailEnd),
       category: 'person_name',
@@ -373,8 +373,8 @@ describe('review fix — phone constrained to real UK numbering shapes', () => {
     const cases = [
       'reference 012345678 in the bundle',
       'exhibit 012345678901',
-      'claim 02034567890', // bare 11-digit run, no separator — not a written phone
-      '07123456789', // bare 11-digit mobile, no separator — rejected for precision
+      'claim 02034567890',
+      '07123456789',
     ]
     for (const value of cases) {
       expect(
@@ -421,9 +421,7 @@ describe('review fix — intra-supplement overlap dedupe', () => {
     const text = 'sort code AB 12 34 56 C'
     const spans = supplementSpans(text)
 
-    const overlapping = spans.filter(
-      (s) => s.start < 23 && s.end > 10, // intersects [10, 23)
-    )
+    const overlapping = spans.filter((s) => s.start < 23 && s.end > 10)
     expect(overlapping).toHaveLength(1)
 
     for (let i = 0; i < spans.length; i += 1) {
