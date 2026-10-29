@@ -632,6 +632,21 @@ describe('bounded collaboration reconciliation', () => {
     ).toEqual(['Alpha revised', 'Beta'])
   })
 
+  it('refuses an operation whose address the alignment does not name', () => {
+    expect(() =>
+      remapMergeOperations(
+        [
+          {
+            type: 'set_paragraph_style',
+            paragraphId: 'para-missing',
+            styleId: null,
+          },
+        ],
+        { baseToCurrentParagraph: new Map(), baseToCurrentRun: new Map() },
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
+
   it('merges a table of contents over an unchanged stale base', async () => {
     const base = await parseDocx(source)
     const current = await parseDocx(source)

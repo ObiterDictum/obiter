@@ -1,6 +1,7 @@
 import JSZip from 'jszip'
 import { describe, expect, it } from 'bun:test'
 
+import { buildOoxmlFixture } from '../fixtures/builder'
 import {
   comment,
   requiredXml,
@@ -49,6 +50,62 @@ describe('product comment package export', () => {
 
     expect(relationships).toContain('<Relationships')
     expect(relationships).toContain('relationships/comments')
+  })
+
+  it('fails closed when the declared comments relationship points at a missing part', async () => {
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const rels = zip.file('word/_rels/document.xml.rels')
+    if (!rels) throw new Error('Fixture rels part is missing.')
+    zip.file(
+      'word/_rels/document.xml.rels',
+      (await rels.async('string')).replace(
+        'Target="comments.xml"',
+        'Target="missing-comments.xml"',
+      ),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const paragraph = document.model.stories[0]?.paragraphs[0]
+    if (!paragraph) throw new Error('Fixture paragraph is missing.')
+
+    await expect(
+      serialiseDocxWithComments(document, [
+        comment('cmt_missing_part', paragraph.id, 0, 0, 'New comment'),
+      ]),
+    ).rejects.toThrowError(
+      expect.objectContaining({ code: 'comment-export-failed' }),
+    )
+  })
+
+  it('fails closed rather than redirecting a declared relationship of another type', async () => {
+    const zip = await JSZip.loadAsync(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const rels = zip.file('word/_rels/document.xml.rels')
+    if (!rels) throw new Error('Fixture rels part is missing.')
+    zip.file(
+      'word/_rels/document.xml.rels',
+      (await rels.async('string')).replace(
+        'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
+        'http://purl.oclc.org/ooxml/officeDocument/relationships/comments',
+      ),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const paragraph = document.model.stories[0]?.paragraphs[0]
+    if (!paragraph) throw new Error('Fixture paragraph is missing.')
+
+    await expect(
+      serialiseDocxWithComments(document, [
+        comment('cmt_foreign_type', paragraph.id, 0, 0, 'New comment'),
+      ]),
+    ).rejects.toThrowError(
+      expect.objectContaining({ code: 'comment-export-failed' }),
+    )
   })
 
   it('inserts two product relationships into a rels part that already has entries', async () => {
