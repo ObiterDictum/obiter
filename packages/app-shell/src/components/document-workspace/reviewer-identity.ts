@@ -34,7 +34,7 @@ function hash(value: string) {
   return result >>> 0
 }
 
-export function reviewerInitials(author: string | undefined) {
+function reviewerInitials(author: string | undefined) {
   const trimmed = (author ?? '').trim()
   return trimmed === '' ? '?' : initialsOf(trimmed)
 }

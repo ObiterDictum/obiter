@@ -22,7 +22,7 @@ import type { EditorChromeProps } from './editor-commands'
 import { styleDisplayName } from './editor-commands'
 
 /** The value the style select shows when the selection covers several styles. */
-export const MIXED_STYLE_VALUE = '__mixed__'
+const MIXED_STYLE_VALUE = '__mixed__'
 
 /**
  * The one compact toolbar row: the controls a document is actually written

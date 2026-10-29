@@ -436,13 +436,7 @@ export {
   command,
   commandOrNull,
   commandPrefix,
-  openRibbonTab,
 } from './editor-test-commands'
-
-/** The menu row for a command, in whichever menu the test just opened. */
-export function menuCommand(name: string | RegExp) {
-  return screen.getByRole('button', { name })
-}
 
 export function selectBodyParagraph(text = 'Hello') {
   fireEvent.click(screen.getByText(text))

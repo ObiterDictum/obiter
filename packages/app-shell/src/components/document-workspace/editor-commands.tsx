@@ -13,8 +13,7 @@ import type {
 import type { InsertRibbonProps } from './use-insert-ribbon'
 import { revealDocumentRedactionRuns } from './document-actions'
 
-export type EditorMenuId =
-  'file' | 'edit' | 'insert' | 'format' | 'review' | 'view'
+type EditorMenuId = 'file' | 'edit' | 'insert' | 'format' | 'review' | 'view'
 
 /** One row a menu, the command palette and the toolbar can each offer. */
 export type EditorCommand = {
@@ -957,4 +956,4 @@ const DOCUMENT_KINDS = [
   { value: 'order', label: 'Order' },
 ] as const
 
-export type { DocumentStructureToolbar }
+
