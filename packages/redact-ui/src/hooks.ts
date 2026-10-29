@@ -126,11 +126,12 @@ export function useRedactionOutput(runId: string, enabled: boolean) {
  * The redaction schedule is the run's own audit report: every decision with its
  * category, reviewer and time, plus the audit log, and never the removed words.
  * PDF and Word are generated server-side on demand — the API serves a schedule
- * only for a finalised run.
+ * only for a finalised run. `json-shareable` is the same audit without the span
+ * text or the source filename, for handing to the other side.
  */
 export function useRedactionScheduleExport(runId: string) {
   return useMutation({
-    mutationFn: (format: 'pdf' | 'docx') =>
+    mutationFn: (format: 'pdf' | 'docx' | 'json-shareable') =>
       apiFetchBlob(`/api/redaction-runs/${runId}/audit?format=${format}`),
   })
 }

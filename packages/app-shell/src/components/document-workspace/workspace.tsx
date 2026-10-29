@@ -23,6 +23,7 @@ import { DocumentDesk } from './document-page'
 import { DocumentPdfPages } from './pdf-view'
 import { EditorIconButton } from './editor-controls'
 import { PdfWorkspaceToolbar } from './pdf-toolbar'
+import { RedactedMark } from '../../redacted-mark'
 import {
   LoadingBlock,
   QueryError,
@@ -135,6 +136,7 @@ function DocumentWorkspaceBody({
           documentId={documentId}
           filename={version.filename}
           layout={layout}
+          mark={<RedactedMark redaction={version.redaction} producedAt={version.createdAt} />}
         />
       </VerifiedViewer>
     )
@@ -148,6 +150,7 @@ function DocumentWorkspaceBody({
           versionNumber={version.versionNumber}
           layout={layout}
           headerLinks={headerLinks}
+          mark={<RedactedMark redaction={version.redaction} producedAt={version.createdAt} />}
         />
       </VerifiedViewer>
     )
@@ -215,10 +218,12 @@ function DownloadRibbon({
   onDownload,
   note,
   error,
+  mark,
 }: {
   onDownload: () => void
   note: string
   error: string | null
+  mark?: ReactNode
 }) {
   return (
     <WorkspaceRibbon>
@@ -234,6 +239,7 @@ function DownloadRibbon({
             icon={<FileArrowDown size={16} aria-hidden />}
           />
         </div>
+        {mark}
         <span className="pl-2 text-xs text-muted">{note}</span>
       </div>
       {error ? (
@@ -249,10 +255,12 @@ function TxtWorkspace({
   documentId,
   filename,
   layout,
+  mark,
 }: {
   documentId: string
   filename: string
   layout: DocumentWorkspaceLayout
+  mark?: ReactNode
 }) {
   const textQuery = useDocumentText(documentId)
   const { downloadError, download } = useDownloadOriginal(documentId, filename)
@@ -263,6 +271,7 @@ function TxtWorkspace({
         note="Plain text, not editable"
         error={downloadError}
         onDownload={download}
+        mark={mark}
       />
       {textQuery.isLoading ? (
         <LoadingBlock label="Loading document text" />
@@ -316,12 +325,14 @@ function PdfWorkspace({
   versionNumber,
   layout,
   headerLinks,
+  mark,
 }: {
   documentId: string
   filename: string
   versionNumber: number
   layout: DocumentWorkspaceLayout
   headerLinks?: { back?: ReactNode; matter?: ReactNode }
+  mark?: ReactNode
 }) {
   const view = useDocumentPdfView(documentId)
   const [zoom, setZoom] = useState(100)
@@ -365,9 +376,12 @@ function PdfWorkspace({
           sits and how to leave it, so a read-only PDF is not a dead end. */}
       <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b border-line px-12 py-2 max-compact:px-8">
         {headerLinks?.back}
-        <h1 className="truncate text-item text-ink" title={filename}>
-          {filename}
-        </h1>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="truncate text-item text-ink" title={filename}>
+            {filename}
+          </h1>
+          {mark}
+        </div>
         <span className="text-caption text-subtle">
           Read only · version {String(versionNumber)}
         </span>
