@@ -25,12 +25,6 @@ import { wordRunInnerTextXml } from './text-run-edit'
 const BODY_SECTION_KEY = 'document:sectPr'
 const PAGE_BREAK_RUN = '<w:r><w:br w:type="page"/></w:r>'
 
-/**
- * `set_section_properties` patches the body-level `w:sectPr` — the final
- * section. A paragraph-level `w:sectPr` written by `insert_section_break`
- * governs an earlier section and is preserved untouched; E5 does not address
- * an individual earlier section.
- */
 export function setSectionProperties(
   document: OoxmlDocument,
   patch: SectionPropertiesPatch,
@@ -57,22 +51,11 @@ export function setSectionProperties(
   part.dirty = true
 }
 
-/**
- * Inserts a paragraph-level `w:sectPr` on the paragraph a section ends at,
- * seeded from the body-level section so the new section inherits its layout.
- * The body-level `w:sectPr` continues to govern the final section.
- */
 export function insertSectionBreak(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
 ) {
   const part = requireEditablePart(document, paragraph.partName)
-  // A paragraph that already carries a `w:sectPr` is the end paragraph of an
-  // existing section, holding its geometry and header/footer references. There
-  // is no second section that can end at the same paragraph, and rewriting it
-  // from the body seed would silently discard the existing section's
-  // definition, so refuse the ambiguous edit. `activeSectionXml` ignores a
-  // section recorded only in the paragraph's `w:pPrChange` history.
   if (
     paragraph.wire.preservedXmlFragments.some(
       (fragment) => activeSectionXml(fragment).length > 0,
@@ -80,8 +63,6 @@ export function insertSectionBreak(
   ) {
     throw new OoxmlError('invalid-document-edit')
   }
-  // The seed is the final section's current definition, including any pending
-  // section draft applied earlier in the same batch.
   const { sectPr } = bodySection(part.overlay)
   const existing = part.overlay.replacements.get(BODY_SECTION_KEY)
   const seed =
@@ -98,13 +79,6 @@ export function insertSectionBreak(
   part.dirty = true
 }
 
-/**
- * Inserts `<w:br w:type="page"/>` in a run at the paragraph character offset,
- * splitting the run when the offset falls inside it. The offset addresses the
- * paragraph's effective text: a text replacement earlier in the batch has
- * already updated `wire.text`, and a run it rewrote is materialised with every
- * accumulated break inline rather than overlapping the replacement.
- */
 export function insertPageBreak(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -114,9 +88,6 @@ export function insertPageBreak(
   const part = requireEditablePart(document, paragraph.partName)
   const overlay = part.overlay
   validateBreakOffset(paragraph, offset)
-  // A truly empty paragraph has no run to splice: the break run and any section
-  // properties share one paragraph-owned replacement so they compose in schema
-  // order instead of two full-node (or same-offset) replacements colliding.
   if (isBlankParagraph(paragraph)) {
     insertRunIntoEmptyParagraph(overlay, paragraph, PAGE_BREAK_RUN)
     part.dirty = true
@@ -131,9 +102,6 @@ export function insertPageBreak(
       pageBreakInsertion(overlay.source, point),
     )
   } else if (shouldMaterialiseRun(overlay, target.run.wire.id)) {
-    // The requested offset addresses the paragraph's effective text, but a
-    // materialised run is rebuilt from its own text, so convert to run-local
-    // before accumulating it.
     const localOffset = offset - target.start
     const offsets = [
       ...(breakOffsets.get(target.run.wire.id) ?? []),
@@ -162,11 +130,6 @@ type EffectiveRunTarget = {
   start: number
 }
 
-/**
- * Finds the run the effective-text offset sits strictly inside, with the
- * paragraph-level offset the run starts at. A boundary offset is handled by
- * `locateOffset` at the caller.
- */
 function locateEffectiveRun(
   paragraph: ParagraphAnchor,
   offset: number,
@@ -181,39 +144,12 @@ function locateEffectiveRun(
   return undefined
 }
 
-/**
- * Whether the run already owns a pending overlay write. Any run-keyed key — a
- * text replacement, a run-property write, or an earlier materialised break —
- * means the run's text and structure live in the overlay, so a new break must
- * rebuild the run from its effective properties rather than reopen its tail
- * from the parse-time `runProperties` snapshot.
- */
 function shouldMaterialiseRun(overlay: XmlOverlay, runId: string) {
   return [...overlay.replacements.keys()].some((key) =>
     key.startsWith(`${runId}:`),
   )
 }
 
-/**
- * Rewrites a run whose overlay already owns its text or properties, with every
- * pending page break inline. It folds the run's non-text children (including a
- * run-property write already patched onto `wire.preservedXmlFragments`) and its
- * effective text, then clears every in-run replacement before claiming the
- * whole run range, so the breaks compose with the text and property writes
- * instead of overlapping them. `offsets` are run-local, not paragraph offsets.
- *
- * Limitation: the preserved non-text children are emitted before the text, so
- * a run that interleaves a structural child (a tab, a drawing, a field) with
- * text and is materially rebuilt here loses that interleaving. The
- * source-slicing path preserves it and is used whenever the run has no pending
- * overlay; a run whose text a `replace_run_text` rewrote no longer has a
- * source-to-model mapping for its children, so the reorder is confined to that
- * already-rewritten case. The run-properties fragment(s) are always emitted
- * first, ahead of the remaining preserved children, because `CT_Run` requires
- * `w:rPr` before any structural child: a property write that appended an
- * `w:rPr` after an existing break or tab would otherwise rebuild a run whose
- * first child is not its properties.
- */
 function materialiseRunWithBreaks(
   overlay: XmlOverlay,
   run: ParagraphAnchor['runs'][number],
@@ -245,26 +181,12 @@ function materialiseRunWithBreaks(
       replacement.end <= run.runRange.end &&
       replacement.start < run.runRange.end
     if (!insideRun) continue
-    // A zero-width replacement exactly at the run's start belongs to the
-    // preceding boundary, exactly as `hasPendingBreakSplice` already treats it
-    // for the run-keyed writers. The paragraph-keyed page-break splice emits
-    // its standalone break run before the run tag, so it neither closes nor
-    // reopens this run; the rebuild leaves it in place and the overlay orders
-    // the zero-width splice before the rebuilt run. Without this skip the
-    // splice satisfies `insideRun` and a batch that is otherwise serialisable —
-    // a break at the run start, a run-keyed write there, then a break strictly
-    // inside the same run — is over-refused.
     if (
       replacement.start === run.runRange.start &&
       replacement.end === run.runRange.start
     ) {
       continue
     }
-    // A non-run-keyed replacement strictly inside the run is a splice this
-    // rebuild would silently drop, losing the break it carries. Fail closed as
-    // a typed edit error rather than let serialisation hit the overlay's plain
-    // overlap error. (A non-zero-width replacement from the run's start is the
-    // whole-run rebuild and is folded like any other run-keyed write.)
     if (!pendingKey.startsWith(`${run.wire.id}:`)) {
       throw new OoxmlError('invalid-document-edit')
     }
@@ -277,12 +199,6 @@ function materialiseRunWithBreaks(
   })
 }
 
-/**
- * The zero-width break insertion for a located point. Every point in one text
- * element is spliced independently (the enclosing run and text are closed and
- * reopened around the break), so two breaks in the same run never overlap at
- * serialise time.
- */
 function pageBreakInsertion(
   source: string,
   point: ReturnType<typeof locateOffset>,
@@ -294,8 +210,6 @@ function pageBreakInsertion(
       value: PAGE_BREAK_RUN,
     }
   }
-  // A truly empty paragraph is intercepted by `insertPageBreak`; this branch
-  // keeps the located-point contract total if a future caller reaches it.
   if (point.split.kind === 'empty-paragraph') {
     const { paragraph } = point.split
     const opening = source
@@ -331,14 +245,6 @@ function pageBreakInsertion(
 
 const PAGE_BREAK = '<w:br w:type="page"/>'
 
-/**
- * Appends a run into a blank paragraph, reusing the paragraph-owned `<w:pPr>`
- * replacement a property writer (style, section break) may already have
- * created. One replacement per paragraph is what lets a page break and a
- * section break compose in schema order — `w:pPr` first, then the break run —
- * instead of two full-node replacements colliding or two same-offset inserts
- * racing for order.
- */
 function insertRunIntoEmptyParagraph(
   overlay: XmlOverlay,
   paragraph: ParagraphAnchor,
@@ -372,11 +278,6 @@ function insertRunIntoEmptyParagraph(
   })
 }
 
-/**
- * Validates the offset against the paragraph's effective text. The plan pass
- * cannot do this: a same-batch `replace_run_text` changes the text length, and
- * `wire.text` only holds the effective text once that operation has run.
- */
 function validateBreakOffset(paragraph: ParagraphAnchor, offset: number) {
   const text = paragraph.runs.map((run) => run.wire.text).join('')
   if (offset > text.length || splitsSurrogate(text, offset)) {

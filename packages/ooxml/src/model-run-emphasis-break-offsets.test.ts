@@ -9,11 +9,6 @@ import {
   save,
 } from './model-run-emphasis.test-support'
 
-// E57: a text-wrapping `w:br` occupies one `\n` character in the paragraph
-// model, so a range boundary after it must advance the source coordinate the
-// same way. `locateInsideRun` used to walk `w:t` elements only, so every offset
-// past a break was short by one per break and an emphasis landed on the wrong
-// characters. A non-wrapping break is structure and consumes no offset.
 const TEXT_BREAK = '<w:br/>'
 const PAGE_BREAK = '<w:br w:type="page"/>'
 const COLUMN_BREAK = '<w:br w:type="column"/>'
@@ -152,9 +147,6 @@ describe('range emphasis across a text-wrapping break', () => {
     expect(styled(runs, 'bold')).toEqual(['ab'])
   })
 
-  // Selecting only a line break styles the run that carries it, never the
-  // neighbouring text. The break is one model character, so a range covering
-  // exactly it is a supported, if unusual, edit.
   it('formats only the logical newline without touching neighbouring text', async () => {
     const { document, paragraph } = await loadRun(
       `<w:r><w:t>ab</w:t>${TEXT_BREAK}<w:t>cdef</w:t></w:r>`,

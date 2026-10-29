@@ -154,13 +154,11 @@ describe('share-safe r4: binary payloads', () => {
       0x00,
       0x00,
       0x00,
-      // comment extension: 0x21 0xfe, sub-block 'SECRETGIF', terminator
       0x21,
       0xfe,
       0x09,
       ...new TextEncoder().encode('SECRETGIF'),
       0x00,
-      // image descriptor + minimal image data
       0x2c,
       0x00,
       0x00,
@@ -175,7 +173,6 @@ describe('share-safe r4: binary payloads', () => {
       0x01,
       0x44,
       0x00,
-      // trailer
       0x3b,
     ])
     const { binary } = await outputParts(
@@ -302,7 +299,6 @@ describe('share-safe r4: drawing and theme', () => {
     const theme = parts.get('word/theme/theme1.xml') ?? ''
     expect(theme).not.toContain('SECRETTHEMENAME')
     expect(theme).not.toContain('SECRETSCHEME')
-    // `typeface` is the font's face name — rendering, not a label.
     expect(theme).toContain('typeface="Calibri"')
   })
 

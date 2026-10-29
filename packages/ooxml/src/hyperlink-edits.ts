@@ -35,18 +35,6 @@ export interface SetHyperlinkOperation {
   target: string | null
 }
 
-/**
- * Wraps the runs covering `[from, to)` of the paragraph's effective text in a
- * `w:hyperlink` element joined to a new external relationship, or — with
- * `target: null` — unwraps the hyperlink covering `from` and drops its
- * relationship. The mark inserts no text, so no offset downstream can move.
- *
- * Only the first and last covered runs are split: a covered interior run
- * stays untouched inside the wrap, preserving its markup byte-for-byte. The
- * source anchors are left alone — like every range edit, the anchor's
- * `runRange` must keep addressing the original element — while the wire
- * gains the run pieces a reparse would produce.
- */
 export function setHyperlink(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -75,8 +63,6 @@ export function setHyperlink(
   }
   const runs = coveringRuns(paragraph, from, to)
   refuseNestedHyperlink(part.overlay.source, runs)
-  // A pending wrap marks its covered wire runs, so a second overlapping
-  // wrap in the same batch is refused like a stored one.
   if (runs.some((run) => run.anchor.wire.hyperlinkTarget !== undefined)) {
     throw new OoxmlError('invalid-document-edit')
   }
@@ -111,7 +97,6 @@ export interface CoveringRun {
   last: boolean
 }
 
-/** Runs whose effective text intersects `[from, to)`, in document order. */
 export function coveringRuns(
   paragraph: ParagraphAnchor,
   from: number,
@@ -143,11 +128,6 @@ export function coveringRuns(
   return runs
 }
 
-/**
- * Refuses a wrap that would overlap a stored `w:hyperlink`. Nested hyperlinks
- * are invalid markup and a partial overlap would leave half a link
- * byte-corrupt; both get the same typed refusal rather than a silent rewrite.
- */
 function refuseNestedHyperlink(source: string, runs: readonly CoveringRun[]) {
   const elements = parseXmlElements(source)
   for (const element of elements) {
@@ -163,11 +143,6 @@ function refuseNestedHyperlink(source: string, runs: readonly CoveringRun[]) {
   }
 }
 
-/**
- * Writes the boundary replacements and returns the `w:hyperlink` fragment for
- * the wire — the wrapper with every covered run element nested inside it, as
- * `preservedXmlFragments` reports after a reparse.
- */
 function writeHyperlinkWrap(
   document: OoxmlDocument,
   overlay: XmlOverlay,
@@ -200,8 +175,6 @@ function writeHyperlinkWrap(
           fragments: anchor.wire.preservedXmlFragments,
           consumedKeys: [],
         }
-    // A materialised view's paragraph holds only the folded run, so its
-    // offsets are run-local; the source view addresses paragraph offsets.
     const offsetBase = materialise ? 0 : covered.runStart
     const startCut = needsHead
       ? locateOffset(view.source, view.paragraph, offsetBase + localFrom)
@@ -263,11 +236,6 @@ function writeHyperlinkWrap(
   return `${openTag}${pieces.join('')}</w:hyperlink>`
 }
 
-/**
- * Unwraps the stored `w:hyperlink` covering `from` and drops its relationship.
- * The inner markup is lifted out byte-for-byte; a pending replacement touching
- * the element refuses rather than silently swallowing work queued this batch.
- */
 function removeHyperlink(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -310,8 +278,6 @@ function removeHyperlink(
   const fragment = elementFragment(part.overlay.source, linkElement)
   paragraph.wire.preservedXmlFragments =
     paragraph.wire.preservedXmlFragments.filter((item) => item !== fragment)
-  // Every run inside the unwrapped element loses its link, not only the one
-  // at `from`.
   for (const run of paragraph.runs) {
     if (
       run.runRange.start >= linkElement.start &&
@@ -323,7 +289,6 @@ function removeHyperlink(
   if (relId) dropRelationship(document, paragraph.partName, relId)
 }
 
-/** The enclosing `w:hyperlink` of a run element, if one exists. */
 function hyperlinkAncestor(element: XmlElement): XmlElement | undefined {
   let cursor = element.parent
   while (cursor) {
@@ -333,7 +298,6 @@ function hyperlinkAncestor(element: XmlElement): XmlElement | undefined {
   return undefined
 }
 
-/** Removes a relationship element from the part's rels and the wire. */
 function dropRelationship(
   document: OoxmlDocument,
   partName: string,

@@ -45,8 +45,6 @@ describe('effective-text image splices', () => {
     ])
     const output = await serialiseDocx(document)
 
-    // The drawing landed inside the replaced text, between 'Hello ' and
-    // 'brave world', and the paragraph reparses with exactly that order.
     const reparsed = mainParagraphs(await parseDocx(output))
     const paragraph = reparsed.find((item) => item.id === anchor.id)
     if (!paragraph) throw new Error('Anchor paragraph is missing.')
@@ -113,7 +111,6 @@ describe('final-anchor trailing paragraph wires', () => {
 
     const wires = mainParagraphs(document)
     const ids = wires.map((paragraph) => paragraph.id)
-    // One trailing paragraph: repeated inserts park the same wire, not a copy.
     expect(new Set(ids).size).toBe(ids.length)
     const trailing = wires.at(-1)
     if (!trailing) throw new Error('Trailing wire is missing.')
@@ -121,9 +118,6 @@ describe('final-anchor trailing paragraph wires', () => {
       fromParagraphId: null,
     })
 
-    // Wire order and count match what the serialised document reparses to.
-    // Fresh wires without a persisted paraId come back with positional ids,
-    // so text — not id — is the comparable sequence for inserted content.
     const reparsed = mainParagraphs(
       await parseDocx(await serialiseDocx(document)),
     )
@@ -143,8 +137,6 @@ describe('final-anchor trailing paragraph wires', () => {
 
 describe('synthetic paragraph-id allocation', () => {
   it('skips a w14 id spelled under another prefix with single quotes', async () => {
-    // The same namespace binding spelled `alias:` and single-quoted is still
-    // an allocated id — the allocator resolves attributes by namespace.
     const bytes = await createSyntheticDocx(['Before', 'After'])
     const zip = await JSZip.loadAsync(bytes)
     const source = await requiredPart(zip, 'word/document.xml')
@@ -175,15 +167,9 @@ describe('synthetic paragraph-id allocation', () => {
       await serialiseDocx(document),
       'word/document.xml',
     )
-    // The prefix class must allow digits — `w14` is the binding the writer
-    // emits. A letters-only class collects `alias:paraId` but never the
-    // generated ids, so the uniqueness assertion could not see a collision.
     const allocated = [
       ...xml.matchAll(/\b[\w.-]+:paraId\s*=\s*['"]([0-9A-Fa-f]{8})['"]/gu),
     ].map((match) => match[1]?.toUpperCase())
-    // The alias paragraph contributes E6000001; the table's generated ids
-    // must actually be in the collected set for the uniqueness check to
-    // mean anything.
     expect(allocated.length).toBeGreaterThan(1)
     expect(new Set(allocated).size).toBe(allocated.length)
     expect(allocated.filter((id) => id === 'E6000001')).toHaveLength(1)
@@ -192,8 +178,6 @@ describe('synthetic paragraph-id allocation', () => {
 
 describe('package limits against the finished archive', () => {
   it('refuses an image whose insertion overflows the entry count', async () => {
-    // Pad to the cap, then drop the relationships part so the insertion
-    // would create two parts (media plus rels) and cross it.
     const document = await parseDocx(await createSyntheticDocx(['Anchor']))
     const missing = OOXML_MAX_ENTRIES - document.sourceParts.size
     for (let index = 0; index < missing; index += 1) {
@@ -207,8 +191,6 @@ describe('package limits against the finished archive', () => {
     const anchor = mainParagraphs(document)[0]
     if (!anchor) throw new Error('Fixture model is missing.')
 
-    // The relationships part is gone, so the insertion would create two
-    // parts (media plus rels) — one more than the reserved check allows.
     expect(() =>
       applyDocumentEdits(document, [imageOperation(anchor.id, 0)]),
     ).toThrowError(expect.objectContaining({ code: 'package-limits-exceeded' }))
@@ -219,9 +201,6 @@ describe('package limits against the finished archive', () => {
     const anchor = mainParagraphs(document)[0]
     if (!anchor) throw new Error('Fixture model is missing.')
     applyDocumentEdits(document, [imageOperation(anchor.id, 0)])
-    // A part added outside the insertion guard pushes the finished package
-    // over the cap: serialise must refuse rather than publish a package the
-    // loader itself would reject.
     const over = OOXML_MAX_ENTRIES + 1 - document.sourceParts.size
     for (let index = 0; index < over; index += 1) {
       const name = `filler/part-${String(index).padStart(4, '0')}.bin`
@@ -252,7 +231,6 @@ describe('relationship part serialisation', () => {
     expect(rels).toContain('<pkg:Relationship ')
     expect(rels).toContain('Target="media/image1.png"')
 
-    // The relationship survives a reload: the drawing resolves to the part.
     const reparsed = await parseDocx(output)
     const relationship = reparsed.model.relationships.find(
       (item) => item.target === 'media/image1.png',
@@ -287,8 +265,6 @@ describe('media content types and raster bytes', () => {
     const bytes = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const zip = await JSZip.loadAsync(bytes)
     const contentTypes = await requiredPart(zip, '[Content_Types].xml')
-    // The package declares png bytes as octet-stream: a package-level lie the
-    // insertion must not propagate onto the new media part.
     const patched = contentTypes.replace(
       /Extension="png" ContentType="[^"]+"/u,
       'Extension="png" ContentType="application/octet-stream"',

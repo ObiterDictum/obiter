@@ -182,7 +182,6 @@ describe('run emphasis and paragraph numbering edits', () => {
         const label = `${name} tracked=${String(tracking)}`
         expect(para, label).toContain('<w:pStyle w:val="Base"/>')
         expect(para, label).toContain('<w:numPr>')
-        // never two sibling properties elements
         expect(para, label).not.toContain('</w:pPr><w:pPr>')
         if (tracking) {
           expect(para, label).toMatch(
@@ -232,9 +231,7 @@ describe('run emphasis and paragraph numbering edits', () => {
     if (!edited) throw new Error('Edited rPr is missing.')
     const active = edited.slice(0, edited.indexOf('<w:rPrChange'))
     const change = edited.slice(edited.indexOf('<w:rPrChange'))
-    // toggle-off lands in the active rPr, before the change record
     expect(active).toContain('<w:b w:val="0"/>')
-    // the recorded pre-change state is untouched
     expect(change).toContain('<w:b/>')
     expect(change).not.toContain('w:val="0"')
   })
@@ -582,8 +579,6 @@ describe('run emphasis and paragraph numbering edits', () => {
     )
     const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
     const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
-    // one outer pPr carrying both edits, one pPr inside the pPrChange
-    // holding the original, never two sibling pPr elements
     expect(para).not.toContain('</w:pPr><w:pPr>')
     expect(para.match(/<w:pPrChange/g) ?? []).toHaveLength(1)
     expect(para).toContain('<w:pStyle w:val="Base"/>')
@@ -638,7 +633,6 @@ describe('run emphasis and paragraph numbering edits', () => {
     const [first, second] = mainParagraphs(document)
     if (!first || !second) throw new Error('Fixture paragraphs are missing.')
 
-    // The fixture's num 2 already carries `ilvl 0` `startOverride 1`.
     applyDocumentEdits(document, [
       {
         type: 'set_paragraph_numbering',
@@ -652,7 +646,6 @@ describe('run emphasis and paragraph numbering edits', () => {
       mainParagraphs(document)[0]?.preservedXmlFragments.join(''),
     ).toContain('<w:numId w:val="2"/>')
 
-    // Two paragraphs asking for the same fresh override share one instance.
     const before = document.model.numbering.length
     applyDocumentEdits(document, [
       {
@@ -768,9 +761,6 @@ describe('run emphasis and paragraph numbering edits', () => {
     const parsed = reloaded.model.numbering.find(
       (instance) => instance.numberingId === created.numberingId,
     )
-    // The reloaded model is what the emitted XML actually carries; the edit's
-    // model entry must describe the same levels, including the source's
-    // override at the other level.
     expect(parsed?.levels).toEqual(created.levels)
     expect(parsed?.levels?.find((level) => level.ilvl === 2)?.numFmt).toBe(
       'upperLetter',
@@ -815,9 +805,6 @@ describe('run emphasis and paragraph numbering edits', () => {
       numAt,
       numberingXml.indexOf('</w:num>', numAt) + 8,
     )
-    // CT_NumLvl orders startOverride before lvl, and the nested level's own
-    // start must agree with it so the restart holds whichever one a consumer
-    // reads.
     expect(fragment.indexOf('<w:startOverride')).toBeGreaterThan(-1)
     expect(fragment.indexOf('<w:startOverride')).toBeLessThan(
       fragment.indexOf('<w:lvl '),
@@ -831,8 +818,6 @@ describe('run emphasis and paragraph numbering edits', () => {
     )
     const level = parsed?.levels?.find((item) => item.ilvl === 0)
     expect(level?.start).toBe(3)
-    // The formatting the source override defined survives, so the edit's model
-    // entry and the reloaded part describe the same level.
     expect(level?.lvlText).toBe('%1)')
     expect(level?.numFmt).toBe('upperLetter')
     expect(parsed?.levels).toEqual(created.levels)

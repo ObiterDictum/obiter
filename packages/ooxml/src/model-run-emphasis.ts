@@ -34,24 +34,9 @@ type RunSplitView = {
   paragraph: ParagraphAnchor
   offsetBase: number
   fragments: readonly string[]
-  // Overlay keys folded into `source`; the caller removes them once every run
-  // in the paragraph has planned, so a rejected edit mutates nothing.
   consumedKeys: readonly string[]
 }
 
-/**
- * Apply every range emphasis for one paragraph in a single pass. Grouping is
- * what makes the result independent of how many range operations the client
- * sent: each original run is split once at the union of all range boundaries
- * and each resulting piece gets the merged emphasis of the ranges covering it.
- *
- * A run whose content was already changed by an earlier operation in the same
- * batch (a text replacement, or a whole-run property write) no longer has a
- * source-to-model mapping, so it is materialised from its effective overlay
- * first and split from that text. Runs without pending overlays keep the
- * source-slicing path so structural children (drawings, tabs, field
- * references) stay byte-identical.
- */
 export function applyRunEmphasisRanges(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -136,28 +121,12 @@ export function applyRunEmphasisRanges(
   }
 }
 
-/**
- * The tracked form of `applyRunEmphasisRanges`. The covered runs split at the
- * same boundaries, but each covered piece's patched properties carry a
- * `w:rPrChange` marker holding its previous properties, so accepting keeps
- * the new formatting and rejecting restores it — no widening the range to the
- * whole run. A run covered whole goes through the tracked writer's property
- * path, so it is still recorded rather than silently rewritten.
- *
- * A covered run carrying a pending overlay cannot split under tracking: the
- * pieces would re-emit a pending tracked write's change id, which the
- * decision map cannot name twice. The batch fails closed instead.
- */
 export function applyTrackedRunEmphasisRanges(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
   ranges: readonly RunEmphasisRange[],
   tracked: {
     setRunEmphasis(anchor: TextRunAnchor, emphasis: RunEmphasis): void
-    /**
-     * The marker attributes a fresh piece's `w:rPrChange` carries; allocating
-     * one per call gives every piece its own persisted `w:id`.
-     */
     changeAttributes(prefix: string): string
   },
   lineage?: LineageRecorder,
@@ -260,12 +229,6 @@ interface SplitRunResult {
   consumedKeys: readonly string[]
 }
 
-/**
- * How a covered piece's XML and preserved fragments are patched. The untracked
- * caller paints the emphasis directly; the tracked caller wraps the patched
- * properties in a `w:rPrChange` marker and returns matching fragments, so the
- * wire model and the part XML carry the same change.
- */
 type SplitPatch = (
   pieceXml: string,
   emphasis: RunEmphasis,
@@ -347,8 +310,6 @@ function splitRun(
     xml: parts.map((part) => part.xml).join(''),
     wires,
     // SAFETY: `wires` is built one per `parts` entry, and `ordered` is the
-    // sorted split bounds with one more entry than `parts`, so `index` and
-    // `index + 1` are in range for every part.
     originParts: parts.map((part, index) => ({
       run: wires[index] as DocumentTextRunWire,
       from: ordered[index] as number,
@@ -379,9 +340,6 @@ function effectiveView(
   run: TextRunAnchor,
   paragraph: ParagraphAnchor,
 ): RunSplitView {
-  // The shared materialised-run view: pending replacements folded into one
-  // source string, sibling runs a break splice produced coalesced, so the
-  // split machinery styles exactly the characters a range covers.
   return { offsetBase: 0, ...effectiveRunView(overlay, run, paragraph) }
 }
 
@@ -438,12 +396,6 @@ function emphasisFragments(
     : [...patched, patchRunEmphasisXml('<w:rPr/>', emphasis)]
 }
 
-/**
- * The tracked counterpart of `emphasisFragments`: the piece's wire fragments
- * carry the same patched properties and `w:rPrChange` marker the part XML
- * does, so a later materialisation replays the change rather than a bare
- * format edit.
- */
 function trackedEmphasisFragments(
   fragments: readonly string[],
   emphasis: RunEmphasis,

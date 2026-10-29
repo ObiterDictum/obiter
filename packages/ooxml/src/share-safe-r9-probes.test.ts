@@ -16,12 +16,6 @@ const PACKAGE_REL_NAMESPACE =
 const HYPERLINK_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink'
 
-/**
- * R9 hardening: the share-safe shape caps (#295), the override control-byte
- * guard (#294) and the linear cost of the declaration pass.
- */
-
-/** The cap only reads counts, so only the lengths of these shapes matter. */
 function shapes(elements: number, attributesEach: number): XmlElement[] {
   return Array.from({ length: elements }, () => ({
     attributes: Array.from({ length: attributesEach }),
@@ -43,9 +37,6 @@ describe('share-safe shape caps', () => {
     )
   })
 
-  // The caps fire on the parsed element list, so the oversized part is
-  // swapped into an already-parsed package: parsing the huge part through
-  // `parseDocx` would spend the very CPU the cap exists to bound.
   async function documentPart() {
     const document = await parseDocx(await probePackage({}))
     const part = document.sourceParts.get('word/document.xml')
@@ -85,8 +76,6 @@ describe('share-safe shape caps', () => {
 describe('share-safe declaration cost', () => {
   it('analyses a part of 40k declarations in linear time', async () => {
     const count = 40_000
-    // Non-self-closing: the whitespace-declaration pass only inspects elements
-    // with an end tag, which is the shape the pass used to filter per element.
     const relationships = Array.from(
       { length: count },
       (_, index) =>
@@ -101,19 +90,12 @@ describe('share-safe declaration cost', () => {
       `<?xml version="1.0"?><Relationships xmlns="${PACKAGE_REL_NAMESPACE}">${relationships}</Relationships>`,
     )
 
-    // The whitespace-declaration pass used to filter the whole element list
-    // per declaration: this many relationships took >10 s there and under 2 s
-    // once children are indexed once. The runner's 5 s timeout is the bound —
-    // quadratic work exceeds it, linear work does not.
     const error = await buildShareSafeDocx(document).catch((thrown) => thrown)
     expect(error).not.toBeInstanceOf(ShareSafeRefusal)
   })
 })
 
 describe('share-safe content cost', () => {
-  // Timed on the plan, not the whole build: the verifier re-parses the emitted
-  // package through `parseDocx`, whose own cost is a separate concern, so a
-  // whole-build measurement would hide a share-safe regression behind it.
   async function planBody(body: string) {
     const pkg = await parseDocx(await probePackage({}))
     const part = pkg.sourceParts.get('word/document.xml')
@@ -136,8 +118,6 @@ describe('share-safe content cost', () => {
     return `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> PAGE ${index} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>`
   }
 
-  // Each shape is the one a pass used to rescan the whole element list for.
-  // The 5 s bound is the runner's timeout: the quadratic versions exceeded it.
   it('plans 16000 compatibility blocks in linear time', async () => {
     expect(
       await planBody(`<w:p><w:r>${alternate.repeat(16_000)}</w:r></w:p>`),
@@ -151,10 +131,6 @@ describe('share-safe content cost', () => {
   })
 
   it('plans one run holding many comment references in linear time', async () => {
-    // A run that keeps text is never collapsed, and it used to re-run the text
-    // check per marker. This many markers is what gives the bound teeth: at
-    // half of it the quadratic version took ~7.0 s, only 1.4x over the bound,
-    // so a faster machine could pass it with the bug present.
     const body = `<w:p><w:r>STRAY${'<w:commentReference w:id="1"/>'.repeat(32_000)}</w:r></w:p>`
     expect(await planBody(body)).toBeLessThan(5_000)
   })
@@ -181,9 +157,6 @@ describe('share-safe content cost', () => {
 })
 
 describe('share-safe field span extent', () => {
-  // A remove-class field drops its whole span, but only the elements the span
-  // actually contains: a container that opens inside the span and outlives the
-  // end marker keeps its later content.
   it('keeps text after a remove-class end marker in the same run', async () => {
     const { parts } = await outputParts({
       body: '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> SET x "v" </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/><w:t>AFTERINRUN</w:t></w:r></w:p>',
@@ -203,10 +176,6 @@ describe('share-safe field span extent', () => {
 })
 
 describe('share-safe override emission', () => {
-  // The field rewrite tokenises an instruction, so a control byte cannot
-  // reach an override through a real package. The emitter is exercised
-  // directly to pin the check that an override carrying a C0 byte refuses
-  // rather than emitting an invalid XML 1.0 document.
   const source = `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:t>Visible.</w:t></w:r></w:p></w:body></w:document>`
 
   function part() {
@@ -266,7 +235,6 @@ describe('share-safe override emission', () => {
   })
 
   it('refuses a control character in an unmodified source attribute', () => {
-    // The override path is defence in depth: this is the reachable shape.
     const hostile = `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:rPr><w:rFonts w:ascii="A\u0007B"/></w:rPr><w:t>Visible.</w:t></w:r></w:p></w:body></w:document>`
     const payload = {
       ...part(),

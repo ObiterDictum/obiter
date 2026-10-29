@@ -22,10 +22,6 @@ async function revisionFixture(children: string) {
   return { document, paragraph, run }
 }
 
-// Redaction must not delete structure outside the redacted text: a control at
-// a replaced start stays with the head, one at a replaced end with the tail,
-// and tabs inside a replaced piece stay. Other covered payloads are removed.
-// Replacement metadata must match what the parser reads back.
 const begin = '<w:fldChar w:fldCharType="begin"/>'
 const end = '<w:fldChar w:fldCharType="end"/>'
 const tab = '<w:tab/>'
@@ -113,8 +109,6 @@ for (const [children, ranges, runs] of [
       ?.async('string')
     expect(xml).toContain(`<w:p>${runs.map(piece).join('')}</w:p>`)
     const saved = (await parseDocx(bytes)).model.stories[0]?.paragraphs[0]
-    // Untouched pieces may stay conservatively ineligible; replacement pieces
-    // must describe exactly what was written.
     const metadata = (runs: typeof paragraph.runs) =>
       runs.map((run) => {
         const plan = planTextRevision(

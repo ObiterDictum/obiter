@@ -15,11 +15,6 @@ const changeContext = {
   date: '2026-08-11T12:30:00.000Z',
 }
 
-/**
- * A document whose first paragraph holds a single plain run of `text`; extra
- * body markup follows in later paragraphs. The run's children stay `w:rPr` +
- * `w:t`, the splittable shape.
- */
 async function runFixture(runXml: string) {
   const zip = await JSZip.loadAsync(
     await buildOoxmlFixture('full-fidelity-with-w14-ids'),
@@ -54,7 +49,6 @@ async function zipText(bytes: Uint8Array, partName: string) {
   return entry.async('string')
 }
 
-/** Part name → raw bytes for every file entry, for untouched-part checks. */
 async function partBytes(bytes: Uint8Array) {
   const zip = await JSZip.loadAsync(bytes)
   const parts = new Map<string, Uint8Array>()
@@ -86,8 +80,6 @@ describe('granular tracked text edits', () => {
       ['del', '60,000'],
       ['ins', '50,000'],
     ])
-    // The kept runs parse as untracked siblings; the pending insertion stays
-    // out of the visible model the way every tracked insertion does.
     const paragraph = reparsed.model.stories[0]?.paragraphs[0]
     expect(paragraph?.runs.map((run) => run.text).join('')).toBe(
       SENTENCE.replace('60,000', ''),
@@ -208,7 +200,6 @@ describe('granular tracked text edits', () => {
     expect(insPiece).toContain('<w:rPr><w:b/></w:rPr>')
     expect(delPiece).toContain('<w:delText>two</w:delText>')
     expect(insPiece).toContain('<w:t>four</w:t>')
-    // The untouched prefix and suffix runs keep the run's properties too.
     expect(xml).toContain(
       '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">one </w:t></w:r>',
     )
@@ -235,11 +226,6 @@ describe('granular tracked text edits', () => {
       await serialiseDocx(document),
       'word/document.xml',
     )
-    // A same-batch emphasis + text edit takes the whole-run form: the ins
-    // run is the complete replacement text carrying the patched properties —
-    // a marker inside `w:ins` would not be a listed change, so the property
-    // revision is subsumed by the insertion — and accepting yields every
-    // piece bold where a granular split would have bolded only the token.
     const insPiece = xml.match(/<w:ins [^>]*>[\s\S]*?<\/w:ins>/u)?.[0]
     expect(insPiece).toContain('<w:b/>')
     expect(insPiece).not.toContain('<w:rPrChange')
@@ -271,9 +257,6 @@ describe('granular tracked text edits', () => {
     )
     const run = document.model.stories[0]?.paragraphs[0]?.runs[0]
     if (!run) throw new Error('Fixture run is missing.')
-    // The product emits the replacement before the emphasis: the pending
-    // split must take the patch on every piece an accept keeps, not only the
-    // inserted run.
     applyDocumentEdits(
       document,
       [
@@ -287,9 +270,6 @@ describe('granular tracked text edits', () => {
     const delPiece = xml.match(/<w:del [^>]*>[\s\S]*?<\/w:del>/u)?.[0]
     const insPiece = xml.match(/<w:ins [^>]*>[\s\S]*?<\/w:ins>/u)?.[0]
     expect(delPiece).toContain('<w:delText>two</w:delText>')
-    // The struck piece keeps the old properties. Each shared run carries the
-    // patch with its own recorded marker; the inserted run takes the patch
-    // alone — a marker nested inside `w:ins` is not a listed change.
     expect(delPiece).not.toContain('<w:rPrChange')
     expect(delPiece).not.toContain('<w:b/>')
     expect(insPiece).toContain('<w:b/>')
@@ -333,9 +313,6 @@ describe('granular tracked text edits', () => {
     )
     const run = document.model.stories[0]?.paragraphs[0]?.runs[0]
     if (!run) throw new Error('Fixture run is missing.')
-    // Deleting the whole run leaves only a `w:del` piece. A marker nested in
-    // it could never be decided, so the deleted run takes the patched
-    // properties directly and a reject restores the last-seen state.
     applyDocumentEdits(
       document,
       [
@@ -381,8 +358,6 @@ describe('granular tracked text edits', () => {
   })
 
   it('keeps punctuation inside the struck token', async () => {
-    // A comma is not a token break: `hello,world` reads as one quantity, so
-    // the substitution strikes the whole token rather than the tail of it.
     const { xml, reparsed } = await editAndParse(
       '<w:r><w:t>hello,world done</w:t></w:r>',
       'hello,there done',
@@ -442,8 +417,6 @@ describe('granular tracked text edits', () => {
     const ins = changes.find(({ elementName }) => elementName === 'ins')
     if (!del || !ins) throw new Error('Granular change pair is missing.')
 
-    // Reject both halves on the edited document: the paragraph reads the
-    // original text again.
     applyTrackedChangeDecisions(edited.reparsed, [del.id, ins.id], 'reject')
     const rejectedXml = await zipText(
       await serialiseDocx(edited.reparsed),
@@ -636,9 +609,6 @@ describe('trackRevisions settings persistence', () => {
     const document = await parseDocx(
       await zip.generateAsync({ type: 'uint8array' }),
     )
-    // The relationship survives the part removal: the declaration is real,
-    // so an `on` write cannot guess where the settings part went, while the
-    // off path writes nothing it cannot see.
     writeTrackRevisions(document, false)
     expect(() => writeTrackRevisions(document, true)).toThrow()
   })
@@ -659,9 +629,6 @@ describe('trackRevisions settings persistence', () => {
     const document = await parseDocx(
       await zip.generateAsync({ type: 'uint8array' }),
     )
-    // Two relationships name an ambiguous part: `off` writes nothing it
-    // cannot locate, while `on` fails closed rather than guessing which one
-    // a reader honours.
     writeTrackRevisions(document, false)
     const xml = await zipText(
       await serialiseDocx(document),

@@ -22,26 +22,6 @@ import {
 } from './run-effective'
 import { requireEditablePart } from './model-edit-overlay'
 
-/**
- * Marks `[from, to)` of `paragraph`'s effective text as a defined term: a
- * `w:bookmarkStart`/`w:bookmarkEnd` pair spliced around the covered words,
- * named `_Def_<normalised term>` so the check can read the term back out of
- * the stored fragments — the wire keeps no offset for a paragraph-level
- * fragment. The same term marked twice writes a second pair under the same
- * name: duplicate marks are legal OOXML, and the check reports them rather
- * than the writer silently deduplicating a drafting fact.
- *
- * The name is derived from the covered text at write time, so the client
- * never invents bookmark names. A range that cannot name a term — no word
- * characters, or longer than the bookmark-name cap — is refused, matching
- * the draft-side refusal.
- *
- * The write reuses the link writer's run-splitting: only the first and last
- * covered runs are cut, each boundary run is rewritten whole, and the wire
- * gains the run pieces a reparse would produce so a later same-batch edit
- * still addresses the right text. The mark inserts no text, so no offset
- * downstream can move.
- */
 export function markDefinedTerm(
   document: OoxmlDocument,
   paragraph: ParagraphAnchor,
@@ -85,14 +65,6 @@ export function markDefinedTerm(
   part.dirty = true
 }
 
-/**
- * A mark boundary that lands inside a stored `w:hyperlink` element would cut
- * the link's anchor text — the stored twin of the draft layer's
- * inside-a-linked-run refusal. The wire does not flag every stored link (an
- * internal anchor or a dropped target leaves no `hyperlinkTarget`), so the
- * check reads the source elements directly. A link wholly inside the marked
- * range composes: the pair is legal OOXML around it.
- */
 function refuseMarkInsideHyperlink(
   source: string,
   runs: readonly CoveringRun[],
@@ -125,13 +97,6 @@ function refuseMarkInsideHyperlink(
   }
 }
 
-/**
- * Writes the boundary replacements: the covered runs are emitted between the
- * bookmark pair with interior markup preserved byte-for-byte. A covered run
- * holding pending work is folded through `effectiveRunView`, matching the
- * link writer — though the draft layer's conflict rules mean a mark rarely
- * meets one, the writer cannot assume the batch ordered around it.
- */
 function writeMarkPair(
   document: OoxmlDocument,
   overlay: XmlOverlay,
@@ -147,8 +112,6 @@ function writeMarkPair(
     const needsHead = localFrom > 0
     const needsTail = localTo < anchor.wire.text.length
     if (!needsHead && !needsTail) {
-      // A wholly covered run keeps its stored element; the pair's half at
-      // that edge lands as a zero-width insertion beside it.
       if (covered.first) {
         setOverlayReplacement(
           overlay,

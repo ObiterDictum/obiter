@@ -1,15 +1,4 @@
-/**
- * Raised when a package cannot be proven free of private or ambiguous
- * material for sharing. The route maps it to `share_safe_export_refused`;
- * nothing is emitted in that case.
- *
- * `reason` is the structured class a caller may log: a bounded enum, so
- * telemetry carries the policy clause that failed and never a part name,
- * attribute value or document text. `message` stays a free-text diagnostic
- * for developers and is never logged or returned to the client.
- */
 export type ShareSafeRefusalReason =
-  /** Tracked-change or revision markup — deleted text stays recoverable. */
   | 'tracked-changes'
   /** Content hidden by vanish, row marks, drawing flags or VML. */
   | 'hidden-content'

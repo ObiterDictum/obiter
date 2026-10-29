@@ -10,7 +10,6 @@ import {
 } from './parts/overlay'
 import { attributeValue, WORD_NAMESPACE } from './parts/xml-elements'
 
-/** A `w15:commentEx` entry to append to the commentsExtended part. */
 export type ExtendedCommentEntry = {
   paraId: string
   parentParaId?: string
@@ -41,9 +40,6 @@ export function productCommentXml(input: {
         : `<w:br/><w:t xml:space="preserve">${escapeXmlText(line)}</w:t>`,
     )
     .join('')
-  // The w14 prefix is declared on the element itself so emitted comments
-  // stay well-formed inside a foreign comments part whatever its root
-  // namespaces declare.
   const namespace =
     input.paraId === null ? '' : ` xmlns:w14="${WORD_2010_NAMESPACE}"`
   const paraId =
@@ -73,7 +69,6 @@ export function highestForeignCommentId(part: SourcePart) {
   return highest
 }
 
-/** Every `w14:paraId` the comments part already carries, for collision-free allocation. */
 export function commentParaIds(part: SourcePart) {
   if (!part.overlay) throw commentExportError()
   const ids = new Set<string>()
@@ -84,11 +79,6 @@ export function commentParaIds(part: SourcePart) {
   return ids
 }
 
-/**
- * Deterministic 8-hex-digit paraIds in a product-owned band. The counter
- * bumps until the id is unused in the comments part, so a foreign paraId can
- * never be claimed for a product comment.
- */
 export function paraIdAllocator(used: ReadonlySet<string>) {
   let counter = 0
   return () => {

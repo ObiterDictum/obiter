@@ -1,11 +1,3 @@
-/**
- * The OMML element vocabulary: every `m:` element name the schema
- * declares that the share-safe copy may emit, plus the phantom family
- * whose only purpose is invisible layout. The per-element `m:val` bounds
- * live in `share-safe-math-attributes.ts`; the hidden-content refusal the
- * element names feed sits in `share-safe-drawing-vocabulary.ts`.
- */
-
 export const MATH_ELEMENTS = new Set([
   'mathPr',
   'mathFont',
@@ -133,11 +125,6 @@ export const MATH_ELEMENTS = new Set([
   'cGpRule',
 ])
 
-/**
- * OMML elements whose only purpose is to hide what they contain.
- * Phantoms render their operand invisibly while still occupying layout
- * space — a hidden carrier refuses rather than shipping under the copy.
- */
 const MATH_HIDDEN_ELEMENTS = new Set([
   'phant',
   'phantPr',

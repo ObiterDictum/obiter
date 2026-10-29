@@ -37,12 +37,6 @@ const COMMENTS_EXTENDED_CONTENT_TYPE =
 
 export type ProductReply = Extract<DocumentCommentReply, { imported: false }>
 
-/**
- * A product-authored reply to a comment the package itself carries. The
- * caller resolves the thread head's numeric `w:id` and `w14:paraId` from the
- * exported document's own model; without a `paraId` the reply still exports
- * but cannot thread under its parent.
- */
 export type ImportedThreadReply = {
   ooxmlId: number | null
   paraId: string | null
@@ -51,9 +45,7 @@ export type ImportedThreadReply = {
 
 export type AllocatedImportedReply = {
   ooxmlId: number
-  /** The reply's own emitted `w14:paraId`; null when it cannot be threaded. */
   paraId: string | null
-  /** The imported head's `w14:paraId` the commentEx entry threads under. */
   parentParaId: string | null
   reply: ProductReply
 }
@@ -95,16 +87,12 @@ export function prepareCommentsPackage(
       left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
     )
     .map((comment) => {
-      // The dedupe pass above already rejected imported replies on a product
-      // thread; narrow again so the allocator sees only product rows.
       const productReplies = comment.replies.filter(
         (reply): reply is ProductReply => !reply.imported,
       )
       const allocatedComment: AllocatedComment = {
         comment,
         ooxmlId: nextId,
-        // A paraId is only emitted when commentsExtended metadata must name
-        // the comment: replies to thread or a done flag to record.
         paraId:
           comment.resolvedAt !== null || productReplies.length > 0
             ? nextParaId()
@@ -156,11 +144,6 @@ export function prepareCommentsPackage(
   return { partName, allocated, importedReplies: allocatedImportedReplies }
 }
 
-/**
- * Appends the product comments and their replies to the comments part and
- * returns the `w15:commentEx` entries needed to thread replies and record
- * done state — the caller writes them into the commentsExtended part.
- */
 export function appendProductComments(
   document: OoxmlDocument,
   partName: string,
@@ -221,7 +204,6 @@ export function appendProductComments(
   return extended
 }
 
-/** Appends `w15:commentEx` entries, creating the part when it is absent. */
 export function appendCommentsExtended(
   document: OoxmlDocument,
   entries: readonly ExtendedCommentEntry[],

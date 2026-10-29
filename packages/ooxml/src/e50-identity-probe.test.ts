@@ -55,8 +55,6 @@ describe('E50 identity counterexamples (real parser)', () => {
       'SEQ-AFTER-TEXT',
       JSON.stringify(shape(after).map((x) => x.text)),
     )
-    // The paragraph id sequence is identical to before, but para-000002 now
-    // names Delta where it used to name Beta. Sequence comparison cannot see it.
     expect(shape(after).map((x) => x.id)).toEqual(initial.map((x) => x.id))
     expect(shape(after).map((x) => x.text)).toEqual(['Alpha', 'Delta', 'Gamma'])
   })
@@ -72,8 +70,6 @@ describe('E50 identity counterexamples (real parser)', () => {
     const after = await reload(before)
     console.log('DUP-BEFORE', JSON.stringify(initial))
     console.log('DUP-AFTER ', JSON.stringify(shape(after)))
-    // Three identical texts collapse to two; no text/count heuristic can name
-    // which one was removed.
     expect(shape(after).map((x) => x.text)).toEqual(['Same', 'Same'])
   })
 

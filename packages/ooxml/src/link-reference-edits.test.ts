@@ -42,7 +42,6 @@ describe('hyperlink edits', () => {
     expect(relId).toBeDefined()
     expect(link).toContain('Alice')
     expect(link).not.toContain('Example overview')
-    // The untouched tail keeps its own run element after the link closes.
     expect(xml).toContain('Example overview')
 
     const rels = await zipText(output, 'word/_rels/document.xml.rels')
@@ -53,7 +52,6 @@ describe('hyperlink edits', () => {
     expect(relationship).toContain('TargetMode="External"')
     expect(relationship).toContain('Target="https://example.co.uk/authority"')
 
-    // The covered piece of the split run carries the link on the wire.
     expect(
       anchor.runs.find((run) => run.text === 'Alice')?.hyperlinkTarget,
     ).toBe('https://example.co.uk/authority')
@@ -72,7 +70,6 @@ describe('hyperlink edits', () => {
         fragment.includes('<w:hyperlink'),
       ),
     ).toBe(true)
-    // The reader resolves the stored w:hyperlink back onto its runs.
     expect(
       paragraph?.runs.find((run) => run.text === 'Alice')?.hyperlinkTarget,
     ).toBe('https://example.co.uk/authority')
@@ -103,8 +100,6 @@ describe('hyperlink edits', () => {
     const hostile = mainParagraphs(document).find((item) =>
       item.runs.some((run) => run.text === 'this'),
     )
-    // The javascript: relationship resolves to nothing on the wire, while
-    // the same document's https link still paints.
     expect(
       hostile?.runs.find((run) => run.text === 'this')?.hyperlinkTarget,
     ).toBeUndefined()
@@ -115,8 +110,6 @@ describe('hyperlink edits', () => {
       linked?.runs.find((run) => run.text === 'the report')?.hyperlinkTarget,
     ).toBe('https://example.co.uk/report')
 
-    // The source .rels stay byte-preserved: fidelity is unaffected, only the
-    // painted link is dropped.
     const output = await serialiseDocx(document)
     expect(await zipText(output, 'word/_rels/document.xml.rels')).toBe(
       await zipText(input, 'word/_rels/document.xml.rels'),
@@ -130,7 +123,6 @@ describe('hyperlink edits', () => {
     )
     if (!anchor) throw new Error('Multi-run paragraph is missing.')
 
-    // 'Alpha bravo charlie': [4, 14) covers 'a bravo ch' across three runs.
     applyDocumentEdits(document, [
       {
         type: 'set_hyperlink',
@@ -143,8 +135,6 @@ describe('hyperlink edits', () => {
     const output = await serialiseDocx(document)
     const xml = await zipText(output, 'word/document.xml')
 
-    // Scope to the edited paragraph: the fixture carries a stored hyperlink
-    // for the unwrap tests.
     const paragraphXml = xml.slice(
       xml.indexOf('B1B2C3D4'),
       xml.indexOf('</w:p>', xml.indexOf('B1B2C3D4')),
@@ -153,8 +143,6 @@ describe('hyperlink edits', () => {
       paragraphXml.match(/<w:hyperlink\b[\s\S]*?<\/w:hyperlink>/gu) ?? []
     expect(links).toHaveLength(1)
     const link = links[0] ?? ''
-    // Interior markup is preserved byte-for-byte: the boundary pieces keep
-    // their run elements and the middle run is untouched inside the wrap.
     expect(link.match(/<w:r>/gu)).toHaveLength(3)
     expect(link).toContain('a ')
     expect(link).toContain('bravo')
@@ -178,7 +166,6 @@ describe('hyperlink edits', () => {
     const before = anchor.runs.map((run) => run.text).join('')
     expect(before).toBe('See the report today')
 
-    // [4, 14) is 'the report' — the range the stored hyperlink covers.
     applyDocumentEdits(document, [
       {
         type: 'set_hyperlink',
@@ -204,7 +191,6 @@ describe('hyperlink edits', () => {
     expect(paragraph?.runs.map((run) => run.text).join('')).toBe(
       'See the report today',
     )
-    // The unwrapped run drops the link on the wire and after a reparse.
     expect(anchor.runs.some((run) => run.hyperlinkTarget)).toBe(false)
     expect(paragraph?.runs.some((run) => run.hyperlinkTarget)).toBe(false)
     expect(
@@ -256,7 +242,6 @@ describe('cross-reference edits', () => {
     const anchor = paragraphs[0]
     const target = paragraphs[1]
     if (!anchor || !target) throw new Error('Fixture model is missing.')
-    // The fixture holds no _Ref_* name, so the first allocation is _Ref_1.
     const bookmark = '_Ref_1'
     expect(target.runs.map((run) => run.text).join('')).toBe('Restarted list')
 
@@ -271,7 +256,6 @@ describe('cross-reference edits', () => {
     const output = await serialiseDocx(document)
     const xml = await zipText(output, 'word/document.xml')
 
-    // begin / instrText / separate / result / end at the caret, in order.
     const field = xml.match(
       /<w:r><w:fldChar w:fldCharType="begin"\/><\/w:r>[\s\S]*?<w:fldChar w:fldCharType="end"\/><\/w:r>/u,
     )?.[0]
@@ -279,11 +263,9 @@ describe('cross-reference edits', () => {
     expect(field).toContain('Restarted list')
     expect(field).toContain('<w:instrText xml:space="preserve">')
     expect(field).toContain('w:fldCharType="separate"')
-    // The field splits 'Alice Example overview' at offset 6.
     expect(xml.indexOf('Alice ')).toBeLessThan(xml.indexOf('fldCharType'))
     expect(xml).toContain('Example overview')
 
-    // The bookmark wraps the target's runs, after its pPr.
     const bookmarkStart = `<w:bookmarkStart w:id="5" w:name="${bookmark}"/>`
     expect(xml).toContain(bookmarkStart)
     const targetOpen = xml.indexOf('Restarted list')
@@ -300,7 +282,6 @@ describe('cross-reference edits', () => {
       ),
     ).toBe(true)
     const anchorWire = reparsed.find((item) => item.id === anchor.id)
-    // The result run's text joins the paragraph's effective text on reload.
     expect(anchorWire?.runs.map((run) => run.text).join('')).toBe(
       'Alice Restarted listExample overview',
     )
@@ -378,7 +359,6 @@ describe('cross-reference edits', () => {
     ].map((match) => match[1])
     expect(ids).toHaveLength(2)
     expect(ids[0]).not.toBe(ids[1])
-    // Each REF instruction resolves its own bookmark.
     const fields = [...xml.matchAll(/REF (_Ref_\d+) /gu)].map(
       (match) => match[1],
     )
@@ -386,10 +366,6 @@ describe('cross-reference edits', () => {
   })
 
   it('allocates bookmark names that survive an encounter-order id shift', async () => {
-    // Without w14:paraId the wire ids are encounter-order para-NNNNNN, so a
-    // paragraph inserted before the target shifts every later id on the next
-    // parse. A name derived from the wire id would then be written a second
-    // time on a different paragraph.
     const first = await parseDocx(
       await buildOoxmlFixture('full-fidelity-without-w14-ids'),
     )
@@ -433,7 +409,6 @@ describe('cross-reference edits', () => {
     if (!nowHoldingId || !thirdHost) {
       throw new Error('Fixture model is missing.')
     }
-    // The wire id moved: this is a different paragraph than the save-1 target.
     expect(nowHoldingId.runs.map((run) => run.text).join('')).toBe(
       'Inserted before the target',
     )
@@ -453,7 +428,6 @@ describe('cross-reference edits', () => {
     ]
     expect(starts).toHaveLength(2)
     expect(starts[0]?.[1]).not.toBe(starts[1]?.[1])
-    // Each bookmarkStart sits inside a different paragraph.
     const positions = starts.map((match) => match.index)
     const paragraphOf = (index: number) =>
       xml.slice(0, index).split('</w:p>').length
@@ -491,7 +465,6 @@ describe('cross-reference edits', () => {
     const output = await serialiseDocx(document)
     const xml = await zipText(output, 'word/document.xml')
 
-    // The bookmark wraps the target's content and the drawing run survives.
     expect(xml).toContain('<w:bookmarkStart w:id="5" w:name="_Ref_1"/>')
     expect(xml).toContain('<w:drawing>')
     const reparsed = mainParagraphs(await parseDocx(output))
@@ -514,9 +487,6 @@ describe('cross-reference edits', () => {
   })
 
   it('rejects a cross-reference whose target is deleted later in the batch', async () => {
-    // The client emits deletions last, so the reference is planned before
-    // the delete that removes its target — the batch-order check must read
-    // the whole planned delete set, not only deletes already applied.
     const document = await parseFixture()
     const paragraphs = mainParagraphs(document)
     const anchor = paragraphs[0]
@@ -564,8 +534,6 @@ describe('structural link and reference refusals', () => {
     )
     const target = paragraphs.find((paragraph) => paragraph.id !== anchor?.id)
     if (!anchor || !target) throw new Error('Fixture model is missing.')
-    // 'See ' [0,4) 'the report' [4,14) ' today' [14,20): 8 sits inside the
-    // stored w:hyperlink, 2 sits before it.
     const nested: DocumentEditOperation[] = [
       {
         type: 'insert_cross_reference',
@@ -589,7 +557,6 @@ describe('structural link and reference refusals', () => {
         expect.objectContaining({ code: 'invalid-document-edit' }),
       )
     }
-    // A splice before the link still composes.
     expect(() =>
       applyDocumentEdits(document, [
         {
@@ -607,9 +574,6 @@ describe('structural link and reference refusals', () => {
   })
 
   it('refuses a splice into pending text inside a stored link the wire cannot see', async () => {
-    // An internal w:anchor link resolves no r:id, and a non-allowlisted
-    // target is dropped at parse: neither sets hyperlinkTarget on the run's
-    // wire, so only the element check can refuse the pending-path splice.
     for (const fixture of [internalLinkFixtureBytes, hostileLinkFixtureBytes]) {
       const document = await parseDocx(await fixture())
       const paragraphs = mainParagraphs(document)
@@ -622,8 +586,6 @@ describe('structural link and reference refusals', () => {
         throw new Error('Fixture model is missing.')
       }
       expect(linked.hyperlinkTarget).toBeUndefined()
-      // 'Open ' [0,5) 'this' [5,9): 7 stays inside the linked run after the
-      // text edit, so the splice takes the pending-run path.
       expect(() =>
         applyDocumentEdits(document, [
           { type: 'replace_run_text', runId: linked.id, text: 'thas' },
@@ -646,8 +608,6 @@ describe('structural link and reference refusals', () => {
     )
     const target = paragraphs.find((paragraph) => paragraph.id !== anchor?.id)
     if (!anchor || !target) throw new Error('Fixture model is missing.')
-    // 'Term \u{1F600} end': offset 6 sits between the emoji's surrogate
-    // halves; a field spliced there would sever the pair.
     expect(() =>
       applyDocumentEdits(document, [
         {
@@ -658,7 +618,6 @@ describe('structural link and reference refusals', () => {
         },
       ]),
     ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
-    // Either edge of the pair composes.
     expect(() =>
       applyDocumentEdits(document, [
         {
@@ -776,11 +735,6 @@ async function parseFixture() {
   return parseDocx(await buildOoxmlFixture('full-fidelity-with-w14-ids'))
 }
 
-/**
- * The shared fixture's text runs are single-run paragraphs; this variant adds
- * a three-run paragraph for span coverage and a stored hyperlink paragraph
- * for unwrap coverage.
- */
 function multiRunFixtureBytes() {
   const zip = new JSZip()
   const fixed = documentXml.replace(
@@ -808,10 +762,6 @@ async function parseMultiRunFixture() {
   return parseDocx(await multiRunFixtureBytes())
 }
 
-/**
- * An internal `w:anchor` hyperlink carries no `r:id`, so its run carries no
- * target on the wire while the element still wraps it.
- */
 function internalLinkFixtureBytes() {
   const zip = new JSZip()
   const fixed = documentXml.replace(
@@ -828,10 +778,6 @@ function internalLinkFixtureBytes() {
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
 
-/**
- * Two stored links in one document: an allowlisted target and a `javascript:`
- * target, so the allowlist is proven selective rather than a blanket drop.
- */
 function hostileLinkFixtureBytes() {
   const zip = new JSZip()
   const fixed = documentXml.replace(
@@ -856,10 +802,6 @@ function hostileLinkFixtureBytes() {
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
 
-/**
- * A paragraph whose text holds a two-code-unit emoji, so a field splice
- * can be placed inside the surrogate pair.
- */
 function surrogateFixtureBytes() {
   const zip = new JSZip()
   const fixed = documentXml.replace(

@@ -16,11 +16,6 @@ import {
   type XmlElement,
 } from './xml-elements'
 
-// Tracked-change elements are parsed as opaque subtrees by the story parser and
-// exposed as `TrackedChangeNode` records. `isTrackedChange` is the single owner
-// of "is this element a tracked change"; the story parser's hot walk
-// precomputes the ancestor and subtree answers from it (`PartIndex` in
-// stories.ts) instead of re-walking the part per paragraph.
 const TRACKED_CHANGE_NAMES = new Set([
   'ins',
   'del',
@@ -60,23 +55,9 @@ function nearestTrackedChangeAncestor(element: XmlElement) {
 
 const NO_ELEMENTS: readonly XmlElement[] = []
 
-/**
- * What reading one part's tracked changes needs from the part, worked out once.
- * Each change used to answer two questions by walking the whole part — which
- * elements sit inside it, and which paragraph is the smallest one holding it —
- * so a part with many changes cost changes × elements for both. `elements` is in
- * document order, so one pass builds the element buckets and one sort of the
- * paragraph ranges answers every containment question.
- */
 export type TrackedChangeLookup = {
-  /** The elements whose nearest tracked-change ancestor is this change. A
-   * change nested in another belongs to the outer one, never to itself, which
-   * is what `nearestTrackedChangeAncestor` answers for its own parent. */
   inside(element: XmlElement): readonly XmlElement[]
-  /** The direct children of this element, so a properties parent is a lookup
-   * rather than a scan of the part. */
   childrenOf(element: XmlElement): readonly XmlElement[]
-  /** The innermost paragraph range containing this element, if any. */
   paragraphAt(element: XmlElement): ParagraphAnchor | undefined
 }
 
@@ -100,13 +81,6 @@ export function trackedChangeLookup(
       else inside.set(nearest, [element])
     }
   }
-  // Paragraph ranges come from the part's tree, so any two are nested or
-  // disjoint. The innermost range holding an element is therefore the one with
-  // the last start that still holds it, and the ranges that could hold it are
-  // exactly its enclosing chain. Following that chain is what keeps a change no
-  // range covers — one inside a paragraph whose mark is deleted, a row-level
-  // insert — from walking every earlier range before answering that nothing
-  // holds it.
   const ordered = [...paragraphs].sort(
     (left, right) => left.paragraphRange.start - right.paragraphRange.start,
   )
@@ -142,22 +116,12 @@ export function trackedChangeLookup(
   }
 }
 
-/**
- * For each range in a start-sorted, nested-or-disjoint list, the index of the
- * nearest earlier range that encloses it, or -1 when none does. One stack pass:
- * a range is enclosed by the last range still open past its start.
- */
 function nearestEnclosing(ordered: readonly ParagraphAnchor[]): number[] {
   const enclosing: number[] = []
   const open: number[] = []
   for (let index = 0; index < ordered.length; index += 1) {
     const end = ordered[index]?.paragraphRange.end
     if (end === undefined) continue
-    // Starts ascend, so every range on the stack begins at or before this one:
-    // it encloses this range exactly when it also ends at or after it. Ranges
-    // that merely touch — one ending where the next begins — do not, and
-    // treating them as enclosing would make the chain step through every
-    // sibling, which is the walk this exists to avoid.
     while (open.length > 0) {
       const candidate = ordered[open[open.length - 1] ?? -1]
       if (candidate !== undefined && candidate.paragraphRange.end >= end) break
@@ -179,9 +143,6 @@ function isParagraphMarkDeletion(element: XmlElement) {
   )
 }
 
-// A moveFrom/moveTo carried on a paragraph mark (the block-move shape) is not
-// a run-content wrapper: deciding it means removing or reviving a whole w:p,
-// which the member-wise decision path does not implement.
 export function isParagraphMarkMove(element: XmlElement) {
   return (
     (isWord(element, 'moveFrom') || isWord(element, 'moveTo')) &&
@@ -305,9 +266,6 @@ export function trackedChange(
         .childrenOf(element)
         .find((candidate) => isWord(candidate, expectedPropertiesName))
     : undefined
-  // Word pairs a move by the shared w:name on its range containers; a wrapper
-  // outside any container is tolerated markup paired by a shared w:id.
-  // Anything else stays ungrouped, which is what makes it undecidable.
   let moveGroup: string | undefined
   let moveMarkers: TrackedChangeNode['moveMarkers']
   if (

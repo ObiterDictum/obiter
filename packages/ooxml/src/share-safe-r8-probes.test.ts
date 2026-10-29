@@ -2,23 +2,6 @@ import { describe, expect, it } from 'bun:test'
 
 import { A, expectRefusal, outputParts, PIC, WP } from './share-safe-probe-kit'
 
-/**
- * R8: alpha policy anchored to the transform's semantics, not its
- * lexical shape. `alphaOff` is additive — ECMA-376 §20.1.2.3.3: "a 10%
- * alpha offset increases a 50% opacity to 60%. A -10% alpha offset
- * decreases a 50% opacity to 40%" — so the erasing direction is
- * negative: every negative offset can complete an erasure against the
- * base it composes with and refuses, while `0` and positive offsets up
- * to `100%` keep. `alpha`/`alphaRepl` declare an absolute alpha with a
- * 1% floor, below which the colour is invisible however spelled.
- * `alphaMod`/`alphaModFix` multiply the running alpha, so multipliers
- * under 100% refuse and only non-reducing modulators keep. `alphaInv`,
- * `alphaFloor` and `alphaBiLevel` can erase their input wherever they
- * sit, so the elements refuse outright. `alphaOutset`'s signed
- * `ST_Coordinate rad` refuses its eroding negative-inset form, and the
- * required slots of `biLevel` (`thresh`), `softEdge` (`rad`) and
- * `fillOverlay` (`blend`) refuse when absent or out of enum.
- */
 const DRAW = (inner: string) =>
   `<w:p><w:r><w:drawing><wp:inline xmlns:wp="${WP}"><a:graphic xmlns:a="${A}"><a:graphicData uri="${PIC}"><pic:pic xmlns:pic="${PIC}">${inner}</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
 const SPPR = (inner: string) => DRAW(`<pic:spPr>${inner}</pic:spPr>`)

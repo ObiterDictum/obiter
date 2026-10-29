@@ -1,10 +1,3 @@
-/**
- * The declared enumerations and element groupings the embedded attribute
- * bounds in `share-safe-drawing-attributes.ts` draw on. These are plain
- * value vocabularies — the file carries no logic, so the tables stay
- * readable next to the schema surface they mirror.
- */
-
 export const SCHEME_CLRS = [
   'tx1',
   'bg1',
@@ -148,7 +141,6 @@ export const BLIP_CSTATE_VALUES = [
   'none',
 ] as const
 
-/** `ST_RelFromH` — `wp:positionH@relativeFrom` values, verbatim. */
 export const POS_FROM_H_VALUES = [
   'margin',
   'page',
@@ -160,7 +152,6 @@ export const POS_FROM_H_VALUES = [
   'outsideMargin',
 ] as const
 
-/** `ST_RelFromV` — `wp:positionV@relativeFrom` values, verbatim. */
 export const POS_FROM_V_VALUES = [
   'margin',
   'page',
@@ -186,10 +177,8 @@ export const VERT_TEXT_VALUES = [
 
 export const TEXT_ANCHOR_VALUES = ['t', 'ctr', 'b', 'just', 'dist'] as const
 
-/** `ST_TextHorzOverflowType` — `horzOverflow` declares two values only. */
 export const TEXT_HORZ_OVERFLOW_VALUES = ['overflow', 'clip'] as const
 
-/** `ST_TextVertOverflowType` — `vertOverflow` additionally allows ellipsis. */
 export const TEXT_VERT_OVERFLOW_VALUES = [
   'overflow',
   'clip',
@@ -209,7 +198,6 @@ export const WRAP_TEXT_VALUES = [
 
 export const FONT_REF_INDEX_VALUES = ['major', 'minor', 'none'] as const
 
-/** `ST_BlendMode` — `a:fillOverlay@blend` values, verbatim. */
 export const BLEND_MODE_VALUES = [
   'over',
   'mult',
@@ -220,10 +208,6 @@ export const BLEND_MODE_VALUES = [
 
 export const FLIP_VALUES = ['none', 'x', 'y', 'xy'] as const
 
-/**
- * Unqualified attribute names whose value is an integer wherever they
- * appear — coordinates, sizes, angles, distances and scalar options.
- */
 export const INT_ATTRIBUTES = [
   'x',
   'y',
@@ -293,7 +277,6 @@ export const INT_ATTRIBUTES = [
   'count',
 ] as const
 
-/** Unqualified attribute names whose value is an on/off flag. */
 export const FLAG_ATTRIBUTES = [
   'flipH',
   'flipV',
@@ -322,14 +305,8 @@ export const FLAG_ATTRIBUTES = [
   'err',
 ] as const
 
-/** Drawing run properties the text-formatting scopes apply to. */
 export const TEXT_RUN_PROPS = ['rPr', 'defRPr', 'endParaRPr'] as const
 
-/**
- * `a:buAutoNum` numbering schemes — `ST_TextAutonumberScheme` exactly.
- * The wider `w:numFmt` list does not apply here: DrawingML bullets
- * declare only these scheme names.
- */
 export const AUTONUM_VALUES = [
   'alphaLcParenBoth',
   'alphaUcParenBoth',
@@ -374,10 +351,6 @@ export const AUTONUM_VALUES = [
   'ea1JpnKorPeriod',
 ] as const
 
-/**
- * Paragraph property carriers — `a:pPr`, its defaults and the nine level
- * shapes share the paragraph attribute surface (`algn`, `marL`, …).
- */
 export const PARA_PROPS_ELEMENTS = [
   'pPr',
   'defPPr',
@@ -392,7 +365,6 @@ export const PARA_PROPS_ELEMENTS = [
   'lvl9pPr',
 ] as const
 
-/** Font declarations carrying face, script and codepage metadata. */
 export const FONT_FACE_ELEMENTS = [
   'latin',
   'ea',
@@ -403,7 +375,6 @@ export const FONT_FACE_ELEMENTS = [
   'buFontTx',
 ] as const
 
-/** Lock elements carrying `no*` flag attributes. */
 export const LOCK_ELEMENTS = [
   'graphicFrameLocks',
   'spLocks',
@@ -411,7 +382,6 @@ export const LOCK_ELEMENTS = [
   'cxnSpLocks',
 ] as const
 
-/** Shadow effects whose `dir` is an angle rather than a slot name. */
 export const SHADOW_ELEMENTS = [
   'outerShdw',
   'innerShdw',
@@ -419,15 +389,6 @@ export const SHADOW_ELEMENTS = [
   'reflection',
 ] as const
 
-/**
- * `a:` elements whose `val` carries the unrestricted `ST_Percentage`
- * union (a signed thousandths integer or a signed `N%` literal).
- * Elements whose `val` is a narrower percentage type — fixed range,
- * positive-only, angle, spacing or bullet size — bind their own bound
- * in `share-safe-drawing-attributes.ts`; `comp`/`inv`/`gray`/`gamma`/
- * `invGamma` declare no attributes at all, and `sepia` is not an
- * element the schema declares.
- */
 export const PERCENT_VAL_ELEMENTS = [
   'lum',
   'lumMod',
@@ -446,18 +407,12 @@ export const PERCENT_VAL_ELEMENTS = [
   'blueMod',
 ] as const
 
-/**
- * `a:` elements whose `val` is `ST_PositiveFixedPercentage` — a
- * thousandths integer in `[0, 100000]` or a `N%`/`N.NN%` literal from
- * 0 to 100.
- */
 export const POSITIVE_FIXED_PERCENT_VAL_ELEMENTS = [
   'tint',
   'shade',
   'alpha',
 ] as const
 
-/** `a:lightRig dir` — the eight light directions. */
 export const LIGHT_RIG_DIRECTION_VALUES = [
   'tl',
   't',

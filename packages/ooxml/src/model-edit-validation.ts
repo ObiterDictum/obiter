@@ -64,13 +64,6 @@ export function validatePlannedOperations(
     }
     deletedIds.add(operation.paragraph.wire.id)
   }
-  // The last-paragraph invariant holds per story: an untracked delete removes
-  // the paragraph from the part it lives in, and a `w:hdr`/`w:ftr` part with
-  // no block-level child is as invalid as an empty body. A tracked delete only
-  // wraps the paragraph in deleted markup, so the count holds without the
-  // guard. Refusing keeps the persisted document structurally valid; the
-  // reason is its own code so the caller can report it without matching
-  // English text.
   if (!tracking) {
     const insertsByPart = new Map<string, number>()
     const deletesByPart = new Map<string, number>()
@@ -98,8 +91,6 @@ export function validatePlannedOperations(
         throw new OoxmlError('last-paragraph-required')
       }
     }
-    // The same invariant, per note entry: the part-level count above cannot
-    // see a `w:footnote` emptied while its siblings survive.
     assertNoteStoriesKeepParagraph(
       document,
       planned.filter(
@@ -130,11 +121,6 @@ export function validatePlannedOperations(
     ) {
       throw new OoxmlError('invalid-document-edit')
     }
-    // A reference to a paragraph deleted anywhere in the batch would write a
-    // bookmark the delete then removes — the REF dangles, so refuse instead.
-    // `deletedIds` collects every planned `delete_paragraph`, explicit marks
-    // and empty-replacement deletes alike, and deletes are emitted last, so
-    // `alreadyDeleted` could never see the batch's own deletions.
     if (
       operation.type === 'insert_cross_reference' &&
       deletedIds.has(operation.targetParagraph.wire.id)
@@ -146,12 +132,6 @@ export function validatePlannedOperations(
     }
   }
 
-  // A paragraph deletion removes its element whole: a stored field's
-  // `begin` inside it vanishes while the `end` survives in another
-  // paragraph, leaving markup Word can never pair. The batch may remove a
-  // field only whole — every boundary marker inside the removed ranges —
-  // and a tracked delete counts the same, since markup wrapped in `w:del`
-  // is deleted as far as Word's field pairing is concerned.
   const deleteRangesByPart = new Map<string, { start: number; end: number }[]>()
   for (const operation of planned) {
     if (operation.type !== 'delete_paragraph') continue
@@ -182,12 +162,6 @@ export function validateTrackedOperations(
   planned: readonly PlannedOperation[],
   deletedIds: ReadonlySet<string>,
 ) {
-  // Tracked writers touch disjoint or foldable ranges per op class:
-  // tracked-text replaces the whole run, tracked-properties merges into the
-  // run's rPr/pPr, and the tracked style and emphasis writers share the
-  // tracked-properties replacement. A run may therefore carry a text change
-  // and a properties change (or style plus emphasis) in one batch, but only
-  // one op per class.
   const runTextTargets = new Set<string>()
   const runStyleTargets = new Set<string>()
   const runEmphasisTargets = new Set<string>()
@@ -197,9 +171,6 @@ export function validateTrackedOperations(
   for (const operation of planned) {
     if (!('paragraph' in operation)) continue
     if (deletedIds.has(operation.paragraph.wire.id)) continue
-    // Structural insertions have no tracked form yet — a `w:ins` cannot
-    // express a new package part or relationship. Fail closed before any
-    // write rather than apply untracked while the client asked for tracking.
     if (
       operation.type === 'insert_table' ||
       operation.type === 'insert_image' ||
@@ -247,10 +218,6 @@ export function validateTrackedOperations(
         ) {
           throw new OoxmlError('invalid-document-edit')
         }
-        // A range emphasis splits the covered runs and marks each piece's
-        // properties, so only the runs the range actually covers must be free
-        // of tracked markup — a tracked change beside the range survives the
-        // split the way any untouched sibling does.
         let runStart = 0
         for (const run of operation.paragraph.runs) {
           const runEnd = runStart + run.wire.text.length

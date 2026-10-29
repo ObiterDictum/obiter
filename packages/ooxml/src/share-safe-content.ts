@@ -53,23 +53,9 @@ const decoder = new TextDecoder('utf-8', { fatal: true })
 const MC_ALTERNATE = /^(AlternateContent|Choice|Fallback)$/u
 const WORD_EXTENSION_PREFIX = 'http://schemas.microsoft.com/office/word/'
 
-/**
- * Backstop for the share-safe content passes' cost. Those passes are linear
- * in one part's element count (children are indexed once, field assembly is
- * a slice, and removal propagates through a worklist), and nested fields are
- * capped separately by `SHARE_SAFE_MAX_FIELD_NESTING`; these caps refuse a
- * part whose parsed shape is still past anything a real document carries.
- * They sit far above real toolchain output — the largest part observed in
- * the corpus (a full `styles.xml`) holds ~9k elements and ~14k attributes.
- */
 const SHARE_SAFE_MAX_PART_ELEMENTS = 100_000
 const SHARE_SAFE_MAX_PART_ATTRIBUTES = 200_000
 
-/**
- * Refuses a kept part whose parsed shape exceeds the share-safe caps above.
- * Separate from the content pass so the boundary itself is testable without
- * building a document.
- */
 export function assertShareSafeShape(
   partName: string,
   elements: readonly XmlElement[],
@@ -90,17 +76,6 @@ export function assertShareSafeShape(
   }
 }
 
-/**
- * The single content pass over one kept XML part. Everything the emitter
- * needs is decided here — which elements never emit, which wrappers lose
- * their tags, which texts and attributes are rewritten — so the
- * serialiser and the verifier replay identical rules: the verifier runs
- * this same function on the emitted bytes and expects an empty plan.
- *
- * The pass runs on the parsed element tree, so comments, processing
- * instructions, `mc:Ignorable` declarations and unused `xmlns` bindings
- * are absent by construction — nothing lexical reaches the plan.
- */
 export function analyseShareSafePart(
   document: OoxmlDocument,
   part: SourcePart,
@@ -111,9 +86,6 @@ export function analyseShareSafePart(
 ): ShareSafeContentPlan {
   const overlay = part.overlay
   if (overlay && overlay.replacements.size > 0) {
-    // Pending edits (the custom-properties adoption writes into the
-    // package-level parts) fold into the source the plan is computed on,
-    // so element coordinates and the emitted text describe one document.
     try {
       part.overlay = createXmlOverlay(serialiseOverlay(overlay))
     } catch {
@@ -171,13 +143,8 @@ export function analyseShareSafePart(
   }
 
   const family = shareSafePartFamily(expected.namespaceUri)
-  // Core, app and custom properties emit canonical bytes — the input below
-  // the root is discarded wholesale, so nothing inside needs decisions.
   if (family === 'metadata') return contentPlan
 
-  // Markup-compatibility branches resolve only where the family allows the
-  // namespace — elsewhere any `mc:` element already fails the namespace
-  // check below. Elements inside a dropped branch must not face verdicts.
   if (family === 'word' || family === 'theme') {
     resolveAlternateContent(part, elements, family, gone, contentPlan)
   }
@@ -227,7 +194,6 @@ export function analyseShareSafePart(
   return contentPlan
 }
 
-/** The refusal a rejected element earns, by the class that rejected it. */
 function refuseReasonFor(element: XmlElement) {
   if (
     element.namespaceUri === WORD_NAMESPACE ||
@@ -258,13 +224,6 @@ function refuseReasonFor(element: XmlElement) {
   return 'unsupported-structure' as const
 }
 
-/**
- * `mc:AlternateContent` resolves to exactly one branch in the output: the
- * first `Choice` whose `Requires` namespaces this build can emit, else the
- * `Fallback`, else the export refuses rather than guessing. Only the chosen
- * branch's elements ever reach the emitter — the wrapper tags and every
- * other branch are dropped here.
- */
 function resolveAlternateContent(
   part: SourcePart,
   elements: readonly XmlElement[],
@@ -272,9 +231,6 @@ function resolveAlternateContent(
   gone: (element: XmlElement) => boolean,
   contentPlan: ShareSafeContentPlan,
 ) {
-  // Children indexed once: the branch scan would otherwise filter the whole
-  // element list per `mc:AlternateContent`, which is quadratic in a part
-  // built entirely of compatibility blocks.
   const children = childrenByParent(elements)
   for (const element of elements) {
     if (element.namespaceUri !== MARKUP_COMPAT_NAMESPACE || gone(element)) {
@@ -335,7 +291,6 @@ function resolveAlternateContent(
   }
 }
 
-/** Every `Requires` token must resolve to a namespace this part emits. */
 function requiresProvable(
   choice: XmlElement,
   family: ReturnType<typeof shareSafePartFamily>,
@@ -356,12 +311,6 @@ function requiresProvable(
     })
 }
 
-/**
- * The attribute pass over everything still standing: verdict refuse
- * classes throw, relationship pointers resolve against the declarations
- * that survive, and detached references (external hyperlinks, attached
- * templates, printer settings) mark their element for unwrap or removal.
- */
 function finishAttributes(
   document: OoxmlDocument,
   part: SourcePart,
@@ -412,8 +361,6 @@ function finishAttributes(
         )
       }
       if (!strippedIds.has(attribute.value)) {
-        // A kept reference ships the canonical `rId` the declaration was
-        // rewritten to — the original id is identifier text and drops.
         const canonical = emittedIds?.get(attribute.value)
         if (canonical === undefined) {
           refuseShareSafe(
@@ -427,10 +374,6 @@ function finishAttributes(
         continue
       }
       const shape = detached?.get(attribute.value)
-      // Only a `w:hyperlink` detaches cleanly — its children re-emit as
-      // plain text. A drawing surface's `a:hlinkClick`/`a:hlinkHover`
-      // cannot be unlinked without restructuring the drawing, so it
-      // refuses with the rest.
       const detachesLink = shape === 'hyperlink' && isWord(element, 'hyperlink')
       const detachesElement =
         (shape === 'attachedTemplate' && isWord(element, 'attachedTemplate')) ||

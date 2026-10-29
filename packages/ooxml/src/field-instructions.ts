@@ -1,17 +1,8 @@
 import { parseStartTag } from './parts/overlay'
 import { decodeXmlReferences, findXmlTagEnd, xmlInnerText } from './xml-lexemes'
 
-/**
- * A stored field instruction parsed the way Word reads it: a field name,
- * plain arguments, and `\` switches each carrying their own arguments.
- * Matching is semantic, not substring — an instruction split across
- * `instrText` runs, carried in a `w:fldSimple` `w:instr` attribute, or
- * written with different whitespace reads identically once the caller has
- * decoded XML entities and concatenated the fragments.
- */
 const INSTRUCTION_TOKEN = /\\[A-Za-z*]+|"(?:[^"\\]|\\.)*"|«[^»]*»|\S+/gu
 
-/** The instruction's lexical tokens: `\h`, `"1"`, `PAGEREF`, `_Ref1`. */
 export function fieldInstructionTokens(instruction: string) {
   const tokens: string[] = []
   for (const match of instruction.matchAll(INSTRUCTION_TOKEN)) {
@@ -20,8 +11,6 @@ export function fieldInstructionTokens(instruction: string) {
   return tokens
 }
 
-/** The field's name — `TOA`, `PAGEREF` — or `''` when the instruction
- * leads with a switch or quotes rather than a name. */
 export function fieldInstructionName(instruction: string) {
   const first = fieldInstructionTokens(instruction)[0]
   if (
@@ -35,10 +24,6 @@ export function fieldInstructionName(instruction: string) {
   return first.toUpperCase()
 }
 
-/**
- * The token's operand value with Word's `"…"`/`«…»` quoting removed —
- * `fieldInstructionTokens` output carries the raw token spelling.
- */
 export function fieldInstructionTokenValue(token: string) {
   return tokenArgument(token)
 }
@@ -53,12 +38,6 @@ function tokenArgument(token: string) {
   return token
 }
 
-/**
- * The arguments each occurrence of `switchName` carries — `fieldSwitchArguments(
- * ' TOA \\h \\c "1" ', 'c')` returns `['1']`. An argument is every token
- * between the switch and the next switch or the instruction's end, with
- * Word's `"…"` / `«…»` quoting removed.
- */
 export function fieldSwitchArguments(instruction: string, switchName: string) {
   const tokens = fieldInstructionTokens(instruction)
   const args: string[] = []
@@ -81,16 +60,10 @@ export function fieldSwitchArguments(instruction: string, switchName: string) {
   return args
 }
 
-/** `fieldInstructionName` of `TOA`. */
 export function isTableOfAuthoritiesField(instruction: string) {
   return fieldInstructionName(instruction) === 'TOA'
 }
 
-/**
- * Whether a `TA` instruction marks `citation` — the `\l` long-form argument
- * is the marked text, so a field hiding the citation elsewhere in its
- * switches does not count as marking it.
- */
 export function tableAuthorityMarkMatches(
   instruction: string,
   citation: string,
@@ -103,11 +76,6 @@ export function tableAuthorityMarkMatches(
   )
 }
 
-/**
- * Skips a comment, CDATA section or processing instruction — constructs that
- * cannot carry field markup — and returns the cursor past them, or `-1`
- * when the input is not such a construct.
- */
 function skipXmlConstruct(xml: string, opening: number) {
   if (xml.startsWith('<!--', opening)) {
     const close = xml.indexOf('-->', opening + 4)
@@ -124,7 +92,6 @@ function skipXmlConstruct(xml: string, opening: number) {
   return -1
 }
 
-/** The position of `</w:instrText` that closes an open `instrText` run. */
 function instrTextClose(xml: string, start: number) {
   let cursor = start
   while (cursor < xml.length) {
@@ -147,16 +114,6 @@ function instrTextClose(xml: string, start: number) {
   return -1
 }
 
-/**
- * Every stored field instruction carried by an XML string — one entry per
- * field, with a complex field's `instrText` runs merged and a
- * `w:fldSimple`'s decoded `w:instr` standing alone. The scan walks markup
- * constructs rather than matching tag text, so a comment or CDATA inside an
- * `instrText` resolves the way an XML parser reads it instead of corrupting
- * the instruction. It pairs `fldChar` begins and ends so two `TA` fields in
- * one window never merge into each other's switches; a field that never
- * closes still emits what its instruction accumulated.
- */
 export function fieldInstructionsInXml(xml: string) {
   const instructions: string[] = []
   const buffers: string[] = []

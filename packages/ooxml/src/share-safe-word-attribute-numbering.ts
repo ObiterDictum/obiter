@@ -1,9 +1,3 @@
-/**
- * WordprocessingML numbering enumerations: `ST_NumberFormat` and the
- * chapter-separator, multilevel and suffix tokens a numbering or
- * page-numbering declaration may carry. An out-of-enumeration value is
- * a crafted payload or a malformed document — the copy refuses it.
- */
 import { enumBound } from './share-safe-value-bounds'
 
 export const WML_NUM_FMT = enumBound([

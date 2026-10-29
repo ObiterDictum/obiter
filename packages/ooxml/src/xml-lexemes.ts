@@ -60,13 +60,6 @@ export function inspectXmlLexemes(xml: string) {
   }
 }
 
-/**
- * The text an XML consumer reads inside `source[start, end)` — the range an
- * element's content occupies. Markup constructs are decoded the way a parser
- * resolves them: comments and processing instructions contribute nothing,
- * CDATA contributes its literal bytes, entity references in text decode, and
- * nested element tags are skipped while their own text still counts.
- */
 export function xmlInnerText(source: string, start: number, end: number) {
   let cursor = start
   let text = ''

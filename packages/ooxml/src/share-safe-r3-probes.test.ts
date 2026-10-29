@@ -12,9 +12,6 @@ import {
 } from './share-safe-probe-kit'
 
 describe('share-safe probes: lexical channels the parser never models', () => {
-  // Canonical emission rebuilds every part from the element tree, so
-  // comments, processing instructions, unused xmlns bindings and
-  // mc:Ignorable markers cannot ride the output.
   it.each([
     [
       'comment inside the document body',
@@ -280,7 +277,6 @@ describe('share-safe probes: package-level escapes', () => {
       0x0a,
       0x1a,
       0x0a,
-      // IHDR: 13 bytes of data.
       0x00,
       0x00,
       0x00,
@@ -306,7 +302,6 @@ describe('share-safe probes: package-level escapes', () => {
       0x00,
       0x00,
       0x00, // crc
-      // tEXt chunk carrying a private string.
       0x00,
       0x00,
       0x00,
@@ -333,7 +328,6 @@ describe('share-safe probes: package-level escapes', () => {
       0x00,
       0x00,
       0x00, // crc
-      // IDAT.
       0x00,
       0x00,
       0x00,
@@ -348,7 +342,6 @@ describe('share-safe probes: package-level escapes', () => {
       0x00,
       0x00,
       0x00, // crc
-      // IEND.
       0x00,
       0x00,
       0x00,

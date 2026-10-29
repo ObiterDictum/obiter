@@ -1,18 +1,6 @@
 import type { SourcePart } from './model'
 import { refuseShareSafe } from './share-safe-refusal'
 
-/**
- * Binary payload policy: a kept image ships only when its bytes parse as
- * the format its part name declares, and the payload is rewritten
- * metadata-free — every chunk or segment a reader does not need to render
- * the pixels is cut, so a `tEXt` record, an `sPLT`/`iCCP` block, an EXIF
- * block or a GIF comment cannot carry bytes across the boundary.
- * Formats this build cannot inspect and re-serialise — BMP, ICO, TIFF,
- * WMF, EMF, embedded fonts — never ship: a magic byte is not format
- * verification, and a format whose payload this layer cannot bound is a
- * carrier for arbitrary appended data.
- */
-
 const IMAGE_FORMATS = new Map<string, string>([
   ['png', 'png'],
   ['jpg', 'jpeg'],
@@ -32,29 +20,16 @@ function partExtension(part: SourcePart) {
   return dot === -1 ? '' : part.name.slice(dot + 1).toLowerCase()
 }
 
-/**
- * The extension canonical naming gives a kept image part — the format the
- * payload inspection already proved from its magic bytes, spelled as the
- * canonical file suffix (`jpg` normalises to `jpeg`).
- */
 export function canonicalImageExtension(part: SourcePart) {
   return IMAGE_FORMATS.get(partExtension(part))
 }
 
-/**
- * Inspects a binary part the inventory classified by its relationship.
- * Returns the payload the transform writes — identical bytes for
- * verifiable formats, a stripped copy for PNG/JPEG/GIF — or refuses.
- */
 export function inspectBinaryPayload(
   part: SourcePart,
   relationshipTail: string,
 ): Uint8Array | undefined {
   const payload = part.originalPayload
   if (relationshipTail === 'font') {
-    // Embedded font parts are dropped before inspection ever runs — a
-    // font payload is font-program bytes this layer cannot bound. A font
-    // reaching inspection is a planning bug.
     refuseShareSafe(
       'opaque-payload',
       `embedded font ${part.name} cannot be re-serialised metadata-free`,
@@ -82,12 +57,6 @@ export function inspectBinaryPayload(
   }
 }
 
-/**
- * PNG chunks a reader needs to render the pixels — ancillary metadata is
- * absent by design. `iCCP` embeds an opaque profile blob, `sPLT` carries
- * named palette labels, and `tEXt`/`zTXt`/`iTXt` are free text: none is
- * rendering-critical, so none ships.
- */
 const PNG_KEPT_CHUNKS = new Set([
   'IHDR',
   'PLTE',
@@ -126,8 +95,6 @@ function stripPng(part: SourcePart, payload: Uint8Array) {
     )
     const end = cursor + 12 + length
     if (end > payload.length) break
-    // An unknown critical chunk (uppercase first letter) is not a shape a
-    // reader can be assumed to skip.
     if (!PNG_KEPT_CHUNKS.has(type) && type.charCodeAt(0) < 0x61) {
       refuseShareSafe(
         'opaque-payload',
@@ -151,12 +118,6 @@ function stripPng(part: SourcePart, payload: Uint8Array) {
   return concatenate(kept)
 }
 
-/**
- * JPEG segments a reader needs: the JFIF header, quantisation and Huffman
- * tables, frame headers, restart intervals, the scan payload and the
- * terminator. `APP1`–`APP15` (EXIF, XMP and friends) and comment segments
- * are dropped; arithmetic-coding tables stay because the scan needs them.
- */
 const JPEG_KEPT_SEGMENTS = new Set([
   0xe0, // APP0 — JFIF header
   0xc4, // DHT
@@ -177,7 +138,6 @@ function stripJpeg(part: SourcePart, payload: Uint8Array) {
   let cursor = 2
   let done = false
   while (cursor < payload.length) {
-    // Standalone markers and fill bytes carry no segment.
     if (payload[cursor] !== 0xff || cursor + 1 >= payload.length) {
       refuseShareSafe(
         'malformed-package',
@@ -216,8 +176,6 @@ function stripJpeg(part: SourcePart, payload: Uint8Array) {
     }
     const isFrameHeader = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc8
     if (marker === 0xda) {
-      // SOS: the compressed scan runs to the next non-restart marker or
-      // the EOI — its bytes are entropy, not addressable structure.
       kept.push(payload.slice(markerStart, end))
       let scan = end
       while (scan < payload.length) {
@@ -248,12 +206,6 @@ function stripJpeg(part: SourcePart, payload: Uint8Array) {
   return concatenate(kept)
 }
 
-/**
- * GIF blocks a reader needs: header, screen descriptor, palettes, image
- * descriptors, image data, graphics-control extensions and the trailer.
- * Comment, plain-text and application extensions — the metadata carriers —
- * are dropped.
- */
 function stripGif(part: SourcePart, payload: Uint8Array) {
   if (
     !hasMagic(payload, [0x47, 0x49, 0x46, 0x38]) ||
@@ -303,7 +255,6 @@ function stripGif(part: SourcePart, payload: Uint8Array) {
       break
     }
     if (marker === 0x2c) {
-      // Image descriptor + optional local palette + LZW data sub-blocks.
       if (cursor + 10 > payload.length) break
       const descriptorByte = payload[cursor + 9]!
       const localTable =
@@ -319,8 +270,6 @@ function stripGif(part: SourcePart, payload: Uint8Array) {
       const label = payload[cursor + 1]!
       const end = skipSubBlocks(cursor + 2)
       if (end > payload.length) break
-      // 0xF9 graphics-control extensions carry rendering state; the rest
-      // are metadata channels.
       if (label === 0xf9) kept.push(payload.slice(cursor, end))
       cursor = end
       continue
@@ -347,10 +296,6 @@ function concatenate(fragments: readonly Uint8Array[]) {
   return combined
 }
 
-/**
- * The verifier's half of the binary check: the emitted payload must strip
- * to itself — a metadata chunk in the output means the transform failed.
- */
 export function verifyBinaryPayload(
   part: SourcePart,
   relationshipTail: string,

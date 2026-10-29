@@ -47,12 +47,6 @@ export type TrackedEditContext = {
   date: string
 }
 
-/**
- * A tracked-change element the writer just created, addressed by the persisted
- * OOXML change id (`w:id`). It is the only cross-version identity for content
- * that serialization wraps in `w:ins`/`w:del` and the parser therefore excludes
- * from the paragraph model.
- */
 export type TrackedChangeCreated = {
   elementName: 'ins' | 'del' | 'rPrChange' | 'pPrChange'
   ooxmlId: string
@@ -72,10 +66,6 @@ export function createTrackedEditWriter(
   }
   let nextChangeId = allocateFirstChangeId(document)
   let created: TrackedChangeCreated[] = []
-  // Change ids whose element ended up nested inside a `w:ins`/`w:del` piece —
-  // a property marker folded into a text replacement. The parser lists only
-  // top-level change elements, so a nested id names a change nobody can
-  // decide; the lineage withdraws it from the batch's reversal groups.
   let consumed: string[] = []
   const attributes = (
     prefix: string,
@@ -95,10 +85,6 @@ export function createTrackedEditWriter(
       const trackedProperties = part.overlay.replacements.get(
         `${anchor.wire.id}:tracked-properties`,
       )
-      // A pending property change rewrites the whole run's rPr: the whole-run
-      // path folds it into the inserted run, where a granular split would put
-      // the new properties on the ins piece alone and leave the untouched
-      // pieces carrying the old ones.
       const edit = granularRunEdit(
         source,
         anchor,
@@ -109,8 +95,6 @@ export function createTrackedEditWriter(
       if (edit.kind === 'noop') return
       if (edit.kind === 'pieces') {
         let value = edit.prefixRun ?? ''
-        // A substitution records its removed side before its inserted side,
-        // the order Word writes and the pair a reversal drains as one unit.
         if (edit.deletedRun) {
           value += `<${prefix}:del ${attributes(prefix, 'del')}>${edit.deletedRun}</${prefix}:del>`
         }
@@ -127,9 +111,6 @@ export function createTrackedEditWriter(
         part.dirty = true
         return
       }
-      // Both tracked branches retain the complete run, so unique-identity
-      // children such as bookmark and comment range markers are duplicated.
-      // Hoisting those children needs a separate identity-preservation design.
       const oldRun = renameTextElements(
         source.slice(anchor.runRange.start, anchor.runRange.end),
         anchor,
@@ -138,10 +119,6 @@ export function createTrackedEditWriter(
       let newRun = replaceRunText(source, anchor, text)
       if (trackedProperties) {
         part.overlay.replacements.delete(`${anchor.wire.id}:tracked-properties`)
-        // The inserted run takes the patched properties without the pending
-        // marker — a marker inside `w:ins` is not a listed change — and the
-        // id it was allocated with is consumed rather than left dangling in
-        // a reversal group.
         const markerId = trackedProperties.value.match(
           new RegExp(`${prefix}:id="(\\d+)"`, 'u'),
         )?.[1]
@@ -300,9 +277,6 @@ export function createTrackedEditWriter(
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
-      // A start override points at a newly created or reused numbering
-      // instance; resolve it before the tracked pPrChange is built so the
-      // recorded change and the current state name the same instance.
       const resolved = resolveParagraphNumbering(document, numbering)
       setTrackedProperties(document, {
         id: anchor.wire.id,
@@ -331,30 +305,16 @@ export function createTrackedEditWriter(
       })
     },
 
-    /**
-     * The marker attributes a fresh run piece's `w:rPrChange` carries. The
-     * range-emphasis path allocates one per covered piece, so every split
-     * piece's marker gets its own persisted `w:id` the way every other
-     * tracked write does.
-     */
     changeAttributes(prefix: string) {
       return attributes(prefix, 'rPrChange')
     },
 
-    /**
-     * The changes created since the previous call, in order. The lineage uses
-     * them to name a reversal by persisted `w:id`, not by run position.
-     */
     takeChanges() {
       const next = created
       created = []
       return next
     },
 
-    /**
-     * Change ids allocated since the previous call whose element was consumed
-     * into nested markup, so a recorded reversal must drop them.
-     */
     takeConsumedChanges() {
       const next = consumed
       consumed = []
@@ -368,12 +328,6 @@ function isCanonicalIsoTimestamp(value: string) {
   return !Number.isNaN(timestamp) && new Date(timestamp).toISOString() === value
 }
 
-/**
- * The next tracked-change id is one past the highest id already in the
- * document, never the lowest free one. A decided change's id is therefore not
- * reused by a later edit, so a stale rejection group can never name a different
- * change it happens to share an id with.
- */
 function allocateFirstChangeId(document: OoxmlDocument) {
   let next = 0
   for (const { wire } of document.trackedChanges.values()) {

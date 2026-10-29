@@ -1,10 +1,3 @@
-/**
- * WordprocessingML enumeration vocabulary for share-safe attribute bounds.
- * Each set names every value the OOXML simple type permits for the slot,
- * so a `w:` attribute keeps only a value Word itself could have written —
- * an out-of-enumeration value is either a crafted payload or a malformed
- * document, and the policy refuses rather than guessing.
- */
 import {
   COLOR_BOUND,
   DATE_BOUND,
@@ -375,11 +368,6 @@ export const WML_LOCK = enumBound([
   'sdtContentLocked',
   'unlocked',
 ])
-/**
- * `w:appearance` — `hidden` is excluded deliberately: an SDT that renders
- * no placeholder is an invisible carrier, so the value refuses with the
- * rest of the out-of-enumeration set.
- */
 export const WML_APPEARANCE = enumBound(['boundingBox', 'tags'])
 export const WML_CLR_SCHEME = enumBound([
   'bg1',
@@ -413,7 +401,6 @@ export const WML_RUBY_ALIGN = enumBound([
   'right',
   'rightVertical',
 ])
-// Shared bound constants re-exported under WML names for the two tables.
 export const WML_INT = INT_BOUND
 export const WML_COLOR = COLOR_BOUND
 export const WML_HEX2 = HEX2_BOUND
@@ -429,6 +416,4 @@ export const WML_IDENT = IDENT_BOUND
 export const WML_VERSION = VERSION_BOUND
 export const WML_CHARSET = CHARSET_BOUND
 export const WML_DATE = DATE_BOUND
-/** `w:type` — a section type or a form-field input type by context. */
 export const WML_TYPE = unionBound([WML_SECT_TYPE, WML_TEXT_INPUT_TYPE])
-/** `w:start`/`w:end` — a border type or a numbering integer by context. */

@@ -36,8 +36,6 @@ describe('structural edits', () => {
     expect(table).toContain('<w:tblBorders>')
     expect(table.match(/<w:tr>/gu)).toHaveLength(2)
     expect(table.match(/<w:tc>/gu)).toHaveLength(6)
-    // Every cell ends in a `w:p` with a `w14:paraId`, the OOXML cell rule the
-    // reader binds wires by.
     const cellParaIds = [
       ...table.matchAll(/w14:paraId="([0-9A-Fa-f]{8})"/gu),
     ].map((match) => match[1])
@@ -48,8 +46,6 @@ describe('structural edits', () => {
       (paragraph) => paragraph.id === anchor.id,
     )
     expect(anchorIndex).toBeGreaterThanOrEqual(0)
-    // The cell wires splice between the anchor and the paragraph that
-    // followed it, in row-major order, with `para-w14-` identities.
     const cells = reparsed.slice(anchorIndex + 1, anchorIndex + 7)
     expect(cells.map((paragraph) => paragraph.id)).toEqual(
       cellParaIds.map((id) => `para-w14-${id}`),
@@ -96,8 +92,6 @@ describe('structural edits', () => {
     const after = xml.slice(xml.indexOf('</w:p>') + '</w:p>'.length)
     const tables = [...after.matchAll(/<w:tbl\b[\s\S]*?<\/w:tbl>/gu)]
     expect(tables.length).toBeGreaterThanOrEqual(2)
-    // Adjacent `w:tbl` elements merge in Word, so the second insertion carries
-    // an empty separator paragraph between them.
     const between = after.slice(
       (tables[0]?.index ?? 0) + (tables[0]?.[0].length ?? 0),
       tables[1]?.index,
@@ -109,7 +103,6 @@ describe('structural edits', () => {
 
   it('separates a new table from an existing one that follows the anchor', async () => {
     const document = await parseFixture()
-    // The bookmark paragraph directly precedes the fixture's stored table.
     const anchor = mainParagraphs(document).find((paragraph) =>
       paragraph.runs.some((run) => run.text.includes('Jane Example')),
     )
@@ -192,14 +185,11 @@ describe('structural edits', () => {
     ])
     const output = await serialiseDocx(document)
 
-    // The media part lands under word/media with the stored bytes.
     const zip = await JSZip.loadAsync(output)
     const media = zip.file('word/media/image2.png')
     if (!media) throw new Error('Inserted media part is missing.')
     expect(new Uint8Array(await media.async('arraybuffer'))).toEqual(PNG_BYTES)
 
-    // The relationship joins the document part to the media part; png was
-    // already a declared Default, so it is declared exactly once.
     const rels = await zipText(output, 'word/_rels/document.xml.rels')
     const relationship = rels.match(
       /<Relationship[^>]*Target="media\/image2\.png"[^>]*\/>/u,
@@ -208,7 +198,6 @@ describe('structural edits', () => {
     const contentTypes = await zipText(output, '[Content_Types].xml')
     expect(contentTypes.match(/Extension="png"/gu)).toHaveLength(1)
 
-    // The drawing is an inline extent in EMU with the escaped name.
     const xml = await zipText(output, 'word/document.xml')
     expect(xml).toContain('<wp:inline')
     expect(xml).toContain('cx="1143000" cy="762000"')
@@ -218,8 +207,6 @@ describe('structural edits', () => {
     )?.[1]
     expect(xml).toContain(`r:embed="${relId ?? 'missing'}"`)
 
-    // A reparse reads the same shape: a zero-text drawing run the paint path
-    // resolves through `paragraphImageXml`.
     const reparsed = mainParagraphs(await parseDocx(output))
     const paragraph = reparsed.find((item) => item.id === anchor.id)
     const drawingRun = paragraph?.runs.find((run) =>
@@ -277,8 +264,6 @@ describe('structural edits', () => {
         await original.async('uint8array'),
       )
     }
-    // The stored table, sdt, tracked changes and fields all survive the
-    // splice — only the new fragment was appended at the anchor's end.
     const xml = await zipText(output, 'word/document.xml')
     expect(xml).toContain('Merged cell')
     expect(xml).toContain('w:sdt')

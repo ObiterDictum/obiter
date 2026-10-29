@@ -28,8 +28,6 @@ type CanonicalNode =
 type CanonicalAttribute = ExpandedName & { value: string }
 type NamespaceBindings = ReadonlyMap<string, string>
 
-// Built on first use: an eager module-scope instance drags fast-xml-parser
-// into the client bundle for a comparison path only server-side code runs.
 let parser: XMLParser | undefined
 
 export function canonicaliseXml(xml: string) {

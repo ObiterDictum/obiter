@@ -8,67 +8,20 @@ import {
 } from './parts/xml-elements'
 import { decodeXmlReferences } from './xml-lexemes'
 
-/**
- * One stored field paired from a part's element stream: a complex
- * `w:fldChar` field or a self-contained `w:fldSimple`. Three consumers read
- * this one scan — the model parser emitting `story.fields`, the update
- * writer proving the shape it can rewrite, and the batch validators
- * refusing a removal that leaves a field unbalanced — so the pairing rule
- * and the tail contract cannot drift between surfaces.
- *
- * `begin`/`end` are the field's own `fldChar` elements; a `separate`
- * belongs to the innermost open field, matching the order the elements
- * appear in source. A field that never closes keeps `end` undefined.
- */
 export type StoredFieldSpan = {
-  /** The `fldChar` begin — absent for a `w:fldSimple`. */
   begin?: XmlElement
-  /** The `fldChar` end that closed the field — absent while it stays open. */
   end?: XmlElement
-  /** The `w:fldSimple` element when the field is not a complex one. */
   simple?: XmlElement
-  /**
-   * The boundary elements attributed to this field alone, in source order:
-   * its begin, its own `separate` markers and its `end` — never a nested
-   * field's. Removing some but not all unbalances the stored field.
-   */
   boundary: XmlElement[]
-  /** The decoded instruction text — the `instrText` content the field
-   * accumulated before its `separate`, or a `w:fldSimple`'s `w:instr`. */
   instruction: string
-  /** The `w:p` ancestors of the boundary elements that sit inside one. */
   boundaryParagraphs: XmlElement[]
-  /** True when a boundary marker sits outside every `w:p` — markup a
-   * paragraph deletion can never address. */
   boundaryUnanchored: boolean
-  /** The `w:p` siblings the field's range covers — the head paragraph
-   * through the one holding `end`, or just the head while the field
-   * stays open. */
   rangeParagraphs: XmlElement[]
-  /** The `w:p` holding `begin` — or the `w:fldSimple`. */
   beginParagraph?: XmlElement
-  /** The `w:p` holding `end`, when it sits inside one. */
   endParagraph?: XmlElement
-  /** The field's own `separate` sits inside the `begin` paragraph — the
-   * result boundary an in-place refresh needs the head to hold. */
   separateInBeginParagraph: boolean
-  /**
-   * A `w:p` sibling of the head paragraph is not the only thing between
-   * the head and the `end`: a `w:tbl`, a block-level `w:sdt` or any other
-   * same-level element sits inside the field's range, so nothing defined
-   * by paragraph spans describes it.
-   */
   interrupted: boolean
-  /**
-   * The tail shape a range rewrite needs: the `end` sits in a different
-   * paragraph than the `begin`, inside a run that is a direct child of
-   * that paragraph, led only by markup (`pPr`, bookmarks; `rPr` inside the
-   * run) — the run the rewrite keeps while replacing everything before it.
-   */
   endLeadsParagraph: boolean
-  /** The field's `begin` is its paragraph's first `fldChar` begin — an
-   * update addressed at the head rewrites from that character, so an
-   * earlier field in the same paragraph disqualifies it. */
   firstBeginInParagraph: boolean
 }
 
@@ -88,12 +41,6 @@ function fieldCharType(element: XmlElement) {
   return attributeValue(element, WORD_NAMESPACE, 'fldCharType')
 }
 
-/**
- * The container's children before `bound` are only `allowed` elements
- * separated by whitespace — no text or unexpected markup — read from the
- * parsed element tree so attribute order or an added `w:rPr` cannot fool a
- * regex.
- */
 function leadingMarkupOnly(
   source: string,
   childrenOf: (element: XmlElement) => readonly XmlElement[],
@@ -114,7 +61,6 @@ function leadingMarkupOnly(
   return source.slice(cursor, bound.start).trim().length === 0
 }
 
-/** Index of the first element whose start is at or after `position`. */
 function firstAtOrAfter(ordered: readonly XmlElement[], position: number) {
   let low = 0
   let high = ordered.length
@@ -126,12 +72,6 @@ function firstAtOrAfter(ordered: readonly XmlElement[], position: number) {
   return low
 }
 
-/**
- * The slice of an ordered element list starting at `from` and stopping before
- * `to` (or at the end when `to` is undefined). Elements are in document order,
- * so a binary search skips the prefix a whole-list scan would walk: pairing a
- * part's fields is otherwise fields × elements.
- */
 function windowOf(
   ordered: readonly XmlElement[],
   from: number,
@@ -150,13 +90,6 @@ function windowOf(
   return window
 }
 
-/**
- * Pairs every field in one part's element stream. Complex fields stack —
- * a `PAGEREF` inside a `TOA` result is its own span, closed by its own
- * `end` — and an element order walk is the only pairing the serialised
- * markup supports. A field still open at the part's end is emitted with
- * `end` undefined so a consumer sees it rather than the field vanishing.
- */
 export function fieldSpans(
   elements: readonly XmlElement[],
   source: string,
@@ -200,8 +133,6 @@ export function fieldSpans(
   const interrupted = (beginParagraph: XmlElement, end: XmlElement) => {
     const parent = beginParagraph.parent
     if (parent === undefined) return true
-    // Only a child of the paragraph's parent can match the parent test, and a
-    // child before the paragraph cannot sit between it and the field's end.
     for (const element of windowOf(
       childrenOf(parent),
       beginParagraph.end,
@@ -270,8 +201,6 @@ export function fieldSpans(
       beginParagraph === undefined
         ? []
         : windowOf(
-            // A parentless paragraph is the part's root, which the old
-            // parent test matched against itself.
             beginParagraph.parent === undefined
               ? [beginParagraph]
               : childrenOf(beginParagraph.parent),
@@ -374,12 +303,6 @@ export function fieldSpans(
   return spans
 }
 
-/**
- * Whether the field's stored shape proves the range rewrite an in-place
- * refresh performs: it closes, its `begin` leads its paragraph's fields, a
- * `separate` sits in the head, the `end` leads a different tail paragraph,
- * and no non-paragraph sibling interrupts the range.
- */
 export function spanRangeReplaceable(span: StoredFieldSpan) {
   return (
     span.end !== undefined &&
@@ -390,12 +313,6 @@ export function spanRangeReplaceable(span: StoredFieldSpan) {
   )
 }
 
-/**
- * Whether another field in the same part encloses this one. Rewriting an
- * inner field's range drops its `begin` while the outer field's `end`
- * survives past the tail — the outer field is left unbalanced — so a
- * nested field is never range-replaceable.
- */
 export function spanNestedInField(
   spans: readonly StoredFieldSpan[],
   span: StoredFieldSpan,
@@ -412,23 +329,6 @@ export function spanNestedInField(
   )
 }
 
-/**
- * The spans of one part that another span encloses, answered for all of them at
- * once. Whether a field is nested decides its `rangeReplaceable`, so a caller
- * that needs the answer for every field would otherwise ask that question of
- * every field against every other field — quadratic in the field count, which a
- * long form or a mail-merge template pays for and which the model pool's
- * deadline was sized around.
- *
- * Sorting by where each `begin` starts and carrying the furthest `end` seen so
- * far answers each query with one binary search over that prefix. An open field
- * — one with no `end` — encloses every span that begins after it, and is never
- * itself reported: the rule only fires for a span that has both markers.
- *
- * `spanNestedInField` answers the same question for a single span, which is
- * cheaper when only one span is asked about; `field-span-nesting.test.ts` holds
- * the two to the same answer.
- */
 export function nestedFieldSpans(
   spans: readonly StoredFieldSpan[],
 ): ReadonlySet<StoredFieldSpan> {
@@ -438,8 +338,6 @@ export function nestedFieldSpans(
     edges.push({ span, begin: span.begin.start, end: span.end?.start })
   }
   edges.sort((left, right) => left.begin - right.begin)
-  // prefixEnd[index] is the furthest end among edges[0..index), an open field
-  // counted as endless so it encloses every begin after it.
   const endless = Number.POSITIVE_INFINITY
   const prefixEnd: number[] = [Number.NEGATIVE_INFINITY]
   for (const edge of edges) {
@@ -451,8 +349,6 @@ export function nestedFieldSpans(
   for (let index = 0; index < edges.length; index += 1) {
     const edge = edges[index]
     if (edge === undefined || edge.end === undefined) continue
-    // Enclosing needs a strictly earlier begin, so spans sharing one are not
-    // candidates for each other and the prefix stops where they start.
     let low = 0
     let high = index
     while (low < high) {
@@ -467,12 +363,6 @@ export function nestedFieldSpans(
   return nested
 }
 
-/**
- * Whether removing `ranges` splits a stored field: some but not all of one
- * field's boundary markers fall inside a removed range. A field removed
- * whole — every marker covered — stays balanced and is allowed; a partial
- * removal leaves stray `fldChar`s Word can never pair.
- */
 export function fieldBoundarySplit(
   elements: readonly XmlElement[],
   source: string,

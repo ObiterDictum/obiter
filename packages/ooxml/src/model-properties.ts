@@ -7,10 +7,6 @@ export type PropertyChild = {
   apply: boolean
 }
 
-// Shared pPr/rPr child writer. Every untracked property writer routes here so a
-// batch touching the same properties element more than once expands absent or
-// self-closing elements once and merges further children into the same
-// replacement instead of writing sibling <w:pPr> elements.
 export function writePropertyChildren(
   overlay: XmlOverlay,
   input: {
@@ -41,7 +37,7 @@ export function writePropertyChildren(
     }
     if (!inner) return
     const n = input.nodeRange
-    const selfClosing = n.startTagEnd === n.end // start-tag end is past it
+    const selfClosing = n.startTagEnd === n.end
     setOverlayReplacement(overlay, key, {
       start: selfClosing ? n.start : n.startTagEnd,
       end: selfClosing ? n.end : n.startTagEnd,
@@ -107,8 +103,6 @@ export function writePropertyChildren(
   }
 }
 
-// CT_PPr/CT_RPr (ECMA-376) element sequences: a missing child lands after its
-// last present predecessor, shared by overlay writes and tracked patches.
 interface PropertyChildPredecessors {
   [localName: string]: readonly string[]
 }
@@ -340,8 +334,6 @@ const PROPERTY_CHILD_PREDECESSORS: PropertyChildPredecessors = {
     'szCs',
     'highlight',
   ],
-  // CT_SectPr is the last CT_PPr child before pPrChange; a section break
-  // inserted into a paragraph's pPr must land after every other child.
   sectPr: [
     'pStyle',
     'keepNext',
@@ -380,17 +372,11 @@ const PROPERTY_CHILD_PREDECESSORS: PropertyChildPredecessors = {
   ],
 }
 
-// The *Change element (rPrChange/pPrChange) is the last child of its
-// properties element and records the pre-change state; child matching and
-// insert positions only consider the active part before it.
 export function activePropertiesContent(content: string) {
   const changeStart = content.search(/<w:(?:pPr|rPr)Change\b/u)
   return changeStart === -1 ? content : content.slice(0, changeStart)
 }
 
-// Computes the offset inside a properties element fragment where a missing
-// child is inserted: after its last present predecessor and before any
-// *Change element.
 export function propertyChildInsertPosition(
   fragment: string,
   localName: string,
@@ -410,8 +396,6 @@ export function propertyChildInsertPosition(
   return position
 }
 
-// CT_PPr/CT_RPr requires pStyle/rStyle first, so a missing numPr/b/i/u lands
-// after the last present predecessor instead of immediately after the open.
 function missingChildInsertPosition(
   source: string,
   propertiesRange: XmlElementRange,
@@ -469,7 +453,6 @@ function appendPropertiesChildren(
   inner: string,
   propertiesName: 'pPr' | 'rPr',
 ) {
-  // A blank paragraph's page break owns a full-node `<w:p>` with no `w:pPr`.
   if (
     propertiesName === 'pPr' &&
     /^<w:p\b/u.test(elementXml) &&
@@ -479,10 +462,6 @@ function appendPropertiesChildren(
     return `${elementXml.slice(0, openEnd)}<w:pPr>${inner}</w:pPr>${elementXml.slice(openEnd)}`
   }
   const closing = `</w:${propertiesName}>`
-  // pStyle/rStyle must stay the first child of pPr/rPr (OOXML sequence).
-  // When a style write merges into an element another writer already
-  // created, insert it before the first non-style child instead of at the
-  // end.
   if (/^<w:(?:pStyle|rStyle)\b/u.test(inner)) {
     const firstChild = elementXml.search(
       /<w:(?:numPr|b|i|u|rFonts|jc|spacing|ind|color|sz|strike|smallCaps|highlight|vertAlign|sectPr)\b/u,

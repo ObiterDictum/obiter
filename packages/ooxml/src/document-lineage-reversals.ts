@@ -1,19 +1,6 @@
 import type { DocumentLineageReversal } from '@obiter/contracts'
 import type { LineageRecorder, RecordedTrackedChange } from './document-lineage'
 
-/**
- * Reversal groups for the tracked changes one accepted batch created.
- *
- * A tracked operation's reversal is a rejection of the persisted `w:id`s it
- * created, grouped by the accepted operation so a replacement's `del`/`ins`
- * pair is handled as one unit. An ins-only group is a tracked paragraph
- * insertion: its content lives inside `w:ins`, so rejecting the group empties
- * the paragraph and the same decision must remove the shell. That reversal is
- * carried on the paragraph entry (`trackedInsertChangeIds`) rather than the
- * run-keyed list — but only when it names no base run; a run insertion into
- * an existing paragraph is ins-only too, and its reversal is the plain
- * rejection below.
- */
 export function buildTrackedReversals(recorder: LineageRecorder) {
   const byOperation = new Map<number, RecordedTrackedChange[]>()
   for (const change of recorder.trackedChanges) {

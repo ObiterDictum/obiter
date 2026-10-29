@@ -486,9 +486,6 @@ describe('bounded collaboration reconciliation', () => {
       (paragraph) => paragraph.sourceParaId === first.sourceParaId,
     )
     if (!matched) throw new Error('Identified paragraph is missing.')
-    // w14 ids stay equal; sequential ids after extras are not matched.
-    // Shift the matched current id so the extras id space is the thing under
-    // test, not an accident of w14 stability.
     matched.id = `${matched.id}-shifted`
     expect(
       reconcileDocumentEdits(
@@ -561,8 +558,6 @@ describe('bounded collaboration reconciliation', () => {
   it('retargets a reconciled merge lineage onto the client base', async () => {
     const base = await parseDocx(source)
     const [first, second] = firstTwoRuns(base)
-    // A collaborator changed the first run; the client edits the second over
-    // the newer current version.
     const current = await editedSource([
       {
         type: 'replace_run_text',
@@ -600,16 +595,11 @@ describe('bounded collaboration reconciliation', () => {
         ),
       )
       .find(({ segment }) => segment.fromRunId === second.id)
-    // The client's base run resolves to a real result paragraph address, so a
-    // reversal can be translated rather than dropped.
     expect(address?.paragraph.toParagraphId).toMatch(/^para-w14-/u)
     expect(address?.run.runIndex).toBeGreaterThanOrEqual(0)
   })
 
   it('rewrites base addresses to current before applying a merge batch', async () => {
-    // A legacy base (positional paragraph ids) reconciled onto a canonicalised
-    // current version: the same paragraphs now carry `w14:paraId` ids, so the
-    // client's base paragraph id must be rewritten before it is applied.
     const seededBytes = await createSyntheticDocx(['Alpha', 'Beta'])
     const base = await parseDocx(seededBytes)
     const currentDoc = await parseDocx(seededBytes)
@@ -630,7 +620,6 @@ describe('bounded collaboration reconciliation', () => {
     expect(reconcileDocumentEdits(base, current, [operation], false)).toEqual({
       mergeable: true,
     })
-    // The base address does not exist in the current version.
     expect(() => applyDocumentEdits(current, [operation])).toThrow()
     const alignment = alignMergeDocuments(base, current)
     expect(alignment.baseToCurrentParagraph.get(baseBetaParagraph.id)).toMatch(
@@ -653,8 +642,6 @@ describe('bounded collaboration reconciliation', () => {
     )
     if (!anchor) throw new Error('Fixture paragraph is missing.')
 
-    // Every paragraph aligns unchanged: the field's own anchor is the only
-    // address, and nothing it would capture has moved.
     expect(
       reconcileDocumentEdits(
         base,
@@ -691,8 +678,6 @@ describe('bounded collaboration reconciliation', () => {
       offset: 0,
     }
 
-    // A rewritten run anywhere conflicts: the footprint cannot say which
-    // changed paragraphs were headings the field would capture.
     expect(
       reconcileDocumentEdits(
         base,
@@ -708,7 +693,6 @@ describe('bounded collaboration reconciliation', () => {
       ),
     ).toEqual({ mergeable: false, operationIndexes: [0] })
 
-    // A deleted anchor conflicts through the presence set.
     expect(
       reconcileDocumentEdits(
         base,

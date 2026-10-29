@@ -314,9 +314,6 @@ describe('tracked change decisions', () => {
   })
 
   it('pairs a move whose containers share w:name but not w:id', async () => {
-    // Word pairs a move by the shared w:name on its moveFromRangeStart and
-    // moveToRangeStart containers; the wrappers carry distinct w:ids. The
-    // fixture uses that real shape, so every change it carries is decidable.
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
     )
@@ -332,8 +329,6 @@ describe('tracked change decisions', () => {
     expect(moveFrom.pairId).toBe(moveTo.id)
     expect(moveTo.pairId).toBe(moveFrom.id)
 
-    // Deciding either half resolves both halves and their range markers in
-    // the same decision.
     const applied = applyTrackedChangeDecisions(
       document,
       [moveFrom.id],
@@ -350,8 +345,6 @@ describe('tracked change decisions', () => {
   it.each(['accept', 'reject'] as const)(
     'decides every run a named container holds in one move (%s)',
     async (action) => {
-      // One move can wrap several runs on each side: the container's w:name
-      // groups them all, and a single half's decision covers the whole move.
       const document = await parseDocx(
         await replaceDocumentXml(
           `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Keep </w:t></w:r><w:moveFromRangeStart w:id="30" w:name="move7" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>First </w:delText></w:r></w:moveFrom><w:moveFrom w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:rPr><w:b/></w:rPr><w:delText>second</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="move7" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="6" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>First </w:t></w:r></w:moveTo><w:moveTo w:id="8" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:rPr><w:b/></w:rPr><w:t>second</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
@@ -387,8 +380,6 @@ describe('tracked change decisions', () => {
   )
 
   it('decides a move whose container spans a paragraph boundary', async () => {
-    // The markers can sit in different paragraphs; the runs between them are
-    // still members of the same named move and decide together.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Pre </w:t></w:r><w:moveFromRangeStart w:id="30" w:name="move8" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>one</w:delText></w:r></w:moveFrom></w:p><w:p><w:moveFrom w:id="3" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>two</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:r><w:t>post</w:t></w:r></w:p><w:p><w:moveToRangeStart w:id="31" w:name="move8" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="5" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveTo w:id="7" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>two</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
@@ -412,8 +403,6 @@ describe('tracked change decisions', () => {
   })
 
   it('decides adjacent same-name containers as one move', async () => {
-    // Word can split one move into several adjacent ranges under one w:name;
-    // every member across every range belongs to the same decision.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Keep </w:t></w:r><w:moveFromRangeStart w:id="30" w:name="move14" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>one</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:r><w:t> gap </w:t></w:r><w:moveFromRangeStart w:id="32" w:name="move14" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>two</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="32"/><w:moveToRangeStart w:id="33" w:name="move14" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="6" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="33"/><w:moveToRangeStart w:id="34" w:name="move14" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="8" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>two</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="34"/></w:p></w:body></w:document>`,
@@ -442,18 +431,12 @@ describe('tracked change decisions', () => {
   })
 
   it('refuses nested move containers', async () => {
-    // A container inside another container is not a shape Word produces; the
-    // inner markers sit inside the outer range uncovered, so the outer group
-    // — and any member under it — stays undecidable and byte-preserved.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="outer" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>outer</w:delText></w:r></w:moveFrom><w:moveFromRangeStart w:id="32" w:name="inner" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>inner</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="32"/><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="33" w:name="outer" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="6" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>outer</w:t></w:r></w:moveTo><w:moveTo w:id="8" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>inner</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="33"/></w:p></w:body></w:document>`,
       ),
     )
     const moves = document.model.changes.filter(({ kind }) => kind === 'move')
-    // The inner markers sit inside the outer range uncovered, so the outer
-    // container is dirty and its members stay unpaired; the inner name has no
-    // to-side container here, so nothing pairs at all.
     if (moves.length !== 4) throw new Error('Nested move members are missing.')
     expect(moves.every(({ pairId }) => pairId === undefined)).toBe(true)
 
@@ -491,7 +474,6 @@ describe('tracked change decisions', () => {
     expect(
       [...document.sourceParts.values()].every(({ dirty }) => !dirty),
     ).toBe(true)
-    // The undecidable move is preserved byte-identically, markers included.
     const xml = await zipText(
       await serialiseDocx(document),
       'word/document.xml',
@@ -501,8 +483,6 @@ describe('tracked change decisions', () => {
   })
 
   it('fails closed when a container carries content outside its wrappers', async () => {
-    // A bare run inside the named range is moved content no member wrapper
-    // covers — a member-wise decision would leave it stranded at the source.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="move10" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>wrapped</w:delText></w:r></w:moveFrom><w:r><w:delText>loose</w:delText></w:r><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="move10" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>wrapped</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
@@ -529,8 +509,6 @@ describe('tracked change decisions', () => {
   })
 
   it('does not pair same-named containers living in different parts', async () => {
-    // Move names are scoped to their story part: a "move1" in a footer is a
-    // different move from a "move1" in the footnotes part.
     const document = await parseDocx(
       await fixtureWithStoryChanges([
         [
@@ -552,10 +530,6 @@ describe('tracked change decisions', () => {
   })
 
   it('keeps a paragraph-mark move listed but undecidable', async () => {
-    // Word records a moved whole paragraph by marking the paragraph mark
-    // (pPr/rPr/moveFrom) inside a range container, not by wrapping runs.
-    // Deciding that needs whole-paragraph semantics E9 does not implement, so
-    // the move lists and preserves but refuses rather than half-apply.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Keep</w:t></w:r></w:p><w:moveFromRangeStart w:id="30" w:name="move11" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:p><w:pPr><w:rPr><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"/></w:rPr></w:pPr><w:r><w:delText>Moved paragraph</w:delText></w:r></w:p><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="move11" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:p><w:pPr><w:rPr><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"/></w:rPr></w:pPr><w:r><w:t>Moved paragraph</w:t></w:r></w:p><w:moveToRangeEnd w:id="31"/></w:body></w:document>`,
@@ -583,8 +557,6 @@ describe('tracked change decisions', () => {
   })
 
   it('fails closed on a move source without its range end', async () => {
-    // A RangeStart with no matching RangeEnd is no container, so the wrapper
-    // inside it pairs by nothing and must stay undecidable.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="move12" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>Open</w:delText></w:r></w:moveFrom><w:moveToRangeStart w:id="31" w:name="move12" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>Open</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
@@ -592,8 +564,6 @@ describe('tracked change decisions', () => {
     )
     const moves = document.model.changes.filter(({ kind }) => kind === 'move')
     if (moves.length !== 2) throw new Error('Open-container moves missing.')
-    // The from wrapper falls back to nothing: unmatched container means no
-    // named group, and distinct w:ids pair by neither mechanism.
     expect(moves.every(({ pairId }) => pairId === undefined)).toBe(true)
     expect(() =>
       applyTrackedChangeDecisions(
@@ -607,10 +577,6 @@ describe('tracked change decisions', () => {
   })
 
   it('marks the changes the engine can never decide on the wire', async () => {
-    // One document mixes a decidable insertion, a fully paired named move, a
-    // stray uncontainered move half, and a property change that recorded no
-    // previous properties — the wire has to tell them apart so review
-    // surfaces never offer a decision the engine would refuse.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="1"><w:r><w:t>Insert</w:t></w:r></w:ins><w:moveFromRangeStart w:id="30" w:name="moved" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2"><w:r><w:delText>From</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="moved" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4"><w:r><w:t>From</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/><w:moveFrom w:id="5"><w:r><w:delText>Stray</w:delText></w:r></w:moveFrom></w:p><w:p><w:pPr><w:pPrChange w:id="6"><w:unknown/></w:pPrChange></w:pPr><w:r><w:t>Keep</w:t></w:r></w:p></w:body></w:document>`,
@@ -636,8 +602,6 @@ describe('tracked change decisions', () => {
     expect(strayMove?.undecidable).toBe('unsupported-move')
     expect(strayMove?.pairId).toBeUndefined()
     expect(property?.undecidable).toBe('missing-property-snapshot')
-    // The flag only ever narrows what a client offers; the engine still
-    // refuses both undecidable shapes.
     for (const target of [strayMove, property]) {
       if (!target) throw new Error('Undecidable change is missing.')
       expect(() =>
@@ -667,10 +631,6 @@ describe('tracked change decisions', () => {
   ] as const)(
     'refuses a move whose container would strand a bookmark mate (%s)',
     async (_label, fromSide) => {
-      // A member-wise decision deletes or carries the whole covered range;
-      // a paired marker whose mate lies outside the container would be left
-      // stranded, so the whole named group stays undecidable — including
-      // its clean destination half.
       const document = await parseDocx(
         await replaceDocumentXml(
           `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="moveB" w:author="A" w:date="2026-08-10T10:00:00Z"/>${fromSide}<w:moveToRangeStart w:id="31" w:name="moveB" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
@@ -711,8 +671,6 @@ describe('tracked change decisions', () => {
   )
 
   it('still decides a move whose wrapped range markers are complete pairs', async () => {
-    // A bookmark and a comment range fully inside the member wrappers are
-    // carried or removed with them — no mate can strand.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="moveC" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:bookmarkStart w:id="7" w:name="kept"/><w:r><w:delText>one</w:delText></w:r><w:bookmarkEnd w:id="7"/></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="moveC" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
@@ -742,8 +700,6 @@ describe('tracked change decisions', () => {
   })
 
   it('decides a move whose wrapped marker has no mate to strand', async () => {
-    // An unmatched start marker has no end to orphan, so removing it with
-    // the covered range strands nothing.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="moveD" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:bookmarkStart w:id="7" w:name="lone"/><w:r><w:delText>one</w:delText></w:r></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="moveD" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
@@ -760,9 +716,6 @@ describe('tracked change decisions', () => {
   })
 
   it('refuses a move container nested inside a member wrapper', async () => {
-    // The inner markers name a different group, but deciding the outer
-    // member would still rewrite the range they sit in — deciding another
-    // group's members unnamed. The whole outer group stays undecidable.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFromRangeStart w:id="30" w:name="outer" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFrom w:id="2" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:delText>one</w:delText></w:r><w:moveFromRangeStart w:id="32" w:name="inner" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveFromRangeEnd w:id="32"/></w:moveFrom><w:moveFromRangeEnd w:id="30"/><w:moveToRangeStart w:id="31" w:name="outer" w:author="A" w:date="2026-08-10T10:00:00Z"/><w:moveTo w:id="4" w:author="A" w:date="2026-08-10T10:00:00Z"><w:r><w:t>one</w:t></w:r></w:moveTo><w:moveToRangeEnd w:id="31"/></w:p></w:body></w:document>`,
@@ -811,10 +764,6 @@ describe('tracked change decisions', () => {
   ] as const)(
     'refuses a legacy w:id move that would strand a %s mate',
     async (_label, startTag, endTag) => {
-      // A wrapper outside any container pairs by shared w:id, but the same
-      // straddle rule applies to its own range: covering one half of a paired
-      // marker while the mate survives outside would strand it, so the whole
-      // id:-keyed pair stays undecidable — including the clean other half.
       for (const wrapper of [
         `<w:moveFrom w:id="9">${startTag}<w:r><w:delText>m</w:delText></w:r></w:moveFrom>${endTag}`,
         `${startTag}<w:moveFrom w:id="9"><w:r><w:delText>m</w:delText></w:r>${endTag}</w:moveFrom>`,
@@ -877,9 +826,6 @@ describe('tracked change decisions', () => {
   ] as const)(
     'refuses a legacy move tangled with unformed move-range markers (%s)',
     async (_label, fromSide) => {
-      // Markers that never formed a named container still delimit a region:
-      // a wrapper sitting inside them, or carrying one, decided by shared
-      // w:id would orphan marker markup the decision leaves behind.
       const document = await parseDocx(
         await replaceDocumentXml(
           `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p>${fromSide}<w:moveTo w:id="9"><w:r><w:t>m</w:t></w:r></w:moveTo></w:p></w:body></w:document>`,
@@ -917,8 +863,6 @@ describe('tracked change decisions', () => {
   )
 
   it('still decides a legacy w:id pair that wraps a complete marker pair', async () => {
-    // A marker pair wholly inside the wrapper goes with the covered range, so
-    // the tolerated shared-w:id fallback still applies to clean markup.
     const document = await parseDocx(
       await replaceDocumentXml(
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:moveFrom w:id="9"><w:bookmarkStart w:id="7" w:name="carried"/><w:r><w:delText>m</w:delText></w:r><w:bookmarkEnd w:id="7"/></w:moveFrom><w:moveTo w:id="9"><w:r><w:t>m</w:t></w:r></w:moveTo><w:r><w:t>Keep</w:t></w:r></w:p></w:body></w:document>`,
@@ -941,15 +885,12 @@ describe('tracked change decisions', () => {
     )
     expect(xml).not.toContain('moveFrom')
     expect(xml).not.toContain('moveTo')
-    // The wrapped bookmark went with the decided range rather than stranding.
     expect(xml).not.toContain('w:name="carried"')
     expect(xml).toContain('<w:t>m</w:t>')
     expect(xml).toContain('<w:t>Keep</w:t>')
   })
 
   it('fails closed for an orphan move and leaves every part clean', async () => {
-    // Distinct w:ids and no w:name is an unpaired move — deciding it, alone
-    // or inside a bulk request, is refused rather than resolved half-way.
     const document = await parseDocx(
       await replaceDocumentXml(
         '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:ins w:id="1"><w:r><w:t>Inserted</w:t></w:r></w:ins><w:moveFrom w:id="2"><w:r><w:delText>Orphan from</w:delText></w:r></w:moveFrom><w:r><w:t>Keeps</w:t></w:r></w:p></w:body></w:document>',

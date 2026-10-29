@@ -45,8 +45,6 @@ describe('run and paragraph property families', () => {
     const run = mainParagraphs(document)[1]?.runs[0]
     if (!run) throw new Error('Fixture run is missing.')
 
-    // Write the whole family first, then release it, so the removed elements
-    // are ones the writer had just produced rather than absent by accident.
     applyDocumentEdits(document, [
       documentEditOperationSchema.parse({
         type: 'set_run_emphasis',

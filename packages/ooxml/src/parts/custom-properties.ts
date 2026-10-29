@@ -21,11 +21,6 @@ export const CUSTOM_PROPERTIES_NAMESPACE =
 export const DOC_PROPS_VT_NAMESPACE =
   'http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes'
 
-/**
- * The property names the markings round-trip through. They are namespaced to
- * the product so foreign custom properties — which a legal document may
- * carry from its DMS — survive a markings write untouched.
- */
 const MARKING_KIND_PROPERTY = 'obiter.documentKind'
 const MARKING_FLAG_PROPERTIES = {
   draft: 'obiter.draft',
@@ -38,12 +33,6 @@ const MARKING_PROPERTY_NAMES = new Set([
   ...Object.values(MARKING_FLAG_PROPERTIES),
 ])
 
-/**
- * The markings allow-list the share-safe export retains. Every other
- * property — including unknown `obiter.*` names a newer build may have
- * written — is dropped from the copy: a name this build does not own cannot
- * be proven safe, and keeping it verbatim would smuggle arbitrary payload.
- */
 export const MARKING_PROPERTY_TYPES = {
   [MARKING_KIND_PROPERTY]: 'string',
   [MARKING_FLAG_PROPERTIES.draft]: 'bool',
@@ -51,7 +40,6 @@ export const MARKING_PROPERTY_TYPES = {
   [MARKING_FLAG_PROPERTIES.withoutPrejudice]: 'bool',
 } as const
 
-/** The marking property names and value tags, shared with the write path. */
 export const MARKING_PROPERTIES = {
   kind: MARKING_KIND_PROPERTY,
   flags: MARKING_FLAG_PROPERTIES,
@@ -69,12 +57,6 @@ export function markingsWriteError(): OoxmlError {
   return new OoxmlError('invalid-document-edit')
 }
 
-/**
- * The shared comments-package helpers report every structural failure as
- * `comment-export-failed`. In this part that code would mislabel a markings
- * problem, so the calls run inside the narrowest conversion the error type
- * allows.
- */
 export function guardMarkingsRoot<T>(
   make: () => T,
   error: () => OoxmlError,
@@ -98,11 +80,6 @@ export function decodeCustomPropertiesPart(
   }
 }
 
-/**
- * The custom-properties part a package declares through `_rels/.rels`. Two
- * declarations, or one pointing at a missing or non-XML part, are ambiguous —
- * reading them would pick a winner arbitrarily, so they fail closed.
- */
 export function customPropertiesPart(
   relationships: readonly DocumentRelationshipWire[],
   sourceParts: ReadonlyMap<string, SourcePart>,
@@ -152,10 +129,6 @@ export function storedCustomProperties(
   return { root, elements, properties }
 }
 
-/**
- * The first `vt:*` child carries a custom property's value. A property with
- * no typed value, or several, is malformed.
- */
 function propertyValueChild(
   elements: readonly XmlElement[],
   property: XmlElement,
@@ -169,16 +142,6 @@ function propertyValueChild(
   return children[0]
 }
 
-/**
- * Reads the product markings the custom properties part carries. A package
- * without the part — or one that declares it at a nonstandard target — reads
- * as unmarked; foreign properties never contribute to markings. A part that
- * exists but cannot be read honestly — malformed XML, a duplicated or
- * mistyped product property, competing declarations — degrades to
- * `unreadable` rather than breaking the open path: opening a document must
- * not fail on markings state the user never wrote. Writes still fail closed
- * on the same input.
- */
 export function readDocumentMarkings(source: {
   model: Pick<OoxmlDocument['model'], 'relationships'>
   sourceParts: ReadonlyMap<string, SourcePart>
@@ -195,12 +158,6 @@ export function readDocumentMarkings(source: {
   }
   if (!part) return { ...EMPTY_DOCUMENT_MARKINGS }
 
-  // One parse: property elements are matched to their vt: children by
-  // identity, so a second parse would never match. The read walks the
-  // property elements directly rather than through `storedCustomProperties` —
-  // that helper insists every property be named, while a nameless *foreign*
-  // property is not a marking this build wrote and must not flip the
-  // unreadable flag.
   let xml: string
   let elements: XmlElement[]
   let root: XmlElement
@@ -243,8 +200,6 @@ export function readDocumentMarkings(source: {
       ) {
         return unreadable
       }
-      // An empty kind is not a kind: it reads as unset rather than failing
-      // the wire's min(1).
       const kind = text.trim()
       markings.documentKind = kind === '' ? null : kind
       continue
