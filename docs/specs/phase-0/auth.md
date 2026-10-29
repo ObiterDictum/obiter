@@ -65,8 +65,8 @@ Rules:
 
 ## Password Reset
 
-Better Auth issues single-use password-reset tokens with its default one-hour
-expiry. A reset request does not reveal whether the email address exists. The
+Better Auth consumes a password-reset token after a successful reset and uses
+its default one-hour expiry. A reset request does not reveal whether the email address exists. The
 email links directly to the web reset screen at the configured web origin; the
 token is validated when the new password is submitted. An invalid or expired
 token must leave the user able to request another link.
