@@ -528,6 +528,19 @@ describe('compareDocumentModels', () => {
     ])
   })
 
+  it('pairs the highest-overlap paragraph before lower-scoring candidates', () => {
+    const base = [paragraph('p1', 'one two three four five')]
+    const target = [
+      paragraph('q1', 'one two three six seven'),
+      paragraph('q2', 'one two three four eight'),
+    ]
+
+    const pairs = alignParagraphs(base, target)
+    expect(
+      pairs.find(({ base: before }) => before?.id === 'p1')?.target?.id,
+    ).toBe('q2')
+  })
+
   it('reports story structure and package area changes', () => {
     const base = model([paragraph('p1', 'Text.', { sourceParaId: 'aa01' })], {
       styles: [{ styleId: 'Normal', sourceFragment: '<w:style a/>' }],
