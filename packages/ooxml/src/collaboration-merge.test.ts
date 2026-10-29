@@ -632,6 +632,27 @@ describe('bounded collaboration reconciliation', () => {
     ).toEqual(['Alpha revised', 'Beta'])
   })
 
+  it('merges a section-properties edit whatever changed in the paragraphs', async () => {
+    const base = await parseDocx(source)
+    const [first] = firstTwoRuns(base)
+    const current = await editedSource([
+      {
+        type: 'replace_run_text',
+        runId: first.id,
+        text: 'Collaborator revision',
+      },
+    ])
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [{ type: 'set_section_properties', orientation: 'landscape' }],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+  })
+
   it('refuses an operation whose address the alignment does not name', () => {
     expect(() =>
       remapMergeOperations(

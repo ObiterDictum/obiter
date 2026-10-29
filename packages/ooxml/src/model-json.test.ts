@@ -65,6 +65,29 @@ describe('document model JSON', () => {
     expect(parseModelJson(JSON.stringify(legacy)).changes).toEqual([])
   })
 
+  it('rejects a stored run whose revision text lost its segments', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const stored = JSON.parse(serialiseModelJson(document))
+    const run = stored.stories
+      .flatMap((story: { paragraphs: { runs: unknown[] }[] }) =>
+        story.paragraphs.flatMap((paragraph) => paragraph.runs),
+      )
+      .find(
+        (candidate: Record<string, unknown>) =>
+          candidate.textRevisionEligible !== undefined,
+      ) as Record<string, unknown> | undefined
+    if (!run) throw new Error('Fixture run is missing.')
+    run.textRevisionEligible = false
+    Reflect.deleteProperty(run, 'textRevisionTokens')
+    Reflect.deleteProperty(run, 'textRevisionTextRanges')
+
+    expect(() => parseModelJson(JSON.stringify(stored))).toThrowError(
+      expect.objectContaining({ code: 'invalid-model-json' }),
+    )
+  })
+
   it('rejects unknown model fields during serialisation', async () => {
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),

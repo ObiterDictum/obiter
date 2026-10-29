@@ -218,6 +218,30 @@ describe('hyperlink edits', () => {
     ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
   })
 
+  it('refuses a second overlapping wrap in the same batch', async () => {
+    const document = await parseFixture()
+    const anchor = mainParagraphs(document)[0]
+    if (!anchor) throw new Error('Fixture model is missing.')
+    expect(() =>
+      applyDocumentEdits(document, [
+        {
+          type: 'set_hyperlink',
+          paragraphId: anchor.id,
+          from: 0,
+          to: 6,
+          target: 'https://example.co.uk/first',
+        },
+        {
+          type: 'set_hyperlink',
+          paragraphId: anchor.id,
+          from: 3,
+          to: 9,
+          target: 'https://example.co.uk/second',
+        },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+  })
+
   it('refuses a removal where no hyperlink covers the range', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document)[0]
