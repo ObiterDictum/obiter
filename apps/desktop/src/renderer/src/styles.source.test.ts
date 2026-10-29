@@ -3,11 +3,6 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'bun:test'
 
-/**
- * Guards the Tailwind v4 @source directives in styles.css.
- * Wrong relative depth (e.g. four `../` instead of five) silently resolves
- * outside the monorepo packages and starves the desktop renderer of utilities.
- */
 const stylesPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   './styles.css',

@@ -1,17 +1,3 @@
-/*
- * Preflight for the editor-interaction runner.
- *
- * A missing or unusable fixture id used to surface as `/matters/undefined/...`
- * and then as a 180 s selector timeout: three minutes spent proving nothing,
- * with the failure reading like a slow document rather than a broken fixture.
- * The ids the selected modes read are therefore resolved and shape-checked
- * before a browser is launched, and the matter and documents are then confirmed
- * against the API through the session the run signed in with. That is the same
- * authorisation boundary the editor itself goes through — a fixture that the
- * signed-in user cannot read is a refused target, not a fast one.
- */
-
-/** The fixture keys each mode reads. `save` writes to a separate document. */
 const MODE_KEYS = {
   typing: ['documentId'],
   scroll: ['documentId'],
@@ -35,11 +21,6 @@ function requiredId(fixtures, key) {
   return value
 }
 
-/**
- * Resolve the ids the selected modes need, naming the missing key before any
- * browser or target work starts. Only the keys the selected modes read are
- * required, so a typo in an unused key cannot block a run.
- */
 export function resolveProbeTargets(fixtures, modes) {
   const matterId = requiredId(fixtures, 'matterId')
   const documents = []
@@ -53,11 +34,6 @@ export function resolveProbeTargets(fixtures, modes) {
   return { matterId, documents }
 }
 
-/**
- * Confirm the fixture matter and documents resolve for the signed-in session.
- * The API answers 404 for both "does not exist" and "not yours", so the message
- * says both rather than guessing which it was.
- */
 export async function assertTargetsReachable({
   get,
   apiUrl,

@@ -1,7 +1,3 @@
-/*
- * Tests for the journey outcome rules the load runner gates samples on. A
- * wrong landing must fail the journey, and a declared redirect must not.
- */
 import { expect, test } from 'bun:test'
 import {
   clientNavProblem,
@@ -27,8 +23,6 @@ test('requiredFixtureKeys lists the placeholders a path needs', () => {
 })
 
 test('a client-navigation sample refuses a journey it would mislabel', () => {
-  // Without an originating route the runner falls back to page.goto, which is a
-  // hard navigation reported under the client-navigation label.
   expect(clientNavProblem(home, 'client')).toMatch(/clientNavFrom/)
   expect(
     clientNavProblem({ path: '/x', clientNavFrom: '/y' }, 'client'),
@@ -39,7 +33,6 @@ test('a client-navigation sample refuses a journey it would mislabel', () => {
       'client',
     ),
   ).toBeNull()
-  // A hard-navigation run is unaffected.
   expect(clientNavProblem(home, 'hard')).toBeNull()
 })
 

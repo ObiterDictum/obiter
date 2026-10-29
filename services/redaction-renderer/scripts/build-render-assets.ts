@@ -4,12 +4,6 @@ import { fileURLToPath } from 'node:url'
 import { compile } from '@tailwindcss/node'
 import { Scanner } from '@tailwindcss/oxide'
 
-/**
- * Builds the two browser assets the worker injects into Chromium. Both derive
- * from app-shell source: the bundle reuses its pagination and page components,
- * and the stylesheet is the Tailwind the page components are written against.
- * Tailwind is a build-time dependency only; the running worker reads `dist/`.
- */
 const here = dirname(fileURLToPath(import.meta.url))
 const packageRoot = resolve(here, '..')
 const repoRoot = resolve(packageRoot, '..', '..')

@@ -2,8 +2,6 @@ import { loadRendererAssets } from './assets'
 import { createDocxRenderer, type DocxRenderer } from './renderer'
 import { createRendererServer, type RendererLogEvent } from './server'
 
-// Private by default: a deployment that needs to reach the worker from another
-// container sets the host explicitly, and nothing else can guess the port.
 const host = process.env.REDACTION_RENDERER_HOST ?? '127.0.0.1'
 const port = Number(process.env.REDACTION_RENDERER_PORT ?? '8790')
 
@@ -29,7 +27,6 @@ async function start(): Promise<void> {
     renderer = await createDocxRenderer({ assets })
     console.log('renderer ready')
   } catch {
-    // No document content, filename or stack: the code alone names the state.
     console.error('renderer failed to become ready; /ready stays 503')
   }
 }

@@ -41,18 +41,8 @@ import { DesktopSearchPage } from '../../pages/search'
 import { Suspense, lazy } from 'react'
 import { VerifyRouteView } from '@obiter/app-shell'
 
-/**
- * Redact is a whole module with its own review desk, PDF preview and output
- * screens. Loading it lazily keeps it out of the renderer's initial bundle:
- * the desktop app boots on the dashboard, and a redaction screen is one chunk
- * fetched on the first visit to /redact.
- */
 import { RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
 
-// The review desk pulls the span panel, the decision bar, the output screens
-// and the PDF preview. It is a chunk of its own, fetched on the first visit to
-// /redact/:runId; the runs list and the document page's runs region stay in the
-// entry because the document page renders them.
 const RedactionReviewView = lazy(async () => ({
   default: (await import('@obiter/redact-ui/review')).RedactionReviewView,
 }))
@@ -68,10 +58,6 @@ function RedactLoading() {
   )
 }
 
-/**
- * Shared-view paths the web app exposes that desktop must also register.
- * Kept here so router.parity.test.ts can catch route drift permanently.
- */
 export const DESKTOP_SHARED_VIEW_PATHS = [
   '/',
   '/workspace',
@@ -186,9 +172,6 @@ const documentDetailRoute = createRoute({
   component: DesktopDocumentDetailRoute,
 })
 
-// Sibling routes (not parent→child): match web's /redact/ + /redact/$runId so
-// navigating to a run replaces the runs list instead of nesting under it
-// without an Outlet (which made Review appear to do nothing).
 const redactRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'redact',
@@ -247,7 +230,6 @@ const casesRoute = createRoute({
 })
 
 function DesktopCasesRedirectRoute() {
-  // Loader always redirects; component is a typed-route placeholder.
   return null
 }
 

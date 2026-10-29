@@ -5,14 +5,8 @@ import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import { DesktopAuthTokenStore } from './auth-token-store'
 
-// The real fs namespace, snapshotted before mock.module patches it in place:
-// cleanup must always delete real temp files even while a test has the module
-// mocked, and the mock factory below spreads this as its untouched base.
 const realFs = { ...(await import('node:fs/promises')) }
 
-// bun:test cannot unregister a mock or reset the module registry: afterEach
-// re-registers the real fs (the latest mock.module registration wins), and
-// each generation bump makes the next dynamic import re-evaluate the store.
 let moduleGen = 0
 
 const directories: string[] = []
@@ -24,8 +18,6 @@ async function tokenPath() {
 }
 
 afterEach(async () => {
-  // Re-register the real node:fs/promises and advance the generation so the
-  // next test imports a freshly evaluated store against real fs.
   mock.module('node:fs/promises', () => ({ ...realFs }))
   moduleGen++
   await Promise.all(
@@ -127,9 +119,6 @@ describe('DesktopAuthTokenStore', () => {
     const store = new DesktopAuthTokenStore(path, encryptionStorage)
     await store.set('token_123')
 
-    // Point a second store at the same file but with an rm that fails with a
-    // non-ENOENT error (force:true does not swallow these), simulating a
-    // locked/permission-denied token file at clear time.
     const failingFs = await mockFs((name) =>
       name === 'rm'
         ? vi.fn(async () => {
@@ -140,7 +129,6 @@ describe('DesktopAuthTokenStore', () => {
         : undefined,
     )
     const failingStore = new failingFs.Store(path, encryptionStorage)
-    // memoryToken was established by set; clear must not null it when rm fails.
     await expect(failingStore.clear()).rejects.toMatchObject({ code: 'EBUSY' })
     expect(await failingStore.get()).toBe('token_123')
   })
@@ -150,7 +138,6 @@ describe('DesktopAuthTokenStore', () => {
     const warn = vi.fn()
     const encryptionStorage = {
       isEncryptionAvailable: () => true,
-      // encryptString throws to trigger a write failure inside set().
       encryptString: () => {
         throw new Error('encrypt failed')
       },
@@ -160,9 +147,7 @@ describe('DesktopAuthTokenStore', () => {
     const store = new DesktopAuthTokenStore(path, encryptionStorage, warn)
 
     await expect(store.set('token_123')).rejects.toThrow('encrypt failed')
-    // Memory was not updated after the failed persist.
     expect(await store.get()).toBeNull()
-    // No .tmp file leaked.
     const { readdir } = await import('node:fs/promises')
     const dir = path.split(/[/\\]/).slice(0, -1).join('/')
     const entries = await readdir(dir)
@@ -186,9 +171,6 @@ describe('DesktopAuthTokenStore', () => {
           })
         : undefined,
     )
-    // A fresh store has memoryToken null; the fix is that get() does not reject
-    // when rm fails in the encryption-unavailable branch — it warns and returns
-    // memory (null here), where the pre-fix code rejected with EACCES.
     const store = new failingFs.Store(path, encryptionStorage, warn)
 
     await expect(store.get()).resolves.toBeNull()
@@ -198,11 +180,6 @@ describe('DesktopAuthTokenStore', () => {
   })
 })
 
-/**
- * Load a fresh module graph where node:fs/promises is partially mocked: the
- * factory returns undefined for untouched exports (the real impl) and a vi.fn
- * override for the named ones. Returns the store class from that graph.
- */
 async function mockFs(
   override: (name: string) => ((...args: unknown[]) => void) | undefined,
 ) {
