@@ -15,34 +15,22 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
   const normalizedQuery = normalizeExactMatchValue(query)
   if (!normalizedQuery) return hits
 
-  return (
-    hits
-      .map((hit, index) => ({
-        hit,
-        index,
-        matchTier: legalSearchMatchTier(hit, normalizedQuery),
-        courtSeniority: courtSeniorityForRanking(hit.court),
-        engineRankingScore:
-          validEngineRankingScore(hit.engineRankingScore) ?? 0,
-      }))
-      // Legal match tiers express user intent. Within a tier the higher
-      // court goes first: for an ambiguous party name the apex-court
-      // decision is usually the wanted one, and a bare surname otherwise
-      // drowns it under dozens of same-tier lower-court title matches.
-      // Engine scores break remaining ties, then ties preserve the
-      // caller's or engine's supplied order. An
-      // equal engine score is not equal engine relevance: it is one lossy number
-      // summarising the words, typo, proximity, attribute, exactness and sort
-      // cascade, so the supplied order still carries signal the score has lost.
-      .sort(
-        (left, right) =>
-          right.matchTier - left.matchTier ||
-          right.courtSeniority - left.courtSeniority ||
-          right.engineRankingScore - left.engineRankingScore ||
-          left.index - right.index,
-      )
-      .map(({ hit }) => hit)
-  )
+  return hits
+    .map((hit, index) => ({
+      hit,
+      index,
+      matchTier: legalSearchMatchTier(hit, normalizedQuery),
+      courtSeniority: courtSeniorityForRanking(hit.court),
+      engineRankingScore: validEngineRankingScore(hit.engineRankingScore) ?? 0,
+    }))
+    .sort(
+      (left, right) =>
+        right.matchTier - left.matchTier ||
+        right.courtSeniority - left.courtSeniority ||
+        right.engineRankingScore - left.engineRankingScore ||
+        left.index - right.index,
+    )
+    .map(({ hit }) => hit)
 }
 
 function courtSeniorityForRanking(court: string | null | undefined) {

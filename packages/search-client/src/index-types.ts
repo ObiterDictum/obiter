@@ -20,10 +20,6 @@ export type LegalSearchMatchReason =
   | 'exact_document_id'
   | 'exact_neutral_citation'
   | 'title_match'
-  // One distinctive query term in the title (rank tier 4). Labelled apart
-  // from 'title_match' so a card never claims a full title match on
-  // single-term evidence; see getLegalSearchMatchReason in the API's
-  // response-utils for the wording rationale.
   | 'partial_title_match'
   | 'body_text_match'
   | 'keyword_match'

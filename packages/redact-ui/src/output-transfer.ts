@@ -20,9 +20,7 @@ export async function shareOrDownload(blob: Blob, filename: string) {
       await navigator.share({ files: [file], title: filename })
       return
     }
-  } catch {
-    // User cancelled share or share failed — fall through to download.
-  }
+  } catch {}
   downloadBlob(blob, filename)
 }
 

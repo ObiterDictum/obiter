@@ -158,27 +158,19 @@ export function decodeXml(value: string) {
 }
 
 export function decodeHtml(value: string) {
-  return (
-    value
-      // Numeric character references, decimal and hexadecimal. Judgment text is
-      // full of them — curly quotes, dashes, section marks — and leaving them
-      // encoded puts `&#8220;` into the indexed text where a quotation mark
-      // belongs, so a phrase query spanning a quote cannot match.
-      .replace(/&#(\d+);/g, (match, code: string) =>
-        codePointToString(Number(code), match),
-      )
-      .replace(/&#[xX]([0-9a-fA-F]+);/g, (match, code: string) =>
-        codePointToString(Number.parseInt(code, 16), match),
-      )
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&nbsp;/g, ' ')
-      // Last, so that an encoded entity such as `&amp;#8220;` decodes to the
-      // literal text `&#8220;` rather than being decoded twice into a quote.
-      .replace(/&amp;/g, '&')
-  )
+  return value
+    .replace(/&#(\d+);/g, (match, code: string) =>
+      codePointToString(Number(code), match),
+    )
+    .replace(/&#[xX]([0-9a-fA-F]+);/g, (match, code: string) =>
+      codePointToString(Number.parseInt(code, 16), match),
+    )
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
 }
 
 function codePointToString(codePoint: number, fallback: string) {

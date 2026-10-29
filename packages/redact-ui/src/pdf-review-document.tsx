@@ -180,9 +180,7 @@ function PdfPage({
           renderTask.cancel()
           try {
             await renderTask.promise
-          } catch {
-            // Cancelled render rejects; canvas is free once settled.
-          }
+          } catch {}
           renderTask = null
         }
 

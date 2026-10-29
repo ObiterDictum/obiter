@@ -56,8 +56,6 @@ export function PdfDocumentPreview({
       loadedDocument.current = null
       if (document) void document.destroy()
     }
-    // The preview is keyed to one immutable output Blob; a new Blob means a
-    // different output and must reload.
   }, [file])
 
   if (error) {
@@ -164,15 +162,12 @@ function PdfPreviewPage({
       try {
         await task.promise
         if (pageNumber === 1) onFirstPageRendered()
-      } catch {
-        // Cancelled or superseded render.
-      }
+      } catch {}
     })
     return () => {
       cancelled = true
       renderTask?.cancel()
     }
-    // The render callback depends on canvas identity, document and page only.
   }, [canvas, pdf, pageNumber, visible])
 
   return (
