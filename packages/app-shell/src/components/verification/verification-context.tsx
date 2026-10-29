@@ -84,7 +84,6 @@ export type VerificationWorkspaceValue = {
   step: (delta: 1 | -1) => void
   dirty: boolean
   ready: boolean
-  checkedVersionId: string | null
   /** The stored version number a result is about, to name it in words. */
   checkedVersionNumber: number | undefined
   /** The version a run would check now. Undefined while the document loads. */
@@ -322,7 +321,6 @@ export function VerificationWorkspaceProvider({
     dirty,
     ready,
     totalFindings,
-    checkedVersionId,
     checkedVersionNumber: checkedVersionId
       ? versionNumbers.get(checkedVersionId)
       : undefined,

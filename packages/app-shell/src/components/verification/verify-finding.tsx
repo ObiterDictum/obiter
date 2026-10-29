@@ -10,10 +10,11 @@ import type {
   VerificationEvidenceView,
   VerificationFindingView,
 } from '@obiter/contracts'
-import { Button, StatusDot } from '@obiter/ui'
+import { Button, cn, StatusDot } from '@obiter/ui'
 import { caseResultLocation } from '../../case-navigation'
 import { sourceNameForUrl } from '../search/provenance'
 import {
+  verificationAuthority,
   verificationDismissalRecord,
   verificationStateLabel,
   verificationStateTone,
@@ -93,6 +94,7 @@ export function VerifyFinding({
   currentUserId,
   checkedLabel,
   onDismiss,
+  onUndismiss,
   onOpen,
 }: {
   finding: VerificationFindingView
@@ -100,6 +102,8 @@ export function VerifyFinding({
   /** When and against which version the check ran. */
   checkedLabel: string
   onDismiss: () => void
+  /** Put a dismissed finding back in the queue. */
+  onUndismiss?: () => void
   /** Open the finding beside its text, where the document can show it. */
   onOpen?: () => void
 }) {
@@ -107,19 +111,34 @@ export function VerifyFinding({
   const story = verificationStoryLabel(finding.location.storyKind)
   const uncertainty = verificationUncertainty(finding)
   const dismissal = finding.dismissal
+  // A dismissed finding is settled work: it keeps the outcome the check
+  // recorded, and it stops competing for attention with what is still open.
+  const settled = dismissal != null
   return (
-    <article className="flex gap-3 border-t border-line px-6 py-5 first:border-t-0">
+    <article
+      className={cn(
+        'flex gap-3 border-t border-line px-6 py-5 first:border-t-0',
+        settled && 'bg-fill/40',
+      )}
+    >
       <span
         aria-hidden="true"
-        className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-fill ${markClass[finding.state]}`}
+        className={cn(
+          'mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-fill',
+          settled ? 'text-subtle' : markClass[finding.state],
+        )}
       >
         <Icon size={14} weight="fill" />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <StatusDot tone={verificationStateTone(finding.state)}>
-            {verificationStateLabel(finding)}
-          </StatusDot>
+          {settled ? (
+            <StatusDot tone="neutral">Dismissed</StatusDot>
+          ) : (
+            <StatusDot tone={verificationStateTone(finding.state)}>
+              {verificationStateLabel(finding)}
+            </StatusDot>
+          )}
           <span className="text-caption text-subtle">
             {verificationTypeLabel(finding.type)}
             {story ? ` · ${story}` : ''}
@@ -129,20 +148,25 @@ export function VerifyFinding({
           </span>
         </div>
 
-        <p className="rounded-md bg-fill px-3 py-2 text-body wrap-anywhere text-ink">
+        <p
+          className={cn(
+            'rounded-md bg-fill px-3 py-2 text-body wrap-anywhere',
+            settled ? 'text-muted' : 'text-ink',
+          )}
+        >
           {finding.type === 'quote_fidelity'
             ? `“${finding.excerpt}”`
             : finding.excerpt}
         </p>
 
         <p className="text-meta text-muted">
-          <span className="text-ink">
+          <span className={settled ? 'text-muted' : 'text-ink'}>
             {finding.type === 'quote_fidelity'
               ? 'Attributed to'
               : 'Cited authority'}
             :
           </span>{' '}
-          {finding.authorityLabel}
+          {verificationAuthority(finding)}
         </p>
 
         <div className="flex flex-col gap-1">
@@ -162,7 +186,7 @@ export function VerifyFinding({
         ) : null}
 
         {dismissal ? (
-          <div className="flex items-start gap-2 rounded-md bg-fill px-3 py-2 text-caption">
+          <div className="flex items-start gap-2 rounded-md bg-surface px-3 py-2 text-caption">
             <Info
               size={14}
               aria-hidden="true"
@@ -189,7 +213,7 @@ export function VerifyFinding({
           </p>
         )}
 
-        {onOpen || (!dismissal && finding.state !== 'clear') ? (
+        {onOpen || !dismissal || onUndismiss ? (
           <div className="flex flex-wrap items-center gap-2">
             {onOpen ? (
               <Button variant="secondary" size="sm" onClick={onOpen}>
@@ -199,6 +223,11 @@ export function VerifyFinding({
             {!dismissal && finding.state !== 'clear' ? (
               <Button variant="ghost" size="sm" onClick={onDismiss}>
                 Dismiss finding
+              </Button>
+            ) : null}
+            {dismissal && onUndismiss ? (
+              <Button variant="ghost" size="sm" onClick={onUndismiss}>
+                Reopen finding
               </Button>
             ) : null}
           </div>

@@ -4,7 +4,11 @@ import type {
   SpanDecision,
   SpanSource,
 } from '@obiter/contracts'
-import type { RedactionSpan, Decisions } from '@obiter/redaction-policy'
+import type {
+  Decisions,
+  DecisionRecord,
+  RedactionSpan,
+} from '@obiter/redaction-policy'
 
 /**
  * What a reviewer is told about one detected span. Kept in one place so the
@@ -150,32 +154,31 @@ export function formatDateTime(value: string) {
 }
 
 /**
- * The decisions table stores the deciding user's id, not their name, and the
- * run payload carries no directory to resolve it against. Naming the deciding
- * user we can identify and falling back to "another reviewer" is the honest
- * option until the API returns a display name; showing the raw id would leak an
+ * The decision stores the deciding user's id and the API resolves the member
+ * name beside it. A name that does not resolve (the account is no longer a
+ * member) falls back to "another reviewer": showing the raw id would leak an
  * internal identifier, and inventing a name would falsify an audit record.
  */
-function reviewerName(decidedBy: string, currentUserId: string | undefined) {
-  return currentUserId && decidedBy === currentUserId
-    ? 'you'
-    : 'another reviewer'
+function reviewerName(
+  record: DecisionRecord,
+  currentUserId: string | undefined,
+) {
+  if (currentUserId && record.decidedBy === currentUserId) return 'you'
+  return record.decidedByName ?? 'another reviewer'
 }
 
-/** "Redacted by you · 26 Oct 2026, 14:42", for one stored decision. */
+/** "Redacted by Priya Shah · 26 Oct 2026, 14:42", for one stored decision. */
 export function decisionRecord(
-  decision: SpanDecision,
-  decidedBy: string,
-  decidedAt: string,
+  record: DecisionRecord,
   currentUserId: string | undefined,
 ) {
   const verb =
-    decision === 'accept' || decision === 'override_redact'
+    record.decision === 'accept' || record.decision === 'override_redact'
       ? 'Redacted'
-      : decision === 'pseudonymise'
+      : record.decision === 'pseudonymise'
         ? 'Pseudonymised'
         : 'Kept visible'
-  return `${verb} by ${reviewerName(decidedBy, currentUserId)} · ${formatDateTime(decidedAt)}`
+  return `${verb} by ${reviewerName(record, currentUserId)} · ${formatDateTime(record.decidedAt)}`
 }
 
 /** Counts per decision state, used by the filter tabs and the finalise gate. */

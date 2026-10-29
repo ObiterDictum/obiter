@@ -10,7 +10,12 @@ import { ensureOrgUser } from '../authz'
 import { readLimitedJsonBody } from '../limited-request-body'
 import { DEFAULT_JSON_BODY_MAX_BYTES } from '../request-limit-defaults'
 import type { StorageService } from '../storage'
-import { dismissVerificationFinding } from '../verification-dismissals'
+import {
+  dismissVerificationFinding,
+  undismissVerificationFinding,
+} from '../verification-dismissals'
+import { appendAuditLog } from '../database'
+import { reviewerNames } from '../reviewer-names'
 import {
   getVerificationRun,
   listVerificationFindings,
@@ -229,14 +234,28 @@ export function createVerificationRunRoutes(
     // finding. Sources live in the corpus store, which is a different database
     // from the organisation's matters.
     const sources = await loadFindingSources(corpusPool, page.findings)
+    // Who dismissed a finding is named by their member name, not by their id:
+    // the page is already scoped to this organisation's run, so the name stays
+    // inside the tenant and no address is ever served.
+    const names = await reviewerNames(
+      pool,
+      user.organisationId,
+      [...page.dismissals.values()].map((dismissal) => dismissal.dismissedBy),
+    )
     return c.json({
       run,
-      findings: page.findings.map((finding) =>
-        toPublicFinding(finding, {
-          dismissal: page.dismissals.get(finding.id) ?? null,
+      findings: page.findings.map((finding) => {
+        const dismissal = page.dismissals.get(finding.id)
+        return toPublicFinding(finding, {
+          dismissal: dismissal
+            ? {
+                ...dismissal,
+                dismissedByName: names.get(dismissal.dismissedBy) ?? null,
+              }
+            : null,
           sources,
-        }),
-      ),
+        })
+      }),
       nextCursor: page.nextCursor,
     })
   })
@@ -277,6 +296,40 @@ export function createVerificationRunRoutes(
         'Verification finding not found.',
         404,
       )
+    },
+  )
+
+  routes.delete(
+    '/api/verification-runs/:runId/findings/:findingId/dismiss',
+    async (c) => {
+      const user = await ensureOrgUser(c, pool)
+      if (user instanceof Response) return user
+      const outcome = await undismissVerificationFinding(pool, user, {
+        runId: c.req.param('runId'),
+        findingId: c.req.param('findingId'),
+      })
+      if (!outcome.ok) {
+        return errorResponse(
+          c,
+          'verification_run_not_found',
+          'Verification run not found.',
+          404,
+        )
+      }
+      // The dismissal row is the whole record of the decision, so the reopening
+      // is audited: nothing else would survive it.
+      if (outcome.removed) {
+        await appendAuditLog(pool, {
+          organisationId: user.organisationId,
+          userId: user.id,
+          entityType: 'verification_run',
+          entityId: c.req.param('runId'),
+          action: 'verification.finding_undismissed',
+          metadata: { findingId: c.req.param('findingId') },
+          requestId: c.get('requestId'),
+        })
+      }
+      return c.body(null, 204)
     },
   )
 

@@ -117,6 +117,26 @@ function authorityLabel(citation: NormalizedCitation) {
   }
 }
 
+/**
+ * The case name the stored judgment carries, looked up through the finding's
+ * own judgment evidence. Nothing is derived from the citation itself: a
+ * citation that names a source the store has no title for yields null and the
+ * UI shows the citation alone.
+ */
+function authorityName(
+  finding: VerificationFinding,
+  sources: Map<string, StoredFindingSource> | undefined,
+) {
+  const references = finding.evidence.filter(
+    (reference) => reference.sourceType === 'judgment',
+  )
+  for (const reference of references) {
+    const stored = sources?.get(findingSourceKey(reference))
+    if (stored?.title) return stored.title
+  }
+  return null
+}
+
 function evidenceLabel(reference: EvidenceReference): string {
   if (reference.granularity === 'document') {
     return reference.sourceType === 'judgment'
@@ -211,6 +231,7 @@ export function toPublicFinding(
       end: finding.citation.location.end,
     },
     authorityLabel: authorityLabel(finding.normalizedCitation),
+    authorityName: authorityName(finding, context.sources),
     evidence: finding.evidence.map((reference): VerificationEvidenceView => ({
       id: createEvidenceReferenceId(reference),
       sourceId: reference.sourceId,
