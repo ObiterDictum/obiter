@@ -52,7 +52,6 @@ describe('GET /api/documents/:id/model storage boundary', () => {
     expect(database.queries.map(queryKind)).toEqual([
       'document-access',
       'versions',
-      'current-version',
     ])
   })
 

@@ -5,6 +5,7 @@ import type {
   MatterRecord,
   MatterStatus,
   DocumentVersionRecord,
+  DocumentVersionRedaction,
   SyncState,
 } from './database-records'
 
@@ -102,7 +103,10 @@ export function mapMatter(row: MatterRow): MatterRecord {
   }
 }
 
-export function mapVersion(row: DocumentVersionRow): DocumentVersionRecord {
+export function mapVersion(
+  row: DocumentVersionRow,
+  redaction: DocumentVersionRedaction | null = null,
+): DocumentVersionRecord {
   return {
     id: row.id,
     organisationId: row.organisation_id,
@@ -122,6 +126,7 @@ export function mapVersion(row: DocumentVersionRow): DocumentVersionRecord {
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),
     lineage: row.lineage,
+    redaction,
   }
 }
 

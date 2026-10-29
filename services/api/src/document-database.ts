@@ -6,11 +6,11 @@ import { lockMatterForEdit } from './matter-lock'
 import type {
   CreateDocumentInput,
   DocumentVersionRecord,
+  DocumentVersionRedaction,
   InsertDocumentVersionInput,
   MatterDocumentRecord,
 } from './database-records'
 import {
-  type Queryable,
   documentColumns,
   firstOrNull,
   mapDocument,
@@ -19,6 +19,55 @@ import {
   type DocumentVersionRow,
   type MatterDocumentRow,
 } from './database-rows'
+
+/**
+ * The run that produced a version, read from the run's own record of the version
+ * it created: return-to-document and save-to-matter both set
+ * `returned_document_version_id`, so provenance needs no column of its own. The
+ * reviewer is the person whose finalise audit row approved the output, and the
+ * run is offered only to a reader who may open it — a standalone run's copy can
+ * be filed into a matter its runner is the only one able to open.
+ */
+function versionRedactionSelect(userParameter: `$${number}`) {
+  return `case when redaction_run.id is null then null else jsonb_build_object(
+    'runId', redaction_run.id,
+    'producedBy', redaction_reviewer.name,
+    'canOpen', redaction_run.matter_id is not null
+      or redaction_run.created_by = ${userParameter}
+  ) end`
+}
+
+const versionRedactionJoins = `
+  left join redaction_runs redaction_run
+    on redaction_run.returned_document_version_id = version.id
+   and redaction_run.organisation_id = version.organisation_id
+   and redaction_run.deleted_at is null
+  left join lateral (
+    select log.user_id
+    from audit_logs log
+    where log.entity_type = 'redaction_run'
+      and log.entity_id = redaction_run.id
+      and log.action = 'redaction.finalize'
+    order by log.created_at desc
+    limit 1
+  ) redaction_finalize on true
+  left join users redaction_reviewer
+    on redaction_reviewer.id = redaction_finalize.user_id
+   and redaction_reviewer."organisationId" = version.organisation_id
+`
+
+function versionRedaction(value: unknown): DocumentVersionRedaction | null {
+  if (typeof value !== 'object' || value === null) return null
+  if (!('runId' in value) || typeof value.runId !== 'string') return null
+  return {
+    runId: value.runId,
+    producedBy:
+      'producedBy' in value && typeof value.producedBy === 'string'
+        ? value.producedBy
+        : null,
+    canOpen: 'canOpen' in value && value.canOpen === true,
+  }
+}
 
 function createDocumentVersionId() {
   return `ver_${crypto.randomUUID()}`
@@ -71,24 +120,6 @@ export async function insertDocumentVersion(
     ],
   )
   return mapVersion(result.rows[0])
-}
-
-async function getDocumentVersion(
-  client: Queryable,
-  organisationId: string,
-  versionId: string,
-): Promise<DocumentVersionRecord | null> {
-  const result = await client.query<DocumentVersionRow>(
-    `
-      select ${versionColumns}
-      from document_versions
-      where id = $1
-        and organisation_id = $2
-    `,
-    [versionId, organisationId],
-  )
-
-  return firstOrNull(result, mapVersion)
 }
 
 export async function createDocument(
@@ -228,15 +259,20 @@ export async function listDocuments(
   options: { includeDeleted?: boolean } = {},
 ): Promise<MatterDocumentRecord[]> {
   const result = await pool.query<
-    MatterDocumentRow & { current_version: DocumentVersionRow | null }
+    MatterDocumentRow & {
+      current_version: DocumentVersionRow | null
+      current_version_redaction: unknown
+    }
   >(
     `
       select
         d.id, d.organisation_id, d.matter_id, d.current_version_id,
         d.logical_key, d.created_by, d.created_at, d.updated_at, d.deleted_at, d.deleted_by,
-        case when v.id is null then null else to_jsonb(v) end as current_version
+        case when version.id is null then null else to_jsonb(version) end as current_version,
+        ${versionRedactionSelect('$4')} as current_version_redaction
       from matter_documents d
-      left join document_versions v on v.id = d.current_version_id
+      left join document_versions version on version.id = d.current_version_id
+      ${versionRedactionJoins}
       join matters matter
         on matter.id = d.matter_id
        and matter.organisation_id = d.organisation_id
@@ -252,7 +288,10 @@ export async function listDocuments(
   return result.rows.map((row) => ({
     ...mapDocument(row),
     currentVersion: row.current_version
-      ? mapVersion(row.current_version)
+      ? mapVersion(
+          row.current_version,
+          versionRedaction(row.current_version_redaction),
+        )
       : null,
   }))
 }
@@ -293,23 +332,26 @@ export async function getDocument(
     return null
   }
 
-  const versionsResult = await pool.query<DocumentVersionRow>(
+  const versionsResult = await pool.query<
+    DocumentVersionRow & { redaction: unknown }
+  >(
     `
-      select ${versionColumns}
-      from document_versions
-      where organisation_id = $1
-        and matter_document_id = $2
-      order by version_number desc
+      select ${versionColumns.replaceAll(/\b([a-z_]+)\b/g, 'version.$1')},
+        ${versionRedactionSelect('$3')} as redaction
+      from document_versions version
+      ${versionRedactionJoins}
+      where version.organisation_id = $1
+        and version.matter_document_id = $2
+      order by version.version_number desc
     `,
-    [user.organisationId, id],
+    [user.organisationId, id, user.id],
   )
-  const versions = versionsResult.rows.map(mapVersion)
+  const versions = versionsResult.rows.map((row) =>
+    mapVersion(row, versionRedaction(row.redaction)),
+  )
   const currentVersion = document.currentVersionId
-    ? await getDocumentVersion(
-        pool,
-        user.organisationId,
-        document.currentVersionId,
-      )
+    ? (versions.find((version) => version.id === document.currentVersionId) ??
+      null)
     : null
 
   return {

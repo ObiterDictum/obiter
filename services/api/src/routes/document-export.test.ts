@@ -188,7 +188,6 @@ describe('GET /api/documents/:id/export response', () => {
     expect(database.queries.map(queryKind)).toEqual([
       'document-access',
       'versions',
-      'current-version',
       'comments',
       'comment-replies',
       'audit',

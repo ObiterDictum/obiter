@@ -2318,12 +2318,13 @@
                 <dd>
                   redaction-detection · redaction-redetect ·
                   redaction-run-creation · redaction-database ·
-                  redaction-audit-report · redaction-renderer ·
-                  redaction-hard-output · redaction-secure-pdf ·
-                  document-extraction · document-layout · comments-db ·
-                  comments-list · comments-create · comments-replies ·
-                  comments-resolution · imported-comment-fingerprint ·
-                  pdf-glyph-layout · redaction-pdf-output · storage · authz
+                  redaction-audit-report · redaction-audit-shareable ·
+                  redaction-renderer · redaction-hard-output ·
+                  redaction-secure-pdf · document-extraction · document-layout ·
+                  comments-db · comments-list · comments-create ·
+                  comments-replies · comments-resolution ·
+                  imported-comment-fingerprint · pdf-glyph-layout ·
+                  redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
@@ -3067,7 +3068,14 @@
                     denied id as provenance — a comment's
                     <code>anchorVersionId</code>, a redaction run's
                     <code>documentVersionId</code> — but every content route
-                    enforces the gate, so the id alone grants nothing.
+                    enforces the gate, so the id alone grants nothing. A version
+                    Redact produced carries its run's provenance (<code
+                      >redaction: { runId, producedBy, canOpen }</code
+                    >) in this response and in the matter's document list, so
+                    the &quot;Redacted&quot; mark follows the copy wherever a
+                    document is listed. <code>canOpen</code> is false where the
+                    reader may see the filed copy but not the standalone run
+                    behind it.
                   </td>
                 </tr>
                 <tr>
@@ -3620,13 +3628,17 @@
                   <td class="id">redact-lifecycle.ts</td>
                   <td>
                     Files a finalized standalone run's copy as version 1 of a
-                    new document in a chosen matter (edit-gated on that matter,
-                    audited as <code>redaction.saved_to_matter</code> plus the
-                    document upload events in one transaction, with the matter
-                    and run locked). Concurrent saves resolve to one version;
-                    retries re-check destination edit access. A document-linked
-                    run is refused here and returns through
-                    <code>return-to-document</code>.
+                    new document in any matter the caller may edit — there is no
+                    &quot;redaction matter&quot; and no matter type of its own
+                    (edit-gated on that matter, audited as
+                    <code>redaction.saved_to_matter</code> plus the document
+                    upload events in one transaction, with the matter and run
+                    locked). Concurrent saves resolve to one version; retries
+                    re-check destination edit access. The filed version records
+                    its run through <code>returned_document_version_id</code>,
+                    which is what carries the &quot;Redacted&quot; provenance
+                    mark into the matter. A document-linked run is refused here
+                    and returns through <code>return-to-document</code>.
                   </td>
                 </tr>
                 <tr>
@@ -3642,7 +3654,12 @@
                     DOCX (<code>format=pdf|docx</code>); disclosure downloads
                     use generic filenames, and the schedule omits the source
                     filename and lists decisions, never the removed words.
-                    Deleted runs are available by known id to owner/admin only
+                    <code>format=json-shareable</code> is the
+                    <code>obiter.redaction-audit-shareable/v1</code> export for
+                    handing to the other side: counts, categories, decisions,
+                    reviewers, pages and the output's SHA-256, with no span
+                    text, source text or source filename. Deleted runs are
+                    available by known id to owner/admin only
                   </td>
                 </tr>
                 <tr>

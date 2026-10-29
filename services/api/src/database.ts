@@ -416,5 +416,7 @@ export { appendAuditLog } from './audit-log'
 export {
   createDocumentInTransaction,
   createDocumentObjectKey,
+  getDocument,
+  listDocuments,
   updateDocumentExtraction,
 } from './document-database'
