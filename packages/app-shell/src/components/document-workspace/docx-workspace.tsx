@@ -36,7 +36,6 @@ import { useChangeReview } from './use-change-review'
 import { usePublishDocumentDirty } from './document-draft-status'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useDocumentSave } from './use-document-save'
-import { UnsavedNavigationGuard } from './unsaved-navigation-guard'
 import { useWorkspaceDerivations } from './use-workspace-derivations'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
@@ -366,12 +365,6 @@ export function DocxWorkspace({
     <InlineChangeReview
       value={inlineReviewOf(changeReview, () => togglePanel('review'))}
     >
-      <UnsavedNavigationGuard
-        atRisk={
-          save.persistence === 'unavailable' &&
-          save.saveState.status !== 'saved'
-        }
-      />
       <WorkspaceShell
         layout={layout}
         onKeyDown={(event) =>
