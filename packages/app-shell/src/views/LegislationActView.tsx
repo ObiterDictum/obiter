@@ -1,4 +1,4 @@
-import { queryOptions, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowUpRight } from '@phosphor-icons/react'
 import {
@@ -12,54 +12,17 @@ import {
 } from '@obiter/ui'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
-import { apiUrl } from '../lib/api-url'
 import { provisionResultLocation } from '../legislation-navigation'
 import { sourceNameForUrl } from '../components/search/provenance'
+import { formatDate } from '../format'
+import {
+  legislationActQueryOptions,
+  type LegislationActContentsKind,
+  type LegislationActContentsNode,
+} from './legislation-document-query'
 
-type LegislationActContentsKind =
-  | 'part'
-  | 'chapter'
-  | 'schedule'
-  | 'crossheading'
-  | 'P1'
-  | 'P2'
-  | 'P3'
-  | 'P4'
-  | 'P5'
-
-interface LegislationActContentsNode {
-  label: string
-  labelPath: string
-  href: string
-  extent: string
-  withheld: boolean
-  kind: LegislationActContentsKind
-  /** Heading text for container rows; never set for provision rows. */
-  text?: string
-  children: LegislationActContentsNode[]
-}
-
-interface LegislationActDocument {
-  identity: string
-  title: string
-  year: number
-  number: number
-  chapter: string
-  extent: string
-  officialUrl: string
-  sourceUrl: string
-  canonicalUrl: string
-  /** Content rows only: sections plus schedule paragraphs. Containers
-   * (Part, Chapter, Schedule, crossheading) are headings, never withheld,
-   * and excluded from both counts. */
-  totalCount: number
-  withheldCount: number
-  contents: LegislationActContentsNode[]
-}
-
-export interface LegislationActResponse {
-  act: LegislationActDocument
-}
+export { legislationActQueryOptions }
+export type { LegislationActResponse } from './legislation-document-query'
 
 const containerKinds = new Set<LegislationActContentsKind>([
   'part',
@@ -125,41 +88,20 @@ function ActContentsItem({
             : 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-ink hover:bg-hover'
         }
       >
-        <span className="text-item">{node.label}</span>
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="shrink-0 text-item tabular-nums">{node.label}</span>
+          {node.heading ? (
+            <span className="truncate text-meta text-muted">
+              {node.heading}
+            </span>
+          ) : null}
+        </span>
         {node.withheld ? (
           <StatusDot tone="warning">Amended wording withheld</StatusDot>
         ) : null}
       </Link>
     </li>
   )
-}
-
-export function legislationActQueryOptions(identity: string) {
-  return queryOptions({
-    queryKey: ['legislation-act', identity],
-    staleTime: 0,
-    retry: 1,
-    refetchOnMount: 'always',
-    queryFn: async () => {
-      // Encode per segment so identity slashes stay as separators while
-      // unsafe characters inside a segment cannot break the request path.
-      const encodedIdentity = identity
-        .split('/')
-        .map((segment) => encodeURIComponent(segment))
-        .join('/')
-      const response = await fetch(
-        apiUrl(`/api/search/legislation/${encodedIdentity}`),
-      )
-      if (response.status === 404) {
-        throw new Error('Legislation Act was not found.')
-      }
-      if (!response.ok) {
-        throw new Error('Legislation Act could not be loaded.')
-      }
-      // SAFETY: 404 and other non-ok statuses throw above; /api/search/legislation/:identity returns LegislationActResponse per the search API contract.
-      return (await response.json()) as LegislationActResponse
-    },
-  })
 }
 
 export function LegislationActView({ identity }: { identity: string }) {
@@ -296,7 +238,9 @@ export function LegislationActView({ identity }: { identity: string }) {
                     {sourceName}
                   </a>
                   <span className="text-caption text-subtle">
-                    Retrieval date not recorded
+                    {act.acquiredAt
+                      ? `Retrieved ${formatDate(act.acquiredAt)}`
+                      : 'Retrieval date not recorded'}
                   </span>
                   <a
                     href={act.officialUrl}

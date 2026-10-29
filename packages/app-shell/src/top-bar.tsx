@@ -19,6 +19,7 @@ import { currentUserQueryOptions } from './current-user'
 import { initialsOf } from './format'
 import { useMattersList } from './matters'
 import { breadcrumbTrail, matterIdFromPath } from './navigation'
+import { useSourceTitle } from './source-title'
 import { ThemeToggle } from './theme-toggle'
 
 /**
@@ -35,7 +36,8 @@ export function TopBar({ platform }: { platform: AppPlatform }) {
   const currentMatterId = matterIdFromPath(pathname)
   const matterName =
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
-  const trail = breadcrumbTrail(pathname, matterName)
+  const sourceTitle = useSourceTitle(pathname)
+  const trail = breadcrumbTrail(pathname, matterName, sourceTitle)
 
   return (
     <header className="shrink-0 bg-canvas">
@@ -59,9 +61,11 @@ export function TopBar({ platform }: { platform: AppPlatform }) {
             <Fragment key={`${crumb.label}-${index}`}>
               {index > 0 ? <CrumbSeparator /> : null}
               {crumb.to ? (
+                // A module crumb is short and stays whole; the page crumb
+                // takes the truncation, so "Search" never reads "Sea…".
                 <Link
                   to={crumb.to}
-                  className="max-w-[18rem] truncate text-subtle hover:text-ink"
+                  className="max-w-[18rem] shrink-0 truncate text-subtle hover:text-ink"
                 >
                   {crumb.label}
                 </Link>

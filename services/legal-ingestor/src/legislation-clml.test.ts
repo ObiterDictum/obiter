@@ -187,6 +187,39 @@ describe('parseClmlDocument', () => {
     expect(rows[2]?.parentLabelPath).toBe('section/100')
   })
 
+  it('stores the section heading and each row’s own text, without dot leaders', () => {
+    // A section's heading arrives on the enclosing P1group's Title, one level
+    // above the P1 that carries the citation: without capturing it the
+    // contents can only read "s. 13". `ownText` keeps a row's own words so a
+    // nested render does not repeat the section's concatenated text, and the
+    // king's-printer dot run for a repealed subsection keeps its published
+    // meaning as one ellipsis instead of raw leader noise.
+    const xml = `<?xml version="1.0"?>
+<Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2021/3" IdURI="http://www.legislation.gov.uk/id/ukpga/2021/3" NumberOfProvisions="1" RestrictExtent="E+W">
+<ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Headings Act 2021</dc:title></ukm:Metadata>
+<Primary><Body>
+<P1group><Title>Main <Emphasis>duties</Emphasis></Title>
+<P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2021/3/section/13" IdURI="http://www.legislation.gov.uk/id/ukpga/2021/3/section/13" id="section-13"><Pnumber>13</Pnumber><P1para>
+<P2 DocumentURI="http://www.legislation.gov.uk/ukpga/2021/3/section/13/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2021/3/section/13/1" id="section-13-1"><Pnumber>1</Pnumber><P2para><Text>First duty.</Text><P3 DocumentURI="http://www.legislation.gov.uk/ukpga/2021/3/section/13/1/a" IdURI="http://www.legislation.gov.uk/id/ukpga/2021/3/section/13/1/a" id="section-13-1-a"><Pnumber>a</Pnumber><P3para><Text>An exception.</Text></P3para></P3></P2para></P2>
+<P2 DocumentURI="http://www.legislation.gov.uk/ukpga/2021/3/section/13/5" IdURI="http://www.legislation.gov.uk/id/ukpga/2021/3/section/13/5" id="section-13-5"><Pnumber>5</Pnumber><P2para><Text>. . . . . . . . . . . .</Text></P2para></P2>
+</P1para></P1></P1group>
+</Body></Primary></Legislation>`
+    const parsed = parseClmlDocument(xml, { ...ref, year: 2021, number: 3 })
+    if ('skipped' in parsed)
+      throw new Error(`unexpected skip: ${parsed.skipped}`)
+    expect(
+      parsed.provisions.map((row) => [row.labelPath, row.heading, row.ownText]),
+    ).toEqual([
+      ['section/13', 'Main duties', ''],
+      ['section/13/1', '', 'First duty.'],
+      ['section/13/1/a', '', 'An exception.'],
+      ['section/13/5', '', '. . .'],
+    ])
+    // The row still carries descendant text for search, with the section's
+    // trailing leader run dropped and nothing invented in its place.
+    expect(parsed.provisions[0]?.text).toBe('First duty. An exception')
+  })
+
   it('skips documents without the expected identity', () => {
     const parsed = parseClmlDocument('<Legislation></Legislation>', ref)
     expect(parsed).toEqual({

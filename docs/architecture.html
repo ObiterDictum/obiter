@@ -2735,7 +2735,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>35 migrations, 0001 to 0036, 0008 withdrawn</dd>
+                <dd>37 migrations, 0001 to 0038, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3025,6 +3025,29 @@
                     Owner-only change of a share grant's access level
                     (<code>matter.share_update</code>, audited) or its
                     revocation
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    GET · POST /api/matters/:matterId/saved-sources
+                  </td>
+                  <td class="id">matter-saved-sources.ts</td>
+                  <td>
+                    Sources kept with a matter, listed under view access and
+                    filed under edit access (<code>matter.source_save</code>,
+                    audited). Idempotent on
+                    <code>(matter, kind, source)</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    DELETE /api/matters/:matterId/saved-sources/:savedSourceId
+                  </td>
+                  <td class="id">matter-saved-sources.ts</td>
+                  <td>
+                    Soft-deletes the saved entry (edit access,
+                    <code>matter.source_remove</code>, audited). The corpus
+                    record is untouched.
                   </td>
                 </tr>
                 <tr>
@@ -4629,9 +4652,19 @@
                     of scope. 0025 restores the
                     <code>legislation_documents_act_type_check</code> constraint
                     on installations whose table pre-existed 0020, where
-                    <code>create table if not exists</code> never added it.
+                    <code>create table if not exists</code> never added it. 0037
+                    adds <code>heading</code> (a section's own published
+                    heading, which CLML carries on the enclosing
+                    <code>P1group</code>), <code>own_text</code> (one level's
+                    own words, since <code>provision_text</code> deliberately
+                    concatenates descendants for search) and
+                    <code>legislation_documents.acquired_at</code> (when this
+                    corpus read the Act, the retrieval date the pages show).
+                    Rows predating 0037 carry <code>own_text</code> NULL and
+                    serve their concatenated text flat until
+                    <code>--force-reparse</code> rewrites them.
                   </td>
-                  <td class="id">0020, 0021, 0022, 0025</td>
+                  <td class="id">0020, 0021, 0022, 0025, 0037</td>
                 </tr>
                 <tr>
                   <td class="id">redaction_runs</td>
@@ -4660,6 +4693,21 @@
                     slice (no BullMQ worker yet).
                   </td>
                   <td class="id">0024</td>
+                </tr>
+                <tr>
+                  <td class="id">matter_saved_sources</td>
+                  <td>
+                    One row per source a member filed against a matter: the
+                    corpus identity of a judgment (<code>document_id</code>) or
+                    a provision (<code>{documentIdentity}/{labelPath}</code>),
+                    never a copy of the text. <code>organisation_id</code> is
+                    denormalised beside <code>matter_id</code> under the same
+                    composite FK <code>matter_shares</code> uses, so the access
+                    check filters by organisation without a join. Unsaving sets
+                    <code>deleted_at</code>, so re-saving revives one row and
+                    the earlier filing stays in the audit trail.
+                  </td>
+                  <td class="id">0038</td>
                 </tr>
                 <tr>
                   <td class="id">verification_finding_dismissals</td>

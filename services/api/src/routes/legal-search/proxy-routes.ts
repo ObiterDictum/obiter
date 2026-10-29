@@ -551,15 +551,20 @@ export function createLegalSearchProxyRoutes(
     )
 
     const courtParagraphNumbers = hasCourtParagraphNumbers(storedSourceRecord)
+    // The retrieval date the source page shows: when the corpus read this
+    // judgment's metadata. Absent remains absent — never the row's
+    // updated_at, which moves on re-index without the source being re-read.
+    const acquiredAt = storedSourceRecord?.provider.acquiredAt ?? null
 
     if (document) {
-      return c.json({ document, courtParagraphNumbers })
+      return c.json({ document, courtParagraphNumbers, acquiredAt })
     }
 
     if (storedSourceRecord?.document) {
       return c.json({
         document: storedSourceRecord.document,
         courtParagraphNumbers,
+        acquiredAt,
       })
     }
 
@@ -569,7 +574,7 @@ export function createLegalSearchProxyRoutes(
     // The case view renders the stored metadata alongside its "full text
     // unavailable" state, so nothing is invented and nothing is fetched.
     if (storedSourceRecord?.summary) {
-      return c.json({ document: storedSourceRecord.summary })
+      return c.json({ document: storedSourceRecord.summary, acquiredAt })
     }
 
     return c.json(

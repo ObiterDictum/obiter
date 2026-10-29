@@ -17,7 +17,11 @@ import { PageScaffold } from '../page-scaffold'
 import { formatDate } from '../format'
 import { selectJudgmentParagraphs } from '../legal-search-selection'
 import { getReadableCourtLabel } from '../components/search/searchTypes'
-import { sourceNameForUrl } from '../components/search/provenance'
+import {
+  findCaseLawUrlForDocumentId,
+  sourceNameForUrl,
+} from '../components/search/provenance'
+import { SourceActions } from '../components/sources/SourceActions'
 import {
   caseLawDocumentQueryOptions,
   type CaseLawDocument,
@@ -44,6 +48,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   }
 
   if (query.isError) {
+    const originalUrl = findCaseLawUrlForDocumentId(caseId)
     return (
       <ContentFrame className="flex flex-col items-start gap-4 py-14">
         <div>
@@ -55,9 +60,22 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
             place.
           </p>
         </div>
-        <Button variant="secondary" onClick={() => void query.refetch()}>
-          Retry
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" onClick={() => void query.refetch()}>
+            Retry
+          </Button>
+          {originalUrl ? (
+            <a
+              className={buttonClassName({ variant: 'ghost', size: 'md' })}
+              href={originalUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              Open original on The National Archives
+              <ArrowUpRight aria-hidden size={14} />
+            </a>
+          ) : null}
+        </div>
       </ContentFrame>
     )
   }
@@ -99,6 +117,15 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
       }
       actions={
         <>
+          <SourceActions
+            source={{
+              kind: 'judgment',
+              sourceId: data.id,
+              title: data.title,
+              citation: data.neutralCitation,
+              sourceUrl: data.sourceUrl,
+            }}
+          />
           <a
             className={buttonClassName({ variant: 'secondary', size: 'md' })}
             href={data.sourceUrl}
@@ -240,7 +267,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                     {sourceName}
                   </a>
                   <span className="text-caption text-subtle">
-                    Retrieval date not recorded
+                    {response.acquiredAt
+                      ? `Retrieved ${formatDate(response.acquiredAt)}`
+                      : 'Retrieval date not recorded'}
                   </span>
                   <a
                     href={data.sourceUrl}

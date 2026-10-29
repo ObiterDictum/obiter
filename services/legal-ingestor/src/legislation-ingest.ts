@@ -206,12 +206,13 @@ async function writeLegislationDocument(
     await client.query('BEGIN')
     await client.query(
       `insert into legislation_documents
-      (identity, act_type, year, number, title, source_url, content_hash, extent, provision_count_note, updated_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+      (identity, act_type, year, number, title, source_url, content_hash, extent, provision_count_note, acquired_at, updated_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())
      on conflict (identity) do update set
        title = excluded.title, source_url = excluded.source_url,
        content_hash = excluded.content_hash, extent = excluded.extent,
        provision_count_note = excluded.provision_count_note,
+       acquired_at = now(),
        updated_at = now()`,
       [
         doc.identity,
@@ -268,15 +269,17 @@ async function writeLegislationDocument(
       const effectsCheckedAt = effects !== null ? new Date() : oldChecked
       await client.query(
         `insert into legislation_provisions
-        (id, document_identity, label_path, label, parent_label_path, kind,
-         extent, provision_text, source_hash, doc_order,
+        (id, document_identity, label_path, label, heading, parent_label_path,
+         kind, extent, provision_text, own_text, source_hash, doc_order,
          has_unapplied_effects, effects_checked_at, updated_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
        on conflict (id) do update set
          label_path = excluded.label_path, label = excluded.label,
+         heading = excluded.heading,
          parent_label_path = excluded.parent_label_path,
          kind = excluded.kind,
          extent = excluded.extent, provision_text = excluded.provision_text,
+         own_text = excluded.own_text,
          source_hash = excluded.source_hash, doc_order = excluded.doc_order,
          has_unapplied_effects = excluded.has_unapplied_effects,
          effects_checked_at = excluded.effects_checked_at,
@@ -286,10 +289,12 @@ async function writeLegislationDocument(
           doc.identity,
           provision.labelPath,
           provision.label,
+          provision.heading,
           provision.parentLabelPath,
           provision.kind,
           provision.extent,
           provision.text,
+          provision.ownText,
           doc.contentHash,
           provision.docOrder,
           hasUnapplied,

@@ -18,6 +18,9 @@ export interface StoredLegislationDocument {
   title: string
   sourceUrl: string
   extent: string
+  /** When this corpus read the Act's data.xml; null when the document has
+   * not been re-stored since the column existed. Never derived. */
+  acquiredAt: string | null
 }
 
 export interface StoredLegislationProvision {
@@ -25,20 +28,37 @@ export interface StoredLegislationProvision {
   documentIdentity: string
   labelPath: string
   label: string
+  /** The provision's own published heading, empty when the source carries
+   * none. */
+  heading: string
   extent: string
   text: string
+  /** Text written directly inside this provision, excluding nested
+   * sub-provisions; null for a row predating the column, whose flat `text`
+   * is all that is known. */
+  ownText: string | null
+  /** Set on rows read through the provision tree; the nearest addressable
+   * ancestor used to nest them. */
+  parentLabelPath?: string | null
   hasUnappliedEffects: boolean
   effectsCheckedAt: string | null
   title: string
   year: number
   sourceUrl: string
+  acquiredAt: string | null
 }
 
-export interface LegislationActListEntry extends StoredLegislationDocument {}
+export type LegislationActListEntry = Omit<
+  StoredLegislationDocument,
+  'acquiredAt'
+>
 
 export interface StoredLegislationActProvision {
   label: string
   labelPath: string
+  /** The provision's own heading; empty for container rows and for
+   * provisions whose source carries none. */
+  heading: string
   extent: string
   hasUnappliedEffects: boolean
   /** Timestamp of the successful effects check that produced the flag,
@@ -108,7 +128,7 @@ export async function getLegislationActProvisionsSnapshot(
       coalesce((
         select json_agg(rows order by rows."docOrder")
           from (
-            select label, label_path as "labelPath", extent,
+            select label, label_path as "labelPath", heading, extent,
                    has_unapplied_effects as "hasUnappliedEffects",
                    effects_checked_at as "effectsCheckedAt",
                    doc_order as "docOrder", kind,
@@ -133,7 +153,8 @@ export async function getLegislationDocument(
 ): Promise<StoredLegislationDocument | null> {
   const result = await pool.query<StoredLegislationDocument>(
     `select identity, act_type as "actType", year, number, title,
-            source_url as "sourceUrl", extent
+            source_url as "sourceUrl", extent,
+            acquired_at as "acquiredAt"
        from legislation_documents where identity = $1`,
     [identity],
   )
@@ -146,17 +167,59 @@ export async function getLegislationProvision(
 ): Promise<StoredLegislationProvision | null> {
   const result = await pool.query<StoredLegislationProvision>(
     `select p.id, p.document_identity as "documentIdentity",
-            p.label_path as "labelPath", p.label, p.extent,
-            p.provision_text as text,
+            p.label_path as "labelPath", p.label, p.heading, p.extent,
+            p.provision_text as text, p.own_text as "ownText",
             p.has_unapplied_effects as "hasUnappliedEffects",
             p.effects_checked_at as "effectsCheckedAt",
-            d.title, d.year, d.source_url as "sourceUrl"
+            d.title, d.year, d.source_url as "sourceUrl",
+            d.acquired_at as "acquiredAt"
        from legislation_provisions p
        join legislation_documents d on d.identity = p.document_identity
       where p.id = $1`,
     [provisionId],
   )
   return result.rows[0] ?? null
+}
+
+/**
+ * One provision row plus every row beneath it, in document order. Children
+ * attach through the stored parent pointer (CLML nesting), never through a
+ * label-path prefix: inserted-amendment rows carry hierarchical IdURIs
+ * (part/2/section/100/kn1) whose prefixes name a container, not the section
+ * that physically holds them. `own_text` rides along so the page can render
+ * each level's own words instead of the section's concatenated text repeated
+ * under every subsection.
+ */
+export async function listLegislationProvisionTree(
+  pool: Pick<Pool, 'query'>,
+  documentIdentity: string,
+  labelPath: string,
+): Promise<StoredLegislationProvision[]> {
+  const result = await pool.query<StoredLegislationProvision>(
+    `with recursive node as (
+       select id, document_identity as "documentIdentity",
+              label_path as "labelPath", label, heading, extent,
+              provision_text as text, own_text as "ownText",
+              has_unapplied_effects as "hasUnappliedEffects",
+              effects_checked_at as "effectsCheckedAt", doc_order,
+              parent_label_path as "parentLabelPath"
+         from legislation_provisions
+        where document_identity = $1 and label_path = $2
+       union all
+       select p.id, p.document_identity as "documentIdentity",
+              p.label_path as "labelPath", p.label, p.heading, p.extent,
+              p.provision_text as text, p.own_text as "ownText",
+              p.has_unapplied_effects as "hasUnappliedEffects",
+              p.effects_checked_at as "effectsCheckedAt", p.doc_order,
+              p.parent_label_path as "parentLabelPath"
+         from legislation_provisions p
+         join node on p.parent_label_path = node."labelPath"
+        where p.document_identity = $1
+     )
+     select * from node order by doc_order`,
+    [documentIdentity, labelPath],
+  )
+  return result.rows
 }
 
 export type StoredProvisionPathResolution =

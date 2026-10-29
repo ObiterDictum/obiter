@@ -1,6 +1,7 @@
 import type { Pool } from 'pg'
 import {
   searchLegislation,
+  trimSourceExcerpt,
   type AppliedLegislationSearchParameters,
 } from '@obiter/search-client'
 import {
@@ -19,6 +20,7 @@ import {
   getLegislationProvision,
   legislationProvisionPathExists,
   listLegislationActs,
+  listLegislationProvisionTree,
   provisionTextServable,
   resolveStoredProvisionPath,
   type StoredProvisionPathResolution,
@@ -157,13 +159,6 @@ const emptyResult: LegislationFetchResult = {
   keywordSearchParameters: null,
 }
 
-function excerpt(text: string, maxLength = 240): string {
-  const collapsed = text.replace(/\s+/g, ' ').trim()
-  return collapsed.length <= maxLength
-    ? collapsed
-    : `${collapsed.slice(0, maxLength).trim()}...`
-}
-
 export function officialProvisionUrl(
   documentIdentity: string,
   labelPath: string,
@@ -225,7 +220,7 @@ function currentProvisionHit(
       provision.labelPath,
     ),
     text: provision.text.slice(0, 4000),
-    snippets: [{ text: excerpt(provision.text) }],
+    snippets: [{ text: trimSourceExcerpt(provision.text) }],
     officialUrl: officialProvisionUrl(
       provision.documentIdentity,
       provision.labelPath,
@@ -608,6 +603,21 @@ async function searchKeywordProvisions(
   }
 }
 
+/**
+ * One addressable level under the provision being read: a subsection, a
+ * sub-paragraph, or a further nested level. `text` is that level's own words
+ * only, so the tree never repeats its parent. `text` is absent when the level
+ * is withheld (an unapplied amendment, or a row no effects check has cleared).
+ */
+export interface LegislationProvisionSubsection {
+  label: string
+  labelPath: string
+  href: string
+  legislationStatus: 'current' | 'amended_not_held'
+  text?: string
+  children: LegislationProvisionSubsection[]
+}
+
 export interface LegislationProvisionPage {
   provision: {
     id: string
@@ -616,11 +626,17 @@ export interface LegislationProvisionPage {
     year: number
     provisionLabel: string
     labelPath: string
+    /** The provision's own published heading, absent when the source carries
+     * none (a schedule paragraph, most subsections). */
+    heading?: string
     extent: string
     legislationStatus: 'current' | 'amended_not_held'
     text?: string
+    subsections?: LegislationProvisionSubsection[]
     officialUrl: string
     sourceUrl: string
+    /** When this corpus read the Act's data.xml; absent when not recorded. */
+    acquiredAt?: string
     notice?: string
     canonicalUrl: string
   }
@@ -631,15 +647,76 @@ export type LegislationProvisionPageResult =
   | { status: 'not_found' }
   | { status: 'unavailable' }
 
+/**
+ * Assembles the subsection tree for one provision from rows in document
+ * order, attaching children through the stored parent pointers (CLML
+ * nesting). The root row is dropped: the page renders it as its own heading
+ * and body, and every other level beneath it as a numbered subsection.
+ */
+/**
+ * False for a row predating migration 0037: how its concatenated text splits
+ * between levels is unknown, so the page keeps serving that text flat rather
+ * than guessing a split.
+ */
+function hasStructuredText(row: StoredLegislationProvision) {
+  return row.ownText !== null && row.ownText !== undefined
+}
+
+function buildSubsectionTree(
+  rows: StoredLegislationProvision[],
+  documentIdentity: string,
+): LegislationProvisionSubsection[] {
+  const nodes = new Map<string, LegislationProvisionSubsection>()
+  for (const row of rows) {
+    const servable = provisionTextServable(
+      row.hasUnappliedEffects,
+      row.effectsCheckedAt,
+    )
+    nodes.set(row.labelPath, {
+      label: row.label,
+      labelPath: row.labelPath,
+      href: createCanonicalProvisionPath(documentIdentity, row.labelPath),
+      legislationStatus: servable ? 'current' : 'amended_not_held',
+      // A withheld level keeps its number and loses its wording: the page
+      // never substitutes text it does not hold.
+      ...(servable
+        ? { text: hasStructuredText(row) ? row.ownText || undefined : row.text }
+        : {}),
+      children: [],
+    })
+  }
+  const roots: LegislationProvisionSubsection[] = []
+  for (const row of rows) {
+    const node = nodes.get(row.labelPath)
+    if (!node) continue
+    const parentLabelPath = row.parentLabelPath ?? null
+    const parent =
+      parentLabelPath === null ? undefined : nodes.get(parentLabelPath)
+    if (parent) parent.children.push(node)
+    else roots.push(node)
+  }
+  return roots
+}
+
 export async function resolveLegislationProvisionPage(
   pool: LegislationServeDeps['pool'],
   provisionId: string,
 ): Promise<LegislationProvisionPageResult> {
   let provision: StoredLegislationProvision | null
+  let tree: StoredLegislationProvision[]
   try {
     provision = await withStoredTimeout(
       getLegislationProvision(pool, provisionId),
     )
+    tree = provision
+      ? await withStoredTimeout(
+          listLegislationProvisionTree(
+            pool,
+            provision.documentIdentity,
+            provision.labelPath,
+          ),
+        )
+      : []
   } catch {
     return { status: 'unavailable' }
   }
@@ -652,6 +729,25 @@ export async function resolveLegislationProvisionPage(
     provision.documentIdentity,
     provision.labelPath,
   )
+  const subsections = buildSubsectionTree(
+    tree,
+    provision.documentIdentity,
+  ).filter((node) => node.labelPath === provision.labelPath)[0]?.children
+  const structured = hasStructuredText(provision) ? subsections : undefined
+  const shared = {
+    id: provision.id,
+    documentIdentity: provision.documentIdentity,
+    title: provision.title,
+    year: provision.year,
+    provisionLabel: provision.label,
+    labelPath: provision.labelPath,
+    extent: provision.extent,
+    officialUrl,
+    sourceUrl: provision.sourceUrl,
+    ...(provision.heading ? { heading: provision.heading } : {}),
+    ...(provision.acquiredAt ? { acquiredAt: provision.acquiredAt } : {}),
+    canonicalUrl,
+  }
   if (
     provisionTextServable(
       provision.hasUnappliedEffects,
@@ -662,18 +758,12 @@ export async function resolveLegislationProvisionPage(
       status: 'ok',
       page: {
         provision: {
-          id: provision.id,
-          documentIdentity: provision.documentIdentity,
-          title: provision.title,
-          year: provision.year,
-          provisionLabel: provision.label,
-          labelPath: provision.labelPath,
-          extent: provision.extent,
+          ...shared,
           legislationStatus: 'current',
-          text: provision.text,
-          officialUrl,
-          sourceUrl: provision.sourceUrl,
-          canonicalUrl,
+          // With a subsection tree, `text` is the provision's own words: the
+          // concatenation would repeat every subsection under its section.
+          text: structured ? (provision.ownText ?? '') : provision.text,
+          ...(structured ? { subsections: structured } : {}),
         },
       },
     }
@@ -682,18 +772,9 @@ export async function resolveLegislationProvisionPage(
     status: 'ok',
     page: {
       provision: {
-        id: provision.id,
-        documentIdentity: provision.documentIdentity,
-        title: provision.title,
-        year: provision.year,
-        provisionLabel: provision.label,
-        labelPath: provision.labelPath,
-        extent: provision.extent,
+        ...shared,
         legislationStatus: 'amended_not_held',
-        officialUrl,
-        sourceUrl: provision.sourceUrl,
         notice: amendedProvisionNotice(officialUrl),
-        canonicalUrl,
       },
     },
   }

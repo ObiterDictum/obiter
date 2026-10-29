@@ -1180,13 +1180,58 @@ function trimSnippetText(text: string, matchText: string, tokens: string[]) {
     /^[\x20-\x7E\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF‘’“”‐‑‒–—―]*$/u.test(
       matchPrefix,
     ) || normalizeExactMatchValue(`${matchPrefix}x`).length - 1 === matchIndex
-  const start = offsetsAlign
+  const rawStart = offsetsAlign
     ? normalizedStart
     : normalizedSnippetOffset(displayText, normalizedStart)
-  const end = Math.min(start + maxLength, displayText.length)
+  const { start, end } = excerptWindow(
+    displayText,
+    rawStart,
+    rawStart + maxLength,
+  )
   const excerpt = displayText.slice(start, end).trim()
 
   return `${start > 0 ? '...' : ''}${excerpt}${end < displayText.length ? '...' : ''}`
+}
+
+/**
+ * The window cut on word and, where it fits, sentence ends. A slice lands on
+ * whatever character sits at the offset, so a result card read "…t by
+ * becoming" and "an o…": in a product whose whole claim is that an extract is
+ * the source's own words, half a word reads as a corrupted source. The start
+ * moves forward to the next word boundary, and the end moves back to the last
+ * sentence end inside the window, falling back to the last word boundary when
+ * the window holds none.
+ */
+function excerptWindow(text: string, from: number, to: number) {
+  let start = from
+  if (start > 0) {
+    const boundary = text.indexOf(' ', start)
+    start = boundary === -1 ? start : boundary + 1
+  }
+  const end = Math.min(to, text.length)
+  if (end === text.length) return { start, end }
+
+  // A sentence end is worth cutting early for only when it keeps most of the
+  // window; otherwise the excerpt would lose the words that matched.
+  const earliestSentenceEnd = start + Math.floor((end - start) / 2)
+  for (let index = end - 1; index >= earliestSentenceEnd; index -= 1) {
+    if (/[.!?;]/.test(text[index]!) && /\s/.test(text[index + 1] ?? '')) {
+      return { start, end: index + 1 }
+    }
+  }
+  const wordBoundary = text.lastIndexOf(' ', end)
+  return { start, end: wordBoundary > start ? wordBoundary : end }
+}
+
+/**
+ * The same cut for a source excerpt that carries no query match: legislation
+ * provision text served as a short quote on a result card.
+ */
+export function trimSourceExcerpt(text: string, maxLength = 240): string {
+  const displayText = text.replace(/\s+/g, ' ').trim()
+  if (displayText.length <= maxLength) return displayText
+  const { end } = excerptWindow(displayText, 0, maxLength)
+  return `${displayText.slice(0, end).trim()}...`
 }
 
 function normalizedSnippetOffset(text: string, offset: number) {

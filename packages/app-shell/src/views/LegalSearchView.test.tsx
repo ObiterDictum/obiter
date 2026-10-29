@@ -310,7 +310,7 @@ describe('LegalSearchView debounce lifecycle', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(container.textContent).toContain(
-      'Stored legal sources did not match "Potanin" with the selected filters. Providers were not consulted for this search.',
+      'No stored source matches "Potanin". Try fewer or different words, or search the public sources below.',
     )
   })
 
@@ -629,9 +629,21 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
 
     expect(container.textContent).toContain(
-      'Stored legal sources did not match "zxqwv neverseen"',
+      'No stored source matches "zxqwv neverseen"',
     )
     expect(container.textContent).not.toContain('Find Case Law')
+    // A dead end becomes a route onward: both public sources, with the query.
+    const elsewhere = Array.from(
+      container.querySelectorAll<HTMLAnchorElement>(
+        'a[href*="nationalarchives"], a[href*="legislation.gov.uk/search"]',
+      ),
+    ).map((anchor) => anchor.getAttribute('href'))
+    expect(elsewhere).toContain(
+      'https://www.legislation.gov.uk/search?title=zxqwv%20neverseen',
+    )
+    expect(elsewhere).toContain(
+      'https://caselaw.nationalarchives.gov.uk/search?query=zxqwv%20neverseen',
+    )
   })
 
   it('keeps stored-only copy for a citation live never checked', async () => {
@@ -657,7 +669,12 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain(
       'No stored legal source holds "[2023] EWCA Civ 123" as a judgment.',
     )
-    expect(container.textContent).toContain('Providers were not consulted')
+    // No provider jargon: the corpus is all that was searched, and the copy
+    // names the next step instead of what did not happen.
+    expect(container.textContent).not.toContain('Providers were not consulted')
+    expect(container.textContent).toContain(
+      'Check the citation, or search by party name instead.',
+    )
   })
 
   it('labels unsupported source types instead of no-match copy', async () => {
@@ -832,18 +849,20 @@ describe('LegalSearchView debounce lifecycle', () => {
     if (!dateFromInput || !dateToInput)
       throw new Error('Date filters were not rendered')
 
-    await changeSearchInput(dateFromInput, '2024-01-01')
-    await changeSearchInput(dateToInput, '2024-12-31')
+    // The date fields take dd/mm/yyyy, not the ISO value the filter holds.
+    await changeSearchInput(dateFromInput, '01/01/2024')
+    await changeSearchInput(dateToInput, '31/12/2024')
     await act(async () => {
       vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
     })
     await flushMicrotasks()
 
     expect(container.textContent).toContain('Supreme Court')
-    expect(container.textContent).toContain('From 2024-01-01')
-    expect(container.textContent).toContain('To 2024-12-31')
+    // The chip reads the same dd/mm/yyyy the field takes.
+    expect(container.textContent).toContain('From 01/01/2024')
+    expect(container.textContent).toContain('To 31/12/2024')
 
-    await clickButton(container, 'Remove from 2024-01-01 filter')
+    await clickButton(container, 'Remove from 01/01/2024 filter')
     await act(async () => {
       vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
     })
@@ -856,8 +875,8 @@ describe('LegalSearchView debounce lifecycle', () => {
       dateTo: '2024-12-31',
     })
     expect(container.textContent).toContain('Supreme Court')
-    expect(container.textContent).not.toContain('From 2024-01-01')
-    expect(container.textContent).toContain('To 2024-12-31')
+    expect(container.textContent).not.toContain('From 01/01/2024')
+    expect(container.textContent).toContain('To 31/12/2024')
   })
   it('selects search results with keyboard navigation', async () => {
     const fetchMock = vi

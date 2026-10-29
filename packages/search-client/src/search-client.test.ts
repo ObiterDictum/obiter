@@ -1838,6 +1838,58 @@ describe('Legal search client', () => {
     expect(snippet?.matchedTerms).toEqual(['test'])
   })
 
+  it('cuts a long snippet on word boundaries, never mid-word', () => {
+    // The reported defect: a 240-character slice landed mid-word, so a result
+    // card read "…t by becoming" and "an o…". An extract is evidence, so it
+    // must not read as a corrupted source.
+    const paragraph =
+      Array.from({ length: 120 }, (_, index) => `word${index + 1}`).join(' ') +
+      ' volunteer'
+    const [snippet] = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: paragraph,
+          },
+        ],
+      }),
+      'volunteer',
+    )
+
+    const core = (snippet?.text ?? '').replace(/^\.\.\.|\.\.\.$/g, '')
+    // Every token is whole: a mid-word cut shows up as "word" or "rd42".
+    expect(
+      core.split(' ').every((token) => /^word\d+$|^volunteer$/.test(token)),
+    ).toBe(true)
+    expect(core).toContain('volunteer')
+  })
+
+  it('prefers a sentence end inside the excerpt window', () => {
+    const paragraph =
+      'The tribunal considered the volunteer arrangement in detail. '.repeat(6)
+    const [snippet] = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: paragraph,
+          },
+        ],
+      }),
+      'volunteer',
+    )
+
+    const text = snippet?.text ?? ''
+    // Cut back to a sentence end rather than stopping wherever 240 lands.
+    expect(text.endsWith('.')).toBe(true)
+    expect(text).toContain('tribunal considered the volunteer arrangement')
+  })
+
   it('omits snippets when paragraph text does not match the query', () => {
     const snippets = extractLegalSearchSnippets(
       authority({

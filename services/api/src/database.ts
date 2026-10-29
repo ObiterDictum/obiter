@@ -44,6 +44,8 @@ export interface AuditRecordInput {
     | 'matter.share_grant'
     | 'matter.share_update'
     | 'matter.share_revoke'
+    | 'matter.source_save'
+    | 'matter.source_remove'
     | 'document.upload'
     | 'document.version_create'
     | 'document.edit'

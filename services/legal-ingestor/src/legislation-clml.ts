@@ -54,6 +54,11 @@ export interface IngestProvision {
   kind: LegislationProvisionKind
   labelPath: string
   label: string
+  /** The provision's own heading as published, empty when the source carries
+   * none. CLML puts a section's heading on the enclosing P1group <Title>, not
+   * on the P1 that carries the citation, which is why it is not part of
+   * `text`. */
+  heading: string
   /** Nearest addressable ancestor in CLML nesting, null for tree roots.
    * Never derived from label-path prefixes: inserted-amendment provisions
    * carry hierarchical IdURIs (part/2/section/100/kn1) while base
@@ -61,6 +66,11 @@ export interface IngestProvision {
   parentLabelPath: string | null
   extent: string
   text: string
+  /** Text written directly inside this element, excluding nested
+   * sub-provisions. `text` concatenates descendants so a section answers its
+   * subsections' terms in search; rendering the tree needs this one, or every
+   * subsection would repeat under its section. */
+  ownText: string
   docOrder: number
 }
 
@@ -170,6 +180,24 @@ function stripTags(value: string): string {
   return decodeXmlEntities(kept.join('')).replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Dot leaders are a typesetting artefact, not words: the corpus carries them
+ * for provisions whose words are no longer in force ("s. 13(7)" is a run of
+ * dots) and for contents-style lines that slipped into a Text run. A run of
+ * three or more dots collapses to the published ellipsis, a longer trailing
+ * run is dropped altogether, and a run that is the whole text becomes the
+ * ellipsis alone — the King's Printer convention for words that have gone,
+ * which is what the source means, rather than an empty string a reader would
+ * read as missing text.
+ */
+export function stripDotLeaders(text: string): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim()
+  // Four or more dots in a run is a leader, never punctuation: a run that is
+  // the whole text becomes one ellipsis, any other run is layout, not words.
+  if (/^(?:\.\s*){4,}$/u.test(collapsed)) return '. . .'
+  return collapsed.replace(/\s*(?:\.\s*){4,}/gu, ' ').trim()
+}
+
 function readAttribute(tag: string, name: string): string | null {
   const match = tag.match(new RegExp(`${name}="([^"]*)"`, 'i'))
   return match ? match[1] : null
@@ -260,9 +288,10 @@ interface ClmlFrame {
   title: string
   extent: string
   texts: string[]
+  /** Text nodes read while this frame is the innermost open provision. */
+  ownTexts: string[]
   inNumber: boolean
   inPnumber: boolean
-  inTitle: boolean
   titleDepth: number
   order: number
 }
@@ -289,6 +318,10 @@ function parseClmlWithStack(
   // of a P1 open without a document IdURI.
   let blockAmendmentDepth = 0
   let textDepth = 0
+  // Frame whose <Title> is being read: a container's own heading, a
+  // provision's own heading, or the enclosing P1group's section heading.
+  // Null outside a Title.
+  let titleFrame: ClmlFrame | null = null
   const tagPattern = /<(\/?)([A-Za-z0-9:]+)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g
   let textStart = 0
   const provisionTags = new Set(['P1', 'P2', 'P3', 'P4', 'P5'])
@@ -302,6 +335,17 @@ function parseClmlWithStack(
     }
     return null
   }
+
+  /** Innermost open P1group: the element that carries a section's heading. */
+  const currentGroup = (): ClmlFrame | null => {
+    for (let i = stack.length - 1; i >= 0; i -= 1) {
+      if (stack[i]!.tag === 'P1group') return stack[i]!
+    }
+    return null
+  }
+
+  /** Heading of the section a provision sits in, empty when it carries none. */
+  const enclosingGroupTitle = (): string => currentGroup()?.title ?? ''
 
   // Addressable containers: Part, Chapter and Schedule are the numbered
   // levels; Pblock is the crossheading level (every observed Pblock IdURI
@@ -365,17 +409,19 @@ function parseClmlWithStack(
     // crossheading titles) are never wrapped in Text elements.
     if (textBefore) {
       const open = currentAddressable()
-      if (open) {
-        if (open.inNumber && !open.pnumber) {
-          const cleaned = stripTags(textBefore)
-          if (cleaned) {
-            open.pnumber = cleaned
-            open.inNumber = false
-          }
-        } else if (open.inTitle && stack.length >= open.titleDepth) {
-          const cleaned = stripTags(textBefore)
-          if (cleaned)
-            open.title = open.title ? `${open.title} ${cleaned}` : cleaned
+      if (open && open.inNumber && !open.pnumber) {
+        const cleaned = stripTags(textBefore)
+        if (cleaned) {
+          open.pnumber = cleaned
+          open.inNumber = false
+        }
+      }
+      if (titleFrame && stack.length >= titleFrame.titleDepth) {
+        const cleaned = stripTags(textBefore)
+        if (cleaned) {
+          titleFrame.title = titleFrame.title
+            ? `${titleFrame.title} ${cleaned}`
+            : cleaned
         }
       }
       if (textDepth > 0) {
@@ -391,6 +437,12 @@ function parseClmlWithStack(
           if (frame.texts.length > 0) {
             frame.texts[frame.texts.length - 1] += textBefore
           }
+        }
+        // The innermost provision keeps this run as its own text too: nested
+        // rows must not repeat their parent's concatenated text.
+        const innermost = provision?.ownTexts
+        if (innermost && innermost.length > 0) {
+          innermost[innermost.length - 1] += textBefore
         }
       }
     }
@@ -430,9 +482,9 @@ function parseClmlWithStack(
               title: '',
               extent: extentCurrent,
               texts: [],
+              ownTexts: [],
               inNumber: false,
               inPnumber: false,
-              inTitle: false,
               titleDepth: 0,
               order: order++,
             })
@@ -466,19 +518,22 @@ function parseClmlWithStack(
           const prov = currentProvision()
           if (prov && !prov.pnumber) prov.inPnumber = true
         } else if (tag === 'Title') {
-          // Title capture targets the nearest addressable frame (container
-          // or provision) that has no title yet, so inner group headings
-          // (P1group Titles, which are not addressable) are skipped once
-          // their container's own Title is captured.
-          const open = currentAddressable()
-          if (open && !open.title) {
-            open.inTitle = true
-            open.titleDepth = stack.length + 1
+          // A section's heading is the enclosing P1group's <Title>, one level
+          // above the P1 that carries the citation and the text; a container
+          // or provision carries its own. The innermost untitled candidate
+          // wins, so a crossheading keeps the Title it already read and a
+          // group heading is never mistaken for the container's.
+          const group = currentGroup()
+          const target = group && !group.title ? group : currentAddressable()
+          if (target && !target.title) {
+            target.titleDepth = stack.length + 1
+            titleFrame = target
           }
         } else if (tag === 'Text') {
           // Every enclosing provision accumulates the run, so a section row
           // carries its subsections' terms and answers them in search.
           for (const open of openProvisions()) open.texts.push('')
+          currentProvision()?.ownTexts.push('')
         }
         stack.push(placeholderFrame(tag))
         if (selfClosing) {
@@ -507,9 +562,9 @@ function parseClmlWithStack(
       title: '',
       extent: '',
       texts: [],
+      ownTexts: [],
       inNumber: false,
       inPnumber: false,
-      inTitle: false,
       titleDepth: 0,
       order: -1,
     }
@@ -529,19 +584,25 @@ function parseClmlWithStack(
         kind: frame.kind,
         labelPath: frame.labelPath,
         label,
+        heading: '',
         parentLabelPath: frame.parentLabelPath,
         extent: frame.extent,
         // A container row's text is its heading: the Act page shows Parts
         // and Schedules as headings, never as searchable body content.
         text: frame.title || label,
+        ownText: '',
         docOrder: frame.order,
       })
       return
     }
-    const text = frame.texts
-      .map((t) => stripTags(t))
-      .filter(Boolean)
-      .join(' ')
+    const joined = (runs: string[]) =>
+      stripDotLeaders(
+        runs
+          .map((t) => stripTags(t))
+          .filter(Boolean)
+          .join(' '),
+      )
+    const text = joined(frame.texts)
     if (!text) {
       // Addressable but textless: stays a row-less P1 and stays loud
       // in the count check rather than vanishing silently.
@@ -553,9 +614,15 @@ function parseClmlWithStack(
       kind: frame.kind,
       labelPath: frame.labelPath,
       label: formatProvisionLabel(frame.labelPath, frame.pnumber),
+      // The provision's own Title wins; a section also takes the heading of
+      // the group it sits in, read from the stack here because the group
+      // closes after its last provision. Sub-provisions never inherit it:
+      // they are cited under their section's heading, not as its equal.
+      heading: frame.title || (frame.tag === 'P1' ? enclosingGroupTitle() : ''),
       parentLabelPath: frame.parentLabelPath,
       extent: frame.extent,
       text,
+      ownText: joined(frame.ownTexts),
       docOrder: frame.order,
     })
   }
@@ -574,10 +641,7 @@ function parseClmlWithStack(
         stack.splice(i, 1)
         // Leaving a Title scope ends title capture (titleDepth counts the
         // Title frame, so this must clear explicitly, not via depth).
-        if (tag === 'Title') {
-          const open = currentAddressable()
-          if (open) open.inTitle = false
-        }
+        if (tag === 'Title') titleFrame = null
         if (tag === 'Number') {
           const container = currentAddressable()
           if (container && container.inNumber) container.inNumber = false

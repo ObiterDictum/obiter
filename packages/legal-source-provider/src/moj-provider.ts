@@ -61,6 +61,10 @@ export interface ProviderSourceMetadata {
   contentHash: string
   rawAtomEntry: string
   rawDocumentHtml?: string
+  /** When this process read the source's metadata: the retrieval date a
+   * source page shows. Absent on rows written before it was recorded, and
+   * then shown as not recorded rather than inferred from `updated_at`. */
+  acquiredAt?: string
 }
 
 /** A stored record, narrowed to what re-fetching actually reads. */

@@ -121,9 +121,11 @@ describe('upsertLegislationDocument transaction', () => {
         kind: 'P1',
         labelPath: 'section/1',
         label: 's. 1',
+        heading: '',
         parentLabelPath: null,
         extent: 'E+W',
         text: 'Provision text.',
+        ownText: 'Provision text.',
         docOrder: 0,
       },
     ],
@@ -564,10 +566,14 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
             }
             if (text.includes('insert into legislation_provisions')) {
               events.push('insert')
+              // Column order of the insert: id, document_identity,
+              // label_path, label, heading, parent_label_path, kind, extent,
+              // provision_text, own_text, source_hash, doc_order,
+              // has_unapplied_effects, effects_checked_at.
               insertedRows.push({
                 labelPath: values?.[2] as string,
-                hasUnappliedEffects: values?.[10] as boolean,
-                effectsCheckedAt: values?.[11] as string | null,
+                hasUnappliedEffects: values?.[12] as boolean,
+                effectsCheckedAt: values?.[13] as string | null,
               })
               return { rows: [] }
             }
