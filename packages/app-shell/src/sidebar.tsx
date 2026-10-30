@@ -14,7 +14,7 @@ import { useRedactionRunsList } from './redaction-runs'
 import { MatterRow, ModuleRow } from './sidebar-rows'
 import { useMediaQuery } from './use-media-query'
 import type { VerificationRunSummary } from '@obiter/contracts'
-import { latestRunsPerDocument, openWorkCount } from './open-work'
+import { attentionRunsPerDocument, openWorkCount } from './open-work'
 import { useOrganisationVerificationRuns } from './verification-runs'
 
 const COLLAPSE_STORAGE_KEY = 'obiter.sidebar.collapsed'
@@ -24,7 +24,7 @@ const RECENT_MATTERS_LIMIT = 4
 function verificationAttentionTone(
   runs: VerificationRun[],
 ): 'danger' | 'warning' | 'success' {
-  const tones = latestRunsPerDocument(runs)
+  const tones = attentionRunsPerDocument(runs)
     .filter((run) => run.status === 'completed')
     .map((run) => verificationAttentionToneFor(run.summary))
   if (tones.includes('danger')) return 'danger'

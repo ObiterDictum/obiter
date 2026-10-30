@@ -22,7 +22,7 @@ function inviteTokenFromSearch(search: { token?: unknown }): string {
 export function AcceptInviteRouteView() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { session, isPending, resendVerificationEmail } = useAuth()
+  const { session, isPending, resendVerificationEmail, signOut } = useAuth()
   // SAFETY: useSearch with strict:false is untyped; token is re-validated as a non-empty string by inviteTokenFromSearch before use.
   const search = useSearch({ strict: false }) as { token?: string }
   const token = inviteTokenFromSearch(search)
@@ -63,9 +63,30 @@ export function AcceptInviteRouteView() {
 
   const checking = isPending || (token.length > 0 && previewQuery.isPending)
   const canJoin = Boolean(token) && preview?.ok === true
+  const differentEmail =
+    Boolean(session) &&
+    preview?.ok === true &&
+    preview.matchesSessionEmail === false
   const showAccept =
-    Boolean(session) && canJoin && error?.kind !== 'missing_token'
+    Boolean(session) &&
+    canJoin &&
+    !differentEmail &&
+    error?.kind !== 'missing_token'
   const showSignUp = !session && canJoin
+  const failureNotice = error ?? (differentEmail ? wrongEmail : null)
+
+  async function handleSignOut() {
+    try {
+      await signOut()
+      await navigate({ to: '/sign-in', search: { token } })
+    } catch (caught) {
+      setError({
+        kind: 'other',
+        message:
+          caught instanceof Error ? caught.message : 'Could not sign out.',
+      })
+    }
+  }
 
   return (
     <AuthLayout footnote="Invitations can be accepted once and expire after 7 days.">
@@ -111,8 +132,16 @@ export function AcceptInviteRouteView() {
           </>
         ) : (
           <>
-            {error ? (
-              <InviteFailureNotice failure={error} token={token} />
+            {failureNotice ? (
+              <InviteFailureNotice
+                failure={failureNotice}
+                token={token}
+                onSignOut={
+                  failureNotice.kind === 'wrong_email'
+                    ? () => void handleSignOut()
+                    : undefined
+                }
+              />
             ) : null}
             {error?.kind === 'unverified' && session?.user.email ? (
               <ResendVerificationControl
@@ -156,6 +185,8 @@ function InviteHeading({
   }
   return null
 }
+
+const wrongEmail: AcceptFailure = { kind: 'wrong_email' }
 
 type AcceptFailure =
   | { kind: 'missing_token' }
@@ -285,9 +316,11 @@ function failureCopy(failure: AcceptFailure): FailureCopy {
 function InviteFailureNotice({
   failure,
   token,
+  onSignOut,
 }: {
   failure: AcceptFailure
   token: string
+  onSignOut?: () => void
 }) {
   const copy = failureCopy(failure)
   return (
@@ -307,6 +340,16 @@ function InviteFailureNotice({
         {copy.next ? <p className="text-meta text-muted">{copy.next}</p> : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {onSignOut ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={onSignOut}
+          >
+            Sign out and switch account
+          </Button>
+        ) : null}
         <Link
           to="/sign-in"
           search={token ? { token } : undefined}

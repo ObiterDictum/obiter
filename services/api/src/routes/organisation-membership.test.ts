@@ -230,6 +230,7 @@ class MembershipStore {
             accepted_at: invite.accepted_at,
             revoked_at: invite.revoked_at,
             expires_at: invite.expires_at,
+            email: invite.email,
             organisation_name:
               this.organisationNames.get(invite.organisation_id) ??
               invite.organisation_id,
@@ -1182,6 +1183,72 @@ describe('organisation membership routes', () => {
     expect(await response.json()).toEqual({
       organisationName: 'North Chambers',
       invitedByName: 'Owner',
+    })
+  })
+
+  it('says the invite matches the signed-in email without returning the address', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const ownerApp = appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const token = tokenFromInviteLog()
+
+    const response = await appFor(store, {
+      id: 'usr_invitee',
+      email: 'Invitee@Example.com',
+      emailVerified: true,
+      organisationId: 'org_b',
+      role: 'owner',
+    }).request(`/api/invites/preview?token=${encodeURIComponent(token)}`)
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as Record<string, unknown>
+    expect(body).toEqual({
+      organisationName: 'North Chambers',
+      invitedByName: 'Owner',
+      matchesSessionEmail: true,
+    })
+    expect(JSON.stringify(body)).not.toContain('invitee@example.com')
+  })
+
+  it('says the invite belongs to a different email when the signed-in address differs', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const ownerApp = appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const token = tokenFromInviteLog()
+
+    const response = await appFor(store, {
+      id: 'usr_other',
+      email: 'other@example.com',
+      emailVerified: true,
+      organisationId: 'org_c',
+      role: 'owner',
+    }).request(`/api/invites/preview?token=${encodeURIComponent(token)}`)
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      organisationName: 'North Chambers',
+      invitedByName: 'Owner',
+      matchesSessionEmail: false,
     })
   })
 

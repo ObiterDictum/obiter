@@ -21,6 +21,22 @@ function startedAt(run: VerificationRun) {
   return Date.parse(run.completedAt ?? run.createdAt) || 0
 }
 
+export function attentionRunsPerDocument(
+  runs: readonly VerificationRun[],
+): VerificationRun[] {
+  const completed = new Map<string, VerificationRun>()
+  for (const run of runs) {
+    if (run.status !== 'completed') continue
+    const seen = completed.get(run.documentId)
+    if (!seen || startedAt(run) > startedAt(seen)) {
+      completed.set(run.documentId, run)
+    }
+  }
+  return latestRunsPerDocument(runs).map(
+    (run) => completed.get(run.documentId) ?? run,
+  )
+}
+
 export function openWorkForRun(run: VerificationRun): number {
   switch (run.status) {
     case 'queued':
@@ -51,7 +67,7 @@ export function openWorkCount(sources: {
   verificationRuns: readonly VerificationRun[]
   redactionRuns: readonly RedactionRunListItem[]
 }): OpenWork {
-  const verify = latestRunsPerDocument(sources.verificationRuns).reduce(
+  const verify = attentionRunsPerDocument(sources.verificationRuns).reduce(
     (total, run) => total + openWorkForRun(run),
     0,
   )

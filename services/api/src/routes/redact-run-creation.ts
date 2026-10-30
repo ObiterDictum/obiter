@@ -232,13 +232,6 @@ export function createRedactRunCreationRoutes(
     )
     if (!source)
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
-    if (!source.text_object_key)
-      return errorResponse(
-        c,
-        'document_version_not_found',
-        'Document text is not available for redaction.',
-        404,
-      )
     const id = `red_${crypto.randomUUID()}`
     const docx = isDocxMimeOrFilename(
       source.filename,
@@ -264,7 +257,16 @@ export function createRedactRunCreationRoutes(
       } catch (error) {
         return extractionErrorResponse(c, error)
       }
-    } else text = await storage.readText(source.text_object_key)
+    } else {
+      if (!source.text_object_key)
+        return errorResponse(
+          c,
+          'document_version_not_found',
+          'Document text is not available for redaction.',
+          404,
+        )
+      text = await storage.readText(source.text_object_key)
+    }
     if (!validSourceText(text))
       return errorResponse(
         c,
