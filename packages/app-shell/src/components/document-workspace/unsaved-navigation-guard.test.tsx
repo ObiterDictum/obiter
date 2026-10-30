@@ -18,20 +18,21 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 import { UnsavedNavigationGuard } from './unsaved-navigation-guard'
+import type { SaveState } from './use-document-save'
 
 afterEach(cleanup)
 
-function openEditor(atRisk: boolean) {
+function openEditor(initial: SaveState) {
   const root = createRootRoute({ component: Outlet })
   const editor = createRoute({
     getParentRoute: () => root,
     path: '/',
     component: () => {
-      const [risk, setRisk] = useState(atRisk)
+      const [state, setState] = useState(initial)
       return (
         <>
-          <UnsavedNavigationGuard atRisk={risk} />
-          <button onClick={() => setRisk(false)}>Saved</button>
+          <UnsavedNavigationGuard saveState={state} />
+          <button onClick={() => setState({ status: 'saved' })}>Saved</button>
           <Link to="/other">Other</Link>
         </>
       )
@@ -49,8 +50,8 @@ function openEditor(atRisk: boolean) {
   render(<RouterProvider router={router} />)
 }
 
-it('requires an explicit choice when a draft cannot be stored', async () => {
-  openEditor(true)
+it('asks before leaving while the save state is unsaved, and Stay keeps the editor', async () => {
+  openEditor({ status: 'unsaved' })
   await screen.findByRole('link', { name: 'Other' })
   fireEvent.click(screen.getByRole('link', { name: 'Other' }))
   await screen.findByRole('heading', { name: 'Leave without saving?' })
@@ -70,8 +71,23 @@ it('requires an explicit choice when a draft cannot be stored', async () => {
   await screen.findByText('Other page')
 })
 
+it('asks before leaving while a save is in flight', async () => {
+  openEditor({ status: 'saving' })
+  fireEvent.click(await screen.findByRole('link', { name: 'Other' }))
+  await screen.findByRole('heading', { name: 'Leave without saving?' })
+})
+
+it('leaves without a prompt once every change is saved', async () => {
+  openEditor({ status: 'saved' })
+  fireEvent.click(await screen.findByRole('link', { name: 'Other' }))
+  await screen.findByText('Other page')
+  expect(
+    screen.queryByRole('heading', { name: 'Leave without saving?' }),
+  ).toBeNull()
+})
+
 it('continues a blocked navigation when an in-flight save completes', async () => {
-  openEditor(true)
+  openEditor({ status: 'saving' })
   const saved = await screen.findByRole('button', { name: 'Saved' })
   fireEvent.click(await screen.findByRole('link', { name: 'Other' }))
   await screen.findByRole('heading', { name: 'Leave without saving?' })

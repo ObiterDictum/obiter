@@ -211,13 +211,14 @@ export function VerifyDocument({
 
       {findingsRun && findingsRun.id !== run.id && run.status === 'failed' ? (
         <p className="px-6 pb-4 text-caption text-subtle">
-          The findings below come from the earlier completed run on{' '}
+          The latest run failed. The findings below are from the previous
+          completed run on{' '}
           {checkedNumber === undefined
             ? 'an earlier version'
             : `version ${String(checkedNumber)}`}
           , completed{' '}
           {formatRunTime(findingsRun.completedAt ?? findingsRun.createdAt)}. The
-          failed run above recorded no result.
+          failed run recorded no result.
         </p>
       ) : null}
 

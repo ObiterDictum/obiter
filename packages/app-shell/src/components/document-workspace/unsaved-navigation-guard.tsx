@@ -9,13 +9,19 @@ import {
   DialogFooter,
   DialogTitle,
 } from '@obiter/ui'
+import type { SaveState } from './use-document-save'
 
-export function UnsavedNavigationGuard({ atRisk }: { atRisk: boolean }) {
+export function UnsavedNavigationGuard({
+  saveState,
+}: {
+  saveState: SaveState
+}) {
   const router = useRouter({ warn: false })
-  return router ? <NavigationGuard atRisk={atRisk} /> : null
+  return router ? <NavigationGuard saveState={saveState} /> : null
 }
 
-function NavigationGuard({ atRisk }: { atRisk: boolean }) {
+function NavigationGuard({ saveState }: { saveState: SaveState }) {
+  const atRisk = saveState.status !== 'saved'
   const blocker = useBlocker({
     shouldBlockFn: () => atRisk,
     enableBeforeUnload: atRisk,
@@ -34,8 +40,8 @@ function NavigationGuard({ atRisk }: { atRisk: boolean }) {
       <DialogContent size="md">
         <DialogTitle>Leave without saving?</DialogTitle>
         <DialogDescription>
-          This browser could not store a draft. Leaving now would lose your
-          unsaved changes. Stay to save them, or leave without saving.
+          You have unsaved changes. Leaving now would lose them. Stay to save
+          them, or leave without saving.
         </DialogDescription>
         <DialogFooter>
           <Button variant="ghost" onClick={() => blocker.reset?.()}>

@@ -7,26 +7,29 @@ import { useUploadMatterDocument } from '../documents'
 function useMatterDocumentUpload(matterId: string) {
   const upload = useUploadMatterDocument(matterId)
   const { toast } = useToast()
+  const [activeFile, setActiveFile] = useState<string | null>(null)
 
-  function send(file: File) {
-    upload.mutate(file, {
-      onSuccess: (result) => {
+  async function send(files: File[]) {
+    for (const file of files) {
+      setActiveFile(file.name)
+      try {
+        const result = await upload.mutateAsync(file)
         toast({
           title: 'Document uploaded',
           description: result.version.filename,
         })
-      },
-      onError: (error) => {
+      } catch (error) {
         toast({
           title: 'Upload failed',
-          description: error.message,
+          description: `${file.name}: ${error instanceof Error ? error.message : 'Please try again.'}`,
           tone: 'danger',
         })
-      },
-    })
+      }
+    }
+    setActiveFile(null)
   }
 
-  return { pending: upload.isPending, send }
+  return { pending: upload.isPending || activeFile !== null, activeFile, send }
 }
 
 export function MatterDropZone({
@@ -65,8 +68,8 @@ export function MatterDropZone({
         if (!carriesFiles(event)) return
         event.preventDefault()
         setDragging(false)
-        const file = event.dataTransfer.files?.[0]
-        if (file) send(file)
+        const files = Array.from(event.dataTransfer.files ?? [])
+        if (files.length > 0) void send(files)
       }}
     >
       {children}
@@ -97,13 +100,17 @@ export function MatterUploadButton({
   label?: string
   variant?: 'primary' | 'secondary' | 'ghost'
 }) {
-  const { pending, send } = useMatterDocumentUpload(matterId)
+  const { pending, activeFile, send } = useMatterDocumentUpload(matterId)
   return (
     <label
       className={`${buttonClassName({ variant, size: 'md' })} cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring`}
     >
       {pending ? (
-        'Uploading…'
+        activeFile ? (
+          `Uploading ${activeFile}…`
+        ) : (
+          'Uploading…'
+        )
       ) : (
         <>
           <Upload size={16} aria-hidden /> {label}
@@ -111,13 +118,14 @@ export function MatterUploadButton({
       )}
       <input
         type="file"
+        multiple
         accept=".docx,.pdf,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         className="sr-only"
         disabled={pending}
         aria-label="Upload document"
         onChange={(event) => {
-          const file = event.target.files?.[0]
-          if (file) send(file)
+          const files = Array.from(event.target.files ?? [])
+          if (files.length > 0) void send(files)
           event.target.value = ''
         }}
       />
@@ -135,7 +143,7 @@ export function NewDocumentButton({ matterId }: { matterId: string }) {
       disabled={pending}
       onClick={() => {
         void blankDocumentFile()
-          .then(send)
+          .then((file) => send([file]))
           .catch((error: unknown) => {
             toast({
               title: 'Could not create the document',

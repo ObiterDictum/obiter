@@ -52,7 +52,13 @@ export function Select({
       ) : null}
       <BaseSelect.Root
         name={name}
-        value={value}
+        value={
+          value !== undefined
+            ? value
+            : defaultValue === undefined
+              ? null
+              : undefined
+        }
         defaultValue={defaultValue}
         disabled={disabled}
         onValueChange={(next) => onValueChange?.(next ?? null)}
