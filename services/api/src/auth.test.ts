@@ -385,9 +385,7 @@ describe('verificationEmailUrl', () => {
     expect(parsed.origin).toBe('http://localhost:8894')
     expect(parsed.pathname).toBe('/api/auth/verify-email')
     expect(parsed.searchParams.get('token')).toBe('a b/c')
-    expect(parsed.searchParams.get('callbackURL')).toBe(
-      'http://localhost:3094',
-    )
+    expect(parsed.searchParams.get('callbackURL')).toBe('http://localhost:3094')
   })
 })
 
