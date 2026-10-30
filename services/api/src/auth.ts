@@ -125,6 +125,11 @@ export function resetPasswordUrl(env: ApiEnv, token: string): string {
   return `${env.webOrigin}/reset-password?token=${encodeURIComponent(token)}`
 }
 
+export function verificationEmailUrl(env: ApiEnv, token: string): string {
+  const query = new URLSearchParams({ token, callbackURL: env.webOrigin })
+  return `${env.authBaseUrl}/api/auth/verify-email?${query.toString()}`
+}
+
 interface AuthAuditContext {
   path: string
   newSession: {
@@ -258,8 +263,12 @@ export function createAuth(env: ApiEnv, pool: Pool) {
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
-      sendVerificationEmail: async ({ user, url }) => {
-        await sendVerificationEmail(env, user.email, url)
+      sendVerificationEmail: async ({ user, token }) => {
+        await sendVerificationEmail(
+          env,
+          user.email,
+          verificationEmailUrl(env, token),
+        )
       },
     },
     user: {
