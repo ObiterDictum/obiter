@@ -7,7 +7,7 @@ import {
   redactionRunNeedsDecision,
   undecidedSpanCount,
 } from '../redaction-runs'
-import { latestRunsPerDocument, openWorkForRun } from '../open-work'
+import { attentionRunsPerDocument, openWorkForRun } from '../open-work'
 
 type AttentionKind =
   | 'verify_flagged'
@@ -65,7 +65,7 @@ export function buildAttentionItems(
   sources: AttentionSources,
 ): AttentionItem[] {
   return [
-    ...latestRunsPerDocument(sources.verificationRuns).flatMap((run) =>
+    ...attentionRunsPerDocument(sources.verificationRuns).flatMap((run) =>
       verificationAttentionItem(run, sources),
     ),
     ...sources.redactionRuns.flatMap((run) =>

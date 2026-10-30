@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { Plus } from '@phosphor-icons/react'
 import {
   Button,
@@ -23,8 +24,10 @@ export function CreateMatterDialog({
   variant?: 'primary' | 'secondary'
   size?: 'sm' | 'md'
 }) {
+  const navigate = useNavigate()
   const { toast } = useToast()
   const createMatter = useCreateMatter()
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [clientReference, setClientReference] = useState('')
   const [primaryJurisdiction, setPrimaryJurisdiction] = useState('')
@@ -55,13 +58,18 @@ export function CreateMatterDialog({
       setName('')
       setClientReference('')
       setPrimaryJurisdiction('')
+      setOpen(false)
+      await navigate({
+        to: '/matters/$matterId',
+        params: { matterId: matter.id },
+      })
     } catch {
       setError('Could not create the matter. Please try again.')
     }
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
           <Button

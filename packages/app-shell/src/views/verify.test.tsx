@@ -519,7 +519,7 @@ describe('VerifyRouteView', () => {
     ).toBeTruthy()
   })
 
-  it('names the earlier completed result when the newest run failed', async () => {
+  it('names the failed latest run and the previous completed result it lists', async () => {
     runs = [
       run({
         id: 'vrun_failed',
@@ -532,7 +532,7 @@ describe('VerifyRouteView', () => {
     await renderVerify()
     expect(
       await screen.findByText(
-        /The findings below come from the earlier completed run/,
+        /The latest run failed\. The findings below are from the previous completed run/,
       ),
     ).toBeTruthy()
   })

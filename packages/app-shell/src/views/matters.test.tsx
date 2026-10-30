@@ -290,6 +290,52 @@ describe('matters list', () => {
     expect(screen.getByRole('button', { name: northgate })).toBeTruthy()
   })
 
+  it('closes the create dialog and opens the new matter', async () => {
+    const created = matter({
+      id: 'mtr_new',
+      name: 'New client matter',
+      clientReference: '',
+      primaryJurisdiction: 'England & Wales',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(String(input), 'http://localhost').pathname
+        if (path === '/api/matters' && init?.method === 'POST') {
+          return Response.json({ matter: created }, { status: 201 })
+        }
+        if (path === '/api/matters') return Response.json({ matters })
+        if (path.endsWith('/verification-runs')) {
+          return Response.json({ runs: [], nextCursor: null })
+        }
+        const body = documents[path]
+        return body
+          ? Response.json({ documents: body })
+          : Response.json({ error: 'not found' }, { status: 404 })
+      }),
+    )
+    const router = buildRouter()
+    render(<RouterProvider router={router} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New matter' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Matter name'), {
+      target: { value: 'New client matter' },
+    })
+    fireEvent.change(within(dialog).getByLabelText('Primary jurisdiction'), {
+      target: { value: 'England & Wales' },
+    })
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create matter' }),
+    )
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/matters/mtr_new')
+    })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(await screen.findByText('Matter page')).toBeTruthy()
+  })
+
   it('offers the empty state before the first matter exists', async () => {
     mocks.useMattersList.mockReturnValue({
       data: [],
