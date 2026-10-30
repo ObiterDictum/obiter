@@ -65,7 +65,7 @@ describe('open work', () => {
     expect(items({ verificationRuns: runs })).toHaveLength(1)
   })
 
-  it('counts the findings Verify lists after a re-run fails', () => {
+  it('counts the findings Verify lists and the failed re-run after a re-run fails', () => {
     const completed = run({ id: 'vrun_done' })
     const failed = run({
       id: 'vrun_failed',
@@ -85,9 +85,14 @@ describe('open work', () => {
 
     expect(
       openWorkCount({ verificationRuns: runs, redactionRuns: [] }).verify,
-    ).toBe(3)
-    expect(summary.verify).toBe(3)
-    expect(items({ verificationRuns: runs })[0]?.runId).toBe('vrun_done')
+    ).toBe(4)
+    expect(summary.verify).toBe(4)
+    expect(
+      items({ verificationRuns: runs }).map((item) => [item.runId, item.kind]),
+    ).toEqual([
+      ['vrun_done', 'verify_flagged'],
+      ['vrun_failed', 'verify_failed'],
+    ])
   })
 
   it('stops counting a finding a person has dismissed', () => {

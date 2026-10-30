@@ -32,9 +32,11 @@ export function attentionRunsPerDocument(
       completed.set(run.documentId, run)
     }
   }
-  return latestRunsPerDocument(runs).map(
-    (run) => completed.get(run.documentId) ?? run,
-  )
+  return latestRunsPerDocument(runs).flatMap((run) => {
+    const listed = completed.get(run.documentId)
+    if (!listed || listed.id === run.id) return [run]
+    return run.status === 'failed' ? [listed, run] : [listed]
+  })
 }
 
 export function openWorkForRun(run: VerificationRun): number {
