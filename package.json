@@ -21,7 +21,6 @@
     "bench:guard": "bun scripts/bench-guard.ts",
     "perf:bundle-budget": "bun scripts/perf/bundle-budget.mjs",
     "perf:desktop-budget": "bun scripts/perf/desktop-budget.mjs",
-    "perf:web-load": "bun scripts/perf/web-load-runner.mjs",
     "load:upload-extraction": "bun scripts/load/upload-extraction-load.mjs",
     "benchmark:search": "bun packages/search-client/src/benchmark/run.ts",
     "benchmark:search-corpus": "bun scripts/search-corpus-relevance/run.ts",
