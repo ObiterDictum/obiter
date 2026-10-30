@@ -5286,9 +5286,13 @@
             development React runtime, and a sha256 digest over the client
             assets. <code>serve.mjs</code> verifies that digest at startup and
             refuses a dist whose client assets no longer match it, and the
-            page-load harness requires the marker to name the commit under test.
-            The digest covers <code>dist/client/assets</code> only; the emitted
-            server bundle is not digested (known limitation, see
+            page-load harness in the private
+            <a href="https://github.com/ObiterDictum/bench">bench repository</a>
+            requires the marker to name the commit under test. Page-load,
+            editor-interaction and operation timings are measured there, as a
+            black box against a built checkout. The digest covers
+            <code>dist/client/assets</code> only; the emitted server bundle is
+            not digested (known limitation, see
             <a href="#infra">Deployment</a>).
           </div>
           <div class="callout note">

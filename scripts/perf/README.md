@@ -1,10 +1,12 @@
-# Bundle and page-load measurement
+# Bundle and desktop size budgets
 
-Reproducible production measurement of what ships and how fast it loads: a
-deterministic web bundle budget, a deterministic desktop size budget, and a
-page-load runner. Read this before quoting a load number: most wrong performance
-claims come from measuring development mode, a stale checkout, or a warm cache
-while calling it cold.
+These two checks gate CI, so they stay here. They are deterministic size
+measurements of what ships; every other performance and quality measurement now
+lives in the private bench repository
+([ObiterDictum/bench](https://github.com/ObiterDictum/bench)) — page-load
+journeys, editor interaction, operation latency, statistics and comparison.
+Bench drives a built Obiter checkout as a black box; this directory owns only
+the numbers CI must refuse to let grow.
 
 ## Web bundle budget
 
@@ -23,7 +25,9 @@ client entry):
 - **pdf worker** — budgeted separately; it is a fixed third-party asset.
 
 Budgets live in `scripts/perf/bundle-budget.mjs` with the measured baseline and
-roughly 10% headroom. They are a ratchet against regression, not a target.
+roughly 10% headroom. They are a ratchet against regression, not a target. The
+script refuses a dist whose build marker names another commit, so a stale build
+cannot measure as current.
 
 ## Desktop size budget
 
@@ -68,115 +72,15 @@ platform-specific — Windows NSIS is the primary target and is built only by
 must not be presented as a Windows or macOS one. Measuring the installer is the
 remaining open part of X25; see board D10 and P1.37.
 
-## Page-load runner
+## Feeding bench
+
+Both scripts take `--json <path>` so bench can record the sizes next to a timed
+result:
 
 ```bash
-Q18_PERF_EMAIL=... Q18_PERF_PASSWORD=... \
-  node scripts/perf/web-load-runner.mjs \
-    --serve-prod "$PWD" --expect-artifact-commit "$(git rev-parse HEAD)" \
-    --web-url http://localhost:3002 --api-url http://localhost:8789 \
-    --expect-checkout "$PWD" \
-    --fixtures /path/to/fixtures.json \
-    --samples 5 --cache cold --nav hard --out /tmp/perf.json
+bun run perf:bundle-budget --json .obiter/bundle-budget.json
+bun run perf:desktop-budget --json .obiter/desktop-budget.json
 ```
 
-`--serve-prod <worktree>` starts `apps/web/serve.mjs` from that worktree behind
-a local gateway reproducing production's same-origin split (`/api/*` to the API,
-everything else to SSR). Omit it to measure a server you started yourself, such
-as `vite dev`; that target has no build marker, so it also needs
-`--allow-unverified-artifact`. Credentials are read from the environment and
-never written to the report.
-
-The runner attributes a run before it measures anything, and records the three
-identities separately because they can diverge:
-
-- **runner** — this harness's own checkout and commit.
-- **artifact** — the web build marker written by the package `build` script.
-  With `--serve-prod` the marker's commit must equal `--expect-artifact-commit`,
-  its dirty flag must be false, it must be a production React build, the
-  sha256 over its `dist/client/assets` must match the bytes on disk, and it must
-  match the marker the running server reported at `/.well-known/obiter-build`.
-  A stale Before dist under an After checkout, a dist replaced after startup, a
-  missing marker and a dirty build presented as clean are all refused. The
-  digest covers client assets only; a post-build edit to the server bundle
-  (`dist/server/server.js`) is a known limitation, not covered.
-- **API** — `/api/health` provenance must name the expected checkout root.
-
-Every sample is gated on the journey's route-ready control and final path. A
-redirect to sign-in, an error screen or a wrong document fails that journey and
-is recorded under `failures` with a reason, rather than contributing a timing
-under the target's name. Credentials are only required when a selected journey
-needs them, so a public-only run needs no `Q18_PERF_*`.
-
-Conditions, which must not be conflated:
-
-| Flag                               | Meaning                                               |
-| ---------------------------------- | ----------------------------------------------------- |
-| `--cache cold`                     | a fresh browser context per sample (empty HTTP cache) |
-| `--cache warm`                     | re-navigate inside one context                        |
-| `--nav hard`                       | `page.goto`, a full document load                     |
-| `--nav client`                     | click the in-app link, measured from the click        |
-| `--emulate-network fast3g\|slow4g` | CDP profile, labelled in the report                   |
-
-The runner refuses to measure unless the API's `/api/health` provenance names
-the expected checkout root, so a stale or shared server cannot be measured by
-accident. It signs in with a password and reports the final path each journey
-reached, so a journey that quietly landed on sign-in is visible.
-
-Metrics per sample: route-ready (`contentMs` = primary control present,
-`readyMs` = control present after React hydration), TTFB, FCP, LCP, CLS, long
-tasks and total blocking time, request counts and transferred/decoded bytes,
-largest scripts, and the API request waterfall.
-
-## Fixtures
-
-`fixtures.example.json` lists the keys the journeys substitute; a journey path
-with a placeholder and no matching key is a hard failure before measurement.
-Point `--fixtures` at a local file containing real ids from the lane database.
-Do not commit that file: it identifies test data, and the point of the runner is
-that it can be pointed at any target.
-
-The `document-editor` journey also reads `documentName` for its client-navigation
-sample, which clicks the document's link in the matter workspace rail.
-
-## Editor interaction
-
-Opening a document is not the same as using one. `editor-interaction.mjs`
-measures the second thing, and reuses the runner's target lifecycle so the same
-provenance gates apply:
-
-```bash
-Q18_PERF_EMAIL=... Q18_PERF_PASSWORD=... \
-  node scripts/perf/editor-interaction.mjs \
-    --serve-prod "$PWD" --expect-artifact-commit "$(git rev-parse HEAD)" \
-    --web-url http://localhost:3003 --api-url http://localhost:8790 \
-    --expect-checkout "$PWD" --fixtures /path/to/fixtures.json \
-    --modes typing,scroll,save --samples 5 --keys 30 --out /tmp/interaction.json
-```
-
-- **typing** — input latency from each keydown to the second animation frame
-  after its keyup, plus long tasks and frame gaps during the run. The typed text
-  is fixed, so Before and After pay the same edit cost.
-- **scroll** — frame gaps through a scripted wheel over the document desk.
-- **save** — click the document toolbar's **Save** control and wait for the
-  response, then reload to check the saved text is actually there. This one
-  mutates the document, so point `saveDocumentId` at a separate fixture from the
-  one whose opening time you are reporting.
-
-Each sample opens a paragraph, waits for the field to accept the edit, and only
-then measures: a document that is painted but not editable is not yet usable,
-and the interval between the two is reported as `paintedMs` to `editableMs`.
-The click is forced because a page that is still relaying out never reports a
-stable box.
-
-Before any probe runs, `matterId` and every document id the selected modes read
-are resolved and then confirmed against the API through the signed-in session,
-so a missing key or a target the user cannot read fails named instead of
-appearing as a slow document.
-
-Each sample is bounded by `--sample-timeout` (seconds, default 600). A sample
-that exceeds its bound is recorded as a failure, and the browser context it
-created is closed and awaited before the next sample is scheduled: an abandoned
-sample still repaginating would otherwise be measured as contention in every
-sample after it. If that close cannot be confirmed, the run stops rather than
-measuring on. `aborted` in the report names the sample that ended the campaign.
+Bench reads those two files from the measured checkout when they exist and
+records the numbers in `budgets`. It never re-derives them.

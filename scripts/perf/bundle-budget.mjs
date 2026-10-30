@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 
@@ -118,6 +118,27 @@ async function main() {
     `pdf worker: ${kb(pdfWorkerGzip)} / budget ${kb(BUDGETS.pdfWorkerGzipBytes)}`,
   ]
   for (const line of report) console.log(line)
+
+  const jsonOut = arg('json')
+  if (jsonOut) {
+    await mkdir(dirname(jsonOut), { recursive: true })
+    await writeFile(
+      jsonOut,
+      `${JSON.stringify(
+        {
+          initialGzipBytes: initialGzip,
+          lazyGzipBytes: lazyGzip,
+          largestLazyChunkGzipBytes: largestLazy.bytes,
+          pdfWorkerGzipBytes: pdfWorkerGzip,
+          initialBudgetBytes: BUDGETS.initialGzipBytes,
+          lazyBudgetBytes: BUDGETS.lazyGzipBytes,
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    )
+  }
 
   const failures = []
   if (initialGzip > BUDGETS.initialGzipBytes)
