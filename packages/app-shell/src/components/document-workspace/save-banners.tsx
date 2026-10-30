@@ -19,12 +19,7 @@ export function DocumentSaveBanners({
   const plural = save.blocked.length === 1 ? 'change' : 'changes'
   return (
     <div className="flex flex-col gap-2 px-3 pb-2">
-      <UnsavedNavigationGuard
-        atRisk={
-          save.persistence === 'unavailable' &&
-          save.saveState.status !== 'saved'
-        }
-      />
+      <UnsavedNavigationGuard saveState={save.saveState} />
       {drafts.restored && save.dirty ? (
         <Banner
           tone="info"

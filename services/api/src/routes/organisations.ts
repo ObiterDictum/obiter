@@ -535,10 +535,17 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
     if (!preview.ok) {
       return errorResponse(c, preview.code, preview.message, 404)
     }
+    const sessionEmail = c.get('user')?.email?.toLowerCase()
     return c.json(
       organisationInvitePreviewSchema.parse({
         organisationName: preview.organisationName,
         invitedByName: preview.invitedByName,
+        ...(sessionEmail
+          ? {
+              matchesSessionEmail:
+                preview.invitedEmail.toLowerCase() === sessionEmail,
+            }
+          : {}),
       }),
     )
   })

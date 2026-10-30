@@ -156,7 +156,10 @@ function noDocuments() {
 
 function uploadMutationSpy() {
   const mutate = vi.fn()
-  return { mutate, isPending: false, error: null }
+  const mutateAsync = vi
+    .fn()
+    .mockResolvedValue({ version: { filename: 'Untitled.docx' } })
+  return { mutate, mutateAsync, isPending: false, error: null }
 }
 
 function deleteMutationSpy() {
@@ -263,7 +266,9 @@ describe('matter page header', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New document' }))
     await waitFor(() => {
       expect(mocks.blankDocumentFile).toHaveBeenCalled()
-      expect(upload.mutate).toHaveBeenCalled()
+      expect(upload.mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Untitled.docx' }),
+      )
     })
   })
 })

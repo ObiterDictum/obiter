@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
   navigate: vi.fn(),
   resendVerificationEmail: vi.fn(),
+  signOut: vi.fn(),
   session: null as {
     user: { id: string; email?: string }
     session: { id: string }
@@ -43,7 +44,7 @@ mock.module('../auth', () =>
         requestPasswordReset: vi.fn(),
         resetPassword: vi.fn(),
         resendVerificationEmail: mocks.resendVerificationEmail,
-        signOut: vi.fn(),
+        signOut: mocks.signOut,
       }),
     }))(),
   ),
@@ -93,6 +94,7 @@ const { AcceptInviteRouteView } = await import('./accept-invite')
 const preview = {
   organisationName: 'North Chambers',
   invitedByName: 'Ada Owner',
+  matchesSessionEmail: true,
 }
 
 function mockApi(options?: {
@@ -277,6 +279,29 @@ describe('AcceptInviteRouteView', () => {
       expect(
         screen.getByText(/sent to a different email address/i),
       ).toBeTruthy()
+    })
+  })
+
+  it('hides Accept and offers to switch account when the invite is for another email', async () => {
+    mocks.session = {
+      user: { id: 'usr_1', email: 'other@obiter.dev' },
+      session: { id: 'ses_1' },
+    }
+    mockApi({ preview: { ...preview, matchesSessionEmail: false } })
+
+    renderAccept()
+    await screen.findByText(/sent to a different email address/i)
+
+    expect(screen.queryByRole('button', { name: /accept invite/i })).toBeNull()
+    fireEvent.click(
+      screen.getByRole('button', { name: /sign out and switch account/i }),
+    )
+    await waitFor(() => {
+      expect(mocks.signOut).toHaveBeenCalledOnce()
+      expect(mocks.navigate).toHaveBeenCalledWith({
+        to: '/sign-in',
+        search: { token: 'invite-token' },
+      })
     })
   })
 

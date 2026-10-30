@@ -45,17 +45,23 @@ export async function loadInvitePreview(
   client: Pick<Pool | PoolClient, 'query'>,
   tokenHash: string,
 ): Promise<
-  | { ok: true; organisationName: string; invitedByName: string }
+  | {
+      ok: true
+      organisationName: string
+      invitedByName: string
+      invitedEmail: string
+    }
   | { ok: false; code: InviteUnavailableCode; message: string }
 > {
   const found = await client.query<
     InviteAvailabilityRow & {
+      email: string
       organisation_name: string
       invited_by_name: string
     }
   >(
     `
-      select i.accepted_at, i.revoked_at, i.expires_at,
+      select i.accepted_at, i.revoked_at, i.expires_at, i.email,
         o.name as organisation_name, u.name as invited_by_name
       from organisation_invites i
       join organisations o on o.id = i.organisation_id
@@ -78,6 +84,7 @@ export async function loadInvitePreview(
     ok: true,
     organisationName: row.organisation_name,
     invitedByName: row.invited_by_name,
+    invitedEmail: row.email,
   }
 }
 
