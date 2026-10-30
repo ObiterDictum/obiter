@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { afterAll, describe, expect, it } from 'bun:test'
 import { Hono } from 'hono'
 import type { AuthzVariables } from '../authz'
@@ -27,7 +28,13 @@ interface StandaloneSeed extends Seed {
   outputKey: string
 }
 
-async function seedStandaloneRun(seed: Seed): Promise<StandaloneSeed> {
+async function seedStandaloneRun(
+  seed: Seed,
+  output: { mimeType: string; bytes: Buffer } = {
+    mimeType: 'text/plain',
+    bytes: copyBytes,
+  },
+): Promise<StandaloneSeed> {
   const runId = `red_standalone_${seed.documentId}`
   const outputId = `out_standalone_${seed.documentId}`
   const outputKey = `org/${seed.orgId}/outputs/${outputId}`
@@ -53,9 +60,9 @@ async function seedStandaloneRun(seed: Seed): Promise<StandaloneSeed> {
       seed.orgId,
       outputId,
       JSON.stringify({
-        outputMimeType: 'text/plain',
+        outputMimeType: output.mimeType,
         outputFilename: 'pasted-extract-redacted.txt',
-        outputSha256: copySha256,
+        outputSha256: createHash('sha256').update(output.bytes).digest('hex'),
       }),
       seed.ownerId,
     ],
@@ -224,6 +231,41 @@ describe('POST /api/redaction-runs/:runId/save-to-matter', () => {
         [seed.matterId],
       )
       expect(documents.rows).toHaveLength(2)
+    } finally {
+      await cleanupRun(seed)
+    }
+  })
+
+  it('saves an image-only redacted PDF copy to a matter with no text layer', async () => {
+    const pdfBytes = await readFile(
+      '../../data/evals/redact/pdf-scanned-like-fixture.pdf',
+    )
+    const seed = await seedStandaloneRun(await seedMatter(pool, null), {
+      mimeType: 'application/pdf',
+      bytes: pdfBytes,
+    })
+    try {
+      const storage = storageFor(seed)
+      storage.binary.set(seed.outputKey, pdfBytes)
+      const response = await saveApp(storage, ownerUser(seed)).request(
+        `/api/redaction-runs/${seed.runId}/save-to-matter`,
+        saveRequest(seed.matterId),
+      )
+
+      expect(response.status).toBe(201)
+      const body = (await response.json()) as { versionId: string }
+      const version = await pool.query<{
+        text_object_key: string | null
+        filename: string
+        size_bytes: string
+      }>(
+        `select text_object_key, filename, size_bytes from document_versions
+         where id = $1`,
+        [body.versionId],
+      )
+      expect(version.rows[0]?.filename).toBe('pasted-extract-redacted.pdf')
+      expect(Number(version.rows[0]?.size_bytes)).toBe(pdfBytes.byteLength)
+      expect(storage.text.get(version.rows[0]!.text_object_key!)).toBe('')
     } finally {
       await cleanupRun(seed)
     }

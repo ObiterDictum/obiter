@@ -164,7 +164,10 @@ export async function saveRedactionOutputToMatter(
     try {
       if (!storage.writeBinary || !storage.writeText)
         throw new Error('unavailable')
-      const extracted = await extractDocumentContent(fileType, bytes)
+      const extracted =
+        fileType === 'pdf'
+          ? { text: '', layout: null }
+          : await extractDocumentContent(fileType, bytes)
       writtenKeys.push(created.version.objectKey, textObjectKey)
       if (extracted.layout)
         writtenKeys.push(

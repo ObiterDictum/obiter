@@ -24,6 +24,7 @@ const {
   sendVerificationEmail,
   sendResetPasswordEmail,
   resetPasswordUrl,
+  verificationEmailUrl,
   buildAuthAuditEvent,
   emailAndPasswordOptions,
   sendResetPasswordForUser,
@@ -351,6 +352,40 @@ describe('sendResetPasswordEmail — reset link targets the web origin', () => {
       'https://app.obiter.test/reset-password?token=tok_abc',
     )
     expect(call.html).not.toContain('obiter://')
+  })
+})
+
+describe('verificationEmailUrl', () => {
+  it('returns the reader to the web app after the API verifies the token', () => {
+    const url = verificationEmailUrl(
+      {
+        ...baseEnv,
+        authBaseUrl: 'https://api.obiter.test',
+        webOrigin: 'https://app.obiter.test',
+      },
+      'tok_123',
+    )
+
+    expect(url).toBe(
+      'https://api.obiter.test/api/auth/verify-email?token=tok_123&callbackURL=https%3A%2F%2Fapp.obiter.test',
+    )
+  })
+
+  it('keeps a split API origin for the token check and still lands on the web app', () => {
+    const url = verificationEmailUrl(
+      {
+        ...baseEnv,
+        authBaseUrl: 'http://localhost:8894',
+        webOrigin: 'http://localhost:3094',
+      },
+      'a b/c',
+    )
+
+    const parsed = new URL(url)
+    expect(parsed.origin).toBe('http://localhost:8894')
+    expect(parsed.pathname).toBe('/api/auth/verify-email')
+    expect(parsed.searchParams.get('token')).toBe('a b/c')
+    expect(parsed.searchParams.get('callbackURL')).toBe('http://localhost:3094')
   })
 })
 
