@@ -1,8 +1,8 @@
+import { RedactionReviewView } from '@obiter/redact-ui'
 import {
-  RedactionReviewView,
   redactionDocumentTextQueryOptions,
   redactionRunQueryOptions,
-} from '@obiter/redact-ui'
+} from '@obiter/redact-ui/hooks'
 import { currentUserQueryOptions, guardAuth } from '@obiter/app-shell'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 

@@ -1,4 +1,5 @@
-import { RedactionRunsView, redactionRunsQueryOptions } from '@obiter/redact-ui'
+import { RedactionRunsView } from '@obiter/redact-ui'
+import { redactionRunsQueryOptions } from '@obiter/redact-ui/hooks'
 import { currentUserQueryOptions, guardAuth } from '@obiter/app-shell'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
