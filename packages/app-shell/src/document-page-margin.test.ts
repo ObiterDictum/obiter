@@ -101,6 +101,28 @@ describe('headerLetterhead', () => {
 })
 
 describe('footerLetterhead', () => {
+  it('decodes predefined entities once in text-box columns', () => {
+    const drawing =
+      '<w:drawing><w:txbxContent><w:p><w:r><w:t>&amp;lt; &lt; &gt; &quot; &apos; &#39; &amp;  right</w:t></w:r></w:p></w:txbxContent></w:drawing>'
+    const story: DocumentStoryWire = {
+      partName: 'word/footer1.xml',
+      kind: 'footer',
+      paragraphs: [
+        {
+          id: 'p',
+          runs: [{ id: 'r', text: '', preservedXmlFragments: [drawing] }],
+          preservedXmlFragments: [],
+        },
+      ],
+      preservedXmlFragments: [],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
+    }
+    expect(footerLetterhead(story)?.rows).toEqual([
+      { left: `&lt; < > " ' ' &`, right: 'right' },
+    ])
+  })
+
   it('keeps one copy of text-box columns and ignores the fallback mash', () => {
     const choice =
       '<mc:Choice><w:txbxContent><w:p><w:r><w:t>+44111</w:t></w:r><w:r><w:t xml:space="preserve">          </w:t></w:r><w:r><w:t>www.example.com</w:t></w:r></w:p><w:p><w:r><w:t>1 Example Street</w:t></w:r><w:r><w:t xml:space="preserve">          </w:t></w:r><w:r><w:t>Company Registration Number: 1</w:t></w:r></w:p></w:txbxContent></mc:Choice>'

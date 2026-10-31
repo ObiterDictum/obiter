@@ -1,3 +1,4 @@
+import { collapseSpaceRuns, readElementContent, unwrapCdata } from './html-scan'
 import type { LegalFetchRequest } from './fetch-schema'
 import {
   supportedFindCaseLawCourts,
@@ -33,9 +34,9 @@ export function readRelLink(xml: string, rel: string) {
 }
 
 export function readIdentifier(xml: string) {
-  return xml.match(
-    /<tna:identifier\b[^>]*type=["']ukncn["'][^>]*>([\s\S]*?)<\/tna:identifier>/i,
-  )?.[1]
+  return readElementContent(xml, 'tna:identifier', (attributes) =>
+    /type=["']ukncn["']/i.test(attributes),
+  )
 }
 
 function readLink(xml: string, predicate: (attributes: string) => boolean) {
@@ -122,10 +123,13 @@ export function dateFromDocumentId(documentId: string) {
 }
 
 const neutralCitationPattern =
-  /\[\d{4}\]\s+[A-Za-z][A-Za-z0-9 ]*?\s+\d+(?:\s+\([A-Za-z][A-Za-z0-9 ]*\))?/
+  /\[\d{4}\]\s+[A-Za-z][A-Za-z0-9]*(?: [A-Za-z0-9]+)*?\s+\d+(?:\s+\([A-Za-z][A-Za-z0-9 ]*\))?/
 
 export function extractNeutralCitation(value: string) {
-  return value.match(neutralCitationPattern)?.[0].replace(/\s+/g, ' ').trim()
+  return collapseSpaceRuns(value)
+    .match(neutralCitationPattern)?.[0]
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 export function addFindCaseLawDateParams(
@@ -154,7 +158,7 @@ export function extractDate(value: string) {
 }
 
 export function decodeXml(value: string) {
-  return decodeHtml(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1'))
+  return decodeHtml(unwrapCdata(value))
 }
 
 export function decodeHtml(value: string) {
