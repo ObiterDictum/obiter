@@ -1,17 +1,11 @@
 import {
   AppShellLayout,
-  CaseLawDocumentView,
-  LegislationProvisionView,
-  DocumentDetailLayoutView,
   ForgotPasswordRouteView,
   HomeRouteView,
-  MatterRouteView,
-  MattersRouteView,
   ResetPasswordRouteView,
   SignInRouteView,
   SignUpRouteView,
   AcceptInviteRouteView,
-  SettingsRouteView,
   ShellError,
   ShellNotFound,
   caseLawDocumentQueryOptions,
@@ -37,23 +31,53 @@ import {
   redirect,
   useNavigate,
 } from '@tanstack/react-router'
-import { DesktopSearchPage } from '../../pages/search'
 import { Suspense, lazy } from 'react'
-import { VerifyRouteView } from '@obiter/app-shell'
 
-import { RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
-
+const CaseLawDocumentView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/case-law-document'))
+    .CaseLawDocumentView,
+}))
+const LegislationProvisionView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/legislation-provision'))
+    .LegislationProvisionView,
+}))
+const DocumentDetailLayoutView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/document-detail'))
+    .DocumentDetailLayoutView,
+}))
+const MatterRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/matter-detail'))
+    .MatterRouteView,
+}))
+const MattersRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/matters')).MattersRouteView,
+}))
+const SettingsRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/settings')).SettingsRouteView,
+}))
+const RedactionRunsRegion = lazy(async () => ({
+  default: (await import('@obiter/redact-ui/runs-region')).RedactionRunsRegion,
+}))
+const RedactionRunsView = lazy(async () => ({
+  default: (await import('@obiter/redact-ui/runs')).RedactionRunsView,
+}))
 const RedactionReviewView = lazy(async () => ({
   default: (await import('@obiter/redact-ui/review')).RedactionReviewView,
 }))
+const DesktopSearchPage = lazy(async () => ({
+  default: (await import('../../pages/search')).DesktopSearchPage,
+}))
+const DesktopVerifyPage = lazy(async () => ({
+  default: (await import('../../pages/verify')).DesktopVerifyRoute,
+}))
 
-function RedactLoading() {
+function RouteLoading() {
   return (
     <p
       className="px-12 py-14 text-meta text-muted max-compact:px-8"
       role="status"
     >
-      Loading redaction…
+      Loading…
     </p>
   )
 }
@@ -133,7 +157,11 @@ const mattersRoute = createRoute({
 })
 
 function DesktopMattersRoute() {
-  return <MattersRouteView platform="desktop" />
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <MattersRouteView platform="desktop" />
+    </Suspense>
+  )
 }
 
 const matterDetailRoute = createRoute({
@@ -187,7 +215,7 @@ const redactReviewRoute = createRoute({
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'search',
-  component: DesktopSearchPage,
+  component: DesktopSearchRoute,
 })
 
 const verifyRoute = createRoute({
@@ -195,10 +223,6 @@ const verifyRoute = createRoute({
   path: 'verify',
   component: DesktopVerifyRoute,
 })
-
-export function DesktopVerifyRoute() {
-  return <VerifyRouteView />
-}
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -212,7 +236,11 @@ const settingsRoute = createRoute({
 })
 
 function DesktopSettingsRoute() {
-  return <SettingsRouteView />
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <SettingsRouteView />
+    </Suspense>
+  )
 }
 
 const casesRoute = createRoute({
@@ -248,7 +276,11 @@ const caseSlugRoute = createRoute({
 function DesktopCaseSlugRoute() {
   const { caseSlug } = caseSlugRoute.useParams()
   const caseId = resolveCaseDocumentIdFromSlug(caseSlug)
-  return <CaseLawDocumentView caseId={caseId} />
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <CaseLawDocumentView caseId={caseId} />
+    </Suspense>
+  )
 }
 
 const legislationRoute = createRoute({
@@ -271,13 +303,21 @@ function DesktopLegislationRoute() {
   if (!provisionPath) {
     throw new Error('Legislation provision path is missing.')
   }
-  return <LegislationProvisionView provisionPath={provisionPath} />
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LegislationProvisionView provisionPath={provisionPath} />
+    </Suspense>
+  )
 }
 
 function DesktopMatterDetailRoute() {
   const { matterId } = matterDetailRoute.useParams()
 
-  return <MatterRouteView matterId={matterId} platform="desktop" />
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <MatterRouteView matterId={matterId} platform="desktop" />
+    </Suspense>
+  )
 }
 
 function DesktopDocumentDetailRoute() {
@@ -285,29 +325,33 @@ function DesktopDocumentDetailRoute() {
   const navigate = useNavigate()
 
   return (
-    <DocumentDetailLayoutView
-      matterId={matterId}
-      documentId={documentId}
-      redactionRunsRegion={
-        <RedactionRunsRegion
-          documentId={documentId}
-          onOpenRun={(runId) =>
-            navigate({ to: '/redact/$runId', params: { runId } })
-          }
-        />
-      }
-    />
+    <Suspense fallback={<RouteLoading />}>
+      <DocumentDetailLayoutView
+        matterId={matterId}
+        documentId={documentId}
+        redactionRunsRegion={
+          <RedactionRunsRegion
+            documentId={documentId}
+            onOpenRun={(runId) =>
+              navigate({ to: '/redact/$runId', params: { runId } })
+            }
+          />
+        }
+      />
+    </Suspense>
   )
 }
 
 function DesktopRedactionRunsRoute() {
   const navigate = useNavigate()
   return (
-    <RedactionRunsView
-      onOpenRun={(runId) =>
-        navigate({ to: '/redact/$runId', params: { runId } })
-      }
-    />
+    <Suspense fallback={<RouteLoading />}>
+      <RedactionRunsView
+        onOpenRun={(runId) =>
+          navigate({ to: '/redact/$runId', params: { runId } })
+        }
+      />
+    </Suspense>
   )
 }
 
@@ -315,7 +359,7 @@ function DesktopRedactionReviewRoute() {
   const { runId } = redactReviewRoute.useParams()
   const navigate = useNavigate()
   return (
-    <Suspense fallback={<RedactLoading />}>
+    <Suspense fallback={<RouteLoading />}>
       <RedactionReviewView
         runId={runId}
         onOpenRun={(replacementRunId) =>
@@ -332,6 +376,22 @@ function DesktopRedactionReviewRoute() {
           })
         }}
       />
+    </Suspense>
+  )
+}
+
+function DesktopSearchRoute() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DesktopSearchPage />
+    </Suspense>
+  )
+}
+
+function DesktopVerifyRoute() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DesktopVerifyPage />
     </Suspense>
   )
 }
