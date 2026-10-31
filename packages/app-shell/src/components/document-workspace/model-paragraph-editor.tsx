@@ -2,7 +2,7 @@ import type { ComponentProps, CSSProperties } from 'react'
 import type { DocumentParagraphWire } from '@obiter/contracts'
 import type { ParagraphFace } from '../../document-page-style'
 import { deleteCharBeforeOffset, textDiff } from '../../document-model-text'
-import type { ModelParagraph } from './model-paragraph'
+import type { ModelParagraph } from './model-paragraph-memo'
 import { ParagraphEditor } from './paragraph-editor'
 
 export type ParagraphWordEdit = {

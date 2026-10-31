@@ -1,4 +1,7 @@
-import { InlineChangeReview, inlineReviewOf } from './inline-change-review'
+import {
+  InlineChangeReview,
+  useInlineReviewValue,
+} from './inline-change-review'
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
@@ -349,10 +352,12 @@ export function DocxWorkspace({
         : undefined,
   })
 
+  const inlineReview = useInlineReviewValue(changeReview, () =>
+    togglePanel('review'),
+  )
+
   return (
-    <InlineChangeReview
-      value={inlineReviewOf(changeReview, () => togglePanel('review'))}
-    >
+    <InlineChangeReview value={inlineReview}>
       <WorkspaceShell
         layout={layout}
         onKeyDown={(event) =>

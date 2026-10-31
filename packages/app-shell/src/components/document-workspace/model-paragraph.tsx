@@ -56,7 +56,25 @@ import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 export type { ParagraphWordEdit } from './model-paragraph-editor'
 import type { ParagraphWordEdit } from './model-paragraph-editor'
 
-export function ModelParagraph({
+export const paragraphRenderCounts = {
+  total: 0,
+  byId: new Map<string, number>(),
+}
+
+export function resetParagraphRenderCounts() {
+  paragraphRenderCounts.total = 0
+  paragraphRenderCounts.byId.clear()
+}
+
+function recordParagraphRender(paragraphId: string) {
+  paragraphRenderCounts.total += 1
+  paragraphRenderCounts.byId.set(
+    paragraphId,
+    (paragraphRenderCounts.byId.get(paragraphId) ?? 0) + 1,
+  )
+}
+
+export function ModelParagraphInner({
   paragraph,
   changes,
   pendingChanges = NO_PENDING_CHANGES,
@@ -146,6 +164,7 @@ export function ModelParagraph({
   story?: { kind: string; partName: string }
   linkOverlay?: ParagraphLinkOverlay
 }) {
+  recordParagraphRender(paragraph.id)
   const carets = (presence ?? []).filter(
     (item) =>
       item.userId !== currentUserId &&
