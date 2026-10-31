@@ -43,12 +43,18 @@ export function DetectionFailure({
   uploading = false,
   uploadError = null,
   onBack,
+  onRetry,
+  retrying = false,
+  retryError,
 }: {
   run: RedactionRun
   onTryAnotherFile?: (file: File) => void
   uploading?: boolean
   uploadError?: string | null
   onBack?: () => void
+  onRetry?: () => void
+  retrying?: boolean
+  retryError?: string
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null)
   return (
@@ -58,8 +64,18 @@ export function DetectionFailure({
         body={`${detectionFailureMessage(run)} This run found nothing, so nothing can be finalised from it.`}
         icon={<Warning size={28} aria-hidden="true" />}
         action={
-          onTryAnotherFile || onBack ? (
+          onTryAnotherFile || onBack || onRetry ? (
             <span className="flex flex-wrap items-center justify-center gap-2">
+              {onRetry ? (
+                <Button
+                  variant="primary"
+                  loading={retrying}
+                  disabled={retrying}
+                  onClick={onRetry}
+                >
+                  Retry
+                </Button>
+              ) : null}
               {onTryAnotherFile ? (
                 <Button
                   variant="primary"
@@ -97,6 +113,11 @@ export function DetectionFailure({
             event.target.value = ''
           }}
         />
+      ) : null}
+      {retryError ? (
+        <p role="alert" className="mt-4 text-meta text-danger">
+          {retryError}
+        </p>
       ) : null}
       {uploadError ? (
         <p className="mt-4 text-meta text-danger" role="alert">

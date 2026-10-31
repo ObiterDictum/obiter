@@ -3,12 +3,16 @@ import { createApiApp, type ApiApp, type ApiRuntimeKind } from './app'
 import { createDatabasePools, type DatabasePools } from './database-pools'
 import { readApiEnv, type ApiEnv } from './env'
 import { runMigrations } from './migrate'
+import { createLocalStorage } from './storage'
+import { startDetectionWorker } from './redaction-detection-jobs'
+import { apiRequestLimitsFromEnv } from './request-limits'
 import { warmRedactionDetector } from './redaction-detection'
 
 export interface ApiRuntime {
   env: ApiEnv
   pools: DatabasePools
   app: ApiApp
+  stopDetectionWorker: () => Promise<void>
 }
 
 export class ApiBootError extends Error {
@@ -34,7 +38,9 @@ export async function createApiRuntime(
     )
   }
 
+  const storage = createLocalStorage()
   const app = createApiApp(env, pools.application, {
+    storage,
     runtime,
     corpus: pools.corpus,
   })
@@ -42,7 +48,12 @@ export async function createApiRuntime(
   reportIndexStatus(env)
   warmDetection(env)
 
-  return { env, pools, app }
+  const worker = startDetectionWorker(
+    pools.application,
+    storage,
+    apiRequestLimitsFromEnv(env),
+  )
+  return { env, pools, app, stopDetectionWorker: worker.stop }
 }
 
 function reportIndexStatus(env: ApiEnv) {

@@ -4,7 +4,8 @@ import { closeDocumentModelWorkers } from './document-model-pool'
 import { createApiRuntime } from './runtime'
 
 async function main() {
-  const { env, pools, app } = await createApiRuntime('node')
+  const { env, pools, app, stopDetectionWorker } =
+    await createApiRuntime('node')
 
   const server = serve(
     {
@@ -29,20 +30,29 @@ async function main() {
     throw error
   })
 
-  installGracefulShutdown({
-    stopAccepting: () =>
-      new Promise<void>((resolve) => {
-        server.close(() => resolve())
-        if ('closeIdleConnections' in server) server.closeIdleConnections()
-      }),
-    closeResources: async () => {
-      await Promise.all([pools.close(), closeDocumentModelWorkers()])
+  installGracefulShutdown(
+    {
+      stopAccepting: async () => {
+        await Promise.all([
+          stopDetectionWorker(),
+          new Promise<void>((resolve) => {
+            server.close(() => resolve())
+            if ('closeIdleConnections' in server) server.closeIdleConnections()
+          }),
+        ])
+      },
+      closeResources: async () => {
+        await Promise.all([pools.close(), closeDocumentModelWorkers()])
+      },
+      pendingCount: () =>
+        new Promise<number | null>((resolve) =>
+          server.getConnections((error, count) =>
+            resolve(error ? null : count),
+          ),
+        ),
     },
-    pendingCount: () =>
-      new Promise<number | null>((resolve) =>
-        server.getConnections((error, count) => resolve(error ? null : count)),
-      ),
-  })
+    { deadlineMs: 120_000 },
+  )
 }
 
 void main().catch(exitOnStartupFailure)

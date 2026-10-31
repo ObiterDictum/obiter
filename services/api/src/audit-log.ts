@@ -39,6 +39,8 @@ export interface AuditRecordInput {
     | 'document.export_refused'
     | 'document.markings'
     | 'redaction.run_create'
+    | 'redaction.run_retry'
+    | 'redaction.detection_complete'
     | 'redaction.run_redetect'
     | 'redaction.span_decision'
     | 'redaction.finalize'

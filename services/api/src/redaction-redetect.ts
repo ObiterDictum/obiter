@@ -22,6 +22,12 @@ export async function redetectRedactionRun(input: {
   }
   const sourceRun = await getRedactionRun(input.pool, user, input.runId, 'edit')
   if (!sourceRun) return { kind: 'not_found' as const }
+  if (
+    sourceRun.status === 'detecting' ||
+    sourceRun.status === 'pending' ||
+    sourceRun.status === 'failed'
+  )
+    return { kind: 'not_ready' as const }
   if (sourceRun.detectionMode === 'model+supplement')
     return { kind: 'already_model_detected' as const }
   const existing = await getRedetectionRun(

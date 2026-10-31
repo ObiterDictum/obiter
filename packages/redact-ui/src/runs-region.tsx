@@ -36,6 +36,10 @@ export function RedactionRunsRegion({
         `/api/documents/${documentId}/redaction-runs`,
       ),
     staleTime: 30_000,
+    refetchInterval: (query) =>
+      query.state.data?.runs.some((run) => run.status === 'detecting')
+        ? 2_000
+        : false,
   })
   const version = document.data?.document.currentVersion
   const ready = version?.documentStatus === 'ready'

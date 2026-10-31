@@ -66,6 +66,13 @@ export function createRedactLifecycleRoutes(
         'Redaction run not found.',
         404,
       )
+    if (result.kind === 'not_ready')
+      return errorResponse(
+        c,
+        'redaction_run_not_ready',
+        'Detection must complete before re-detection. Retry failed jobs instead.',
+        409,
+      )
     if (result.kind === 'already_model_detected')
       return errorResponse(
         c,

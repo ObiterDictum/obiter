@@ -4,7 +4,6 @@ import type { AuthzContext, AuthzVariables } from '../authz'
 import { ensureOrgUser } from '../authz'
 import { readLimitedJsonBody } from '../limited-request-body'
 import { DEFAULT_JSON_BODY_MAX_BYTES } from '../request-limit-defaults'
-import { detectRedactionSpans } from '../redaction-detection'
 import { publicRun } from '../redaction-database'
 
 export type RouteVariables = AuthzVariables
@@ -33,23 +32,6 @@ export async function jsonBody(
   const value = await readLimitedJsonBody(c, maxBytes)
   if (value instanceof Response) return value
   return value
-}
-
-export async function detectForRoute(c: RouteContext, text: string) {
-  try {
-    return await detectRedactionSpans(text)
-  } catch (error) {
-    console.error('redaction_detection_failed', {
-      requestId: c.get('requestId'),
-      reason: error instanceof Error ? error.message : 'unknown failure',
-    })
-    return errorResponse(
-      c,
-      'redaction_detection_failed',
-      'Redaction detection could not complete for this document.',
-      500,
-    )
-  }
 }
 
 export function listItem(run: ReturnType<typeof publicRun>) {

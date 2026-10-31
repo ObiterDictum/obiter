@@ -77,8 +77,13 @@ function provenance(model: string, revision: string, degraded: boolean) {
   }
 }
 
+export type DetectionProgressCallback = (
+  completed: number,
+  total: number,
+) => Promise<void>
+
 export interface RedactionDetector {
-  (text: string): Promise<DetectionResult>
+  (text: string, progress?: DetectionProgressCallback): Promise<DetectionResult>
   warm: () => Promise<void>
 }
 
@@ -183,9 +188,15 @@ export function createRedactionDetector(
 
   const detectSpans = async function detectSpans(
     text: string,
+    progress?: DetectionProgressCallback,
   ): Promise<DetectionResult> {
     const windows = planDetectionWindows(text)
-    if (windows.length === 1) return detectWindow(text)
+    if (progress) await progress(0, windows.length)
+    if (windows.length === 1) {
+      const result = await detectWindow(text)
+      if (progress) await progress(1, 1)
+      return result
+    }
 
     const started = performance.now()
     const detections: WindowDetection[] = []
@@ -194,6 +205,7 @@ export function createRedactionDetector(
       const result = await detectWindow(text.slice(window.start, window.end))
       results.push(result)
       detections.push({ window, spans: result.spans })
+      if (progress) await progress(results.length, windows.length)
     }
     const degraded = results.some((result) => result.degraded)
     log('redaction_detection_completed', {
@@ -239,8 +251,11 @@ function requireConfiguredDetector(): RedactionDetector {
   return configuredDetector
 }
 
-export function detectRedactionSpans(text: string) {
-  return requireConfiguredDetector()(text)
+export function detectRedactionSpans(
+  text: string,
+  progress?: DetectionProgressCallback,
+) {
+  return requireConfiguredDetector()(text, progress)
 }
 
 export function warmRedactionDetector() {

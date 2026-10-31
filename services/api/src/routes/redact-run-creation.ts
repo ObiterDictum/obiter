@@ -1,30 +1,29 @@
-import { Hono, type Context } from 'hono'
+import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { redactionPolicyModeSchema } from '@obiter/contracts'
-import { appendAuditLog } from '../database'
-import { DocumentExtractionError } from '../document-extraction'
+import { loadOoxmlZipEntries } from '@obiter/ooxml'
+import { normaliseFileType } from '../document-extraction'
 import {
-  documentTextTooLongMessage,
   extractedTextWithinLimit,
+  documentTextTooLongMessage,
 } from '../document-extraction-limits'
-import { extractRedactionContent } from '../redaction-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import { readLimitedFormData } from '../limited-request-body'
-import type { ApiRequestLimits } from '../request-limits'
-import { DEFAULT_API_REQUEST_LIMITS } from '../request-limits'
+import {
+  DEFAULT_API_REQUEST_LIMITS,
+  type ApiRequestLimits,
+} from '../request-limits'
 import {
   getDocumentRedactionSource,
+  getRedactionRun,
   listRedactionRuns,
-  mimeTypeFromStoredFileType,
   listRedactionRunsForDocument,
   publicRun,
 } from '../redaction-database'
-import { detectionMode } from '../redaction-detection'
 import { createRedactionRun } from '../redaction-run-creation'
-import { isDocxMimeOrFilename } from '../redaction-docx-output'
+import { retryDetectionJob } from '../redaction-detection-jobs'
 import type { StorageService } from '../storage'
 import {
-  detectForRoute,
   errorResponse,
   jsonBody,
   listItem,
@@ -32,75 +31,37 @@ import {
   type RouteVariables,
 } from './redact-shared'
 
-function extractionErrorResponse(c: Context, error: unknown) {
-  if (!(error instanceof DocumentExtractionError)) throw error
-  if (error.userFacing && error.message.startsWith('The document package'))
-    return errorResponse(c, 'ooxml_limits_exceeded', error.message, 413)
-  return errorResponse(
-    c,
-    'validation_failed',
-    error.userFacing
-      ? error.message
-      : 'Document text could not be read for redaction.',
-    400,
-  )
-}
-
-function sourceInput(body: Record<string, unknown> | null) {
-  const filename =
-    typeof body?.filename === 'string' ? body.filename.trim() : ''
-  const text = typeof body?.text === 'string' ? body.text : null
-  const policyMode = redactionPolicyModeSchema.safeParse(
-    body?.policyMode ?? 'internal_ai_minimisation',
-  )
-  return { filename, text, policyMode }
-}
-
 export function createRedactRunCreationRoutes(
   pool: Pool,
   storage: StorageService,
   limits: ApiRequestLimits = DEFAULT_API_REQUEST_LIMITS,
 ) {
   const routes = new Hono<{ Variables: RouteVariables }>()
-
   routes.get('/api/redaction-runs', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const runs = await listRedactionRuns(pool, user)
-    return c.json({ runs: runs.map((run) => listItem(publicRun(run))) })
+    return c.json({
+      runs: (await listRedactionRuns(pool, user)).map((run) =>
+        listItem(publicRun(run)),
+      ),
+    })
   })
 
   routes.post('/api/redaction-runs', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-
-    const isMultipart =
-      c.req
-        .header('content-type')
-        ?.toLowerCase()
-        .startsWith('multipart/form-data') ?? false
-    let form: FormData | null = null
-    if (isMultipart) {
-      const formResult = await readLimitedFormData(
-        c,
-        limits.documentUploadMaxBytes,
-      )
-      if (!formResult.ok) return formResult.response
-      form = formResult.form
-    }
-    const rawJsonBody = form ? null : await jsonBody(c, limits.jsonBodyMaxBytes)
-    if (rawJsonBody instanceof Response) return rawJsonBody
-    const input = sourceInput(
-      form ? { policyMode: form.get('policyMode') } : rawJsonBody,
-    )
-    let filename = input.filename
-    let text = input.text
-    let uploadContents: Buffer | null = null
-    let uploadMimeType: string | null = null
-    let layoutJson: string | null = null
-
-    if (form) {
-      const file = form.get('file')
+    const multipart = c.req
+      .header('content-type')
+      ?.toLowerCase()
+      .startsWith('multipart/form-data')
+    let filename: string
+    let contents: Buffer
+    let fileType: 'pdf' | 'docx' | 'txt'
+    let policy: unknown
+    if (multipart) {
+      const result = await readLimitedFormData(c, limits.documentUploadMaxBytes)
+      if (!result.ok) return result.response
+      const file = result.form.get('file')
       if (!(file instanceof File))
         return errorResponse(
           c,
@@ -111,105 +72,98 @@ export function createRedactRunCreationRoutes(
       try {
         const upload = await readDocumentUpload(
           file,
-          form.get('fileType')?.toString() ?? file.type,
+          result.form.get('fileType')?.toString() ?? file.type,
           limits.documentUploadMaxBytes,
         )
         filename = upload.filename
-        uploadContents = upload.contents
-        uploadMimeType =
-          upload.fileType === 'pdf'
-            ? 'application/pdf'
-            : upload.fileType === 'docx'
-              ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-              : 'text/plain'
-        const extracted = await extractRedactionContent(
-          upload.fileType,
-          upload.contents,
-          { ooxmlLimits: limits.ooxmlLimits },
-        )
-        text = extracted.text
-        if (extracted.layout) layoutJson = JSON.stringify(extracted.layout)
+        contents = upload.contents
+        fileType = upload.fileType
       } catch (error) {
-        if (error instanceof DocumentUploadError)
-          return errorResponse(c, 'validation_failed', error.message, 400)
-        return extractionErrorResponse(c, error)
+        if (!(error instanceof DocumentUploadError)) throw error
+        return errorResponse(c, 'validation_failed', error.message, 400)
       }
-    }
-
-    if (!filename || text === null || !input.policyMode.success) {
-      return errorResponse(
-        c,
-        'validation_failed',
-        'A source filename, document text, and valid policy mode are required.',
-        400,
+      if (fileType === 'docx') {
+        try {
+          await loadOoxmlZipEntries(contents, limits.ooxmlLimits)
+        } catch {
+          return errorResponse(
+            c,
+            'ooxml_limits_exceeded',
+            'The document package is invalid or exceeds the package limits.',
+            413,
+          )
+        }
+      }
+      policy = result.form.get('policyMode') ?? 'internal_ai_minimisation'
+    } else {
+      const body = await jsonBody(c, limits.jsonBodyMaxBytes)
+      if (body instanceof Response) return body
+      if (
+        typeof body?.filename !== 'string' ||
+        !body.filename.trim() ||
+        typeof body.text !== 'string'
       )
+        return errorResponse(
+          c,
+          'validation_failed',
+          'A source filename and document text are required.',
+          400,
+        )
+      if (!extractedTextWithinLimit(body.text))
+        return errorResponse(
+          c,
+          'validation_failed',
+          documentTextTooLongMessage(body.text.length),
+          400,
+        )
+      filename = body.filename.trim()
+      contents = Buffer.from(body.text)
+      fileType = 'txt'
+      policy = body.policyMode ?? 'internal_ai_minimisation'
     }
-    if (!extractedTextWithinLimit(text))
+    const policyMode = redactionPolicyModeSchema.safeParse(policy)
+    if (!policyMode.success)
       return errorResponse(
         c,
         'validation_failed',
-        documentTextTooLongMessage(text.length),
+        'A valid policy mode is required.',
         400,
       )
     const id = `red_${crypto.randomUUID()}`
-    const sourceTextObjectKey = `org/${user.organisationId}/redaction-runs/${id}/source`
-    const sourceFileObjectKey = uploadContents
-      ? `org/${user.organisationId}/redaction-runs/${id}/original`
-      : null
-    const sourceLayoutObjectKey = layoutJson
-      ? `org/${user.organisationId}/redaction-runs/${id}/layout.json`
-      : null
-    await storage.writeText(sourceTextObjectKey, text)
-    if (uploadContents && sourceFileObjectKey && storage.writeBinary)
-      await storage.writeBinary(sourceFileObjectKey, uploadContents)
-    if (layoutJson && sourceLayoutObjectKey)
-      await storage.writeText(sourceLayoutObjectKey, layoutJson)
-    const detection = await detectForRoute(c, text)
-    if (detection instanceof Response) {
-      await storage.delete(sourceTextObjectKey)
-      if (sourceFileObjectKey) await storage.delete(sourceFileObjectKey)
-      if (sourceLayoutObjectKey) await storage.delete(sourceLayoutObjectKey)
-      return detection
-    }
-    let run
+    const base = `org/${user.organisationId}/redaction-runs/${id}`
+    if (!storage.writeBinary)
+      throw new Error('Binary storage is required for redaction uploads.')
     try {
-      run = await createRedactionRun({
+      await storage.writeBinary(`${base}/original`, contents)
+      await storage.writeText(`${base}/source`, '')
+      const run = await createRedactionRun({
         pool,
         id,
         organisationId: user.organisationId,
         userId: user.id,
         sourceFilename: filename,
-        sourceTextObjectKey,
-        sourceFileObjectKey,
-        sourceLayoutObjectKey,
-        sourceMimeType: uploadMimeType,
-        spans: detection.spans,
-        detectorVersion: detection.detectorVersion,
-        detectionMode: detectionMode(detection.degraded),
-        policyMode: input.policyMode.data,
+        sourceTextObjectKey: `${base}/source`,
+        sourceFileObjectKey: multipart ? `${base}/original` : null,
+        sourceMimeType:
+          fileType === 'pdf'
+            ? 'application/pdf'
+            : fileType === 'docx'
+              ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              : 'text/plain',
+        spans: [],
+        detectorVersion: '',
+        detectionMode: 'unknown',
+        policyMode: policyMode.data,
+        detectionInput: { objectKey: `${base}/original`, fileType },
+        requestId: c.get('requestId'),
       })
+      if (!run) throw new Error('Redaction run creation returned no row.')
+      return c.json({ run: publicRun(run) }, 202)
     } catch (error) {
-      await storage.delete(sourceTextObjectKey)
-      if (sourceFileObjectKey) await storage.delete(sourceFileObjectKey)
-      if (sourceLayoutObjectKey) await storage.delete(sourceLayoutObjectKey)
+      await storage.delete(`${base}/original`)
+      await storage.delete(`${base}/source`)
       throw error
     }
-    if (!run)
-      throw new Error('Standalone redaction run creation returned no row.')
-    await appendAuditLog(pool, {
-      organisationId: user.organisationId,
-      userId: user.id,
-      entityType: 'redaction_run',
-      entityId: run.id,
-      action: 'redaction.run_create',
-      metadata: {
-        policyMode: run.policyMode,
-        detectionMode: run.detectionMode,
-        spanCount: run.spans.length,
-      },
-      requestId: c.get('requestId'),
-    })
-    return c.json({ run: publicRun(run) }, 201)
   })
 
   routes.post('/api/documents/:documentId/redaction-runs', async (c) => {
@@ -234,105 +188,86 @@ export function createRedactRunCreationRoutes(
     )
     if (!source)
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
-    const id = `red_${crypto.randomUUID()}`
-    const docx = isDocxMimeOrFilename(
-      source.filename,
-      mimeTypeFromStoredFileType(source.file_type),
-    )
-    let text: string
-    if (docx) {
-      if (!storage.readBinary)
-        return errorResponse(
-          c,
-          'document_version_not_found',
-          'Document source is not available for redaction.',
-          404,
-        )
-      try {
-        text = (
-          await extractRedactionContent(
-            'docx',
-            await storage.readBinary(source.object_key),
-            { ooxmlLimits: limits.ooxmlLimits },
-          )
-        ).text
-      } catch (error) {
-        return extractionErrorResponse(c, error)
-      }
-    } else {
-      if (!source.text_object_key)
-        return errorResponse(
-          c,
-          'document_version_not_found',
-          'Document text is not available for redaction.',
-          404,
-        )
-      text = await storage.readText(source.text_object_key)
-    }
-    if (!extractedTextWithinLimit(text))
+    const fileType = normaliseFileType(source.file_type)
+    if (!fileType)
       return errorResponse(
         c,
         'validation_failed',
-        documentTextTooLongMessage(text.length),
+        'Unsupported document type.',
         400,
       )
-    const detection = await detectForRoute(c, text)
-    if (detection instanceof Response) return detection
-    const sourceTextObjectKey = docx
-      ? `org/${user.organisationId}/redaction-runs/${id}/source`
-      : null
-    if (sourceTextObjectKey) await storage.writeText(sourceTextObjectKey, text)
-    let run
-    try {
-      run = await createRedactionRun({
-        pool,
-        id,
-        organisationId: user.organisationId,
-        userId: user.id,
-        sourceFilename: source.filename,
-        sourceTextObjectKey,
-        spans: detection.spans,
-        detectorVersion: detection.detectorVersion,
-        detectionMode: detectionMode(detection.degraded),
-        policyMode: policyMode.data,
-        matterId: source.matter_id,
-        documentId: c.req.param('documentId'),
-        documentVersionId: source.version_id,
-      })
-    } catch (error) {
-      if (sourceTextObjectKey) await storage.delete(sourceTextObjectKey)
-      throw error
-    }
-    if (!run) {
-      if (sourceTextObjectKey) await storage.delete(sourceTextObjectKey)
-      return errorResponse(c, 'document_not_found', 'Document not found.', 404)
-    }
-    await appendAuditLog(pool, {
+    const id = `red_${crypto.randomUUID()}`
+    const run = await createRedactionRun({
+      pool,
+      id,
       organisationId: user.organisationId,
       userId: user.id,
-      entityType: 'redaction_run',
-      entityId: run.id,
-      action: 'redaction.run_create',
-      metadata: {
-        policyMode: run.policyMode,
-        detectionMode: run.detectionMode,
-        spanCount: run.spans.length,
-      },
+      sourceFilename: source.filename,
+      sourceTextObjectKey: null,
+      spans: [],
+      detectorVersion: '',
+      detectionMode: 'unknown',
+      policyMode: policyMode.data,
+      matterId: source.matter_id,
+      documentId: c.req.param('documentId'),
+      documentVersionId: source.version_id,
+      detectionInput: { objectKey: source.object_key, fileType },
       requestId: c.get('requestId'),
     })
-    return c.json({ run: publicRun(run) }, 201)
+    if (!run)
+      return errorResponse(c, 'document_not_found', 'Document not found.', 404)
+    return c.json({ run: publicRun(run) }, 202)
+  })
+
+  routes.post('/api/redaction-runs/:runId/retry', async (c) => {
+    const user = await requireUser(c, pool)
+    if (user instanceof Response) return user
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'edit')
+    if (!run)
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    if (
+      !(await retryDetectionJob(
+        pool,
+        run.id,
+        user.organisationId,
+        user.id,
+        c.get('requestId'),
+      ))
+    )
+      return errorResponse(
+        c,
+        'redaction_run_not_ready',
+        'Only failed detection jobs can be retried.',
+        409,
+      )
+    const next = await getRedactionRun(pool, user, run.id, 'view')
+    if (!next)
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    return c.json({ run: publicRun(next) }, 202)
   })
 
   routes.get('/api/documents/:documentId/redaction-runs', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const runs = await listRedactionRunsForDocument(
-      pool,
-      user,
-      c.req.param('documentId'),
-    )
-    return c.json({ runs: runs.map((run) => listItem(publicRun(run))) })
+    return c.json({
+      runs: (
+        await listRedactionRunsForDocument(
+          pool,
+          user,
+          c.req.param('documentId'),
+        )
+      ).map((run) => listItem(publicRun(run))),
+    })
   })
-
   return routes
 }

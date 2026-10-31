@@ -1,5 +1,6 @@
 import type {
   DetectionMode,
+  RedactionDetectionProgress,
   DocumentTextLayout,
   RedactionFinalizeInput,
   RedactionOutputResponse,
@@ -26,6 +27,7 @@ export interface RedactionRun {
     available: boolean
   }
   status: RedactionRunStatus
+  detectionProgress?: RedactionDetectionProgress
   policyMode: RedactionPolicyMode
   spans: RedactionSpan[]
   decisions: Decisions
