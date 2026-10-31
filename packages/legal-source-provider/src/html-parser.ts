@@ -4,7 +4,11 @@ import {
   extractNeutralCitation,
   readTag,
 } from './document-utils'
-import { replaceElements, replaceTags } from './html-scan'
+import {
+  replaceElements,
+  replaceTags,
+  stripFindCaseLawSuffix,
+} from './html-scan'
 
 const NON_CONTENT_ELEMENTS = [
   'script',
@@ -79,14 +83,7 @@ export function extractJudgmentTitleFromHtml(html: string) {
     html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ??
     ''
 
-  return (
-    decodeHtml(
-      replaceTags(title, ' ')
-        .replace(/\s+-\s+Find Case Law[\s\S]*$/i, '')
-        .replace(/\s+/g, ' ')
-        .trim(),
-    ) || null
-  )
+  return decodeHtml(replaceTags(title, ' ').replace(/\s+/g, ' ').trim()) || null
 }
 
 export function extractNeutralCitationFromHtml(html: string) {

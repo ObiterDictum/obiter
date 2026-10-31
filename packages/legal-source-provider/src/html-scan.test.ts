@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
   collapseSpaceRuns,
   readElementContent,
+  stripFindCaseLawSuffix,
   replaceElements,
   replaceTags,
   unwrapCdata,
@@ -136,6 +137,33 @@ describe('readElementContent', () => {
     expect(
       fast(() => readElementContent(xml, 'tna:identifier', () => true)),
     ).toBeLessThan(100)
+  })
+})
+
+describe('stripFindCaseLawSuffix', () => {
+  it('matches the original suffix removal on random titles', () => {
+    const random = seeded(6)
+    const parts = [
+      ' ',
+      '\t',
+      '-',
+      'Find Case Law',
+      'find case law',
+      'A',
+      ' - Find Case Law',
+      '\n',
+    ]
+    for (let round = 0; round < 4000; round += 1) {
+      const title = randomText(random, parts, 8)
+      expect(stripFindCaseLawSuffix(title)).toBe(
+        title.replace(/\s+-\s+Find Case Law[\s\S]*$/i, ''),
+      )
+    }
+  })
+
+  it('stays linear on long whitespace runs', () => {
+    const title = `A${'\t'.repeat(100_000)}B`
+    expect(fast(() => stripFindCaseLawSuffix(title))).toBeLessThan(50)
   })
 })
 

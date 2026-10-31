@@ -101,3 +101,19 @@ export function readElementContent(
 export function collapseSpaceRuns(value: string) {
   return value.replace(/ {2,}/gu, ' ')
 }
+
+export function stripFindCaseLawSuffix(title: string) {
+  const suffix = /-\s+Find Case Law/giy
+  for (
+    let dash = title.indexOf('-');
+    dash !== -1;
+    dash = title.indexOf('-', dash + 1)
+  ) {
+    suffix.lastIndex = dash
+    if (!suffix.test(title)) continue
+    let start = dash
+    while (start > 0 && /\s/u.test(title[start - 1] ?? '')) start -= 1
+    if (start < dash) return title.slice(0, start)
+  }
+  return title
+}
