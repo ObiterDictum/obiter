@@ -5,12 +5,9 @@ import { fileURLToPath } from 'node:url'
 import { QueryClient } from '@tanstack/react-query'
 import { LegalSearchView, VerifyRouteView } from '@obiter/app-shell'
 import { describe, expect, it } from 'bun:test'
-import {
-  createAppRouter,
-  DESKTOP_SHARED_VIEW_PATHS,
-  DesktopVerifyRoute,
-} from './router'
+import { createAppRouter, DESKTOP_SHARED_VIEW_PATHS } from './router'
 import { DesktopSearchPage } from '../../pages/search'
+import { DesktopVerifyRoute } from '../../pages/verify'
 
 function collectSources(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

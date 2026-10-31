@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./review": "./src/review.tsx"
+    "./review": "./src/review.tsx",
+    "./runs": "./src/runs.tsx",
+    "./runs-region": "./src/runs-region.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
