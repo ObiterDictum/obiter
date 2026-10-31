@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url'
 import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 
 export const BUDGETS = {
-  initialGzipBytes: 236 * 1024,
-  lazyGzipBytes: 425 * 1024,
-  largestLazyChunkGzipBytes: 200 * 1024,
+  initialGzipBytes: 206 * 1024,
+  lazyGzipBytes: 441 * 1024,
+  largestLazyChunkGzipBytes: 147 * 1024,
   pdfWorkerGzipBytes: 320 * 1024,
 }
 
@@ -160,6 +160,12 @@ async function main() {
     )
   )
     failures.push('the initial graph contains the React development runtime')
+  if (
+    [...initialSources.values()].some((source) => source.includes('ZodError'))
+  )
+    failures.push(
+      'the initial graph contains zod; schemas must load from the route that needs them',
+    )
   if (lazyGzip > BUDGETS.lazyGzipBytes)
     failures.push(
       `lazy chunks total ${kb(lazyGzip)}, over the ${kb(BUDGETS.lazyGzipBytes)} budget`,
