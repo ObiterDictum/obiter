@@ -69,11 +69,19 @@ type Measured = {
 
 let measured = new WeakMap<DocumentParagraphWire, Measured>()
 let floatTargets = new WeakMap<DocumentParagraphWire, ParagraphFloatTargets>()
+let fontsWatched = false
 const MAX_LINE_COUNTS = 64
 
 export function clearParagraphMeasureCache(): void {
   measured = new WeakMap()
   floatTargets = new WeakMap()
+}
+
+function watchFontLoads() {
+  if (fontsWatched) return
+  fontsWatched = true
+  if (typeof document === 'undefined' || !document.fonts) return
+  document.fonts.addEventListener('loadingdone', clearParagraphMeasureCache)
 }
 
 export function paragraphMeasure(
@@ -83,6 +91,7 @@ export function paragraphMeasure(
   extraRuns: ExtraRuns,
   pendingRedlines?: PendingRedlines,
 ): ParagraphMeasure {
+  watchFontLoads()
   const paragraph = effectiveParagraph(
     source,
     drafts,
