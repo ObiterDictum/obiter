@@ -84,7 +84,13 @@ edits use the same element shapes Word serialises.
 
     # Rebuild rather than append: appending would leave duplicate entries and
     # readers disagree about which copy wins.
-    tmp_out = tempfile.mktemp(suffix=".docx")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_out = f"{tmp_dir}/output.docx"
+        _rebuild_docx(tmp_path, tmp_out, surgery, _zf, etree)
+        shutil.move(tmp_out, final_path)
+
+
+def _rebuild_docx(tmp_path, tmp_out, surgery, _zf, etree):
     with _zf.ZipFile(tmp_path, "r") as zin:
         replacements: dict[str, bytes] = {}
 
@@ -102,7 +108,6 @@ edits use the same element shapes Word serialises.
                 zout.writestr(item.filename, data, compress_type=_zf.ZIP_DEFLATED)
             for name, data in replacements.items():
                 zout.writestr(name, data, compress_type=_zf.ZIP_DEFLATED)
-    shutil.move(tmp_out, final_path)
 
 
 NS = {
