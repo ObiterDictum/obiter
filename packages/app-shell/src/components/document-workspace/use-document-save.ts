@@ -36,6 +36,45 @@ export type SaveState =
 
 export type DocumentSave = ReturnType<typeof useDocumentSave>
 
+export type ChromeSave = Pick<
+  DocumentSave,
+  | 'blocked'
+  | 'refused'
+  | 'saveState'
+  | 'failure'
+  | 'lineageUnresolved'
+  | 'blockedHistoryMessage'
+  | 'persistence'
+  | 'dirty'
+  | 'held'
+  | 'stale'
+  | 'retry'
+  | 'reload'
+  | 'discardBlocked'
+  | 'discardRefused'
+  | 'discardHeld'
+>
+
+export function chromeSaveOf(save: DocumentSave): ChromeSave {
+  return {
+    blocked: save.blocked,
+    refused: save.refused,
+    saveState: save.saveState,
+    failure: save.failure,
+    lineageUnresolved: save.lineageUnresolved,
+    blockedHistoryMessage: save.blockedHistoryMessage,
+    persistence: save.persistence,
+    dirty: save.dirty,
+    held: save.held,
+    stale: save.stale,
+    retry: save.retry,
+    reload: save.reload,
+    discardBlocked: save.discardBlocked,
+    discardRefused: save.discardRefused,
+    discardHeld: save.discardHeld,
+  }
+}
+
 const EMPTY_PLAN: SavePlan = {
   operations: [],
   covered: [],

@@ -41,6 +41,27 @@ import { createWorkspaceDraftEdits } from './workspace-draft-edits'
 
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
 
+export type ChromeDrafts = Pick<
+  WorkspaceDrafts,
+  | 'restored'
+  | 'recoverable'
+  | 'staleDraft'
+  | 'restoreRecoverable'
+  | 'discardRecoverable'
+  | 'discardStaleDraft'
+>
+
+export function chromeDraftsOf(drafts: WorkspaceDrafts): ChromeDrafts {
+  return {
+    restored: drafts.restored,
+    recoverable: drafts.recoverable,
+    staleDraft: drafts.staleDraft,
+    restoreRecoverable: drafts.restoreRecoverable,
+    discardRecoverable: drafts.discardRecoverable,
+    discardStaleDraft: drafts.discardStaleDraft,
+  }
+}
+
 type DraftBundle = {
   state: DraftState
   held: HeldChange[]
