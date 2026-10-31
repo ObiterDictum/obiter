@@ -1,16 +1,5 @@
 import { useState } from 'react'
 import {
-  CaretLeft,
-  CaretRight,
-  Check,
-  CopySimple,
-  DotsThree,
-  Warning,
-  X,
-} from '@phosphor-icons/react'
-import type { SpanDecision } from '@obiter/contracts'
-import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
-import {
   Button,
   KeyboardHint,
   Menu,
@@ -19,6 +8,17 @@ import {
   MenuTrigger,
   StatusDot,
 } from '@obiter/ui'
+import {
+  CaretLeft,
+  CaretRight,
+  Check,
+  CopySimple,
+  DotsThree,
+  Warning,
+  X,
+} from '@obiter/ui/icons'
+import type { SpanDecision } from '@obiter/contracts'
+import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
 import {
   CONFIDENCE_CAVEAT,
   categoryLabel,

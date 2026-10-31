@@ -5,7 +5,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@obiter/ui'
-import { ArrowClockwise } from '@phosphor-icons/react'
+import { ArrowClockwise } from '@obiter/ui/icons'
 import type { DocumentVersionRecord } from '../../documents'
 import {
   useVerificationWorkspace,

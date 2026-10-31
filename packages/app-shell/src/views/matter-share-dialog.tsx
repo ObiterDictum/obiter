@@ -1,4 +1,3 @@
-import { Users } from '@phosphor-icons/react'
 import {
   Button,
   Dialog,
@@ -11,6 +10,7 @@ import {
   cn,
   useToast,
 } from '@obiter/ui'
+import { Users } from '@obiter/ui/icons'
 import type { MatterAccessLevel } from '@obiter/contracts'
 import { useState } from 'react'
 import { initialsOf } from '../format'

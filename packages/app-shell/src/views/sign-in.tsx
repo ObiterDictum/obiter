@@ -1,6 +1,6 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { CheckCircle } from '@phosphor-icons/react'
 import { Button, Input } from '@obiter/ui'
+import { CheckCircle } from '@obiter/ui/icons'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'

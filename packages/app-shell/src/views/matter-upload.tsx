@@ -1,5 +1,5 @@
-import { FileArrowUp, Plus, Upload } from '@phosphor-icons/react'
 import { buttonClassName, cn, useToast } from '@obiter/ui'
+import { FileArrowUp, Plus, Upload } from '@obiter/ui/icons'
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { blankDocumentFile } from '../document-blank'
 import { useUploadMatterDocument } from '../documents'

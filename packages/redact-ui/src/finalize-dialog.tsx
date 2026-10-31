@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { DownloadSimple, Lock, Warning } from '@phosphor-icons/react'
-import type { OutputMode } from '@obiter/contracts'
 import {
   Button,
   Dialog,
@@ -10,6 +8,8 @@ import {
   DialogTitle,
   StatusDot,
 } from '@obiter/ui'
+import { DownloadSimple, Lock, Warning } from '@obiter/ui/icons'
+import type { OutputMode } from '@obiter/contracts'
 import { mixedTextGroups, type MixedTextGroup } from '@obiter/redaction-policy'
 import { DetectionModeWarning } from './detection-mode-warning'
 import { useFinalizeRun } from './hooks'

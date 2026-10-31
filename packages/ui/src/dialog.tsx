@@ -1,6 +1,6 @@
 import { Dialog as BaseDialog } from '@base-ui-components/react/dialog'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { X } from '@phosphor-icons/react'
+import { X } from './icons'
 import { cn } from './lib/cn'
 
 type Size = 'sm' | 'md' | 'lg'

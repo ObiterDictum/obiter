@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { FolderOpen } from '@phosphor-icons/react'
 import {
   Button,
   Dialog,
@@ -9,6 +8,7 @@ import {
   DialogTitle,
   Select,
 } from '@obiter/ui'
+import { FolderOpen } from '@obiter/ui/icons'
 import { useMattersList } from '@obiter/app-shell'
 import { useSaveToMatter } from './hooks'
 import type { RedactionRun } from './types'

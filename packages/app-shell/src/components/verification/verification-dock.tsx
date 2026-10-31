@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Clock, Info, ListChecks, Warning } from '@phosphor-icons/react'
 import { Button, Skeleton, StatusDot } from '@obiter/ui'
+import { Clock, Info, ListChecks, Warning } from '@obiter/ui/icons'
 import type { VerificationFindingView } from '@obiter/contracts'
 import { ApiError } from '../../api'
 import {

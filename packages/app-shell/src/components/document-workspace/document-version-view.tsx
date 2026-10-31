@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
+import { Badge, Button, EmptyState } from '@obiter/ui'
 import {
   ArrowCounterClockwise,
   FileArrowDown,
   MagnifyingGlassMinus,
   MagnifyingGlassPlus,
-} from '@phosphor-icons/react'
-import { Badge, Button, EmptyState } from '@obiter/ui'
+} from '@obiter/ui/icons'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { downloadBlob } from '../../document-edits'
 import { workspaceKind } from '../../document-kind'
