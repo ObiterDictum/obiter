@@ -9,7 +9,13 @@
     "./document-render": "./src/document-render.tsx",
     "./views/legal-search": "./src/views/LegalSearchView.tsx",
     "./views/case-law-document": "./src/views/CaseLawDocumentView.tsx",
-    "./views/case-law-document-query": "./src/views/case-law-document-query.ts"
+    "./views/case-law-document-query": "./src/views/case-law-document-query.ts",
+    "./views/document-detail": "./src/views/document-detail.tsx",
+    "./views/legislation-provision": "./src/views/LegislationProvisionView.tsx",
+    "./views/matter-detail": "./src/views/matter-detail.tsx",
+    "./views/matters": "./src/views/matters.tsx",
+    "./views/settings": "./src/views/settings.tsx",
+    "./views/verify": "./src/views/verify.tsx"
   },
   "dependencies": {
     "@obiter/contracts": "workspace:*",
