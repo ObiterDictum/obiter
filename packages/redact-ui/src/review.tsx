@@ -93,7 +93,10 @@ export function RedactionReviewView({
 
   const failedWithoutText =
     (runQuery.data?.status === 'failed' || detecting) && !textQuery.data
-  if (runQuery.isPending || (textQuery.isPending && !failedWithoutText)) {
+  if (
+    runQuery.isPending ||
+    (runQuery.data !== undefined && textQuery.isPending && !failedWithoutText)
+  ) {
     return (
       <div className="mx-auto w-full max-w-[1216px] px-12 py-14 max-compact:px-8">
         <div className="flex flex-col gap-4" aria-busy="true">
