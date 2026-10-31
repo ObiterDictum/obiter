@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import type { ReactNode } from 'react'
-import { Warning } from '@phosphor-icons/react'
+import { Warning } from '@obiter/ui/icons'
 import type { DetectionMode } from '@obiter/contracts'
 
 type LimitedDetectionMode = Exclude<DetectionMode, 'model+supplement'>

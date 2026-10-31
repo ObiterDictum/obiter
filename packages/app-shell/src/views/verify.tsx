@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ShieldCheck } from '@phosphor-icons/react'
 import {
   Button,
   Card,
@@ -11,6 +10,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@obiter/ui'
+import { ShieldCheck } from '@obiter/ui/icons'
 import { useCurrentUser } from '../current-user'
 import { useMattersList } from '../matters'
 import { PageScaffold } from '../page-scaffold'

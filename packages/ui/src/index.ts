@@ -71,3 +71,4 @@ export {
 export { StatusDot, type StatusDotProps } from './status-dot'
 export { KeyboardHint } from './keyboard-hint'
 export { ObiterMark } from './brand/obiter-mark'
+export type { IconProps, IconWeight } from './icon-base'

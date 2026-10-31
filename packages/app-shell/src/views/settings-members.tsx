@@ -1,4 +1,3 @@
-import { Plus } from '@phosphor-icons/react'
 import {
   Button,
   Input,
@@ -10,6 +9,7 @@ import {
   THead,
   TR,
 } from '@obiter/ui'
+import { Plus } from '@obiter/ui/icons'
 import { useState, type FormEvent } from 'react'
 import { userRoleSchema, type UserRole } from '@obiter/contracts'
 import { ApiError } from '../api'

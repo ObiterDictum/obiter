@@ -1,5 +1,5 @@
-import { CaretDown, CaretUp, X } from '@phosphor-icons/react'
 import { Button } from '@obiter/ui'
+import { CaretDown, CaretUp, X } from '@obiter/ui/icons'
 import { EditorIconButton, EditorTextButton } from './editor-controls'
 import type { DocumentFindToolbar } from './ribbon-types'
 

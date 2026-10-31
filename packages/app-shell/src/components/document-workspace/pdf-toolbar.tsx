@@ -1,4 +1,4 @@
-import { DownloadSimple, FileArrowDown } from '@phosphor-icons/react'
+import { DownloadSimple, FileArrowDown } from '@obiter/ui/icons'
 import { EditorIconButton, EditorTextButton } from './editor-controls'
 import type { DocumentFindToolbar } from './ribbon-types'
 

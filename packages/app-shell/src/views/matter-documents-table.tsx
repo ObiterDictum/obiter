@@ -1,5 +1,4 @@
 import { Link } from '@tanstack/react-router'
-import { CaretRight, FileText } from '@phosphor-icons/react'
 import {
   Card,
   EmptyState,
@@ -12,8 +11,9 @@ import {
   TR,
   Table,
   cn,
+  type StatusDotProps,
 } from '@obiter/ui'
-import type { StatusDotProps } from '@obiter/ui'
+import { CaretRight, FileText } from '@obiter/ui/icons'
 import type { MatterDocumentRecord } from '../documents'
 import { formatDate } from '../format'
 import { RedactedMark } from '../redacted-mark'

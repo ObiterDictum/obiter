@@ -1,12 +1,12 @@
 import { useState } from 'react'
+import { Badge, Button, Card, Skeleton, StatusDot } from '@obiter/ui'
 import {
   DownloadSimple,
   Eye,
   FolderOpen,
   ShareNetwork,
   Warning,
-} from '@phosphor-icons/react'
-import { Badge, Button, Card, Skeleton, StatusDot } from '@obiter/ui'
+} from '@obiter/ui/icons'
 import { PageScaffold } from '@obiter/app-shell'
 import {
   useRedactionOutput,

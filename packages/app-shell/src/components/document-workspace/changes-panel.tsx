@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Check, ChatText, X } from '@phosphor-icons/react'
 import {
   Button,
   DockedPanel,
@@ -7,6 +6,7 @@ import {
   cn,
   type PanelPopout,
 } from '@obiter/ui'
+import { Check, ChatText, X } from '@obiter/ui/icons'
 import {
   TRACKED_DECISION_MAX_IDS,
   type DocumentComment,

@@ -1,4 +1,11 @@
 import {
+  Popover,
+  PopoverPopup,
+  PopoverPortal,
+  PopoverPositioner,
+  cn,
+} from '@obiter/ui'
+import {
   Eraser,
   Highlighter,
   ListChecks,
@@ -10,14 +17,7 @@ import {
   TextSuperscript,
   TreeStructure,
   Swap,
-} from '@phosphor-icons/react'
-import {
-  Popover,
-  PopoverPopup,
-  PopoverPortal,
-  PopoverPositioner,
-  cn,
-} from '@obiter/ui'
+} from '@obiter/ui/icons'
 import { LINE_SPACING_OPTIONS } from '../../document-paragraph-format'
 import { INDENT_OPTIONS } from '../../document-paragraph-format'
 import {

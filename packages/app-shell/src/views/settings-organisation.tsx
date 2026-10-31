@@ -1,5 +1,5 @@
-import { ArrowRight } from '@phosphor-icons/react'
 import { Button, Input } from '@obiter/ui'
+import { ArrowRight } from '@obiter/ui/icons'
 import { useRef, useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { FileArrowDown } from '@phosphor-icons/react'
 import { EmptyState } from '@obiter/ui'
+import { FileArrowDown } from '@obiter/ui/icons'
 import { downloadBlob, downloadPlainText } from '../../document-edits'
 import { clampFindIndex, pdfFindHits } from '../../document-find'
 import { useFindState } from './use-workspace-find'

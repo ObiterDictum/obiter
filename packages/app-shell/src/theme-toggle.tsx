@@ -1,4 +1,4 @@
-import { Moon, Sun } from '@phosphor-icons/react'
+import { Moon, Sun } from '@obiter/ui/icons/shell'
 import { setAppTheme, useAppTheme } from './use-app-theme'
 
 export function ThemeToggle() {

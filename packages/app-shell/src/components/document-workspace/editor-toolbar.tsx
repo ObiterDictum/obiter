@@ -12,7 +12,7 @@ import {
   TextItalic,
   TextUnderline,
   TextAa,
-} from '@phosphor-icons/react'
+} from '@obiter/ui/icons'
 import {
   EditorIconButton,
   EditorSelect,

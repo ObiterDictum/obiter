@@ -6,6 +6,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@obiter/ui'
+import { FloppyDisk } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
 import type { DocumentPresence } from '@obiter/contracts'
 import type { DocumentVersionRecord } from '../../documents'
@@ -17,7 +18,6 @@ import {
 import { useOffline } from '../../shell-states'
 import { RedactedMark } from '../../redacted-mark'
 import type { DocumentSave, SaveState } from './use-document-save'
-import { FloppyDisk } from '@phosphor-icons/react'
 
 export type HeaderSaveInput = {
   state: SaveState

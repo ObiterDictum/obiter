@@ -5,7 +5,7 @@ import {
   PencilSimple,
   Robot,
   ShieldCheck,
-} from '@phosphor-icons/react'
+} from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 
 export type ModuleId =

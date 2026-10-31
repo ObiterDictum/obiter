@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, Flag, PencilSimple, Warning } from '@phosphor-icons/react'
 import { Card, CardFoot, Skeleton, buttonClassName, cn } from '@obiter/ui'
+import { ArrowRight, Flag, PencilSimple, Warning } from '@obiter/ui/icons'
 import { useVerificationFindings } from '../verification-runs'
 import type { AttentionItem, VerificationAttentionItem } from './home-attention'
 import {

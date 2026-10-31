@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { ArrowLeft, CircleNotch, ShieldCheck } from '@phosphor-icons/react'
-import type { SpanDecision } from '@obiter/contracts'
-import type { RedactionSpan } from '@obiter/redaction-policy'
-import { sameTextOccurrences } from '@obiter/redaction-policy'
 import {
   Badge,
   Button,
@@ -12,6 +8,10 @@ import {
   Skeleton,
   StatusDot,
 } from '@obiter/ui'
+import { ArrowLeft, CircleNotch, ShieldCheck } from '@obiter/ui/icons'
+import type { SpanDecision } from '@obiter/contracts'
+import type { RedactionSpan } from '@obiter/redaction-policy'
+import { sameTextOccurrences } from '@obiter/redaction-policy'
 import { PageScaffold, useCurrentUser } from '@obiter/app-shell'
 import {
   useCreateUploadedRedactionRun,

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, FileText } from '@phosphor-icons/react'
 import { Card, CardBody, CardHead, Skeleton } from '@obiter/ui'
+import { ArrowRight, FileText } from '@obiter/ui/icons'
 import { formatDate } from '../format'
 import { matterInitials } from '../matters'
 import type { VersionRedaction } from '../documents'

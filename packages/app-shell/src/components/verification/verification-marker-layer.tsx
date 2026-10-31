@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Minus, Question, Warning } from '@phosphor-icons/react'
+import { cn } from '@obiter/ui'
+import { Check, Minus, Question, Warning } from '@obiter/ui/icons'
 import type {
   DocumentModelWire,
   VerificationFindingView,
 } from '@obiter/contracts'
-import { cn } from '@obiter/ui'
 import { useVerificationWorkspace } from './verification-context'
 import { rectsOfRange, renderedRangeFor } from './verification-anchor'
 import type { FindingTarget, UnmappedReason } from './verification-mapping'

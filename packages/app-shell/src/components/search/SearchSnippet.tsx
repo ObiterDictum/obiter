@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { Scales } from '@phosphor-icons/react'
 import { cn } from '@obiter/ui'
+import { Scales } from '@obiter/ui/icons'
 import { caseResultLocation } from '../../case-navigation'
 import { provisionResultLocation } from '../../legislation-navigation'
 import {

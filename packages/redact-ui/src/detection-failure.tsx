@@ -1,6 +1,6 @@
 import { useRef } from 'react'
-import { ArrowLeft, ArrowClockwise, Warning } from '@phosphor-icons/react'
 import { Button, EmptyState } from '@obiter/ui'
+import { ArrowLeft, ArrowClockwise, Warning } from '@obiter/ui/icons'
 import type { RedactionRun } from './types'
 
 type Format = 'pdf' | 'docx' | 'txt'

@@ -1,6 +1,6 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { Warning } from '@phosphor-icons/react'
 import { Button, buttonClassName } from '@obiter/ui'
+import { Warning } from '@obiter/ui/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiError, apiFetch } from '../api'

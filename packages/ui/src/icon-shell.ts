@@ -1,0 +1,17 @@
+export const SHELL_ICONS = [
+  'ArrowClockwise',
+  'CaretLeft',
+  'CaretRight',
+  'CircleNotch',
+  'Folders',
+  'House',
+  'Lock',
+  'MagnifyingGlass',
+  'Moon',
+  'PencilSimple',
+  'Robot',
+  'ShieldCheck',
+  'Sun',
+  'Warning',
+  'X',
+] as const

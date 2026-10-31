@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react'
 import { Link, Outlet, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, DotsThree, Trash } from '@phosphor-icons/react'
 import {
   Button,
   Dialog,
@@ -17,6 +16,7 @@ import {
   buttonClassName,
   useToast,
 } from '@obiter/ui'
+import { ArrowLeft, DotsThree, Trash } from '@obiter/ui/icons'
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
 import { useMatter } from '../matters'

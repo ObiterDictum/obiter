@@ -1,6 +1,4 @@
 import { useQueries } from '@tanstack/react-query'
-import { MagnifyingGlass } from '@phosphor-icons/react'
-import type { AppPlatform } from '@obiter/contracts'
 import {
   Button,
   Card,
@@ -13,6 +11,8 @@ import {
   Skeleton,
   cn,
 } from '@obiter/ui'
+import { MagnifyingGlass } from '@obiter/ui/icons'
+import type { AppPlatform } from '@obiter/contracts'
 import { useState } from 'react'
 import { matterDocumentsQueryOptions } from '../documents'
 import { formatDateTime } from '../format'

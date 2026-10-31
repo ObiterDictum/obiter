@@ -1,5 +1,5 @@
-import { CheckCircle } from '@phosphor-icons/react'
 import { ObiterMark, cn } from '@obiter/ui'
+import { CheckCircle } from '@obiter/ui/icons'
 import type { FormEvent, ReactNode } from 'react'
 import { ThemeToggle } from '../theme-toggle'
 import authArtDark from '../assets/auth/auth-art-dark.webp'
