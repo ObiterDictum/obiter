@@ -9,6 +9,7 @@ import {
 } from './html-scan'
 import { extractNeutralCitation, readIdentifier } from './document-utils'
 import { courtFromCitation } from './court-utils'
+import { extractJudgmentTitleFromHtml } from './html-parser'
 
 function seeded(seed: number) {
   let state = seed
@@ -159,6 +160,17 @@ describe('stripFindCaseLawSuffix', () => {
         title.replace(/\s+-\s+Find Case Law[\s\S]*$/i, ''),
       )
     }
+  })
+
+  it('removes the site suffix from a judgment page title', () => {
+    expect(
+      extractJudgmentTitleFromHtml(
+        '<title>Smith v Jones - Find Case Law - The National Archives</title>',
+      ),
+    ).toBe('Smith v Jones')
+    expect(extractJudgmentTitleFromHtml('<h1>R v <b>Brown</b></h1>')).toBe(
+      'R v Brown',
+    )
   })
 
   it('stays linear on long whitespace runs', () => {

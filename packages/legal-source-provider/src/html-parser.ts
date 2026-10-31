@@ -83,7 +83,13 @@ export function extractJudgmentTitleFromHtml(html: string) {
     html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ??
     ''
 
-  return decodeHtml(replaceTags(title, ' ').replace(/\s+/g, ' ').trim()) || null
+  return (
+    decodeHtml(
+      stripFindCaseLawSuffix(replaceTags(title, ' '))
+        .replace(/\s+/g, ' ')
+        .trim(),
+    ) || null
+  )
 }
 
 export function extractNeutralCitationFromHtml(html: string) {
