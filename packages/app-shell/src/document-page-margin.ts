@@ -1,5 +1,5 @@
 import { tableHeight } from './document-page-blocks'
-import { paragraphMetrics } from './document-page-keep'
+import { paragraphMetrics } from './document-page-measure'
 import type {
   DocumentChangeWire,
   DocumentModelWire,
