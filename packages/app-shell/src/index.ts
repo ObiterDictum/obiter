@@ -22,6 +22,7 @@ export {
   guardAuth,
   prefetchHomeData,
   prefetchInviteAcceptData,
+  prefetchVerifyData,
 } from './route-loaders'
 
 export {

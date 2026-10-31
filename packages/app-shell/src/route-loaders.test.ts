@@ -5,7 +5,11 @@ import { isRedirect } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from './api'
-import { guardAuth, prefetchHomeData } from './route-loaders'
+import {
+  guardAuth,
+  prefetchHomeData,
+  prefetchVerifyData,
+} from './route-loaders'
 
 const noopQueryClient = new QueryClient()
 
@@ -128,6 +132,68 @@ describe('prefetchHomeData', () => {
     )
 
     await expectRejection(prefetchHomeData(queryClient), (error: unknown) => {
+      if (!isRedirect(error)) return false
+      const opts = (error as { options?: { to?: string } }).options
+      return opts?.to === '/sign-in'
+    })
+  })
+})
+
+describe('prefetchVerifyData', () => {
+  it('prefetches verification runs, matters and run documents for an organisation user', async () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(CURRENT_USER_QUERY_KEY, ORG_ME)
+    queryClient.setQueryData(['verification-runs'], {
+      pages: [{ runs: [{ documentId: 'doc_1' }], nextCursor: null }],
+      pageParams: [null],
+    })
+    const prefetchQuery = vi
+      .spyOn(queryClient, 'prefetchQuery')
+      .mockResolvedValue(undefined)
+    const prefetchInfiniteQuery = vi
+      .spyOn(queryClient, 'prefetchInfiniteQuery')
+      .mockResolvedValue(undefined)
+    vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(undefined)
+
+    await prefetchVerifyData(queryClient)
+
+    expect(prefetchInfiniteQuery).toHaveBeenCalledTimes(1)
+    expect(prefetchQuery).toHaveBeenCalledTimes(2)
+    expect(prefetchQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['matters', 'list'] }),
+    )
+    expect(prefetchQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ['documents', 'detail', 'doc_1'],
+        staleTime: 30_000,
+      }),
+    )
+  })
+
+  it('prefetches only the current user for an organisation-less user', async () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(CURRENT_USER_QUERY_KEY, ORGLESS_ME)
+    const prefetchQuery = vi
+      .spyOn(queryClient, 'prefetchQuery')
+      .mockResolvedValue(undefined)
+    const prefetchInfiniteQuery = vi
+      .spyOn(queryClient, 'prefetchInfiniteQuery')
+      .mockResolvedValue(undefined)
+    vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(undefined)
+
+    await prefetchVerifyData(queryClient)
+
+    expect(prefetchInfiniteQuery).not.toHaveBeenCalled()
+    expect(prefetchQuery).not.toHaveBeenCalled()
+  })
+
+  it('redirects to /sign-in when the current-user fetch is unauthenticated', async () => {
+    const queryClient = new QueryClient()
+    vi.spyOn(queryClient, 'ensureQueryData').mockRejectedValueOnce(
+      new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_7'),
+    )
+
+    await expectRejection(prefetchVerifyData(queryClient), (error: unknown) => {
       if (!isRedirect(error)) return false
       const opts = (error as { options?: { to?: string } }).options
       return opts?.to === '/sign-in'
