@@ -1,6 +1,6 @@
 import { Select as BaseSelect } from '@base-ui-components/react/select'
 import { useId, type ReactNode } from 'react'
-import { CaretDown } from '@phosphor-icons/react'
+import { CaretDown } from './icons'
 import { cn } from './lib/cn'
 
 export interface SelectOption {

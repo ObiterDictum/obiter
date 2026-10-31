@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { EyeSlash } from '@phosphor-icons/react'
 import { Badge, Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
+import { EyeSlash } from '@obiter/ui/icons'
 import type { VersionRedaction } from './documents'
 import { formatDate } from './format'
 

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ArrowUpRight } from '@phosphor-icons/react'
 import {
   Button,
   Card,
@@ -11,6 +10,7 @@ import {
   StatusDot,
   buttonClassName,
 } from '@obiter/ui'
+import { ArrowUpRight } from '@obiter/ui/icons'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { sourceNameForUrl } from '../components/search/provenance'

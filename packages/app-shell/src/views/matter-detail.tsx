@@ -1,6 +1,4 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { DotsThree } from '@phosphor-icons/react'
-import type { AppPlatform } from '@obiter/contracts'
 import {
   Button,
   Dialog,
@@ -19,6 +17,8 @@ import {
   buttonClassName,
   useToast,
 } from '@obiter/ui'
+import { DotsThree } from '@obiter/ui/icons'
+import type { AppPlatform } from '@obiter/contracts'
 import { useState } from 'react'
 import { ContentFrame } from '../content-frame'
 import { useCurrentUser } from '../current-user'

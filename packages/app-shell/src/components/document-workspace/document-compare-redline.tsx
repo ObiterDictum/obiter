@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import { ArrowsLeftRight, X } from '@phosphor-icons/react'
 import { Button, Select, cn } from '@obiter/ui'
+import { ArrowsLeftRight, X } from '@obiter/ui/icons'
 import type {
   DocumentComparisonSegment,
   DocumentCompareResponse,

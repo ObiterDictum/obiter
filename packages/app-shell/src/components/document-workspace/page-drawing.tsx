@@ -1,4 +1,4 @@
-import { Image as ImageIcon } from '@phosphor-icons/react'
+import { Image as ImageIcon } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
 import { drawingAnchor, drawingScene } from '../../document-page-drawings'
 import {

@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { Warning } from '@phosphor-icons/react'
-import { ApiError } from '../../api'
 import {
   Button,
   Dialog,
@@ -11,6 +9,8 @@ import {
   DialogTitle,
   useToast,
 } from '@obiter/ui'
+import { Warning } from '@obiter/ui/icons'
+import { ApiError } from '../../api'
 import { useDismissVerificationFinding } from '../../verification-runs'
 import { verificationStateLabel } from '../../verification-copy'
 import type { VerificationFindingView } from '@obiter/contracts'

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { GearSix, Lock, User, Users } from '@phosphor-icons/react'
 import { cn } from '@obiter/ui'
+import { GearSix, Lock, User, Users } from '@obiter/ui/icons'
 import { useCurrentUser } from '../current-user'
 import { PageScaffold } from '../page-scaffold'
 import { AccountSection } from './settings-account'

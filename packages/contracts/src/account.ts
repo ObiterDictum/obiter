@@ -18,5 +18,4 @@ export const updateProfileResponseSchema = z.object({
 })
 export type UpdateProfileResponse = z.infer<typeof updateProfileResponseSchema>
 
-export const MIN_PASSWORD_LENGTH = 8
-export const MAX_PASSWORD_LENGTH = 128
+export { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './limits'

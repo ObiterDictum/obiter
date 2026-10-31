@@ -1,4 +1,4 @@
-import { X, ArrowsInSimple, ArrowsOutSimple } from '@phosphor-icons/react'
+import { X, ArrowsInSimple, ArrowsOutSimple } from './icons'
 import { useRef, type ReactNode } from 'react'
 import { Button } from './button'
 import { cn } from './lib/cn'

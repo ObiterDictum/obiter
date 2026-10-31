@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { DocumentPdfViewResponse } from '@obiter/contracts'
 import { Button } from '@obiter/ui'
-import { CaretLeft, CaretRight } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight } from '@obiter/ui/icons'
 import { pdfSliceBounds, type PdfFindHit } from '../../document-find'
 
 export function DocumentPdfPages({

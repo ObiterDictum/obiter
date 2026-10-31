@@ -1,5 +1,5 @@
-import { X } from '@phosphor-icons/react'
 import { Button } from '@obiter/ui'
+import { X } from '@obiter/ui/icons'
 import type { DocumentOutlineEntry } from '../../document-outline'
 
 export function DocumentNavigationPane({

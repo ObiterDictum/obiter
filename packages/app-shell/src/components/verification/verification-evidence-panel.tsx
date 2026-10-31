@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { CaretLeft, CaretRight, X } from '@phosphor-icons/react'
 import {
   Badge,
   Button,
@@ -8,6 +7,7 @@ import {
   PopoverPortal,
   PopoverPositioner,
 } from '@obiter/ui'
+import { CaretLeft, CaretRight, X } from '@obiter/ui/icons'
 import { VerificationSourceEvidence } from './verification-source-evidence'
 import type { VerificationFindingView } from '@obiter/contracts'
 import {

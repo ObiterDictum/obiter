@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { VerificationRun } from '@obiter/contracts'
-import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { cn, ObiterMark } from '@obiter/ui'
+import { CaretLeft, CaretRight } from '@obiter/ui/icons/shell'
 import { useState, type Ref } from 'react'
 import { useMattersList, type MatterRecord } from './matters'
 import {

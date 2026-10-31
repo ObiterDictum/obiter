@@ -25,7 +25,7 @@ client entry):
 - **pdf worker** — budgeted separately; it is a fixed third-party asset.
 
 Budgets live in `scripts/perf/bundle-budget.mjs` with the measured baseline and
-roughly 10% headroom. They are a ratchet against regression, not a target. The
+roughly 3% headroom. They are a ratchet against regression, not a target. The
 script refuses a dist whose build marker names another commit, so a stale build
 cannot measure as current.
 

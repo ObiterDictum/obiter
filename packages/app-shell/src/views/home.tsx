@@ -1,9 +1,9 @@
 import { Link } from '@tanstack/react-router'
-import { PencilSimple, Upload } from '@phosphor-icons/react'
+import { Skeleton, buttonClassName } from '@obiter/ui'
+import { PencilSimple, Upload } from '@obiter/ui/icons'
 import { useQueries, useQueryClient } from '@tanstack/react-query'
 import type { AppPlatform, MeResponse } from '@obiter/contracts'
 import { PERSONAL_WORKSPACE_NAME } from '@obiter/contracts'
-import { Skeleton, buttonClassName } from '@obiter/ui'
 import { useEffect, useRef } from 'react'
 import { useCurrentUser } from '../current-user'
 import {

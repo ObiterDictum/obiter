@@ -1,5 +1,7 @@
-import type { ApiErrorCode } from '@obiter/contracts'
-import { apiErrorResponseSchema } from '@obiter/contracts'
+import {
+  parseApiErrorResponse,
+  type ApiErrorCode,
+} from '@obiter/contracts/api-error-response'
 import { apiUrl } from './lib/api-url'
 import { getDesktopAuthToken } from './lib/auth-token'
 import { readDesktopBridge } from './lib/desktop-bridge'
@@ -33,6 +35,26 @@ async function readJsonOrNull(response: Response) {
   } catch {
     return null
   }
+}
+
+async function throwApiError(response: Response): Promise<never> {
+  const parsed = await readJsonOrNull(response)
+  const result = parseApiErrorResponse(parsed)
+  if (result) {
+    throw new ApiError(
+      result.error.code,
+      result.error.message,
+      response.status,
+      result.error.requestId,
+    )
+  }
+
+  throw new ApiError(
+    'storage_unavailable',
+    'The API returned an unexpected error response.',
+    response.status,
+    UNKNOWN_REQUEST_ID,
+  )
 }
 
 async function serverCookieHeader(): Promise<Record<string, string>> {
@@ -80,26 +102,7 @@ export async function apiFetch<T>(
     return undefined as T
   }
 
-  if (!response.ok) {
-    const parsed = await readJsonOrNull(response)
-
-    const result = apiErrorResponseSchema.safeParse(parsed)
-    if (result.success) {
-      throw new ApiError(
-        result.data.error.code,
-        result.data.error.message,
-        response.status,
-        result.data.error.requestId,
-      )
-    }
-
-    throw new ApiError(
-      'storage_unavailable',
-      'The API returned an unexpected error response.',
-      response.status,
-      UNKNOWN_REQUEST_ID,
-    )
-  }
+  if (!response.ok) await throwApiError(response)
 
   // SAFETY: non-ok responses throw above; each call site instantiates T with that endpoint's contract response type.
   return (await response.json()) as T
@@ -121,26 +124,7 @@ export async function apiFetchBlobResult(
     },
   })
 
-  if (!response.ok) {
-    const parsed = await readJsonOrNull(response)
-
-    const result = apiErrorResponseSchema.safeParse(parsed)
-    if (result.success) {
-      throw new ApiError(
-        result.data.error.code,
-        result.data.error.message,
-        response.status,
-        result.data.error.requestId,
-      )
-    }
-
-    throw new ApiError(
-      'storage_unavailable',
-      'The API returned an unexpected error response.',
-      response.status,
-      UNKNOWN_REQUEST_ID,
-    )
-  }
+  if (!response.ok) await throwApiError(response)
 
   return { blob: await response.blob(), headers: response.headers }
 }

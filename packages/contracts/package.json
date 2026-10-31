@@ -3,8 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./api-error": "./src/api-error.ts",
+    "./api-error-response": "./src/api-error-response.ts",
+    "./case-paths": "./src/case-paths.ts",
+    "./legislation-paths": "./src/legislation-paths.ts",
+    "./limits": "./src/limits.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from 'react'
-import { ChatText, Scales, TextB, TextItalic } from '@phosphor-icons/react'
+import { ChatText, Scales, TextB, TextItalic } from '@obiter/ui/icons'
 import { EditorIconButton } from './editor-controls'
 import type { DocumentFormatToolbar } from './ribbon-types'
 

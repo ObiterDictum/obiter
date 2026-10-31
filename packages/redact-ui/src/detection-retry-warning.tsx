@@ -1,5 +1,5 @@
-import { ArrowClockwise } from '@phosphor-icons/react'
 import { Button } from '@obiter/ui'
+import { ArrowClockwise } from '@obiter/ui/icons'
 import { DetectionModeWarning } from './detection-mode-warning'
 import { useRedetectRun } from './hooks'
 import type { RedactionRun } from './types'

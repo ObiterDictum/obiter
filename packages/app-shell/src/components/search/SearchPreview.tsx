@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { Scales } from '@phosphor-icons/react'
 import { Card, CardBody, CardFoot, CardHead, StatusDot } from '@obiter/ui'
+import { Scales } from '@obiter/ui/icons'
 import { caseResultLocation } from '../../case-navigation'
 import { formatDate } from '../../format'
 import { provisionResultLocation } from '../../legislation-navigation'

@@ -1,5 +1,4 @@
 import { Link } from '@tanstack/react-router'
-import { CaretRight } from '@phosphor-icons/react'
 import {
   Skeleton,
   StatusDot,
@@ -11,6 +10,7 @@ import {
   Table,
   cn,
 } from '@obiter/ui'
+import { CaretRight } from '@obiter/ui/icons'
 import { formatDateTime } from '../format'
 import type { MatterRecord } from '../matters'
 import { matterInitials } from '../matters'

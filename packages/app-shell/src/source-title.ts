@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
+import { resolveCaseDocumentIdFromSlug } from '@obiter/contracts/case-paths'
 import {
   parseLegislationActPath,
   parseLegislationProvisionPath,
-  resolveCaseDocumentIdFromSlug,
-} from '@obiter/contracts'
+} from '@obiter/contracts/legislation-paths'
 import { caseLawDocumentQueryOptions } from './views/case-law-document-query'
 import {
   legislationActQueryOptions,

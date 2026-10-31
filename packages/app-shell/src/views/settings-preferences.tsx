@@ -1,4 +1,4 @@
-import { Moon, Sun } from '@phosphor-icons/react'
+import { Moon, Sun } from '@obiter/ui/icons'
 import { SegmentedControl } from '../segmented-control'
 import { setAppTheme, useThemeChoice, type ThemeChoice } from '../use-app-theme'
 import { SectionHeading } from './settings-fields'
