@@ -28,6 +28,7 @@ import { documentListMarkers } from '../../document-page-lists'
 import { paragraphStoryResolver } from '../../document-model-text'
 import { documentNotes } from '../../document-page-notes'
 import { pageClickHandlers } from './model-page-clicks'
+import { useLatestCallback } from './use-latest-callback'
 import type { ParagraphWordEdit } from './model-paragraph'
 import type { ParagraphSelectionRange } from './model-run'
 import { PageOverlays, renderBlock } from './model-page-blocks'
@@ -180,6 +181,7 @@ export function DocumentModelPage({
     })
     return { order, neighbors }
   }, [model, story, extraRuns, inserts, deletedParagraphIds])
+  const latestNeighbors = useLatestCallback(neighbors)
 
   const page = pageLayout?.box ?? documentPageBox(model)
   const frame =
@@ -352,7 +354,7 @@ export function DocumentModelPage({
                   editing: bodyEditing,
                   paragraphs: story.paragraphs,
                   columnWidthPx: column.widthPx,
-                  neighbors,
+                  neighbors: latestNeighbors,
                 }),
               )}
           </div>

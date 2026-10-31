@@ -1,4 +1,7 @@
-import { InlineChangeReview, inlineReviewOf } from './inline-change-review'
+import {
+  InlineChangeReview,
+  useInlineReviewValue,
+} from './inline-change-review'
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
@@ -44,7 +47,7 @@ import { documentExportHandlers } from './document-workspace-export'
 import { selectionAnnouncement } from './document-workspace-status'
 import { useDocumentMarkings } from './use-document-markings'
 import { useLegalToolsState } from './use-legal-tools-state'
-import { paragraphSelectionHandlers } from './paragraph-selection-handlers'
+import { useParagraphSelectionHandlers } from './paragraph-selection-handlers'
 import { DocumentPrintStyle } from './document-page'
 import { useDocumentPrint } from './use-document-print'
 import {
@@ -269,7 +272,7 @@ export function DocxWorkspace({
     setView,
     revealParagraph,
   })
-  const selectionHandlers = paragraphSelectionHandlers(caret)
+  const selectionHandlers = useParagraphSelectionHandlers(caret)
   const commentsPanel = useWorkspaceComments({
     documentId,
     listed: commentsQuery.data,
@@ -349,10 +352,12 @@ export function DocxWorkspace({
         : undefined,
   })
 
+  const inlineReview = useInlineReviewValue(changeReview, () =>
+    togglePanel('review'),
+  )
+
   return (
-    <InlineChangeReview
-      value={inlineReviewOf(changeReview, () => togglePanel('review'))}
-    >
+    <InlineChangeReview value={inlineReview}>
       <WorkspaceShell
         layout={layout}
         onKeyDown={(event) =>
