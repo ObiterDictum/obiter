@@ -27,7 +27,8 @@ import {
 import { documentListMarkers } from '../../document-page-lists'
 import type { NoteKind } from '../../document-page-notes'
 import type { ParagraphSelectionRange } from './model-run'
-import { ModelParagraph, type ParagraphWordEdit } from './model-paragraph'
+import { ModelParagraph } from './model-paragraph-memo'
+import type { ParagraphWordEdit } from './model-paragraph'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import {
   type ParagraphNeighborResolver,
