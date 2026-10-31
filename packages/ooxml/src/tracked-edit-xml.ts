@@ -251,7 +251,14 @@ export function appendPropertyChange(
       marker,
     )
   }
-  return properties.replace(/(<\/[^>]+>)$/u, `${marker}$1`)
+  const end = properties.lastIndexOf('>')
+  if (end === -1 || end !== properties.length - 1) return properties
+  const start = properties.indexOf(
+    '</',
+    properties.lastIndexOf('>', end - 1) + 1,
+  )
+  if (start === -1 || start + 2 >= end) return properties
+  return properties.slice(0, start) + marker + properties.slice(start)
 }
 
 function styleInstruction(prefix: string, name: string, styleId: string) {
