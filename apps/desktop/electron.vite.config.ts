@@ -15,6 +15,11 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
   },
   preload: {
+    build: {
+      rollupOptions: {
+        output: { format: 'cjs', entryFileNames: '[name].cjs' },
+      },
+    },
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
