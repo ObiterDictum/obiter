@@ -56,7 +56,7 @@ import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 export type { ParagraphWordEdit } from './model-paragraph-editor'
 import type { ParagraphWordEdit } from './model-paragraph-editor'
 
-export function ModelParagraph({
+export function ModelParagraphInner({
   paragraph,
   changes,
   pendingChanges = NO_PENDING_CHANGES,
@@ -123,7 +123,7 @@ export function ModelParagraph({
   verticalCaret?: VerticalCaretColumn
   selectionHandlers?: ParagraphSelectionHandlers
   selectionSegment?: ParagraphSelectionRange | null
-  onFocusParagraph?: () => void
+  onFocusParagraph?: (paragraphId: string) => void
   editing?: boolean
   presence?: DocumentPresence[]
   currentUserId?: string
@@ -440,7 +440,11 @@ export function ModelParagraph({
                 next={adjacent?.next}
                 verticalCaret={verticalCaret}
                 selection={selectionBinding}
-                onFocusParagraph={onFocusParagraph}
+                onFocusParagraph={
+                  onFocusParagraph
+                    ? () => onFocusParagraph(paragraph.id)
+                    : undefined
+                }
                 onMoveCaret={onMoveCaret}
                 onTextSelection={(localStart, localEnd, direction) =>
                   onTextSelection?.(

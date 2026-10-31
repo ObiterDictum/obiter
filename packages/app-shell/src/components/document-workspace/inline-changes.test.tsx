@@ -16,7 +16,8 @@ import {
   paragraphPlainText,
   effectiveParagraph,
 } from '../../document-model-text'
-import { ModelParagraph, type ParagraphWordEdit } from './model-paragraph'
+import { ModelParagraph } from './model-paragraph-memo'
+import type { ParagraphWordEdit } from './model-paragraph'
 import { InlineChangeReview } from './inline-change-review'
 import { renderedRangeFor } from '../verification/verification-anchor'
 import {

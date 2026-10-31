@@ -10,7 +10,8 @@ import { wrapLines } from '../../document-page-flow'
 import { paragraphPlainText } from '../../document-model-text'
 import { paragraphFace, paragraphLineHeightPx } from '../../document-page-style'
 import { paragraphClickCaret } from './model-click-caret'
-import { ModelParagraph, type ParagraphWordEdit } from './model-paragraph'
+import { ModelParagraph } from './model-paragraph-memo'
+import type { ParagraphWordEdit } from './model-paragraph'
 import { DocumentModelPage } from './model-view'
 import {
   createVerticalCaretColumn,

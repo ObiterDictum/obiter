@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useLayoutEffect,
+  useMemo,
   useRef,
   type ReactNode,
 } from 'react'
@@ -16,17 +17,29 @@ export const InlineChangeReview = createContext<{
   selectChange: (id: string) => void
 } | null>(null)
 
-export function inlineReviewOf(review: ChangeReview, openPanel: () => void) {
-  return {
-    activeChangeId: review.activeChangeId,
-    tabChangeId: review.inlineTabChangeId,
-    moveChange: review.goToAdjacentInline,
-    selectChange: (id: string) => {
-      const index = review.changes.findIndex((change) => change.id === id)
-      if (index >= 0) review.goTo(index)
-      openPanel()
-    },
-  }
+export function useInlineReviewValue(
+  review: ChangeReview,
+  openPanel: () => void,
+) {
+  const reviewRef = useRef(review)
+  reviewRef.current = review
+  const openPanelRef = useRef(openPanel)
+  openPanelRef.current = openPanel
+  return useMemo(
+    () => ({
+      activeChangeId: review.activeChangeId,
+      tabChangeId: review.inlineTabChangeId,
+      moveChange: (fromId: string, direction: -1 | 1) =>
+        reviewRef.current.goToAdjacentInline(fromId, direction),
+      selectChange: (id: string) => {
+        const current = reviewRef.current
+        const index = current.changes.findIndex((change) => change.id === id)
+        if (index >= 0) current.goTo(index)
+        openPanelRef.current()
+      },
+    }),
+    [review.activeChangeId, review.inlineTabChangeId],
+  )
 }
 
 const BREAK_LABELS = new Map([

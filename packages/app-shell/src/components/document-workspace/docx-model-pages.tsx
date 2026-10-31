@@ -17,6 +17,8 @@ import { DocumentModelPage } from './model-view'
 import type { ParagraphSelectionRange } from './model-run'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import type { VerticalCaretColumn } from './paragraph-arrow'
+import type { ParagraphWordEdit } from './model-paragraph'
+import { useLatestCallback } from './use-latest-callback'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
 import type { EditingKind } from './use-editing-story'
 
@@ -105,6 +107,52 @@ export function DocxModelPages({
       drafts.drafts,
     ],
   )
+  const select = useLatestCallback(selectParagraph)
+  const focus = useLatestCallback(focusParagraph)
+  const move = useLatestCallback(moveCaret)
+  const selectText = useLatestCallback(
+    (
+      paragraphId: string,
+      from: number,
+      to: number,
+      direction: 'forward' | 'backward',
+    ) => {
+      setFormatRange({ from, to })
+      mirrorSelection(paragraphId, from, to, direction)
+    },
+  )
+  const changeRunText = useLatestCallback((runId: string, text: string) => {
+    drafts.setDrafts((current) => ({
+      ...current,
+      [runId]: normaliseEditText(text),
+    }))
+  })
+  const changeInsertText = useLatestCallback(
+    (clientId: string, text: string) => {
+      drafts.setInserts((current) =>
+        current.map((item) =>
+          item.clientId === clientId
+            ? { ...item, text: normaliseEditText(text) }
+            : item,
+        ),
+      )
+    },
+  )
+  const insertParagraph = useLatestCallback((afterParagraphId: string) => {
+    selectParagraph(drafts.insertAfter(afterParagraphId), 0)
+  })
+  const deleteParagraph = useLatestCallback((paragraphId: string) => {
+    const { selectId } = drafts.deleteParagraph(paragraphId)
+    if (selectId) selectParagraph(selectId)
+  })
+  const wordEdit = useLatestCallback((edit: ParagraphWordEdit) => {
+    const outcome = drafts.handleWordEdit(model, edit)
+    if (outcome?.status === 'applied') {
+      selectParagraph(outcome.caret.paragraphId, outcome.caret.offset)
+    } else if (outcome?.status === 'refused') {
+      reportJoinRefusal(outcome.refusal)
+    }
+  })
   return (
     <>
       {pages.map((laid, index) => (
@@ -134,24 +182,16 @@ export function DocxModelPages({
             pageTextBoxes={laid.textBoxes}
             pageLayout={laid}
             selectedParagraphId={selectedParagraphId}
-            onSelectParagraph={selectParagraph}
-            onTextSelection={(paragraphId, from, to, direction) => {
-              setFormatRange({ from, to })
-              mirrorSelection(paragraphId, from, to, direction)
-            }}
+            onSelectParagraph={select}
+            onTextSelection={selectText}
             selectionSegments={selectionSegments}
             linkOverlays={linkOverlays}
             selectionHandlers={selectionHandlers}
-            onFocusParagraph={focusParagraph}
-            onMoveCaret={moveCaret}
+            onFocusParagraph={focus}
+            onMoveCaret={move}
             drafts={drafts.drafts}
             emphasis={drafts.format.emphasis}
-            onRunTextChange={(runId, text) =>
-              drafts.setDrafts((current) => ({
-                ...current,
-                [runId]: normaliseEditText(text),
-              }))
-            }
+            onRunTextChange={changeRunText}
             editing
             presence={presence}
             currentUserId={currentUserId}
@@ -159,30 +199,10 @@ export function DocxModelPages({
             deletedParagraphIds={paintedDeletes}
             extraRuns={drafts.extraRuns}
             imageUrls={imageUrls}
-            onInsertTextChange={(clientId, text) =>
-              drafts.setInserts((current) =>
-                current.map((item) =>
-                  item.clientId === clientId
-                    ? { ...item, text: normaliseEditText(text) }
-                    : item,
-                ),
-              )
-            }
-            onInsertParagraph={(afterParagraphId) =>
-              selectParagraph(drafts.insertAfter(afterParagraphId), 0)
-            }
-            onDeleteParagraph={(paragraphId) => {
-              const { selectId } = drafts.deleteParagraph(paragraphId)
-              if (selectId) selectParagraph(selectId)
-            }}
-            onWordEdit={(edit) => {
-              const outcome = drafts.handleWordEdit(model, edit)
-              if (outcome?.status === 'applied') {
-                selectParagraph(outcome.caret.paragraphId, outcome.caret.offset)
-              } else if (outcome?.status === 'refused') {
-                reportJoinRefusal(outcome.refusal)
-              }
-            }}
+            onInsertTextChange={changeInsertText}
+            onInsertParagraph={insertParagraph}
+            onDeleteParagraph={deleteParagraph}
+            onWordEdit={wordEdit}
             restoreCaret={restoreCaret}
             verticalCaret={verticalCaret}
           />

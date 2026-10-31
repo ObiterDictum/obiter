@@ -8,7 +8,7 @@ import type {
 } from '@obiter/contracts'
 import { applyWordEdit, emptyEditorState } from '../../document-word-edits'
 import { multiParagraphModel } from './docx-workspace-harness'
-import { ModelParagraph } from './model-paragraph'
+import { ModelParagraph } from './model-paragraph-memo'
 
 const paragraph: DocumentParagraphWire = {
   id: 'p',
