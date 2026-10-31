@@ -98,7 +98,7 @@ export type { LegislationActResponse } from './views/LegislationActView'
 export {
   createCanonicalCasePath,
   resolveCaseDocumentIdFromSlug,
-} from '@obiter/contracts'
+} from '@obiter/contracts/case-paths'
 export {
   LegalSearchView,
   LEGAL_SEARCH_DEBOUNCE_MS,

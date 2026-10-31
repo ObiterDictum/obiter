@@ -16,7 +16,7 @@ import {
   rememberDocumentDraftUser,
   resumeDocumentDraftWrites,
   suspendDocumentDraftWrites,
-} from './document-draft-store'
+} from './document-draft-identity'
 
 export function currentUserQueryOptions() {
   return queryOptions({

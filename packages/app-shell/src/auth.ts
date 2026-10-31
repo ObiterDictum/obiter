@@ -1,11 +1,14 @@
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
 import { useQueryClient } from '@tanstack/react-query'
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+} from '@obiter/contracts/limits'
 import {
   clearStoredDocumentDraftsForUser,
   suspendDocumentDraftWrites,
-} from './document-draft-store'
+} from './document-draft-identity'
 import { resolvePackagedApiOrigin } from './lib/api-url'
 import {
   clearDesktopAuthToken,

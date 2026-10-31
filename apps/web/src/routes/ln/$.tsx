@@ -7,7 +7,7 @@ import {
 import {
   parseLegislationActPath,
   parseLegislationProvisionPath,
-} from '@obiter/contracts'
+} from '@obiter/contracts/legislation-paths'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/ln/$')({
