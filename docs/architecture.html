@@ -2316,15 +2316,15 @@
                 </dd>
                 <dt>Domain</dt>
                 <dd>
-                  redaction-detection · redaction-redetect ·
-                  redaction-run-creation · redaction-database ·
-                  redaction-audit-report · redaction-audit-shareable ·
-                  redaction-renderer · redaction-hard-output ·
-                  redaction-secure-pdf · document-extraction · document-layout ·
-                  comments-db · comments-list · comments-create ·
-                  comments-replies · comments-resolution ·
-                  imported-comment-fingerprint · pdf-glyph-layout ·
-                  redaction-pdf-output · storage · authz
+                  redaction-detection · redaction-detection-windows ·
+                  redaction-redetect · redaction-run-creation ·
+                  redaction-database · redaction-audit-report ·
+                  redaction-audit-shareable · redaction-renderer ·
+                  redaction-hard-output · redaction-secure-pdf ·
+                  document-extraction · document-layout · comments-db ·
+                  comments-list · comments-create · comments-replies ·
+                  comments-resolution · imported-comment-fingerprint ·
+                  pdf-glyph-layout · redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
@@ -5984,7 +5984,10 @@
                 applies the bidi algorithm only on the item path. Vertical
                 writing and non-perpendicular skewed glyph axes are rejected
                 until their geometry is supported. Every generated layout passes
-                the shared schema before it can be returned or stored.</span
+                the shared schema before it can be returned or stored.
+                Extraction refuses text above 2,000,000 characters — roughly
+                1,000 pages at 2,000 characters per page — with a message naming
+                the actual length, the bound and the remedy.</span
               >
             </li>
             <li>
@@ -5997,7 +6000,14 @@
               <span
                 ><b>Model detection.</b> The Rampart classifier runs over masked
                 text; offsets project back to the original. Long documents chunk
-                at 400 tokens with overlap.</span
+                at 400 tokens with overlap. A document longer than 200,000
+                characters is split into 200,000-character windows with 4,000
+                characters of overlap, cut at a paragraph break or whitespace
+                near the limit. Each window runs the full pipeline; spans map
+                back to document offsets and merge. A span that does not touch
+                its window's cut edge beats the truncated copy found at a
+                neighbouring window's edge; otherwise the longer span wins, then
+                the higher confidence, then the earlier window.</span
               >
             </li>
             <li>
