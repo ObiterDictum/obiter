@@ -7,6 +7,11 @@ import type { PdfPreviewStatus } from './pdf-document-preview'
 const hooks = vi.hoisted(() => ({
   useRedactionRun: vi.fn(),
   useRedactionDocumentText: vi.fn(),
+  useRetryDetection: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  })),
   useRedactionOutput: vi.fn(),
   useRedactionOutputFile: vi.fn(),
   useRedactionScheduleExport: vi.fn(),

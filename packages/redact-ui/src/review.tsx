@@ -16,6 +16,7 @@ import { PageScaffold, useCurrentUser } from '@obiter/app-shell'
 import {
   useCreateUploadedRedactionRun,
   useRedactionDocumentText,
+  useRetryDetection,
   useRedactionOutput,
   useRedactionRun,
   useSpanDecision,
@@ -54,8 +55,17 @@ export function RedactionReviewView({
 }) {
   const { data: me } = useCurrentUser()
   const runQuery = useRedactionRun(runId)
-  const textQuery = useRedactionDocumentText(runId)
-  const pdfPreviewEnabled = runQuery.data?.sourcePreview?.available === true
+  const detecting =
+    runQuery.data?.status === 'detecting' || runQuery.data?.status === 'pending'
+  const textQuery = useRedactionDocumentText(
+    runId,
+    !!runQuery.data && !detecting && runQuery.data.status !== 'failed',
+  )
+  const retry = useRetryDetection(runId)
+  const pdfPreviewEnabled =
+    !detecting &&
+    runQuery.data?.status !== 'failed' &&
+    runQuery.data?.sourcePreview?.available === true
   const sourceFileQuery = useRedactionSource(
     runId,
     'source-file',
@@ -82,7 +92,7 @@ export function RedactionReviewView({
   }, [selectedId])
 
   const failedWithoutText =
-    runQuery.data?.status === 'failed' && !textQuery.data
+    (runQuery.data?.status === 'failed' || detecting) && !textQuery.data
   if (runQuery.isPending || (textQuery.isPending && !failedWithoutText)) {
     return (
       <div className="mx-auto w-full max-w-[1216px] px-12 py-14 max-compact:px-8">
@@ -115,6 +125,27 @@ export function RedactionReviewView({
   const run = runQuery.data
   const currentUserId = me?.user.id
 
+  if (detecting)
+    return (
+      <PageScaffold title={run.sourceFilename} eyebrow="Redaction review">
+        <EmptyState
+          title="Detecting…"
+          body={
+            run.detectionProgress?.total
+              ? `${run.detectionProgress.completed} of ${run.detectionProgress.total} sections. This screen updates when detection finishes.`
+              : 'Reading the document. You can leave this page and come back.'
+          }
+          icon={
+            <CircleNotch
+              className="animate-spin"
+              size={28}
+              aria-hidden="true"
+            />
+          }
+        />
+      </PageScaffold>
+    )
+
   if (run.status === 'failed') {
     return (
       <PageScaffold title={run.sourceFilename} eyebrow="Redaction review">
@@ -127,6 +158,9 @@ export function RedactionReviewView({
               onSuccess: ({ run: next }) => onOpenRun(next.id),
             })
           }
+          onRetry={() => retry.mutate()}
+          retrying={retry.isPending}
+          retryError={retry.error?.message}
           onBack={onBack}
         />
       </PageScaffold>
@@ -163,24 +197,6 @@ export function RedactionReviewView({
         onOpenDocument={onOpenDocument}
       />
     )
-
-  if (run.status === 'detecting' || run.status === 'pending') {
-    return (
-      <PageScaffold title={run.sourceFilename} eyebrow="Redaction review">
-        <EmptyState
-          title="Detection in progress"
-          body="Rampart is reading the document. This screen updates when detection finishes; you can leave the page and come back."
-          icon={
-            <CircleNotch
-              className="animate-spin"
-              size={28}
-              aria-hidden="true"
-            />
-          }
-        />
-      </PageScaffold>
-    )
-  }
 
   const counts = decisionCounts(run.spans, run.decisions)
   const changeFilter = (apply: () => void) => {

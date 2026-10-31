@@ -21,7 +21,8 @@ mock.module('@obiter/app-shell', () =>
   ),
 )
 
-const { useFinalizeRun, useRedetectRun } = await import('./hooks')
+const { useFinalizeRun, useRedetectRun, useRedactionRun, useRetryDetection } =
+  await import('./hooks')
 
 const baseRun: RedactionRun = {
   id: 'red_1',
@@ -75,6 +76,55 @@ function createWrapper(client: QueryClient) {
 
 beforeEach(() => {
   apiFetch.mockReset()
+})
+
+describe('detection jobs', () => {
+  it('polls a detecting run until ready and stops after completion', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    apiFetch
+      .mockResolvedValueOnce({ run: { ...baseRun, status: 'detecting' } })
+      .mockResolvedValue({ run: baseRun })
+    const view = renderHook(() => useRedactionRun('red_1'), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() =>
+      expect(view.result.current.data?.status).toBe('detecting'),
+    )
+    await waitFor(
+      () => expect(view.result.current.data?.status).toBe('ready_for_review'),
+      { timeout: 4_000 },
+    )
+    const calls = apiFetch.mock.calls.length
+    await new Promise((resolve) => setTimeout(resolve, 2_100))
+    expect(apiFetch.mock.calls.length).toBe(calls)
+    view.unmount()
+    client.clear()
+  }, 10_000)
+
+  it('replaces the failed detail cache with the queued run after retry', async () => {
+    const client = new QueryClient()
+    client.setQueryData(['redaction-run', 'red_1'], {
+      ...baseRun,
+      status: 'failed',
+    })
+    apiFetch.mockResolvedValueOnce({ run: { ...baseRun, status: 'detecting' } })
+    const view = renderHook(() => useRetryDetection('red_1'), {
+      wrapper: createWrapper(client),
+    })
+    await act(async () => {
+      await view.result.current.mutateAsync()
+    })
+    expect(apiFetch).toHaveBeenCalledWith('/api/redaction-runs/red_1/retry', {
+      method: 'POST',
+    })
+    expect(
+      client.getQueryData<RedactionRun>(['redaction-run', 'red_1'])?.status,
+    ).toBe('detecting')
+    view.unmount()
+    client.clear()
+  })
 })
 
 describe('useFinalizeRun cache updates', () => {

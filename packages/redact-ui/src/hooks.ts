@@ -30,6 +30,10 @@ export function redactionRunsQueryOptions() {
   return queryOptions({
     queryKey: runsKey,
     queryFn: () => apiFetch<{ runs: RedactionRun[] }>('/api/redaction-runs'),
+    refetchInterval: (query) =>
+      query.state.data?.runs.some((run) => run.status === 'detecting')
+        ? 2_000
+        : false,
     staleTime: 30_000,
   })
 }
@@ -105,7 +109,7 @@ export function redactionRunQueryOptions(runId: string) {
       (await apiFetch<{ run: RedactionRun }>(`/api/redaction-runs/${runId}`))
         .run,
     refetchInterval: (query) =>
-      query.state.data?.status === 'detecting' ? 5_000 : false,
+      query.state.data?.status === 'detecting' ? 2_000 : false,
     staleTime: 30_000,
   })
 }
@@ -123,8 +127,22 @@ export function redactionDocumentTextQueryOptions(runId: string) {
   })
 }
 
-export function useRedactionDocumentText(runId: string) {
-  return useQuery(redactionDocumentTextQueryOptions(runId))
+export function useRedactionDocumentText(runId: string, enabled = true) {
+  return useQuery({ ...redactionDocumentTextQueryOptions(runId), enabled })
+}
+
+export function useRetryDetection(runId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ run: RedactionRun }>(`/api/redaction-runs/${runId}/retry`, {
+        method: 'POST',
+      }),
+    onSuccess: ({ run }) => {
+      client.setQueryData(runKey(runId), run)
+      void client.invalidateQueries({ queryKey: runsKey })
+    },
+  })
 }
 
 export function useRedactionOutput(runId: string, enabled: boolean) {

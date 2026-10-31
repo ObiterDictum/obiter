@@ -6,6 +6,11 @@ import type { RedactionRun } from './types'
 
 const hooks = vi.hoisted(() => ({
   useRedactionRun: vi.fn(),
+  useRetryDetection: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  })),
   useRedactionDocumentText: vi.fn(),
   useRedactionOutput: vi.fn(() => ({ isPending: false })),
   useRedactionOutputFile: vi.fn(() => ({
@@ -190,6 +195,40 @@ beforeEach(() => {
 })
 
 describe('redaction review', () => {
+  it('shows section progress without fetching review text until detection is ready', () => {
+    const view = renderRun({
+      status: 'detecting',
+      detectionProgress: { completed: 12, total: 40 },
+    })
+    expect(screen.getByText('Detecting…')).toBeTruthy()
+    expect(screen.getByText(/12 of 40 sections/u)).toBeTruthy()
+    expect(hooks.useRedactionDocumentText).toHaveBeenLastCalledWith(
+      'red_1',
+      false,
+    )
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: decidedRun,
+    })
+    view.rerender(<RedactionReviewView runId="red_1" onOpenRun={onOpenRun} />)
+    expect(screen.getByText('2 of 2 detected spans decided')).toBeTruthy()
+    expect(hooks.useRedactionDocumentText).toHaveBeenLastCalledWith(
+      'red_1',
+      true,
+    )
+  })
+
+  it('retries the stored source from the failed screen', () => {
+    const retry = vi.fn()
+    hooks.useRetryDetection.mockReturnValue({
+      mutate: retry,
+      isPending: false,
+      error: null,
+    })
+    renderRun({ status: 'failed' })
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
   it('states what the detector found and how sure it is, in plain words', () => {
     renderRun()
     expect(
