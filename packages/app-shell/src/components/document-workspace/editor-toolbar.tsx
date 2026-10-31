@@ -13,6 +13,7 @@ import {
   TextUnderline,
   TextAa,
 } from '@obiter/ui/icons'
+import { memo } from 'react'
 import {
   EditorIconButton,
   EditorSelect,
@@ -20,18 +21,37 @@ import {
 } from './editor-controls'
 import type { EditorChromeProps } from './editor-commands'
 import { styleDisplayName } from './editor-commands'
+import { workspaceDataEqual } from './workspace-data-equal'
 
 const MIXED_STYLE_VALUE = '__mixed__'
 
-export function EditorToolbar({
-  props,
-  onOpenFormatting,
-  onOpenPalette,
-}: {
+type EditorToolbarProps = {
   props: EditorChromeProps
   onOpenFormatting: () => void
   onOpenPalette: () => void
-}) {
+}
+
+function editorToolbarPropsEqual(
+  prev: EditorToolbarProps,
+  next: EditorToolbarProps,
+): boolean {
+  return (
+    prev.onOpenFormatting === next.onOpenFormatting &&
+    prev.onOpenPalette === next.onOpenPalette &&
+    prev.props.canEdit === next.props.canEdit &&
+    prev.props.canUndo === next.props.canUndo &&
+    prev.props.canRedo === next.props.canRedo &&
+    prev.props.commentCount === next.props.commentCount &&
+    prev.props.commentsOpen === next.props.commentsOpen &&
+    workspaceDataEqual(prev.props.format, next.props.format)
+  )
+}
+
+function EditorToolbarInner({
+  props,
+  onOpenFormatting,
+  onOpenPalette,
+}: EditorToolbarProps) {
   const { format } = props
   const editing = props.canEdit && Boolean(format)
   const styles = format?.paragraphStyles ?? []
@@ -180,3 +200,5 @@ export function EditorToolbar({
 function ToolbarDivider() {
   return <div className="mx-1 h-5 w-px shrink-0 bg-line" aria-hidden />
 }
+
+export const EditorToolbar = memo(EditorToolbarInner, editorToolbarPropsEqual)

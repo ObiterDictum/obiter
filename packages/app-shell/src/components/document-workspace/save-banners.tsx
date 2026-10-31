@@ -2,8 +2,8 @@ import { Button } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import { refocusCaretBeforeFlight } from './document-actions'
 import { blockedSummary, refusedSummary } from './document-save-messages'
-import type { DocumentSave } from './use-document-save'
-import type { WorkspaceDrafts } from './use-workspace-drafts'
+import type { ChromeSave } from './use-document-save'
+import type { ChromeDrafts } from './use-workspace-drafts'
 import { DiscardWorkDialog } from './discard-work-dialog'
 import { UnsavedNavigationGuard } from './unsaved-navigation-guard'
 
@@ -11,8 +11,8 @@ export function DocumentSaveBanners({
   save,
   drafts,
 }: {
-  save: DocumentSave
-  drafts: WorkspaceDrafts
+  save: ChromeSave
+  drafts: ChromeDrafts
 }) {
   const blocked = blockedSummary(save.blocked)
   const refused = refusedSummary(save.refused)
@@ -142,7 +142,7 @@ export function DocumentSaveBanners({
   )
 }
 
-function hasUnsavedWork(save: DocumentSave, drafts: WorkspaceDrafts) {
+function hasUnsavedWork(save: ChromeSave, drafts: ChromeDrafts) {
   return (
     save.dirty ||
     save.held.length > 0 ||
@@ -151,7 +151,7 @@ function hasUnsavedWork(save: DocumentSave, drafts: WorkspaceDrafts) {
   )
 }
 
-function heldSummary(save: DocumentSave) {
+function heldSummary(save: ChromeSave) {
   const first = save.held[0]
   if (save.held.length === 1) {
     return `The server rejected ${first?.label ?? 'a change'}. It is held here and has not blocked the rest of your work. Saving will not resend it.`
