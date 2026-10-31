@@ -15,6 +15,8 @@ import {
   type ErrorComponentProps,
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import favicon from '@obiter/ui/brand/logo/mark-32-ink-on-sand.png?url'
+import touchIcon from '@obiter/ui/brand/logo/mark-256-ink-on-sand.png?url'
 import appCss from '../styles.css?url'
 
 interface RouterContext {
@@ -39,6 +41,16 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       {
         href: appCss,
         rel: 'stylesheet',
+      },
+      {
+        href: favicon,
+        rel: 'icon',
+        sizes: '32x32',
+        type: 'image/png',
+      },
+      {
+        href: touchIcon,
+        rel: 'apple-touch-icon',
       },
     ],
   }),
