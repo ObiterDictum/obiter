@@ -1,3 +1,4 @@
+import { collapseSpaceRuns } from './html-scan'
 const findCaseLawJurisdiction = 'england-and-wales'
 const supportedFindCaseLawCourts = new Set([
   'eat',
@@ -125,7 +126,7 @@ function courtFromFindCaseLawPath(uri: string | null) {
 }
 
 function courtFromCitation(citation: string) {
-  const match = citation.match(
+  const match = collapseSpaceRuns(citation).match(
     /^\[\d{4}\]\s+([A-Za-z][A-Za-z0-9 ]*?)\s+\d+(?:\s+\(([A-Za-z][A-Za-z0-9 ]*)\))?$/,
   )
   const token = match?.[1]

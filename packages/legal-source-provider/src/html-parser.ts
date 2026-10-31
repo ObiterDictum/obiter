@@ -4,6 +4,16 @@ import {
   extractNeutralCitation,
   readTag,
 } from './document-utils'
+import { replaceElements, replaceTags } from './html-scan'
+
+const NON_CONTENT_ELEMENTS = [
+  'script',
+  'style',
+  'nav',
+  'header',
+  'footer',
+  'aside',
+] as const
 
 export function parseJudgmentParagraphs(html: string, documentId: string) {
   const judgmentHtml = extractJudgmentHtml(html)
@@ -30,14 +40,13 @@ export function parseJudgmentParagraphs(html: string, documentId: string) {
 
 function htmlFragmentToText(html: string) {
   return decodeHtml(
-    html
-      .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<nav\b[\s\S]*?<\/nav>/gi, ' ')
-      .replace(/<header\b[\s\S]*?<\/header>/gi, ' ')
-      .replace(/<footer\b[\s\S]*?<\/footer>/gi, ' ')
-      .replace(/<aside\b[\s\S]*?<\/aside>/gi, ' ')
-      .replace(/<[^>]+>/g, ' '),
+    replaceTags(
+      NON_CONTENT_ELEMENTS.reduce(
+        (text, name) => replaceElements(text, name, ' '),
+        html,
+      ),
+      ' ',
+    ),
   )
 }
 
@@ -72,8 +81,7 @@ export function extractJudgmentTitleFromHtml(html: string) {
 
   return (
     decodeHtml(
-      title
-        .replace(/<[^>]+>/g, ' ')
+      replaceTags(title, ' ')
         .replace(/\s+-\s+Find Case Law[\s\S]*$/i, '')
         .replace(/\s+/g, ' ')
         .trim(),
@@ -87,9 +95,7 @@ export function extractNeutralCitationFromHtml(html: string) {
     html.match(/judgment-header__neutral-citation[\s\S]{0,300}/i)?.[0] ??
     html
 
-  return extractNeutralCitation(
-    decodeHtml(citationSource.replace(/<[^>]+>/g, ' ')),
-  )
+  return extractNeutralCitation(decodeHtml(replaceTags(citationSource, ' ')))
 }
 
 export function extractJudgmentDateFromHtml(html: string) {
