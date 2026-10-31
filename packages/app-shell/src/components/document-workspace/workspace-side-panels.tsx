@@ -5,7 +5,7 @@ import type {
   DocumentImportedCommentThread,
 } from '@obiter/contracts'
 import { DockedPanel, type PanelPopout } from '@obiter/ui'
-import type { ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 import { DocumentAuthoritiesPanel } from './authorities-panel'
 import { DocumentReviewPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
@@ -24,7 +24,7 @@ import type {
 } from '../../documents'
 import type { DocumentModelWire } from '@obiter/contracts'
 
-export function WorkspaceSidePanels({
+function WorkspaceSidePanelsInner({
   panel,
   onClose,
   popout,
@@ -183,3 +183,8 @@ export function WorkspaceSidePanels({
     </DockedPanel>
   )
 }
+
+export const WorkspaceSidePanels = memo(
+  WorkspaceSidePanelsInner,
+  (prev, next) => prev.panel === null && next.panel === null,
+)
