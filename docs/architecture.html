@@ -5699,21 +5699,22 @@
             Migration 0041 adds detection input, completed/total progress,
             attempts, lease token and lease expiry columns plus a partial claim
             index; the existing detecting/failed statuses are reused. Bun and
-            Node runtimes start one in-process detection worker. Postgres UPDATE
-            with FOR UPDATE SKIP LOCKED claims one run exclusively across
-            instances. Extraction and detection run outside the request;
-            inference still yields between overlapping windows. A 90-second
-            lease is renewed every 15 seconds. Three abandoned attempts are
-            allowed, then the next claim fails the job. Explicit retry resets
-            that budget. Shutdown stops claims and releases at the next window
-            boundary, with a 120-second API drain deadline. Publication and
-            failure cleanup lock the run and fence by organisation and lease
-            token. Derived text and layout are deleted on failure; original
-            inputs are retained for explicit retry under the existing
-            soft-deletion/restore lifecycle. Matter originals are never deleted
-            by a job. Hosted processing stays inside the API/storage boundary.
-            Shared web/desktop Query hooks poll detecting runs and lists, then
-            open review or offer failure retry.
+            Node runtimes start one in-process detection worker that keeps at
+            most two claims active, so a second document is inferred between the
+            windows of a long one. Postgres UPDATE with FOR UPDATE SKIP LOCKED
+            claims each run exclusively across instances. Extraction and
+            detection run outside the request; inference still yields between
+            overlapping windows. A 90-second lease is renewed every 15 seconds.
+            Three abandoned attempts are allowed, then the next claim fails the
+            job. Explicit retry resets that budget. Shutdown stops claims and
+            releases at the next window boundary, with a 120-second API drain
+            deadline. Publication and failure cleanup lock the run and fence by
+            organisation and lease token. Derived text and layout are deleted on
+            failure; original inputs are retained for explicit retry under the
+            existing soft-deletion/restore lifecycle. Matter originals are never
+            deleted by a job. Hosted processing stays inside the API/storage
+            boundary. Shared web/desktop Query hooks poll detecting runs and
+            lists, then open review or offer failure retry.
           </p>
 
           <figure class="diagram">
@@ -6058,9 +6059,12 @@
                 characters is split into 200,000-character windows with 4,000
                 characters of overlap, cut at a paragraph break or whitespace
                 near the limit. Each window runs the full pipeline; spans map
-                back to document offsets and merge. A span that does not touch
-                its window's cut edge beats the truncated copy found at a
-                neighbouring window's edge; otherwise the longer span wins, then
+                back to document offsets and merge. Same-category detections
+                from different windows merge to the union of their character
+                ranges, so a name one window sees truncated and its neighbour
+                sees in part keeps every detected character. Category, source,
+                confidence and id come from the preferred detection: one that
+                does not touch its window's cut edge, then the longer span, then
                 the higher confidence, then the earlier window.</span
               >
             </li>
