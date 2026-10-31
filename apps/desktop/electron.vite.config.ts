@@ -20,6 +20,7 @@ export default defineConfig({
   renderer: {
     build: {
       manifest: true,
+      minify: true,
     },
     resolve: {
       alias: {

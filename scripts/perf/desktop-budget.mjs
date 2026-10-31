@@ -5,15 +5,15 @@ import { pathToFileURL } from 'node:url'
 import { classifyManifest } from './desktop-manifest.mjs'
 
 export const BUDGETS = {
-  rendererInitialJsBytes: 3_600_000,
+  rendererInitialJsBytes: 861_000,
   rendererInitialCssBytes: 93_000,
-  lazyChunksBytes: 935_000,
-  largestLazyChunkBytes: 850_000,
+  lazyChunksBytes: 1_416_000,
+  largestLazyChunkBytes: 560_000,
   workerPayloadBytes: 1_150_000,
   productAssetsBytes: 790_000,
   mainBundleBytes: 12_000,
   preloadBundleBytes: 2_000,
-  applicationPayloadBytes: 6_510_000,
+  applicationPayloadBytes: 4_249_000,
 }
 
 const MANIFEST_PARTS = ['renderer', '.vite', 'manifest.json']
