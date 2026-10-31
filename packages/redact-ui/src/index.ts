@@ -2,6 +2,9 @@ export { RedactionReviewView } from './review'
 export { RedactionRunsView } from './runs'
 export { RedactionRunsRegion } from './runs-region'
 export {
+  redactionDocumentTextQueryOptions,
+  redactionRunQueryOptions,
+  redactionRunsQueryOptions,
   useCreateRedactionRun,
   useDeleteRedactionRun,
   useRedactionDocumentText,
