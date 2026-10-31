@@ -47,24 +47,24 @@ describe('replaceTags', () => {
 
 describe('replaceElements', () => {
   const original = (html: string) =>
-    html.replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    html.replace(/<nav\b[\s\S]*?<\/nav>/gi, ' ')
 
   it('matches the original element removal when end tags are exact', () => {
     const random = seeded(2)
     const parts = [
-      '<script>',
-      '</script>',
-      '<SCRIPT a>',
-      '<scripts>',
+      '<nav>',
+      '</nav>',
+      '<NAV a>',
+      '<navs>',
       'x',
       ' ',
       '<',
       '>',
-      '</scriptx>',
+      '</navx>',
     ]
     for (let round = 0; round < 4000; round += 1) {
       const html = randomText(random, parts, 12)
-      expect(replaceElements(html, 'script', ' ')).toBe(original(html))
+      expect(replaceElements(html, 'nav', ' ')).toBe(original(html))
     }
   })
 
@@ -140,6 +140,24 @@ describe('readElementContent', () => {
 })
 
 describe('citation matching', () => {
+  it('finds the same citations as the original patterns', () => {
+    const originalNeutral =
+      /\[\d{4}\]\s+[A-Za-z][A-Za-z0-9 ]*?\s+\d+(?:\s+\([A-Za-z][A-Za-z0-9 ]*\))?/
+    const originalCourt =
+      /^\[\d{4}\]\s+([A-Za-z][A-Za-z0-9 ]*?)\s+\d+(?:\s+\(([A-Za-z][A-Za-z0-9 ]*)\))?$/
+    const random = seeded(5)
+    const parts = ['[2024]', ' ', '  ', 'EWHC', 'Ch', '12', '(', ')', 'x', '\n']
+    for (let round = 0; round < 4000; round += 1) {
+      const text = randomText(random, parts, 9)
+      const collapsed = collapseSpaceRuns(text)
+      expect(extractNeutralCitation(text)).toBe(
+        collapsed.match(originalNeutral)?.[0].replace(/\s+/g, ' ').trim(),
+      )
+      const court = collapsed.match(originalCourt)
+      if (!court) expect(courtFromCitation(text)).toBeNull()
+    }
+  })
+
   it('finds the same neutral citation whatever the space runs', () => {
     expect(extractNeutralCitation('see [2024]   EWHC   123   (Ch) today')).toBe(
       '[2024] EWHC 123 (Ch)',

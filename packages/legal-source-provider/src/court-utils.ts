@@ -127,7 +127,7 @@ function courtFromFindCaseLawPath(uri: string | null) {
 
 function courtFromCitation(citation: string) {
   const match = collapseSpaceRuns(citation).match(
-    /^\[\d{4}\]\s+([A-Za-z][A-Za-z0-9 ]*?)\s+\d+(?:\s+\(([A-Za-z][A-Za-z0-9 ]*)\))?$/,
+    /^\[\d{4}\]\s+([A-Za-z][A-Za-z0-9]*(?: [A-Za-z0-9]+)*?)\s+\d+(?:\s+\(([A-Za-z][A-Za-z0-9 ]*)\))?$/,
   )
   const token = match?.[1]
   const division = match?.[2]

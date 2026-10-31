@@ -123,7 +123,7 @@ export function dateFromDocumentId(documentId: string) {
 }
 
 const neutralCitationPattern =
-  /\[\d{4}\]\s+[A-Za-z][A-Za-z0-9 ]*?\s+\d+(?:\s+\([A-Za-z][A-Za-z0-9 ]*\))?/
+  /\[\d{4}\]\s+[A-Za-z][A-Za-z0-9]*(?: [A-Za-z0-9]+)*?\s+\d+(?:\s+\([A-Za-z][A-Za-z0-9 ]*\))?/
 
 export function extractNeutralCitation(value: string) {
   return collapseSpaceRuns(value)
