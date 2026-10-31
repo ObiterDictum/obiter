@@ -127,7 +127,12 @@ function hasUnsupportedDtd(declaration: string) {
   const hasExternalIdentifier = /^\s*[^\s>[\]]+\s+(?:SYSTEM|PUBLIC)\b/u.test(
     header,
   )
-  return hasExternalIdentifier || /<!ENTITY\b/u.test(withoutComments)
+  const rawHeader = declaration.slice('<!DOCTYPE'.length).split('[', 1)[0]
+  return (
+    hasExternalIdentifier ||
+    /^\s*[^\s>[\]]+\s+(?:SYSTEM|PUBLIC)\b/u.test(rawHeader) ||
+    /<!ENTITY\b/u.test(declaration)
+  )
 }
 
 function findXmlWhitespace(value: string) {

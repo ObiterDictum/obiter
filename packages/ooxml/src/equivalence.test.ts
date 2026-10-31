@@ -123,6 +123,15 @@ describe('compareXmlSemantics', () => {
     })
   })
 
+  it('refuses entity declarations hidden by a quoted comment opener', () => {
+    const xml =
+      '<!DOCTYPE root [<!ATTLIST root value CDATA "<!--"><!ENTITY source "secret"><!-- -->]><root/>'
+    expect(compareXmlSemantics(xml, xml)).toEqual({
+      equivalent: false,
+      reason: 'unsupported-or-malformed-xml',
+    })
+  })
+
   it('fails closed on malformed XML, unsupported entities, and unbound prefixes', () => {
     expect(equivalent('<root>', '<root>')).toBe(false)
     expect(equivalent('<root/> \r\n', '<root/>\t')).toBe(true)
