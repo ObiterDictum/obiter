@@ -15,8 +15,6 @@
         "scripts/api-runtime/database-target-proof.mjs",
         "scripts/eval-redact.ts",
         "scripts/generate-pdf-fixtures.mjs",
-        "scripts/perf/editor-interaction.mjs",
-        "scripts/perf/editor-interaction-probes.mjs",
         "scripts/word-roundtrip/run.ts",
         "tools/oxlint/anti-slop/effect/index.ts",
       ],
