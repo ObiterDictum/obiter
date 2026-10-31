@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test'
-import { isAllowedNavigation, parseAllowedOrigin } from './navigation-guard'
+import {
+  isAllowedNavigation,
+  isSafeExternalUrl,
+  parseAllowedOrigin,
+} from './navigation-guard'
 
 describe('isAllowedNavigation', () => {
   const packaged = parseAllowedOrigin('obiter://desktop-auth')
@@ -47,5 +51,35 @@ describe('isAllowedNavigation', () => {
     expect(isAllowedNavigation(dev, 'http://localhost:5174/')).toBe(false)
     expect(isAllowedNavigation(dev, 'https://localhost:5173/')).toBe(false)
     expect(isAllowedNavigation(dev, 'obiter://desktop-auth/')).toBe(false)
+  })
+})
+
+describe('isSafeExternalUrl', () => {
+  it('opens web links from search and source pages', () => {
+    expect(
+      isSafeExternalUrl('https://caselaw.nationalarchives.gov.uk/uksc/2024/1'),
+    ).toBe(true)
+    expect(
+      isSafeExternalUrl('http://www.legislation.gov.uk/ukpga/2018/12'),
+    ).toBe(true)
+  })
+
+  it('refuses local files, scripts and OS protocol handlers', () => {
+    for (const url of [
+      'file:///C:/Windows/System32/calc.exe',
+      'javascript:alert(1)',
+      'ms-msdt:/id PCWDiagnostic',
+      'search-ms:query=x',
+      'obiter://desktop-auth/index.html',
+      'smb://attacker/share',
+      'data:text/html,<script>1</script>',
+    ]) {
+      expect(isSafeExternalUrl(url)).toBe(false)
+    }
+  })
+
+  it('refuses URLs that do not parse or have no host', () => {
+    expect(isSafeExternalUrl('not a url')).toBe(false)
+    expect(isSafeExternalUrl('https://')).toBe(false)
   })
 })

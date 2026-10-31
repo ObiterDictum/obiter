@@ -13,7 +13,11 @@ import { fileURLToPath } from 'node:url'
 import { pathToFileURL } from 'node:url'
 import { resolveRendererPath } from './renderer-path'
 import { DesktopAuthTokenStore } from './auth-token-store'
-import { isAllowedNavigation, parseAllowedOrigin } from './navigation-guard'
+import {
+  isAllowedNavigation,
+  isSafeExternalUrl,
+  parseAllowedOrigin,
+} from './navigation-guard'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -109,14 +113,14 @@ function createWindow() {
     title: 'Obiter',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
-      sandbox: false,
+      sandbox: true,
     },
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
 
