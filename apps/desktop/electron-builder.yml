@@ -42,6 +42,8 @@ directories:
   output: release
   buildResources: build
 
+icon: ../../packages/ui/src/brand/obiter-app-icon-1024.png
+
 # Windows installer (primary target).
 win:
   target:
@@ -49,7 +51,6 @@ win:
       arch:
         - x64
   # No signing configuration: unsigned for now (documented).
-  # icon: build/icon.ico  # follow-up: ship a real .ico
 
 nsis:
   oneClick: false
@@ -67,7 +68,6 @@ mac:
         - x64
         - arm64
   category: public.app-category.productivity
-  # icon: build/icon.icns  # follow-up: ship a real .icns
   hardenedRuntime: true
   # Notarization is a follow-up (requires Apple credentials).
 
@@ -78,4 +78,3 @@ linux:
       arch:
         - x64
   category: Office
-  # icon: build/icon.png  # follow-up: ship a real 512x512 png
