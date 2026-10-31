@@ -38,9 +38,9 @@ import {
 import { useChangeReview } from './use-change-review'
 import { usePublishDocumentDirty } from './document-draft-status'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
-import { useDocumentSave } from './use-document-save'
+import { chromeSaveOf, useDocumentSave } from './use-document-save'
 import { useWorkspaceDerivations } from './use-workspace-derivations'
-import { useWorkspaceDrafts } from './use-workspace-drafts'
+import { chromeDraftsOf, useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
 import { useWorkspaceComments } from './use-workspace-comments'
 import { documentExportHandlers } from './document-workspace-export'
@@ -50,6 +50,7 @@ import { useLegalToolsState } from './use-legal-tools-state'
 import { useParagraphSelectionHandlers } from './paragraph-selection-handlers'
 import { DocumentPrintStyle } from './document-page'
 import { useDocumentPrint } from './use-document-print'
+import { useLatestCallback, useLatestHandlers } from './use-latest-callback'
 import {
   LoadingBlock,
   QueryError,
@@ -107,7 +108,7 @@ export function DocxWorkspace({
     modelError: modelQuery.isError,
     model,
   })
-
+  const chromeDrafts = useLatestHandlers(chromeDraftsOf(drafts))
   const [zoom, setZoom] = useState(100)
   const panels = useWorkspacePanels()
   const legalTools = useLegalToolsState(documentId)
@@ -154,6 +155,7 @@ export function DocxWorkspace({
     remoteChange,
     onSaved: handleSaved,
   })
+  const chromeSave = useLatestHandlers(chromeSaveOf(save))
 
   usePublishDocumentDirty(save.saveState.status !== 'saved')
 
@@ -287,12 +289,14 @@ export function DocxWorkspace({
   const undo = withCaretRefocus(undoDocument)
   const redo = withCaretRefocus(redoDocument)
   const print = withCaretRefocus(() => void forPrint(printDocument))
-  const reload = withCaretRefocus(save.reload)
+  const reload = useLatestCallback(withCaretRefocus(save.reload))
   const exports = documentExportHandlers(documentId, filename, setBanner)
-  const citation = usePendingCitation(documentId, (text) => {
-    if (selectedParagraphId)
-      insertAuthority(text, legalTools.citationStyle === 'house')
-  })
+  const citation = useLatestHandlers(
+    usePendingCitation(documentId, (text) => {
+      if (selectedParagraphId)
+        insertAuthority(text, legalTools.citationStyle === 'house')
+    }),
+  )
   function togglePanel(panel: WorkspacePanel) {
     if (navOpen) toggleNavPane()
     panels.toggle(panel)
@@ -301,56 +305,59 @@ export function DocxWorkspace({
     if (!navOpen) panels.dismiss()
     toggleNavPane()
   }
-  const chrome = docxWorkspaceChrome({
-    save,
-    drafts,
-    trackChanges,
-    zoom,
-    panels,
-    commentCount: commentsPanel.threadCount,
-    changeCount: changesQuery.data?.changes.length ?? 0,
-    insert,
-    onInsertAuthorityText: (text) =>
-      insertAuthority(text, legalTools.citationStyle === 'house'),
-    canInsertAuthority:
-      selectedParagraphId !== null ||
-      (model !== undefined && Boolean(documentStory(model)?.paragraphs[0])),
-    citationStyle: legalTools.citationStyle,
-    onCitationStyle: legalTools.onCitationStyle,
-    setZoom,
-    exports,
-    print,
-    undo,
-    redo,
-    selectedParagraphId,
-    selectParagraph,
-    deleteParagraphReason,
-    format,
-    selectionActive,
-    onCopy: () => void copyToClipboard(),
-    onCut: () => void cutToClipboard(),
-    onPaste: () => void pasteFromClipboard(),
-    find,
-    changeReview,
-    markings,
-    view,
-    onView,
-    rulerOn,
-    onToggleRuler: toggleRuler,
-    navOpen,
-    onToggleNavPane: toggleNavigation,
-    spelling,
-    onToggleSpelling: () => toggleSpelling(setBanner),
-    onOpenVerify: () => panels.open('verify'),
-    infoOpen: panels.active === 'info',
-    onToggleInfo: documentRecord ? () => togglePanel('info') : undefined,
-    onOpenCompare:
-      versions.filter(
-        (item) => item.documentStatus === 'ready' && item.fileType === 'docx',
-      ).length >= 2
-        ? () => setCompareOpen(true)
-        : undefined,
-  })
+  const commentSelection = useLatestCallback(() => togglePanel('comments'))
+  const chrome = useLatestHandlers(
+    docxWorkspaceChrome({
+      save,
+      drafts,
+      trackChanges,
+      zoom,
+      panels,
+      commentCount: commentsPanel.threadCount,
+      changeCount: changesQuery.data?.changes.length ?? 0,
+      insert,
+      onInsertAuthorityText: (text) =>
+        insertAuthority(text, legalTools.citationStyle === 'house'),
+      canInsertAuthority:
+        selectedParagraphId !== null ||
+        (model !== undefined && Boolean(documentStory(model)?.paragraphs[0])),
+      citationStyle: legalTools.citationStyle,
+      onCitationStyle: legalTools.onCitationStyle,
+      setZoom,
+      exports,
+      print,
+      undo,
+      redo,
+      selectedParagraphId,
+      selectParagraph,
+      deleteParagraphReason,
+      format,
+      selectionActive,
+      onCopy: () => void copyToClipboard(),
+      onCut: () => void cutToClipboard(),
+      onPaste: () => void pasteFromClipboard(),
+      find,
+      changeReview,
+      markings,
+      view,
+      onView,
+      rulerOn,
+      onToggleRuler: toggleRuler,
+      navOpen,
+      onToggleNavPane: toggleNavigation,
+      spelling,
+      onToggleSpelling: () => toggleSpelling(setBanner),
+      onOpenVerify: () => panels.open('verify'),
+      infoOpen: panels.active === 'info',
+      onToggleInfo: documentRecord ? () => togglePanel('info') : undefined,
+      onOpenCompare:
+        versions.filter(
+          (item) => item.documentStatus === 'ready' && item.fileType === 'docx',
+        ).length >= 2
+          ? () => setCompareOpen(true)
+          : undefined,
+    }),
+  )
 
   const inlineReview = useInlineReviewValue(changeReview, () =>
     togglePanel('review'),
@@ -402,8 +409,8 @@ export function DocxWorkspace({
             <DocumentPrintStyle box={printBox} />
             <DocxWorkspaceChrome
               props={chrome}
-              save={save}
-              drafts={drafts}
+              save={chromeSave}
+              drafts={chromeDrafts}
               remoteChange={remoteChange}
               transientNotice={transientBanner}
               selectionNotice={
@@ -412,7 +419,7 @@ export function DocxWorkspace({
               onReload={reload}
               requests={requests}
               selectionActive={selectionActive}
-              onCommentSelection={() => togglePanel('comments')}
+              onCommentSelection={commentSelection}
               citation={citation}
               citationCanInsert={selectedParagraphId !== null}
             />

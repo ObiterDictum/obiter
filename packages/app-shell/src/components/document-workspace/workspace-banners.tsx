@@ -1,7 +1,7 @@
 import { DocumentSaveBanners } from './save-banners'
 import { ConflictBanner } from './workspace-chrome'
-import type { useDocumentSave } from './use-document-save'
-import type { WorkspaceDrafts } from './use-workspace-drafts'
+import type { ChromeSave } from './use-document-save'
+import type { ChromeDrafts } from './use-workspace-drafts'
 
 export function WorkspaceBanners({
   save,
@@ -11,8 +11,8 @@ export function WorkspaceBanners({
   selectionNotice,
   onReload,
 }: {
-  save: ReturnType<typeof useDocumentSave>
-  drafts: WorkspaceDrafts
+  save: ChromeSave
+  drafts: ChromeDrafts
   remoteChange: boolean
   transientNotice: string | null
   selectionNotice: string
