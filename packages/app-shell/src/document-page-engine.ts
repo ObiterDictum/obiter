@@ -9,7 +9,7 @@ import {
 import type { ExtraRuns } from './document-word-edits'
 import { documentStory } from './document-model-text'
 import { keepWithNext } from './document-page-keep'
-import { drawingFloat, paragraphAnchorXml } from './document-page-floats'
+import { paragraphFloatTargets } from './document-page-measure'
 import {
   contentFrame,
   documentSections,
@@ -94,12 +94,10 @@ export function layoutDocument(
   const boxed = new Set<string>()
   const hosts = new Set<string>()
   for (const paragraph of story.paragraphs) {
-    for (const xml of paragraphAnchorXml(paragraph)) {
-      const spec = drawingFloat(xml, paragraph.id)
-      if (!spec) continue
-      hosts.add(paragraph.id)
-      for (const id of spec.textBoxParaIds) boxed.add(id)
-    }
+    const targets = paragraphFloatTargets(paragraph)
+    if (!targets.host) continue
+    hosts.add(paragraph.id)
+    for (const id of targets.boxed) boxed.add(id)
   }
   const source = storyBlocksWithInserts(
     (blocks ?? storyBlocks(story)).filter(
