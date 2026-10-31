@@ -1,28 +1,25 @@
 import type { PendingRedlines } from './document-pending-redlines'
-import { pendingParagraphChanges } from './document-pending-redlines'
-import { paragraphPartName } from './document-inline-index'
-import { inlineChanges } from './document-inline-changes'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import type { ExtraRuns } from './document-word-edits'
-import { documentStory, effectiveParagraph } from './document-model-text'
-import { firstLineIndentPx, takeFragment } from './document-page-flow'
-import { drawingScene } from './document-page-drawings'
-import { paragraphMetrics, widowMaxY } from './document-page-keep'
+import { documentStory } from './document-model-text'
+import { takeFragment } from './document-page-flow'
+import { widowMaxY } from './document-page-keep'
 import {
-  drawingFloat,
-  paragraphAnchorXml,
-  paragraphInlineXml,
   resolveFloat,
   type PageFloat,
   type PageTextBox,
 } from './document-page-floats'
 import type { ColumnFrame, ContentFrame, PageBox } from './document-page-layout'
 import { drawingSolidFill } from './document-page-media'
-import { paragraphListIndent } from './document-page-lists'
-import { paragraphFace, paragraphLineHeightPx } from './document-page-style'
+import {
+  paragraphLineCount,
+  paragraphMeasure,
+  paragraphMetrics,
+  type ParagraphAnchor,
+} from './document-page-measure'
 import {
   rowPaintHeight,
   type DisplayTable,
@@ -82,37 +79,29 @@ export function layoutParagraph(
   pageBreaks: readonly number[] = [],
   pendingRedlines?: PendingRedlines,
 ): void {
-  const paragraph = effectiveParagraph(
+  const measure = paragraphMeasure(
     item.paragraph,
+    model,
     drafts,
-    extraRuns[item.paragraph.id] ?? [],
+    extraRuns,
+    pendingRedlines,
   )
-  const partName = paragraphPartName(model, item.paragraph)
-  const projection = inlineChanges(
-    paragraph,
-    model.changes,
-    partName,
-    pendingParagraphChanges(pendingRedlines, paragraph.id, partName),
-  )
-  const text = projection.text
+  const paragraph = measure.paragraph
+  const projection = measure.projection
+  const text = measure.text
   const breaks = [
     ...new Set(
-      [...pageBreaks, ...storedPageBreakOffsets(paragraph)].map((at) =>
+      [...pageBreaks, ...measure.pageBreaks].map((at) =>
         projection.toDisplay(at),
       ),
     ),
   ].sort((left, right) => left - right)
-  const face = paragraphFace(paragraph, model.styles)
-  const linePx = paragraphLineHeightPx(face)
-  const fontSize = face.run.fontSizePx ?? linePx
-  const list = paragraphListIndent(paragraph, model)
-  const indent =
-    (list?.leftPx ?? face.indentLeftPx ?? 0) + (face.indentRightPx ?? 0)
-  const textIndentPx = firstLineIndentPx(face, Boolean(list))
-  const imagePx = Math.max(
-    0,
-    ...paragraphInlineXml(paragraph).map((xml) => drawingScene(xml).heightPx),
-  )
+  const face = measure.face
+  const linePx = measure.linePx
+  const fontSize = measure.fontSize
+  const indent = measure.indent
+  const textIndentPx = measure.textIndentPx
+  const imagePx = measure.imagePx
   let placed = false
   let offset = 0
   let continuation = false
@@ -120,7 +109,7 @@ export function layoutParagraph(
 
   const place = () => {
     if (placed) return
-    placeAnchors(paragraph, box, frame, column(), session)
+    placeAnchors(measure.anchors, box, frame, column(), session)
     placed = true
   }
 
@@ -156,22 +145,20 @@ export function layoutParagraph(
     }
     place()
     const startY = session.y + before
+    const widthPx = Math.max(1, column().widthPx - indent)
     const fragment = takeFragment({
       text: nextBreak === undefined ? text : text.slice(0, nextBreak),
       offset,
       startY,
       maxY: widowMaxY(
         face.widowControl !== false,
-        text,
+        (at) =>
+          paragraphLineCount(measure, widthPx, at, at === 0 ? textIndentPx : 0),
         offset,
         startY,
         frame.heightPx,
         linePx,
-        fontSize,
-        Math.max(1, column().widthPx - indent),
         session.y > 0 && !continuation,
-        face.run.fontFamily,
-        textIndentPx,
       ),
       linePx,
       fontSize,
@@ -238,53 +225,25 @@ export function layoutParagraph(
 }
 
 function placeAnchors(
-  paragraph: DocumentParagraphWire,
+  anchors: readonly ParagraphAnchor[],
   box: PageBox,
   frame: ContentFrame,
   column: ColumnFrame,
   session: PageSession,
 ): void {
-  for (const xml of paragraphAnchorXml(paragraph)) {
-    const spec = drawingFloat(xml, paragraph.id)
-    if (!spec) continue
+  for (const anchor of anchors) {
+    const spec = anchor.spec
     const placed = resolveFloat(spec, box, frame, column, session.y)
     if (spec.isTextBox) {
       session.page.textBoxes.push({
         ...placed,
         paragraphIds: spec.textBoxParaIds,
-        fill: drawingSolidFill(xml),
+        fill: drawingSolidFill(anchor.xml),
       })
     } else {
       session.page.floats.push(placed)
     }
   }
-}
-
-function storedPageBreakOffsets(paragraph: DocumentParagraphWire): number[] {
-  const offsets: number[] = []
-  const paragraphXml = paragraph.preservedXmlFragments.join('')
-  if (pageBreakBefore(paragraphXml) || hasPageBreakElement(paragraphXml)) {
-    offsets.push(0)
-  }
-  let cursor = 0
-  for (const run of paragraph.runs) {
-    if (hasPageBreakElement(run.preservedXmlFragments.join(''))) {
-      offsets.push(cursor)
-    }
-    cursor += run.text.length
-  }
-  return offsets
-}
-
-function hasPageBreakElement(xml: string): boolean {
-  return /<w:br\b[^>]*w:type="page"/i.test(xml)
-}
-
-function pageBreakBefore(xml: string): boolean {
-  const before = xml.match(/<w:pageBreakBefore\b([^>]*)\/?>/i)
-  if (!before) return false
-  const val = before[1]?.match(/w:val="([^"]+)"/i)?.[1]?.toLowerCase()
-  return val !== 'false' && val !== '0' && val !== 'off'
 }
 
 export function tableHeight(
