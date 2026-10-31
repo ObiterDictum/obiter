@@ -48,11 +48,9 @@ export async function createApiRuntime(
   reportIndexStatus(env)
   warmDetection(env)
 
-  const worker = startDetectionWorker(
-    pools.application,
-    storage,
-    apiRequestLimitsFromEnv(env),
-  )
+  const worker = startDetectionWorker(pools.application, storage, {
+    limits: apiRequestLimitsFromEnv(env),
+  })
   return { env, pools, app, stopDetectionWorker: worker.stop }
 }
 

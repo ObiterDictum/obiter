@@ -14,6 +14,12 @@ detection run in the API's leased Postgres worker, not the HTTP request. Poll
 remain for retry under the existing soft-deletion/restore lifecycle. Linked matter
 originals are untouched.
 
+One worker per API process keeps up to two claims active, so a short upload from
+another user is inferred between the windows of a long document instead of
+waiting for it to finish. Model inference stays serialised one window at a time,
+so concurrency changes which document gets the next turn, not how many model
+calls run at once.
+
 `POST /api/redaction-runs/:runId/retry`
 
 Requires edit access and a failed job. Requeues the retained source with a fresh
@@ -25,8 +31,13 @@ three-attempt lease budget and returns **202**. Automatic recovery retries expir
 `GET /api/redaction-runs/:runId/spans`
 
 Spans, source-file preview, document text and layout return **409 redaction_run_not_ready** until
-detection completes. Decisions and finalisation retain their reviewable-state
-guards. All user-facing reads and retries retain organisation and matter ACLs.
+detection completes. A document longer than 200,000 characters is detected in
+overlapping windows; same-category detections from different windows merge to the
+union of their character ranges, so accepting every suggestion covers every
+character any window detected. A fully contained duplicate is replaced by the
+containing span rather than keeping both. Decisions and finalisation retain their
+reviewable-state guards. All user-facing reads and retries retain organisation and
+matter ACLs.
 
 `POST /api/redaction-runs/:runId/spans/:spanId/decision`
 

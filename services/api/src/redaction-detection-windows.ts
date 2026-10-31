@@ -96,6 +96,23 @@ function prefers(candidate: Candidate, incumbent: Candidate): boolean {
   )
 }
 
+function unionCandidate(left: Candidate, right: Candidate): Candidate {
+  const base = prefers(left, right) ? left : right
+  return {
+    span: {
+      ...base.span,
+      start: Math.min(left.span.start, right.span.start),
+      end: Math.max(left.span.end, right.span.end),
+      suggestion:
+        left.span.suggestion === 'redact' || right.span.suggestion === 'redact'
+          ? 'redact'
+          : base.span.suggestion,
+    },
+    windowIndex: base.windowIndex,
+    touchesEdge: left.touchesEdge || right.touchesEdge,
+  }
+}
+
 export function mergeWindowDetections(
   detections: readonly WindowDetection[],
   text: string,
@@ -108,6 +125,7 @@ export function mergeWindowDetections(
       const candidate: Candidate = {
         span: {
           ...span,
+          id: `${span.id}@${window.start}`,
           start: span.start + window.start,
           end: span.end + window.start,
         },
@@ -125,25 +143,25 @@ export function mergeWindowDetections(
     (left, right) =>
       left.span.start - right.span.start || left.span.end - right.span.end,
   )
-  const dropped = new Set<Candidate>()
-  const active: Candidate[] = []
+  const merged: Candidate[] = []
   for (const candidate of ordered) {
-    for (let index = active.length - 1; index >= 0; index--) {
-      if (active[index].span.end <= candidate.span.start)
-        active.splice(index, 1)
+    let next = candidate
+    for (let index = merged.length - 1; index >= 0; index--) {
+      const other = merged[index]
+      if (other.span.category !== next.span.category) continue
+      if (other.windowIndex === next.windowIndex) continue
+      if (other.span.end <= next.span.start) break
+      merged.splice(index, 1)
+      next = unionCandidate(next, other)
     }
-    for (const other of active) {
-      if (dropped.has(candidate) || dropped.has(other)) continue
-      if (other.windowIndex === candidate.windowIndex) continue
-      if (other.span.category !== candidate.span.category) continue
-      if (prefers(candidate, other)) dropped.add(other)
-      else dropped.add(candidate)
-    }
-    if (!dropped.has(candidate)) active.push(candidate)
+    merged.push(next)
   }
 
-  return ordered
-    .filter((candidate) => !dropped.has(candidate))
+  return merged
+    .sort(
+      (left, right) =>
+        left.span.start - right.span.start || left.span.end - right.span.end,
+    )
     .map((candidate) => ({
       ...candidate.span,
       text: text.slice(candidate.span.start, candidate.span.end),

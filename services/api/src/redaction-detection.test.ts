@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { Span as RampartSpan } from '@obiter/rampart-inference'
+import { applyRedacted } from '@obiter/redaction-policy'
 import { createRedactionDetector, detectionMode } from './redaction-detection'
 import {
   DETECTION_WINDOW_CHARS,
@@ -411,6 +412,67 @@ describe('redaction detection', () => {
       [...placed]
         .sort(([left], [right]) => left - right)
         .map(([start, marker]) => [start, start + marker.length, marker]),
+    )
+  })
+
+  it('redacts every character of a name two windows describe differently at their overlap', async () => {
+    const name = 'Alice Mary Jones'
+    const at = 199_989
+    const text = `${'x'.repeat(at)}${name}${'x'.repeat(450_000 - at - name.length)}`
+    const detected = new Map<string, [number, number]>()
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async (masked) => {
+        const spans: RampartSpan[] = []
+        const prefix = masked.indexOf('Alice Mary')
+        if (prefix >= 0 && masked.slice(prefix).trimEnd() === 'Alice Mary') {
+          detected.set('prefix', [prefix, prefix + 'Alice Mary'.length])
+          spans.push({
+            start: prefix,
+            end: prefix + 'Alice Mary'.length,
+            label: 'GIVEN_NAME',
+            score: 0.9,
+            source: 'ner',
+            text: 'Alice Mary',
+          })
+        }
+        const suffix = masked.indexOf('Mary Jones')
+        if (suffix >= 0) {
+          detected.set('suffix', [suffix, suffix + 'Mary Jones'.length])
+          spans.push({
+            start: suffix,
+            end: suffix + 'Mary Jones'.length,
+            label: 'GIVEN_NAME',
+            score: 0.9,
+            source: 'ner',
+            text: 'Mary Jones',
+          })
+        }
+        return spans
+      },
+      log: () => undefined,
+    })
+
+    const result = await detect(text)
+
+    expect([...detected.keys()].sort()).toEqual(['prefix', 'suffix'])
+    for (let index = at; index < at + name.length; index++)
+      expect(
+        result.spans.some((span) => span.start <= index && span.end > index),
+      ).toBe(true)
+    const decisions = Object.fromEntries(
+      result.spans.map((span) => [
+        span.id,
+        {
+          decision: 'accept' as const,
+          decidedBy: 'usr_reviewer',
+          decidedAt: '2026-11-01T00:00:00.000Z',
+        },
+      ]),
+    )
+    const output = applyRedacted(text, result.spans, decisions)
+    expect(output).toBe(
+      `${'x'.repeat(at)}[REDACTED]${'x'.repeat(450_000 - at - name.length)}`,
     )
   })
 

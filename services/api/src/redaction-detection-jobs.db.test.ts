@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { afterAll, expect, it } from 'bun:test'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -11,6 +12,7 @@ import { createRedactionDetector } from './redaction-detection'
 import {
   claimDetectionJob,
   processDetectionJob,
+  startDetectionWorker,
 } from './redaction-detection-jobs'
 import { createRedactRunCreationRoutes } from './routes/redact-run-creation'
 import { createRedactReviewRoutes } from './routes/redact-review'
@@ -257,6 +259,48 @@ it('reports that a scanned PDF requires OCR after the request has already return
     expect(failed.status).toBe('failed')
     expect(failed.summary.failureReason).toContain('OCR')
     expect(f.storage.binary.has(job.detection_input_key)).toBe(true)
+  } finally {
+    await f.cleanup()
+  }
+})
+
+it('lets a second upload progress while a long document is still detecting on one worker', async () => {
+  const f = await fixture()
+  try {
+    const longText = 'Email synthetic.person@example.com. '.repeat(7_000)
+    const shortText = 'Email synthetic.person@example.com'
+    const longId = await f.create(longText)
+    const shortId = await f.create(shortText)
+    let releaseLong: () => void = () => undefined
+    const longPaused = new Promise<void>((resolve) => {
+      releaseLong = resolve
+    })
+    const started: string[] = []
+    const worker = startDetectionWorker(pool, f.storage, {
+      detect: async (text, progress) => {
+        const isLong = text === longText
+        started.push(isLong ? 'long' : 'short')
+        if (isLong) await longPaused
+        return detector(text, progress)
+      },
+    })
+    const deadline = Date.now() + 15_000
+    while (
+      (await f.read(shortId)).status !== 'ready_for_review' &&
+      Date.now() < deadline
+    )
+      await sleep(100)
+    expect((await f.read(shortId)).status).toBe('ready_for_review')
+    expect((await f.read(longId)).status).toBe('detecting')
+    releaseLong()
+    while (
+      (await f.read(longId)).status === 'detecting' &&
+      Date.now() < deadline
+    )
+      await sleep(100)
+    expect((await f.read(longId)).status).toBe('ready_for_review')
+    await worker.stop()
+    expect(started).toEqual(['long', 'short'])
   } finally {
     await f.cleanup()
   }

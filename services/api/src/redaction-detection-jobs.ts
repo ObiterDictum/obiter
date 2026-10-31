@@ -30,6 +30,7 @@ interface DetectionJob {
 
 const LEASE_SECONDS = 90
 const MAX_ATTEMPTS = 3
+const DETECTION_WORKER_CONCURRENCY = 2
 
 export async function claimDetectionJob(pool: Pool) {
   const result = await pool.query<DetectionJob>(
@@ -279,19 +280,41 @@ export async function processDetectionJob(
 export function startDetectionWorker(
   pool: Pool,
   storage: StorageService,
-  limits?: ApiRequestLimits,
+  options: {
+    limits?: ApiRequestLimits
+    detect?: (
+      text: string,
+      progress?: DetectionProgressCallback,
+    ) => Promise<DetectionResult>
+  } = {},
 ) {
   let stopping = false
   let wake: (() => void) | undefined
+  const active = new Set<Promise<void>>()
+  const start = (job: DetectionJob) => {
+    const running: Promise<void> = processDetectionJob(pool, storage, job, {
+      stopping: () => stopping,
+      limits: options.limits,
+      detect: options.detect,
+    })
+      .catch(() => {
+        console.error('redaction_detection_job_unavailable')
+      })
+      .finally(() => {
+        active.delete(running)
+      })
+    active.add(running)
+  }
   const finished = (async () => {
     while (!stopping) {
       try {
+        if (active.size >= DETECTION_WORKER_CONCURRENCY) {
+          await Promise.race(active)
+          continue
+        }
         const job = await claimDetectionJob(pool)
         if (job) {
-          await processDetectionJob(pool, storage, job, {
-            stopping: () => stopping,
-            limits,
-          })
+          start(job)
           continue
         }
       } catch {
@@ -306,6 +329,7 @@ export function startDetectionWorker(
           }
         })
     }
+    await Promise.all(active)
   })()
   return {
     stop: async () => {

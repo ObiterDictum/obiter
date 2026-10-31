@@ -130,16 +130,58 @@ describe('merging window detections', () => {
     expect(spans.map(({ start, end }) => [start, end])).toEqual([[195, 205]])
   })
 
-  it('keeps the longer span when both copies touch a window edge', () => {
+  it('covers the union when two windows report crossing ranges that both touch an edge', () => {
+    const text = 'a'.repeat(300)
     const spans = mergeWindowDetections(
       [
         { window: { start: 0, end: 200 }, spans: [span(190, 200)] },
         { window: { start: 196, end: 300 }, spans: [span(0, 9)] },
       ],
+      text,
+    )
+
+    expect(spans.map(({ start, end }) => [start, end])).toEqual([[190, 205]])
+    expect(spans[0].text).toBe(text.slice(190, 205))
+  })
+
+  it('covers the union when crossing ranges chain through a third window', () => {
+    const spans = mergeWindowDetections(
+      [
+        { window: { start: 0, end: 100 }, spans: [span(90, 100)] },
+        { window: { start: 95, end: 150 }, spans: [span(0, 20)] },
+        { window: { start: 110, end: 200 }, spans: [span(0, 30)] },
+      ],
+      'a'.repeat(200),
+    )
+
+    expect(spans.map(({ start, end }) => [start, end])).toEqual([[90, 140]])
+  })
+
+  it('keeps the containing span when a detected range sits inside another window range', () => {
+    const spans = mergeWindowDetections(
+      [
+        { window: { start: 0, end: 200 }, spans: [span(190, 200)] },
+        { window: { start: 180, end: 300 }, spans: [span(10, 30)] },
+      ],
       'a'.repeat(300),
     )
 
-    expect(spans.map(({ start, end }) => [start, end])).toEqual([[190, 200]])
+    expect(spans.map(({ start, end }) => [start, end])).toEqual([[190, 210]])
+  })
+
+  it('gives spans from different windows distinct ids', () => {
+    const spans = mergeWindowDetections(
+      [
+        { window: { start: 0, end: 200 }, spans: [span(10, 20)] },
+        { window: { start: 196, end: 300 }, spans: [span(10, 20)] },
+      ],
+      'a'.repeat(300),
+    )
+
+    expect(spans.map(({ id }) => id)).toEqual([
+      'span_10_20_person_name@0',
+      'span_10_20_person_name@196',
+    ])
   })
 
   it('keeps both categories when two windows find the same range under different categories', () => {
