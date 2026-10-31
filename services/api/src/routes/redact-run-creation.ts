@@ -3,6 +3,10 @@ import type { Pool } from 'pg'
 import { redactionPolicyModeSchema } from '@obiter/contracts'
 import { appendAuditLog } from '../database'
 import { DocumentExtractionError } from '../document-extraction'
+import {
+  documentTextTooLongMessage,
+  extractedTextWithinLimit,
+} from '../document-extraction-limits'
 import { extractRedactionContent } from '../redaction-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import { readLimitedFormData } from '../limited-request-body'
@@ -24,10 +28,8 @@ import {
   errorResponse,
   jsonBody,
   listItem,
-  MAX_REDACTION_SOURCE_TEXT_LENGTH,
   requireUser,
   type RouteVariables,
-  validSourceText,
 } from './redact-shared'
 
 function extractionErrorResponse(c: Context, error: unknown) {
@@ -142,11 +144,11 @@ export function createRedactRunCreationRoutes(
         400,
       )
     }
-    if (!validSourceText(text))
+    if (!extractedTextWithinLimit(text))
       return errorResponse(
         c,
         'validation_failed',
-        `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        documentTextTooLongMessage(text.length),
         400,
       )
     const id = `red_${crypto.randomUUID()}`
@@ -267,11 +269,11 @@ export function createRedactRunCreationRoutes(
         )
       text = await storage.readText(source.text_object_key)
     }
-    if (!validSourceText(text))
+    if (!extractedTextWithinLimit(text))
       return errorResponse(
         c,
         'validation_failed',
-        `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        documentTextTooLongMessage(text.length),
         400,
       )
     const detection = await detectForRoute(c, text)

@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import { createSyntheticDocx } from '@obiter/ooxml'
 import type { AuthzVariables } from '../authz'
 import { createDocumentObjectKey } from '../document-database'
+import { MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH } from '../document-extraction-limits'
 import type { StorageService } from '../storage'
 import { createTestPool } from '../test-database.test-support'
 import {
@@ -34,6 +35,68 @@ const { createRedactRunCreationRoutes } = await import('./redact-run-creation')
 const { createRedactReviewRoutes } = await import('./redact-review')
 const pool = createTestPool()
 afterAll(() => pool.end())
+
+const VARIED_WORDS = [
+  'covenant',
+  'easement',
+  'leasehold',
+  'indemnity',
+  'schedule',
+  'undertaking',
+  'conveyance',
+  'dilapidations',
+  'forfeiture',
+  'assignment',
+  'premium',
+  'arrears',
+  'surveyor',
+  'correspondence',
+  'privilege',
+  'annexure',
+  'executed',
+  'witnessed',
+  'solicitor',
+  'counsel',
+  'retainer',
+  'disclosure',
+  'freehold',
+  'registered',
+  'occupation',
+  'encroachment',
+  'restriction',
+  'transferor',
+  'transferee',
+  'lessor',
+  'lessee',
+  'determination',
+  'remedy',
+  'injunction',
+  'nuisance',
+  'trespass',
+  'negligence',
+  'estoppel',
+  'probate',
+  'intestacy',
+  'residue',
+  'consideration',
+  'apportionment',
+  'retention',
+  'disbursement',
+  'termination',
+  'renewal',
+  'deposit',
+  'guarantee',
+]
+
+function variedText(length: number) {
+  let text = ''
+  let state = 0x9e3779b9
+  while (text.length < length) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+    text += `${VARIED_WORDS[state % VARIED_WORDS.length]} `
+  }
+  return text.slice(0, length)
+}
 
 const json = (body: Record<string, unknown>) => ({
   method: 'POST',
@@ -92,6 +155,68 @@ it('starts a redaction run from an edited DOCX version whose stored text key is 
       [seed.versionId],
     )
     expect(version.rows[0]?.text_object_key).toBeNull()
+  } finally {
+    await pool.query('delete from redaction_runs where organisation_id = $1', [
+      seed.orgId,
+    ])
+    await cleanupMatter(pool, seed)
+  }
+})
+
+it('starts a redaction run for a document longer than the old 200,000-character refusal', async () => {
+  const seed = await seedMatter(pool, null)
+  try {
+    const storage = storageFor(seed)
+    const longText = `STATE ${variedText(300_000)}`
+    storage.binary.set(
+      seed.sourceKey,
+      Buffer.from(await createSyntheticDocx([longText])),
+    )
+    const app = appFor(seed, storage)
+
+    const created = await app.request(
+      `/api/documents/${seed.documentId}/redaction-runs`,
+      json({}),
+    )
+
+    expect(longText.length).toBeGreaterThan(200_000)
+    expect(created.status).toBe(201)
+    const { run } = (await created.json()) as {
+      run: { spans: Array<{ text: string }> }
+    }
+    expect(run.spans.map((span) => span.text)).toEqual(['STATE'])
+  } finally {
+    await pool.query('delete from redaction_runs where organisation_id = $1', [
+      seed.orgId,
+    ])
+    await cleanupMatter(pool, seed)
+  }
+})
+
+it('refuses text over the extraction limit with the bound and the remedy', async () => {
+  const seed = await seedMatter(pool, null)
+  try {
+    const storage = storageFor(seed)
+    const tooLong = variedText(MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH + 1)
+    storage.binary.set(
+      seed.sourceKey,
+      Buffer.from(await createSyntheticDocx([tooLong])),
+    )
+    const app = appFor(seed, storage)
+
+    const response = await app.request(
+      `/api/documents/${seed.documentId}/redaction-runs`,
+      json({}),
+    )
+
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as {
+      error: { code: string; message: string }
+    }
+    expect(body.error.code).toBe('validation_failed')
+    expect(body.error.message).toContain('2,000,001 characters')
+    expect(body.error.message).toContain('up to 2,000,000 characters')
+    expect(body.error.message).toContain('Split it into smaller documents')
   } finally {
     await pool.query('delete from redaction_runs where organisation_id = $1', [
       seed.orgId,

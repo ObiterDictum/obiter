@@ -35,12 +35,6 @@ export async function jsonBody(
   return value
 }
 
-export const MAX_REDACTION_SOURCE_TEXT_LENGTH = 200_000
-
-export function validSourceText(text: string) {
-  return text.length <= MAX_REDACTION_SOURCE_TEXT_LENGTH
-}
-
 export async function detectForRoute(c: RouteContext, text: string) {
   try {
     return await detectRedactionSpans(text)

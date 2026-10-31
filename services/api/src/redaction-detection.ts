@@ -20,6 +20,11 @@ import {
 import type { DetectionMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { defaultRampartCacheDir } from './rampart-cache'
+import {
+  mergeWindowDetections,
+  planDetectionWindows,
+  type WindowDetection,
+} from './redaction-detection-windows'
 
 const PACKAGE_VERSION = '0.1.3-vendored'
 
@@ -109,7 +114,7 @@ export function createRedactionDetector(
   const log =
     dependencies.log ?? ((message, details) => console.info(message, details))
 
-  const detectSpans = async function detectSpans(
+  const detectWindow = async function detectWindow(
     text: string,
   ): Promise<DetectionResult> {
     const supplement = supplementSpans(text)
@@ -173,6 +178,35 @@ export function createRedactionDetector(
         spans: suppressCourtContextSpans(text, mergeSpans(rampart, supplement)),
         ...provenance(configuration.model, configuration.revision, true),
       }
+    }
+  }
+
+  const detectSpans = async function detectSpans(
+    text: string,
+  ): Promise<DetectionResult> {
+    const windows = planDetectionWindows(text)
+    if (windows.length === 1) return detectWindow(text)
+
+    const started = performance.now()
+    const detections: WindowDetection[] = []
+    const results: DetectionResult[] = []
+    for (const window of windows) {
+      const result = await detectWindow(text.slice(window.start, window.end))
+      results.push(result)
+      detections.push({ window, spans: result.spans })
+    }
+    const degraded = results.some((result) => result.degraded)
+    log('redaction_detection_completed', {
+      textLength: text.length,
+      windows: windows.length,
+      inferenceMs: Math.round(performance.now() - started),
+      model: configuration.model,
+      revision: configuration.revision,
+      degraded,
+    })
+    return {
+      spans: mergeWindowDetections(detections, text),
+      ...provenance(configuration.model, configuration.revision, degraded),
     }
   }
 
