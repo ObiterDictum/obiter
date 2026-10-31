@@ -45,7 +45,7 @@ describe('desktop router parity with web shared views', () => {
       resolve(dirname(fileURLToPath(import.meta.url)), './router.tsx'),
       'utf8',
     )
-    expect(source).toContain('<DocumentDetailLayoutView')
+    expect(source).toContain('warmedDocumentDetail ?? DocumentDetailLayoutView')
     expect(source).not.toMatch(
       /VerificationRunPanel|VerificationDock|VerificationEvidencePanel|verification-findings/,
     )

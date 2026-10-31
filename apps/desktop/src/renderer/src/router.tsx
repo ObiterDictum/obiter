@@ -31,7 +31,59 @@ import {
   redirect,
   useNavigate,
 } from '@tanstack/react-router'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
+
+let warmedDocumentDetail:
+  | typeof import('@obiter/app-shell/views/document-detail').DocumentDetailLayoutView
+  | undefined
+let warmedRedactionRunsRegion:
+  typeof import('@obiter/redact-ui/runs-region').RedactionRunsRegion | undefined
+
+async function loadDocumentDetail() {
+  const module = await import('@obiter/app-shell/views/document-detail')
+  warmedDocumentDetail = module.DocumentDetailLayoutView
+  return module
+}
+
+async function loadRedactionRunsRegion() {
+  const module = await import('@obiter/redact-ui/runs-region')
+  warmedRedactionRunsRegion = module.RedactionRunsRegion
+  return module
+}
+
+let routeWarmupScheduled = false
+
+function warmRouteChunks() {
+  if (routeWarmupScheduled) return
+  routeWarmupScheduled = true
+  const imports = [
+    loadDocumentDetail,
+    loadRedactionRunsRegion,
+    () => import('@obiter/app-shell/views/matter-detail'),
+    () => import('@obiter/app-shell/views/matters'),
+    () => import('../../pages/search'),
+    () => import('../../pages/verify'),
+    () => import('@obiter/app-shell/views/case-law-document'),
+    () => import('@obiter/app-shell/views/legislation-provision'),
+    () => import('@obiter/redact-ui/runs'),
+    () => import('@obiter/redact-ui/review'),
+    () => import('@obiter/app-shell/views/settings'),
+  ]
+  const scheduleNext = () => {
+    const next = imports.shift()
+    if (!next) return
+    window.requestIdleCallback(
+      () => {
+        void next().then(scheduleNext, (error: unknown) => {
+          console.error('Unable to warm desktop route', error)
+          scheduleNext()
+        })
+      },
+      { timeout: 1000 },
+    )
+  }
+  scheduleNext()
+}
 
 const CaseLawDocumentView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/case-law-document'))
@@ -42,8 +94,7 @@ const LegislationProvisionView = lazy(async () => ({
     .LegislationProvisionView,
 }))
 const DocumentDetailLayoutView = lazy(async () => ({
-  default: (await import('@obiter/app-shell/views/document-detail'))
-    .DocumentDetailLayoutView,
+  default: (await loadDocumentDetail()).DocumentDetailLayoutView,
 }))
 const MatterRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/matter-detail'))
@@ -56,7 +107,7 @@ const SettingsRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/settings')).SettingsRouteView,
 }))
 const RedactionRunsRegion = lazy(async () => ({
-  default: (await import('@obiter/redact-ui/runs-region')).RedactionRunsRegion,
+  default: (await loadRedactionRunsRegion()).RedactionRunsRegion,
 }))
 const RedactionRunsView = lazy(async () => ({
   default: (await import('@obiter/redact-ui/runs')).RedactionRunsView,
@@ -131,6 +182,7 @@ const indexRoute = createRoute({
 })
 
 function DesktopHomeRoute() {
+  useEffect(warmRouteChunks, [])
   return <HomeRouteView platform="desktop" />
 }
 
@@ -323,14 +375,16 @@ function DesktopMatterDetailRoute() {
 function DesktopDocumentDetailRoute() {
   const { matterId, documentId } = documentDetailRoute.useParams()
   const navigate = useNavigate()
+  const DocumentView = warmedDocumentDetail ?? DocumentDetailLayoutView
+  const RunsRegion = warmedRedactionRunsRegion ?? RedactionRunsRegion
 
   return (
     <Suspense fallback={<RouteLoading />}>
-      <DocumentDetailLayoutView
+      <DocumentView
         matterId={matterId}
         documentId={documentId}
         redactionRunsRegion={
-          <RedactionRunsRegion
+          <RunsRegion
             documentId={documentId}
             onOpenRun={(runId) =>
               navigate({ to: '/redact/$runId', params: { runId } })
@@ -403,6 +457,7 @@ const signInRoute = createRoute({
 })
 
 function DesktopSignInRoute() {
+  useEffect(warmRouteChunks, [])
   return <SignInRouteView platform="desktop" />
 }
 
