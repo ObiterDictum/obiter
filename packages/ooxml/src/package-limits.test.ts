@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import { deflateRawSync } from 'node:zlib'
 import {
   assertOoxmlPackageCentralDirectory,
   getActiveInflateCount,
@@ -30,6 +31,7 @@ function buildZipWithCentralDirectory(
     compressedSize: number
     uncompressedSize: number
     payload?: Uint8Array
+    method?: number
   }>,
 ) {
   const parts: Uint8Array[] = []
@@ -43,7 +45,7 @@ function buildZipWithCentralDirectory(
     const local = new Uint8Array(30 + nameBytes.length + payload.length)
     const view = new DataView(local.buffer, local.byteOffset, local.byteLength)
     writeUint32(view, 0, LOCAL_SIGNATURE)
-    writeUint16(view, 8, 0)
+    writeUint16(view, 8, entry.method ?? 0)
     writeUint32(view, 18, entry.compressedSize)
     writeUint32(view, 22, entry.uncompressedSize)
     writeUint16(view, 26, nameBytes.length)
@@ -64,7 +66,7 @@ function buildZipWithCentralDirectory(
       central.byteLength,
     )
     writeUint32(view, 0, CD_SIGNATURE)
-    writeUint16(view, 10, 0)
+    writeUint16(view, 10, entry.method ?? 0)
     writeUint32(view, 20, entry.compressedSize)
     writeUint32(view, 24, entry.uncompressedSize)
     writeUint16(view, 28, nameBytes.length)
@@ -214,5 +216,47 @@ describe('OOXML package limits', () => {
     ])
 
     await expect(loadOoxmlZipEntries(zip)).resolves.toBeInstanceOf(Map)
+  })
+
+  it('stops inflating an entry that grows past its declared size', async () => {
+    const inflated = new Uint8Array(32 * 1024 * 1024).fill(0x20)
+    const deflated = new Uint8Array(deflateRawSync(inflated))
+    const zip = buildZipWithCentralDirectory([
+      {
+        name: '[Content_Types].xml',
+        compressedSize: 8,
+        uncompressedSize: 8,
+        payload: new TextEncoder().encode('<Types/>'),
+      },
+      {
+        name: 'word/document.xml',
+        compressedSize: deflated.byteLength,
+        uncompressedSize: 1024,
+        payload: deflated,
+        method: 8,
+      },
+    ])
+
+    const error = await loadOoxmlZipEntries(zip).catch((caught) => caught)
+    expect(error).toBeInstanceOf(OoxmlError)
+    expect(error.code).toBe('package-limits-exceeded')
+  })
+
+  it('rejects an entry that inflates to less than its declared size', async () => {
+    const inflated = new TextEncoder().encode('<w:document/>')
+    const deflated = new Uint8Array(deflateRawSync(inflated))
+    const zip = buildZipWithCentralDirectory([
+      {
+        name: 'word/document.xml',
+        compressedSize: deflated.byteLength,
+        uncompressedSize: inflated.byteLength + 64,
+        payload: deflated,
+        method: 8,
+      },
+    ])
+
+    const error = await loadOoxmlZipEntries(zip).catch((caught) => caught)
+    expect(error).toBeInstanceOf(OoxmlError)
+    expect(error.code).toBe('invalid-package')
   })
 })
