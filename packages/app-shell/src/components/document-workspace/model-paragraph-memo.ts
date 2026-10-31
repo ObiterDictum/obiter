@@ -30,6 +30,27 @@ function imageUrlsEqual(
   return true
 }
 
+function draftsEqual(
+  prev: ModelParagraphProps,
+  next: ModelParagraphProps,
+): boolean {
+  if (prev.drafts === next.drafts) return true
+  return prev.paragraph.runs.every(
+    (run) => prev.drafts?.[run.id] === next.drafts?.[run.id],
+  )
+}
+
+function restoreCaretEqual(
+  prev: ModelParagraphProps,
+  next: ModelParagraphProps,
+): boolean {
+  if (prev.restoreCaret === next.restoreCaret) return true
+  return (
+    prev.restoreCaret?.paragraphId !== prev.paragraph.id &&
+    next.restoreCaret?.paragraphId !== next.paragraph.id
+  )
+}
+
 function modelParagraphPropsEqual(
   prev: ModelParagraphProps,
   next: ModelParagraphProps,
@@ -37,6 +58,7 @@ function modelParagraphPropsEqual(
   if (prev.selected || next.selected) return false
   return (
     prev.paragraph === next.paragraph &&
+    draftsEqual(prev, next) &&
     prev.changes === next.changes &&
     prev.pendingChanges === next.pendingChanges &&
     prev.emphasis === next.emphasis &&
@@ -61,6 +83,19 @@ function modelParagraphPropsEqual(
     prev.noteKind === next.noteKind &&
     prev.story === next.story &&
     prev.linkOverlay === next.linkOverlay &&
+    prev.onSelectParagraph === next.onSelectParagraph &&
+    prev.onRunTextChange === next.onRunTextChange &&
+    prev.onInsertParagraph === next.onInsertParagraph &&
+    prev.onDeleteParagraph === next.onDeleteParagraph &&
+    prev.onJoinPrevious === next.onJoinPrevious &&
+    prev.onWordEdit === next.onWordEdit &&
+    prev.onMoveCaret === next.onMoveCaret &&
+    prev.onTextSelection === next.onTextSelection &&
+    prev.onFocusParagraph === next.onFocusParagraph &&
+    prev.selectionHandlers === next.selectionHandlers &&
+    restoreCaretEqual(prev, next) &&
+    prev.verticalCaret === next.verticalCaret &&
+    prev.neighbors === next.neighbors &&
     pageReferencesEqual(prev.pageReferences, next.pageReferences)
   )
 }

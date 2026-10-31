@@ -47,7 +47,7 @@ import { documentExportHandlers } from './document-workspace-export'
 import { selectionAnnouncement } from './document-workspace-status'
 import { useDocumentMarkings } from './use-document-markings'
 import { useLegalToolsState } from './use-legal-tools-state'
-import { paragraphSelectionHandlers } from './paragraph-selection-handlers'
+import { useParagraphSelectionHandlers } from './paragraph-selection-handlers'
 import { DocumentPrintStyle } from './document-page'
 import { useDocumentPrint } from './use-document-print'
 import {
@@ -272,7 +272,7 @@ export function DocxWorkspace({
     setView,
     revealParagraph,
   })
-  const selectionHandlers = paragraphSelectionHandlers(caret)
+  const selectionHandlers = useParagraphSelectionHandlers(caret)
   const commentsPanel = useWorkspaceComments({
     documentId,
     listed: commentsQuery.data,

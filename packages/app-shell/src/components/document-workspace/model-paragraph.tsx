@@ -56,24 +56,6 @@ import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 export type { ParagraphWordEdit } from './model-paragraph-editor'
 import type { ParagraphWordEdit } from './model-paragraph-editor'
 
-export const paragraphRenderCounts = {
-  total: 0,
-  byId: new Map<string, number>(),
-}
-
-export function resetParagraphRenderCounts() {
-  paragraphRenderCounts.total = 0
-  paragraphRenderCounts.byId.clear()
-}
-
-function recordParagraphRender(paragraphId: string) {
-  paragraphRenderCounts.total += 1
-  paragraphRenderCounts.byId.set(
-    paragraphId,
-    (paragraphRenderCounts.byId.get(paragraphId) ?? 0) + 1,
-  )
-}
-
 export function ModelParagraphInner({
   paragraph,
   changes,
@@ -141,7 +123,7 @@ export function ModelParagraphInner({
   verticalCaret?: VerticalCaretColumn
   selectionHandlers?: ParagraphSelectionHandlers
   selectionSegment?: ParagraphSelectionRange | null
-  onFocusParagraph?: () => void
+  onFocusParagraph?: (paragraphId: string) => void
   editing?: boolean
   presence?: DocumentPresence[]
   currentUserId?: string
@@ -164,7 +146,6 @@ export function ModelParagraphInner({
   story?: { kind: string; partName: string }
   linkOverlay?: ParagraphLinkOverlay
 }) {
-  recordParagraphRender(paragraph.id)
   const carets = (presence ?? []).filter(
     (item) =>
       item.userId !== currentUserId &&
@@ -459,7 +440,11 @@ export function ModelParagraphInner({
                 next={adjacent?.next}
                 verticalCaret={verticalCaret}
                 selection={selectionBinding}
-                onFocusParagraph={onFocusParagraph}
+                onFocusParagraph={
+                  onFocusParagraph
+                    ? () => onFocusParagraph(paragraph.id)
+                    : undefined
+                }
                 onMoveCaret={onMoveCaret}
                 onTextSelection={(localStart, localEnd, direction) =>
                   onTextSelection?.(

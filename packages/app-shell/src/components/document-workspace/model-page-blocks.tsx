@@ -38,6 +38,8 @@ import { PageTable } from './page-table'
 import { PendingInsert } from './pending-insert'
 import { PageDrawing } from './page-drawing'
 
+const noSelection = () => undefined
+
 export type BlockContext = {
   model: DocumentModelWire
   pendingRedlines?: PendingRedlines
@@ -214,11 +216,7 @@ export function renderBlock(
       neighbors={ctx.neighbors}
       selectionSegment={ctx.selectionSegments.get(paragraph.id) ?? null}
       selectionHandlers={ctx.selectionHandlers}
-      onFocusParagraph={
-        ctx.onFocusParagraph
-          ? () => ctx.onFocusParagraph?.(paragraph.id)
-          : undefined
-      }
+      onFocusParagraph={ctx.onFocusParagraph}
       restoreCaret={ctx.restoreCaret}
       verticalCaret={ctx.verticalCaret}
       editing={
@@ -329,7 +327,7 @@ export function PageOverlays({
                 paragraph={paragraph}
                 changes={model.changes}
                 selected={false}
-                onSelectParagraph={() => undefined}
+                onSelectParagraph={noSelection}
                 selectionSegment={selectionSegments.get(paragraph.id) ?? null}
                 selectionHandlers={selectionHandlers}
                 drafts={drafts}
