@@ -1,7 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ArrowUpRight, MagnifyingGlass } from '@phosphor-icons/react'
-import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import {
   Button,
   Card,
@@ -12,6 +10,8 @@ import {
   Skeleton,
   buttonClassName,
 } from '@obiter/ui'
+import { ArrowUpRight, MagnifyingGlass } from '@obiter/ui/icons'
+import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import { useState } from 'react'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'

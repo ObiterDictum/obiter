@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowSquareOut, Clock, FileText, Warning } from '@phosphor-icons/react'
+import { Button, cn } from '@obiter/ui'
+import { ArrowSquareOut, Clock, FileText, Warning } from '@obiter/ui/icons'
 import type {
   VerificationFindingView,
   VerificationRun,
 } from '@obiter/contracts'
-import { Button, cn } from '@obiter/ui'
 import {
   formatRunTime,
   verificationCountsLabel,

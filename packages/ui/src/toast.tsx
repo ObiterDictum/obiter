@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { X } from '@phosphor-icons/react'
+import { X } from './icons/shell'
 import { cn } from './lib/cn'
 
 export type ToastTone = 'info' | 'success' | 'warning' | 'danger'

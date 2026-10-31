@@ -1,5 +1,5 @@
-import { ArrowRight } from '@phosphor-icons/react'
 import { Badge, Button, DockedPanel, type PanelPopout } from '@obiter/ui'
+import { ArrowRight } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
 import type {
   DocumentVersionRecord,

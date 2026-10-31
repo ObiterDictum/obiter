@@ -7,13 +7,13 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { KeyboardHint, cn } from '@obiter/ui'
 import {
   Folders,
   MagnifyingGlass,
   PencilSimple,
   X,
-} from '@phosphor-icons/react'
-import { KeyboardHint, cn } from '@obiter/ui'
+} from '@obiter/ui/icons/shell'
 import { useMattersList } from './matters'
 import { useRedactionRunsList } from './redaction-runs'
 

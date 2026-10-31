@@ -1,4 +1,4 @@
-import { CalendarBlank, CaretLeft, CaretRight } from '@phosphor-icons/react'
+import { CalendarBlank, CaretLeft, CaretRight } from './icons'
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { cn } from './lib/cn'
 

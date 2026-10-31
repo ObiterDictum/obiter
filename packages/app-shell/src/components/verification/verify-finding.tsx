@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { Button, cn, StatusDot } from '@obiter/ui'
 import {
   CheckCircle,
   MinusCircle,
@@ -6,12 +7,11 @@ import {
   Info,
   Question,
   Warning,
-} from '@phosphor-icons/react'
+} from '@obiter/ui/icons'
 import type {
   VerificationEvidenceView,
   VerificationFindingView,
 } from '@obiter/contracts'
-import { Button, cn, StatusDot } from '@obiter/ui'
 import { caseResultLocation } from '../../case-navigation'
 import { sourceNameForUrl } from '../search/provenance'
 import {

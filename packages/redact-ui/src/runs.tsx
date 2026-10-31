@@ -1,13 +1,5 @@
 import { useRef, useState } from 'react'
 import {
-  DotsThree,
-  FileText,
-  Plus,
-  Trash,
-  UploadSimple,
-  Warning,
-} from '@phosphor-icons/react'
-import {
   Button,
   Card,
   Dialog,
@@ -26,6 +18,14 @@ import {
   StatusDot,
   useToast,
 } from '@obiter/ui'
+import {
+  DotsThree,
+  FileText,
+  Plus,
+  Trash,
+  UploadSimple,
+  Warning,
+} from '@obiter/ui/icons'
 import { PageScaffold, useCurrentUser } from '@obiter/app-shell'
 import {
   useCreateRedactionRun,

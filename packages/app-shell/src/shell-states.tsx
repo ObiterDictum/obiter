@@ -1,12 +1,12 @@
 import { Link } from '@tanstack/react-router'
+import { Button, ObiterMark, Skeleton, cn } from '@obiter/ui'
 import {
   ArrowClockwise,
   House,
   Lock,
   MagnifyingGlass,
   Warning,
-} from '@phosphor-icons/react'
-import { Button, ObiterMark, Skeleton, cn } from '@obiter/ui'
+} from '@obiter/ui/icons/shell'
 import { useSyncExternalStore, type ReactNode } from 'react'
 import { ApiError } from './api'
 import { ContentFrame } from './content-frame'

@@ -1,5 +1,5 @@
 import { caseLawDocumentQueryOptions } from '@obiter/app-shell/views/case-law-document-query'
-import { createCanonicalCasePath } from '@obiter/contracts'
+import { createCanonicalCasePath } from '@obiter/contracts/case-paths'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/cases/$caseId')({

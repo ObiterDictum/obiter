@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Check, X } from '@phosphor-icons/react'
 import { Button, KeyboardHint } from '@obiter/ui'
+import { Check, X } from '@obiter/ui/icons'
 import { labelledBreaks } from './inline-change-review'
 import type { ReviewItem } from './review-items'
 import { itemKindLabel, itemLead } from './review-items'

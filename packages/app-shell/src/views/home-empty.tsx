@@ -1,11 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import {
-  BookOpen,
-  MagnifyingGlass,
-  Scales,
-  Upload,
-} from '@phosphor-icons/react'
 import { StatusDot, buttonClassName } from '@obiter/ui'
+import { BookOpen, MagnifyingGlass, Scales, Upload } from '@obiter/ui/icons'
 import { useState, type FormEvent } from 'react'
 import { getRecentLegalSearches } from '../legal-search-recents'
 import { CreateMatterDialog } from './create-matter-dialog'

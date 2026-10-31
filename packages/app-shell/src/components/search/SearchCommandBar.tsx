@@ -1,7 +1,6 @@
 import { type FormEvent, type RefObject } from 'react'
-import { MagnifyingGlass, X } from '@phosphor-icons/react'
 import { Button } from '@obiter/ui'
-
+import { MagnifyingGlass, X } from '@obiter/ui/icons'
 interface SearchCommandBarProps {
   isSearching: boolean
   inputRef?: RefObject<HTMLInputElement | null>

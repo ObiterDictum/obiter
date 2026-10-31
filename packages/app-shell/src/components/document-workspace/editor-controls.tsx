@@ -1,5 +1,4 @@
 import { useId, type ReactNode } from 'react'
-import { Check } from '@phosphor-icons/react'
 import {
   Button,
   MenuCheckboxItem,
@@ -11,7 +10,7 @@ import {
   TooltipTrigger,
   cn,
 } from '@obiter/ui'
-
+import { Check } from '@obiter/ui/icons'
 function controlReason(
   soon: boolean | string | undefined,
   disabled: boolean | undefined,

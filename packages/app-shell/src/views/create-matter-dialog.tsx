@@ -1,5 +1,4 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Plus } from '@phosphor-icons/react'
 import {
   Button,
   Dialog,
@@ -12,6 +11,7 @@ import {
   Input,
   useToast,
 } from '@obiter/ui'
+import { Plus } from '@obiter/ui/icons'
 import { useState, type FormEvent } from 'react'
 import { useCreateMatter, type CreateMatterInput } from '../matters'
 

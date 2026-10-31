@@ -1,7 +1,6 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform, MeResponse } from '@obiter/contracts'
 import { useQuery } from '@tanstack/react-query'
-import { CaretRight } from '@phosphor-icons/react'
 import {
   Menu,
   MenuContent,
@@ -11,6 +10,7 @@ import {
   Skeleton,
   cn,
 } from '@obiter/ui'
+import { CaretRight } from '@obiter/ui/icons/shell'
 import { Fragment } from 'react'
 import { AppSearchField } from './app-search-field'
 import { useAuth } from './auth'

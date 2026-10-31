@@ -1,6 +1,6 @@
 import { Button as BaseButton } from '@base-ui-components/react/button'
 import type { ReactNode, Ref } from 'react'
-import { CircleNotch } from '@phosphor-icons/react'
+import { CircleNotch } from './icons/shell'
 import { cn } from './lib/cn'
 
 type BaseButtonRender = React.ComponentProps<typeof BaseButton>['render']

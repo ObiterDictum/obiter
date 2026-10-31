@@ -1,5 +1,5 @@
-import { CheckCircle, Eye, EyeSlash } from '@phosphor-icons/react'
 import { Input } from '@obiter/ui'
+import { CheckCircle, Eye, EyeSlash } from '@obiter/ui/icons'
 import { useState, type ReactNode, type RefObject } from 'react'
 import type { CurrentUser } from '@obiter/contracts'
 

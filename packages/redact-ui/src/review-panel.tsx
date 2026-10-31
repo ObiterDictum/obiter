@@ -1,7 +1,5 @@
 import type { KeyboardEvent, RefObject } from 'react'
 import type { SpanCategory } from '@obiter/contracts'
-import { Lock } from '@phosphor-icons/react'
-import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
 import {
   Select,
   StatusDot,
@@ -11,6 +9,8 @@ import {
   TabsTrigger,
   cn,
 } from '@obiter/ui'
+import { Lock } from '@obiter/ui/icons'
+import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
 import {
   categoryLabel,
   confidenceLabel,
