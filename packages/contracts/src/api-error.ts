@@ -1,52 +1,10 @@
 import { z } from 'zod'
+import { API_ERROR_CODES, type ApiErrorCode } from './api-error-codes'
+import type { ApiErrorResponse } from './api-error-response'
 
-export const apiErrorCodeSchema = z.enum([
-  'unauthenticated',
-  'forbidden',
-  'validation_failed',
-  'organisation_not_found',
-  'organisation_not_empty',
-  'invite_not_found',
-  'invite_expired',
-  'invite_revoked',
-  'invite_already_accepted',
-  'no_organisation',
-  'closed_beta_required',
-  'matter_not_found',
-  'saved_source_not_found',
-  'matter_share_not_found',
-  'document_not_found',
-  'document_version_not_found',
-  'comment_anchor_unresolved',
-  'comment_client_key_conflict',
-  'output_not_found',
-  'upload_failed',
-  'storage_unavailable',
-  'search_unavailable',
-  'search_incomplete',
-  'job_unavailable',
-  'conflict_detected',
-  'redaction_run_not_found',
-  'span_not_found',
-  'redaction_run_not_reviewable',
-  'redaction_already_finalized',
-  'redaction_detection_failed',
-  'redaction_model_unavailable',
-  'redaction_span_integrity_error',
-  'redaction_secure_pdf_failed',
-  'verification_run_not_found',
-  'verification_finding_not_found',
-  'verification_finding_not_dismissable',
-  'verification_execution_failed',
-  'extraction_coverage_incomplete',
-  'mixed_text_decisions',
-  'payload_too_large',
-  'ooxml_limits_exceeded',
-  'hydration_budget_exceeded',
-  'share_safe_export_refused',
-  'redaction_return_unavailable',
-])
-export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>
+export type { ApiErrorCode, ApiErrorResponse }
+
+export const apiErrorCodeSchema = z.enum(API_ERROR_CODES)
 
 export const apiErrorResponseSchema = z.object({
   error: z.object({
@@ -55,4 +13,3 @@ export const apiErrorResponseSchema = z.object({
     requestId: z.string().min(1),
   }),
 })
-export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>

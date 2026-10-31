@@ -12,8 +12,8 @@ import {
   allKeys,
   clearDocumentDraftsMatching,
   documentDraftKey,
+  documentDraftWritesSuspended,
   documentStaleDraftKey,
-  keyIncludesUser,
   newTabId,
   removeKey,
   writerIsLive,
@@ -25,10 +25,15 @@ import {
 
 export {
   DOCUMENT_DRAFT_SCHEMA_VERSION,
+  clearStoredDocumentDrafts,
+  clearStoredDocumentDraftsForUser,
   documentDraftKey,
   documentDraftTabId,
+  rememberDocumentDraftUser,
   releaseDocumentDraftWriterClaim,
   resolveDocumentDraftWriter,
+  resumeDocumentDraftWrites,
+  suspendDocumentDraftWrites,
   touchDocumentDraftWriterClaim,
   type DraftScope,
   type DraftStorage,
@@ -38,21 +43,6 @@ export {
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000
 
 export type { HeldChange } from './document-draft-schema'
-
-let writesSuspended = false
-let rememberedUserId: string | null = null
-
-export function suspendDocumentDraftWrites() {
-  writesSuspended = true
-}
-
-export function resumeDocumentDraftWrites() {
-  writesSuspended = false
-}
-
-export function rememberDocumentDraftUser(userId: string | null) {
-  rememberedUserId = userId
-}
 
 export type DraftRestore =
   | { status: 'empty' }
@@ -219,7 +209,7 @@ export function writeDocumentDraft(
     trackChangesFlip?: boolean
   },
 ): boolean {
-  if (writesSuspended) return false
+  if (documentDraftWritesSuspended()) return false
   const active = scanPayloads(storage, scope).find(
     (record) => record.writerId === scope.tabId && record.status === 'active',
   )
@@ -279,26 +269,6 @@ export function discardRecoverableDraft(
 
 export function clearAllDocumentDrafts(storage: DraftStorage) {
   clearDocumentDraftsMatching(storage, () => true)
-}
-
-function clearDocumentDraftsForUser(storage: DraftStorage, userId: string) {
-  clearDocumentDraftsMatching(storage, (key) => keyIncludesUser(key, userId))
-}
-
-export function clearStoredDocumentDrafts() {
-  if (typeof window === 'undefined') return
-  try {
-    if (rememberedUserId) {
-      clearDocumentDraftsForUser(window.localStorage, rememberedUserId)
-    }
-  } catch {}
-}
-
-export function clearStoredDocumentDraftsForUser(userId: string) {
-  if (typeof window === 'undefined') return
-  try {
-    clearDocumentDraftsForUser(window.localStorage, userId)
-  } catch {}
 }
 
 type Scanned = {

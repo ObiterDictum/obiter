@@ -219,3 +219,41 @@ export function keyIncludesUser(key: string, userId: string) {
 }
 
 let memoryTabId: string | null = null
+let writesSuspended = false
+let rememberedUserId: string | null = null
+
+export function suspendDocumentDraftWrites() {
+  writesSuspended = true
+}
+
+export function resumeDocumentDraftWrites() {
+  writesSuspended = false
+}
+
+export function rememberDocumentDraftUser(userId: string | null) {
+  rememberedUserId = userId
+}
+
+export function documentDraftWritesSuspended() {
+  return writesSuspended
+}
+
+function clearDocumentDraftsForUser(storage: DraftStorage, userId: string) {
+  clearDocumentDraftsMatching(storage, (key) => keyIncludesUser(key, userId))
+}
+
+export function clearStoredDocumentDrafts() {
+  if (typeof window === 'undefined') return
+  try {
+    if (rememberedUserId) {
+      clearDocumentDraftsForUser(window.localStorage, rememberedUserId)
+    }
+  } catch {}
+}
+
+export function clearStoredDocumentDraftsForUser(userId: string) {
+  if (typeof window === 'undefined') return
+  try {
+    clearDocumentDraftsForUser(window.localStorage, userId)
+  } catch {}
+}
