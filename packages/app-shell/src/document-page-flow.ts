@@ -196,6 +196,22 @@ export function wrapLines(
   return lines.length > 0 ? lines : [{ text: '', from: 0, to: 0 }]
 }
 
+const LINE_BREAK_CACHE_TEXTS = 5_000
+const lineBreaks = new Map<string, Map<string, number>>()
+let fontsWatched = false
+
+export function clearLineBreakCache() {
+  lineBreaks.clear()
+  measuredFont = ''
+}
+
+function watchFontLoads() {
+  if (fontsWatched) return
+  fontsWatched = true
+  if (typeof document === 'undefined' || !document.fonts) return
+  document.fonts.addEventListener('loadingdone', clearLineBreakCache)
+}
+
 export function takeLine(
   text: string,
   offset: number,
@@ -203,8 +219,28 @@ export function takeLine(
   widthPx: number,
   fontFamily = MEASURE_FONT,
 ): number {
-  const rest = text.slice(offset)
-  if (!rest) return 0
+  if (offset >= text.length) return 0
+  watchFontLoads()
+  let breaks = lineBreaks.get(text)
+  if (!breaks) {
+    if (lineBreaks.size >= LINE_BREAK_CACHE_TEXTS) lineBreaks.clear()
+    breaks = new Map()
+    lineBreaks.set(text, breaks)
+  }
+  const key = `${offset}\u0000${fontSizePx}\u0000${widthPx}\u0000${fontFamily}`
+  const cached = breaks.get(key)
+  if (cached !== undefined) return cached
+  const taken = measureLine(text.slice(offset), fontSizePx, widthPx, fontFamily)
+  breaks.set(key, taken)
+  return taken
+}
+
+function measureLine(
+  rest: string,
+  fontSizePx: number,
+  widthPx: number,
+  fontFamily: string,
+): number {
   if (rest.startsWith('\n')) return 1
   const newline = rest.indexOf('\n')
   const haystack = newline === -1 ? rest : rest.slice(0, newline)
