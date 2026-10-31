@@ -44,7 +44,17 @@ export function paragraphNoteRefs(paragraph: DocumentParagraphWire): NoteRef[] {
   )
 }
 
+const notesByModel = new WeakMap<DocumentModelWire, NoteBody[]>()
+
 export function documentNotes(model: DocumentModelWire): NoteBody[] {
+  const cached = notesByModel.get(model)
+  if (cached) return cached
+  const notes = collectNotes(model)
+  notesByModel.set(model, notes)
+  return notes
+}
+
+function collectNotes(model: DocumentModelWire): NoteBody[] {
   const footnotes = noteStoryBodies(model, 'footnotes', 'footnote')
   const endnotes = noteStoryBodies(model, 'endnotes', 'endnote')
   const used = new Set<string>()

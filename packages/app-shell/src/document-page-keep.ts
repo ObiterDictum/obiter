@@ -1,17 +1,8 @@
 import type { PendingRedlines } from './document-pending-redlines'
-import { pendingParagraphChanges } from './document-pending-redlines'
-import { paragraphPartName } from './document-inline-index'
-import { inlineChanges } from './document-inline-changes'
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
-} from '@obiter/contracts'
-import { effectiveParagraph } from './document-model-text'
+import type { DocumentModelWire } from '@obiter/contracts'
 import type { ExtraRuns } from './document-word-edits'
-import { countLines, firstLineIndentPx } from './document-page-flow'
 import type { ColumnFrame, ContentFrame } from './document-page-layout'
-import { paragraphListIndent } from './document-page-lists'
-import { paragraphFace, paragraphLineHeightPx } from './document-page-style'
+import { paragraphMetrics } from './document-page-measure'
 import type { StoryBlock } from './document-page-tables'
 
 export function keepWithNext(
@@ -70,72 +61,18 @@ export function keepWithNext(
 
 export function widowMaxY(
   widowControl: boolean,
-  text: string,
+  lineCount: (offset: number) => number,
   offset: number,
   startY: number,
   pageMaxY: number,
   linePx: number,
-  fontSize: number,
-  widthPx: number,
   orphanCheck: boolean,
-  fontFamily?: string,
-  textIndentPx = 0,
 ): number {
   if (!widowControl) return pageMaxY
-  const remainingLines = countLines(
-    text.slice(offset),
-    fontSize,
-    widthPx,
-    fontFamily,
-    offset === 0 ? textIndentPx : 0,
-  )
+  const remainingLines = lineCount(offset)
   const fit = Math.max(0, Math.floor((pageMaxY - startY) / linePx))
   if (orphanCheck && fit === 1 && remainingLines > 1) return startY
   if (fit >= 2 && remainingLines - fit === 1) return startY + (fit - 1) * linePx
   if (fit === 1 && remainingLines === 2) return startY
   return pageMaxY
-}
-
-export function paragraphMetrics(
-  paragraph: DocumentParagraphWire,
-  model: DocumentModelWire,
-  drafts: Record<string, string> | undefined,
-  extraRuns: ExtraRuns,
-  columnWidthPx: number,
-  pendingRedlines?: PendingRedlines,
-) {
-  const resolved = effectiveParagraph(
-    paragraph,
-    drafts,
-    extraRuns[paragraph.id] ?? [],
-  )
-  const partName = paragraphPartName(model, paragraph)
-  const text = inlineChanges(
-    resolved,
-    model.changes,
-    partName,
-    pendingParagraphChanges(pendingRedlines, paragraph.id, partName),
-  ).text
-  const face = paragraphFace(resolved, model.styles)
-  const linePx = paragraphLineHeightPx(face)
-  const fontSize = face.run.fontSizePx ?? linePx
-  const list = paragraphListIndent(resolved, model)
-  const indent =
-    (list?.leftPx ?? face.indentLeftPx ?? 0) + (face.indentRightPx ?? 0)
-  const lineCount = countLines(
-    text,
-    fontSize,
-    Math.max(1, columnWidthPx - indent),
-    face.run.fontFamily,
-    firstLineIndentPx(face, Boolean(list)),
-  )
-  return {
-    linePx,
-    lineCount,
-    heightPx:
-      (face.marginTopPx ?? 0) + lineCount * linePx + (face.marginBottomPx ?? 0),
-    keepNext: face.keepNext === true,
-    keepLines: face.keepLines === true,
-    widowControl: face.widowControl !== false,
-  }
 }
