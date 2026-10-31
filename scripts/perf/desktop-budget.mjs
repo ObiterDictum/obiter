@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { readFile, readdir, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { classifyManifest } from './desktop-manifest.mjs'
 
@@ -198,6 +198,23 @@ async function main() {
   console.log(
     `largest lazy chunk: ${buckets.largestLazyChunk.file || 'none'} (${buckets.lazyChunks.chunkCount} lazy chunks)`,
   )
+  const jsonOut = arg('json')
+  if (jsonOut) {
+    await mkdir(dirname(jsonOut), { recursive: true })
+    await writeFile(
+      jsonOut,
+      `${JSON.stringify(
+        Object.fromEntries(
+          Object.entries(buckets).flatMap(([name, bucket]) =>
+            typeof bucket?.bytes === 'number' ? [[name, bucket.bytes]] : [],
+          ),
+        ),
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    )
+  }
   if (failures.length > 0) {
     for (const failure of failures)
       console.error(`desktop budget failed: ${failure}`)

@@ -2,7 +2,7 @@
 
 Start with [README.md](README.md) and [docs/roadmap.md](docs/roadmap.md). Load anything else only when the task needs it.
 
-Operating model and sync lives in the separate [`obiter-ops`](https://github.com/ObiterDictum/obiter-ops) repo.
+Operating model and sync lives in the separate [`obiter-ops`](https://github.com/ObiterDictum/obiter-ops) repo. Repeatable speed and quality measurement lives in the private [`bench`](https://github.com/ObiterDictum/bench) repo; this repo keeps only the bundle and desktop size budgets that gate CI.
 
 ## On-demand docs
 
