@@ -29,3 +29,16 @@ export function isAllowedNavigation(
 
   return target.protocol === allowed.protocol && target.host === allowed.host
 }
+
+const EXTERNAL_PROTOCOLS = new Set(['https:', 'http:'])
+
+export function isSafeExternalUrl(targetUrl: string): boolean {
+  let target: URL
+  try {
+    target = new URL(targetUrl)
+  } catch {
+    return false
+  }
+
+  return EXTERNAL_PROTOCOLS.has(target.protocol) && target.hostname !== ''
+}
