@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
 import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
+import { useLatestHandlers } from './use-latest-callback'
 
 import { documentBreakToolbar } from '../../document-break-toolbar'
 import type { BreakDraft } from '../../document-edits'
@@ -70,25 +71,27 @@ export function useInsertRibbon(
     model && marginStories(model, 'footer').length === 0
       ? 'This document has no footer part'
       : undefined
-  const structure = documentStructureToolbar({
-    paragraphId,
-    model,
-    painted,
-    cellParagraphIds,
-    offset,
-    selectionActive,
-    selectionRange,
-    deletedParagraphIds: drafts.deletedParagraphIds,
-    trackChanges,
-    structures: drafts.structures,
-    drafts: drafts.drafts,
-    extraRuns: drafts.extraRuns,
-    format: drafts.format,
-    breaks: drafts.breaks,
-    inserts: drafts.inserts,
-    setStructures: drafts.setStructures,
-    toaFacts,
-  })
+  const structure = useLatestHandlers(
+    documentStructureToolbar({
+      paragraphId,
+      model,
+      painted,
+      cellParagraphIds,
+      offset,
+      selectionActive,
+      selectionRange,
+      deletedParagraphIds: drafts.deletedParagraphIds,
+      trackChanges,
+      structures: drafts.structures,
+      drafts: drafts.drafts,
+      extraRuns: drafts.extraRuns,
+      format: drafts.format,
+      breaks: drafts.breaks,
+      inserts: drafts.inserts,
+      setStructures: drafts.setStructures,
+      toaFacts,
+    }),
+  )
   return {
     ...documentBreakToolbar({
       paragraphId,

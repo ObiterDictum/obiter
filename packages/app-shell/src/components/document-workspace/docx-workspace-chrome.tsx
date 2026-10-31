@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from 'react'
+import { memo, useLayoutEffect, useState } from 'react'
 import type { CitationStyle } from '../../document-preferences'
 import type {
   DocumentFindToolbar,
@@ -7,8 +7,8 @@ import type {
 } from './ribbon-types'
 import type { EditorChromeProps } from './editor-commands'
 import type { InsertRibbonProps } from './use-insert-ribbon'
-import type { DocumentSave } from './use-document-save'
-import type { WorkspaceDrafts } from './use-workspace-drafts'
+import type { ChromeSave, DocumentSave } from './use-document-save'
+import type { ChromeDrafts, WorkspaceDrafts } from './use-workspace-drafts'
 import type { useWorkspacePanels } from './use-workspace-panels'
 import type { ChangeReview } from './use-change-review'
 import type { documentExportHandlers } from './document-workspace-export'
@@ -30,11 +30,28 @@ import { usePendingCitation } from './use-pending-citation'
 import { WorkspaceBanners } from './workspace-banners'
 import { WorkspaceRibbon } from './workspace-chrome'
 import { useVerificationWorkspace } from '../verification/verification-context'
+import { useLatestCallback } from './use-latest-callback'
+import { workspaceDataEqual } from './workspace-data-equal'
 
 type DocumentExportHandlers = ReturnType<typeof documentExportHandlers>
 type WorkspacePanels = ReturnType<typeof useWorkspacePanels>
 
-export function DocxWorkspaceChrome({
+type DocxWorkspaceChromeProps = {
+  props: EditorChromeProps
+  save: ChromeSave
+  drafts: ChromeDrafts
+  remoteChange: boolean
+  transientNotice: string | null
+  selectionNotice: string
+  onReload: () => void
+  requests: { find: number; palette: number; formatting: number }
+  selectionActive: boolean
+  onCommentSelection: () => void
+  citation: ReturnType<typeof usePendingCitation>
+  citationCanInsert: boolean
+}
+
+function DocxWorkspaceChromeInner({
   props,
   save,
   drafts,
@@ -47,20 +64,7 @@ export function DocxWorkspaceChrome({
   onCommentSelection,
   citation,
   citationCanInsert,
-}: {
-  props: EditorChromeProps
-  save: DocumentSave
-  drafts: WorkspaceDrafts
-  remoteChange: boolean
-  transientNotice: string | null
-  selectionNotice: string
-  onReload: () => void
-  requests: { find: number; palette: number; formatting: number }
-  selectionActive: boolean
-  onCommentSelection: () => void
-  citation: ReturnType<typeof usePendingCitation>
-  citationCanInsert: boolean
-}) {
+}: DocxWorkspaceChromeProps) {
   const [formattingOpen, setFormattingOpen] = useState(false)
   const [formattingAnchor, setFormattingAnchor] = useState<HTMLElement | null>(
     null,
@@ -124,6 +128,12 @@ export function DocxWorkspaceChrome({
       : props.onOpenVerify,
   }
   const menus = editorMenus(menued, actions)
+  const openToolbarFormatting = useLatestCallback(() =>
+    openFormatting(
+      document.querySelector<HTMLElement>('[data-editor-toolbar]'),
+    ),
+  )
+  const openPalette = useLatestCallback(() => setPaletteOpen(true))
   return (
     <WorkspaceRibbon>
       <div className="flex items-stretch border-b border-line px-3">
@@ -131,12 +141,8 @@ export function DocxWorkspaceChrome({
       </div>
       <EditorToolbar
         props={props}
-        onOpenFormatting={() =>
-          openFormatting(
-            document.querySelector<HTMLElement>('[data-editor-toolbar]'),
-          )
-        }
-        onOpenPalette={() => setPaletteOpen(true)}
+        onOpenFormatting={openToolbarFormatting}
+        onOpenPalette={openPalette}
       />
       {citation.text === null ? null : (
         <PendingCitationBar
@@ -216,6 +222,11 @@ export function DocxWorkspaceChrome({
     </WorkspaceRibbon>
   )
 }
+
+export const DocxWorkspaceChrome = memo(
+  DocxWorkspaceChromeInner,
+  workspaceDataEqual,
+)
 
 export type DocxChromeProps = EditorChromeProps
 

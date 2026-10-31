@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -13,21 +13,29 @@ import { editorCommandList } from './editor-commands'
 
 type Hit = { menu: EditorMenu; group: string; command: EditorCommand }
 
-export function EditorCommandPalette({
-  open,
-  onOpenChange,
-  menus,
-}: {
+type EditorCommandPaletteProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   menus: readonly EditorMenu[]
-}) {
+}
+
+function EditorCommandPaletteInner({
+  open,
+  onOpenChange,
+  menus,
+}: EditorCommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [highlighted, setHighlighted] = useState(0)
-  const all = editorCommandList(menus).map((hit) => ({
-    ...hit,
-    group: hit.group.label,
-  }))
+  const all = useMemo(
+    () =>
+      open
+        ? editorCommandList(menus).map((hit) => ({
+            ...hit,
+            group: hit.group.label,
+          }))
+        : [],
+    [open, menus],
+  )
   const needle = query.trim().toLowerCase()
   const hits = needle
     ? all.filter(
@@ -175,3 +183,8 @@ function ShortcutHelp() {
     </dl>
   )
 }
+
+export const EditorCommandPalette = memo(
+  EditorCommandPaletteInner,
+  (prev, next) => prev.open === next.open && !prev.open,
+)
