@@ -31,7 +31,49 @@ import {
   redirect,
   useNavigate,
 } from '@tanstack/react-router'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, use, useEffect } from 'react'
+import { preloadable } from './route-preload'
+
+const documentDetailModule = preloadable(
+  () => import('@obiter/app-shell/views/document-detail'),
+)
+const redactionRunsRegionModule = preloadable(
+  () => import('@obiter/redact-ui/runs-region'),
+)
+
+let routeWarmupScheduled = false
+
+function warmRouteChunks() {
+  if (routeWarmupScheduled) return
+  routeWarmupScheduled = true
+  const imports = [
+    documentDetailModule,
+    redactionRunsRegionModule,
+    () => import('@obiter/app-shell/views/matter-detail'),
+    () => import('@obiter/app-shell/views/matters'),
+    () => import('../../pages/search'),
+    () => import('../../pages/verify'),
+    () => import('@obiter/app-shell/views/case-law-document'),
+    () => import('@obiter/app-shell/views/legislation-provision'),
+    () => import('@obiter/redact-ui/runs'),
+    () => import('@obiter/redact-ui/review'),
+    () => import('@obiter/app-shell/views/settings'),
+  ]
+  const scheduleNext = () => {
+    const next = imports.shift()
+    if (!next) return
+    window.requestIdleCallback(
+      () => {
+        void next().then(scheduleNext, (error: unknown) => {
+          console.error('Unable to warm desktop route', error)
+          scheduleNext()
+        })
+      },
+      { timeout: 1000 },
+    )
+  }
+  scheduleNext()
+}
 
 const CaseLawDocumentView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/case-law-document'))
@@ -40,10 +82,6 @@ const CaseLawDocumentView = lazy(async () => ({
 const LegislationProvisionView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/legislation-provision'))
     .LegislationProvisionView,
-}))
-const DocumentDetailLayoutView = lazy(async () => ({
-  default: (await import('@obiter/app-shell/views/document-detail'))
-    .DocumentDetailLayoutView,
 }))
 const MatterRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/matter-detail'))
@@ -54,9 +92,6 @@ const MattersRouteView = lazy(async () => ({
 }))
 const SettingsRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/settings')).SettingsRouteView,
-}))
-const RedactionRunsRegion = lazy(async () => ({
-  default: (await import('@obiter/redact-ui/runs-region')).RedactionRunsRegion,
 }))
 const RedactionRunsView = lazy(async () => ({
   default: (await import('@obiter/redact-ui/runs')).RedactionRunsView,
@@ -131,6 +166,7 @@ const indexRoute = createRoute({
 })
 
 function DesktopHomeRoute() {
+  useEffect(warmRouteChunks, [])
   return <HomeRouteView platform="desktop" />
 }
 
@@ -322,23 +358,38 @@ function DesktopMatterDetailRoute() {
 
 function DesktopDocumentDetailRoute() {
   const { matterId, documentId } = documentDetailRoute.useParams()
-  const navigate = useNavigate()
 
   return (
     <Suspense fallback={<RouteLoading />}>
-      <DocumentDetailLayoutView
-        matterId={matterId}
-        documentId={documentId}
-        redactionRunsRegion={
-          <RedactionRunsRegion
-            documentId={documentId}
-            onOpenRun={(runId) =>
-              navigate({ to: '/redact/$runId', params: { runId } })
-            }
-          />
-        }
-      />
+      <DesktopDocumentDetail matterId={matterId} documentId={documentId} />
     </Suspense>
+  )
+}
+
+function DesktopDocumentDetail({
+  matterId,
+  documentId,
+}: {
+  matterId: string
+  documentId: string
+}) {
+  const navigate = useNavigate()
+  const { DocumentDetailLayoutView } = use(documentDetailModule())
+  const { RedactionRunsRegion } = use(redactionRunsRegionModule())
+
+  return (
+    <DocumentDetailLayoutView
+      matterId={matterId}
+      documentId={documentId}
+      redactionRunsRegion={
+        <RedactionRunsRegion
+          documentId={documentId}
+          onOpenRun={(runId) =>
+            navigate({ to: '/redact/$runId', params: { runId } })
+          }
+        />
+      }
+    />
   )
 }
 
@@ -403,6 +454,7 @@ const signInRoute = createRoute({
 })
 
 function DesktopSignInRoute() {
+  useEffect(warmRouteChunks, [])
   return <SignInRouteView platform="desktop" />
 }
 
