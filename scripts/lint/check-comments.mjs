@@ -11,6 +11,7 @@ const ALLOWED = [
   /\b(?:eslint|oxlint)-(?:disable|enable)/u,
   /@ts-(?:expect-error|ignore|nocheck)/u,
   /prettier-ignore|@vitest-environment|@jsxImportSource|c8 ignore|istanbul ignore/u,
+  /^\/\*\s*[@#]__PURE__\s*\*\/$/u,
 ]
 
 const SKIPPED = [
