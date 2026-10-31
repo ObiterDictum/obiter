@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import type {
   RedactionReturnResponse,
   RedactionSaveToMatterResponse,
@@ -21,11 +26,17 @@ import type {
 const runKey = (runId: string) => ['redaction-run', runId] as const
 const runsKey = ['redaction-runs'] as const
 
-export function useRedactionRuns(options?: { enabled?: boolean }) {
-  return useQuery({
+export function redactionRunsQueryOptions() {
+  return queryOptions({
     queryKey: runsKey,
     queryFn: () => apiFetch<{ runs: RedactionRun[] }>('/api/redaction-runs'),
     staleTime: 30_000,
+  })
+}
+
+export function useRedactionRuns(options?: { enabled?: boolean }) {
+  return useQuery({
+    ...redactionRunsQueryOptions(),
     enabled: options?.enabled ?? true,
   })
 }
@@ -87,8 +98,8 @@ export function useCreateDocumentRedactionRun() {
   })
 }
 
-export function useRedactionRun(runId: string) {
-  return useQuery({
+export function redactionRunQueryOptions(runId: string) {
+  return queryOptions({
     queryKey: runKey(runId),
     queryFn: async () =>
       (await apiFetch<{ run: RedactionRun }>(`/api/redaction-runs/${runId}`))
@@ -99,13 +110,21 @@ export function useRedactionRun(runId: string) {
   })
 }
 
-export function useRedactionDocumentText(runId: string) {
-  return useQuery({
+export function useRedactionRun(runId: string) {
+  return useQuery(redactionRunQueryOptions(runId))
+}
+
+export function redactionDocumentTextQueryOptions(runId: string) {
+  return queryOptions({
     queryKey: ['redaction-run-document-text', runId],
     queryFn: () =>
       apiFetch<{ text: string }>(`/api/redaction-runs/${runId}/document-text`),
     staleTime: 30_000,
   })
+}
+
+export function useRedactionDocumentText(runId: string) {
+  return useQuery(redactionDocumentTextQueryOptions(runId))
 }
 
 export function useRedactionOutput(runId: string, enabled: boolean) {

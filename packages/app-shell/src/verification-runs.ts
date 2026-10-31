@@ -1,10 +1,13 @@
 import {
+  infiniteQueryOptions,
   queryOptions,
   useInfiniteQuery,
   useMutation,
   useQueries,
   useQuery,
   useQueryClient,
+  type InfiniteData,
+  type QueryClient,
 } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import type {
@@ -83,8 +86,8 @@ export function useLatestVerificationRuns(
   return states
 }
 
-export function useOrganisationVerificationRuns(enabled: boolean) {
-  const query = useInfiniteQuery({
+export function organisationVerificationRunsQueryOptions() {
+  return infiniteQueryOptions({
     queryKey: verificationRunsQueryKey,
     queryFn: ({ pageParam }: { pageParam: string | null }) =>
       apiFetch<VerificationRunListResponse>(
@@ -92,18 +95,39 @@ export function useOrganisationVerificationRuns(enabled: boolean) {
       ),
     initialPageParam: null,
     getNextPageParam: (last) => last.nextCursor,
-    enabled,
     staleTime: 15_000,
     refetchInterval: (query) =>
       runsAreLive(query.state.data?.pages.flatMap((page) => page.runs))
         ? 2500
         : false,
   })
+}
+
+export function useOrganisationVerificationRuns(enabled: boolean) {
+  const query = useInfiniteQuery({
+    ...organisationVerificationRunsQueryOptions(),
+    enabled,
+  })
   const runs = useMemo(
     () => query.data?.pages.flatMap((page) => page.runs) ?? [],
     [query.data],
   )
   return { ...query, runs }
+}
+
+export function organisationVerificationRunDocumentIds(
+  queryClient: QueryClient,
+): string[] {
+  const data = queryClient.getQueryData<
+    InfiniteData<VerificationRunListResponse>
+  >(verificationRunsQueryKey)
+  return [
+    ...new Set(
+      (data?.pages ?? [])
+        .flatMap((page) => page.runs)
+        .map((run) => run.documentId),
+    ),
+  ]
 }
 
 export function useVerificationFindings(runId: string | null) {
