@@ -899,9 +899,9 @@ API's configured `DATABASE_URL` for local provenance checks; those fields are
 not exposed outside development.
 
 The provider boundary, the hydration ledger, the shared Find Case Law request
-budget and the corpus-only decision are server internals and are recorded in
-`backend/docs`: the API and every case-law code path now live in the private
-[`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository.
+budget and the corpus-only decision are server internals: they live in the
+private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend)
+repository, which records them in `docs/architecture-decisions.md`.
 
 ### Document edit operations: property families without a second compatibility path (31 August 2026)
 
@@ -1390,7 +1390,8 @@ sign-out.
 Stored Acts, the withheld amended text, the provision contents hierarchy and
 the legislation index are server code and moved with the rest of the API to
 the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend)
-repository, where both decisions are recorded in `backend/docs`. What stays
+repository, where both decisions are recorded in
+`docs/architecture-decisions.md`. What stays
 public is the request and response shape the clients read
 (`packages/contracts`) and the legislation view in `packages/app-shell`.
 
@@ -1546,7 +1547,7 @@ The corpus reader seam (`DatabasePools.corpus`), the separately configured
 corpus writer, the withdrawal/indexing ordering and the legislation act-type
 constraint are API and database code. They moved with the API to the private
 [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository,
-which records the decision in `backend/docs`.
+which records them in `docs/architecture-decisions.md`.
 
 ### Document-model loading moves off the serving event loop (23 September 2026)
 
