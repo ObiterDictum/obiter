@@ -3,7 +3,13 @@ import { focusParagraph } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { closeMenu, menuItem, openFormatting, openMenu } from './editor-chrome'
+import {
+  closeMenu,
+  menuItem,
+  openFormatting,
+  openMenu,
+  runMenuCommand,
+} from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const STYLED_FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
@@ -92,10 +98,12 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
   await shot(page, '03-list-across-selection')
 
   await focusParagraph(page, 'Alpha item')
+  await runMenuCommand(page, 'Format', 'Restart numbering')
   await openMenu(page, 'Format')
-  const restart = menuItem(page, 'Restart numbering')
-  await restart.click()
-  await expect(restart).toHaveAttribute('aria-checked', 'true')
+  await expect(menuItem(page, 'Restart numbering')).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
   await closeMenu(page)
   await shot(page, '04-list-restart')
 

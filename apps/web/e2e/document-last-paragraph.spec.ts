@@ -7,12 +7,14 @@ import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
 
 const FIRST = 'E0 sole paragraph of the synthetic fixture.'
 const SECOND = 'E0 second paragraph after insertion.'
+const FILENAME = 'e0-last-paragraph.docx'
 
 async function openSyntheticDocument(
   page: Page,
   email: string,
   password: string,
   matterName: string,
+  mode: 'upload' | 'reopen',
 ) {
   await signIn(page, email, password)
 
@@ -41,17 +43,18 @@ async function openSyntheticDocument(
   await page.getByRole('link', { name: matterName }).first().click()
   await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
 
-  const filename = 'e0-last-paragraph.docx'
-  const bytes = await createSyntheticDocx([FIRST])
-  const fileInput = page.locator('input[aria-label="Upload document"]')
-  await expect(fileInput).toBeAttached({ timeout: 20_000 })
-  await fileInput.setInputFiles({
-    name: filename,
-    mimeType:
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    buffer: Buffer.from(bytes),
-  })
-  const documentRow = page.getByText(filename).first()
+  const documentRow = page.getByRole('link', { name: FILENAME }).first()
+  if (mode === 'upload') {
+    const bytes = await createSyntheticDocx([FIRST])
+    const fileInput = page.locator('input[aria-label="Upload document"]')
+    await expect(fileInput).toBeAttached({ timeout: 20_000 })
+    await fileInput.setInputFiles({
+      name: FILENAME,
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer: Buffer.from(bytes),
+    })
+  }
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
   await documentRow.click()
 
@@ -141,7 +144,7 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   const faults = watchForFaults(page)
   const { email, password } = await createAccount(request, 'E0')
   const matter = `E0 ${String(Date.now())}`
-  await openSyntheticDocument(page, email, password, matter)
+  await openSyntheticDocument(page, email, password, matter, 'upload')
 
   await expect(page.locator('[data-paragraph-id]').first()).toContainText(FIRST)
   const unavailable = await deleteButton(page)
@@ -196,7 +199,7 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   const reloaded = await fresh.newPage()
   const freshFaults = watchForFaults(reloaded)
   try {
-    await openSyntheticDocument(reloaded, email, password, matter)
+    await openSyntheticDocument(reloaded, email, password, matter, 'reopen')
     expect(await settledParagraphCount(reloaded)).toBe(1)
     await expect(reloaded.locator('[data-paragraph-id]').first()).toContainText(
       FIRST,

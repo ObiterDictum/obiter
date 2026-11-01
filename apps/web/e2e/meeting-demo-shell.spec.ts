@@ -1,4 +1,11 @@
-import { test, expect, type Page } from '@playwright/test'
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Page,
+} from '@playwright/test'
+import { createAccount } from './document-journey'
+import { signIn } from './e13-support'
 import { documentWidths, mockSession, workspaceNav } from './shell-harness'
 
 const RUN_ID = 'vrun_6f2ffddc-4c20-4df5-b981-44ea5e1bd4dc'
@@ -163,13 +170,29 @@ async function mockVerifyData(page: Page) {
   )
 }
 
-test('Verify is live, names its runs, and guides an empty list to a document', async ({
-  page,
-}) => {
+async function signInWithMockedVerifyData(
+  page: Page,
+  request: APIRequestContext,
+) {
+  const { email, password } = await createAccount(request, 'Demo')
   await mockSession(page)
   await mockVerifyData(page)
+  await signIn(page, email, password)
+}
 
-  await page.goto('/verify')
+async function openVerify(page: Page) {
+  await workspaceNav(page)
+    .getByRole('link', { name: /^Verify/ })
+    .click()
+  await expect(page).toHaveURL(/\/verify$/)
+}
+
+test('Verify is live, names its runs, and guides an empty list to a document', async ({
+  page,
+  request,
+}) => {
+  await signInWithMockedVerifyData(page, request)
+  await openVerify(page)
   await expect(workspaceNav(page)).toBeVisible()
 
   const verifyMode = workspaceNav(page).getByRole('link', {
@@ -251,11 +274,11 @@ test('both search fields show a keyboard focus ring', async ({ page }) => {
 
 test('the verify list and its controls fit a 390px viewport', async ({
   page,
+  request,
 }) => {
-  await mockSession(page)
-  await mockVerifyData(page)
+  await signInWithMockedVerifyData(page, request)
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/verify')
+  await openVerify(page)
   await expect(workspaceNav(page)).toBeVisible()
 
   const openDocument = page.getByRole('link', { name: 'Open document' })
