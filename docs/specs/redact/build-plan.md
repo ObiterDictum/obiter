@@ -2,7 +2,7 @@
 
 > ## Implementation status (verified against the codebase, July 2026)
 >
-> **Delivered (verified 2026-07-27).** This banner previously said the Rampart pipeline was not implemented. That is out of date. Model-based detection ships: `packages/rampart-inference/` vendors an ONNX NER classifier against Obiter's pinned `qarlus/rampart` mirror, and `services/api/src/redaction-detection.ts` runs it as `model+supplement`, falling back to `heuristics+supplement` when the model is unavailable.
+> **Delivered (verified 2026-07-27).** This banner previously said the Rampart pipeline was not implemented. That is out of date. Model-based detection ships: `packages/rampart-inference/` vendors an ONNX NER classifier against Obiter's pinned `qarlus/rampart` mirror, and `backend/services/api/src/redaction-detection.ts` runs it as `model+supplement`, falling back to `heuristics+supplement` when the model is unavailable.
 >
 > Two deviations from the original design: the Effect TS pilot never happened, so the module is plain TypeScript (see `docs/architecture.md`), and detection is not environment-configurable as F30 required. Outstanding work is tracked in [Redact PRD 4](../../prds/redact-4-hardening.md).
 >
@@ -500,15 +500,15 @@ packages/redaction-policy/
     index.test.ts       - test fixtures with real legal text
 ```
 
-### `services/api/src/routes/redact.ts`
+### `backend/services/api/src/routes/redact.ts`
 
 API route handlers. Follows the existing pattern in `routes/matters.ts` and `routes/documents.ts`: `createRedactRoutes(pool)` returns a Hono instance, mounted in `app.ts`.
 
-### `services/api/src/redaction-database.ts`
+### `backend/services/api/src/redaction-database.ts`
 
 Database functions for redaction runs. Follows the pattern of `database.ts`: typed query helpers, not inline SQL in routes.
 
-### `services/api/src/redaction-detection.ts`
+### `backend/services/api/src/redaction-detection.ts`
 
 Rampart integration module. Loads the `@nationaldesignstudio/rampart` guard, calls `guard.protect(text)`, maps Rampart spans to Obiter categories, runs UK supplement, merges. Handles chunking for long documents.
 
@@ -527,8 +527,8 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 
 **Goal:** Rampart running in the API process, schema, contracts, API skeleton, UK supplement.
 
-- [ ] Add `@nationaldesignstudio/rampart` and `@huggingface/transformers` to `services/api/package.json`
-- [ ] Create `services/api/src/redaction-detection.ts`:
+- [ ] Add `@nationaldesignstudio/rampart` and `@huggingface/transformers` to `backend/services/api/package.json`
+- [ ] Create `backend/services/api/src/redaction-detection.ts`:
   - Load Rampart guard via `createGuard({ device: 'cpu' })`
   - Implement `detectPII(text)` that calls `guard.protect(text)`, maps Rampart labels to Obiter categories
   - Handle 512-token chunking for long documents (split, detect per chunk, adjust offsets, merge)
@@ -543,8 +543,8 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 - [ ] Implement `merge.ts`: merge Rampart spans + UK supplement spans, deduplicate overlaps (Rampart wins on confidence)
 - [ ] Implement `chunk.ts`: split text into 400-token chunks, run detection per chunk, adjust offsets to document level, handle spans at chunk boundaries
 - [ ] Write rampart-map, supplement, merge, and chunk tests with realistic legal text fixtures
-- [ ] Scaffold `services/api/src/routes/redact.ts` with `createRedactRoutes(pool)`
-- [ ] Create `services/api/src/redaction-database.ts` with query helpers
+- [ ] Scaffold `backend/services/api/src/routes/redact.ts` with `createRedactRoutes(pool)`
+- [ ] Create `backend/services/api/src/redaction-database.ts` with query helpers
 - [ ] Mount redact routes in `app.ts`
 - [ ] Implement `POST /api/documents/:documentId/redaction-runs` (create run, call detection, merge spans, store, return run)
 
@@ -681,8 +681,8 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 | `text_object_key` on document versions       | Done (migration 0002)                                                                                                                                                                                                                                                                                                                                                            |
 | Auth middleware, org-scoping, request IDs    | Done (`app.ts`)                                                                                                                                                                                                                                                                                                                                                                  |
 | Object storage for text/output               | Not wired (verified July 2026): no storage client exists in the API and document upload is metadata-only — no file bytes reach the server. M1–M2 run on a `StorageService` abstraction with a local-filesystem adapter (introduced in Redact PRD 1 for fallback-text persistence); M3 adds multipart content upload and the object-storage adapter (Redact PRD 3, FR1.11–FR1.12) |
-| `@nationaldesignstudio/rampart` npm package  | Not yet installed. Add to `services/api/package.json`                                                                                                                                                                                                                                                                                                                            |
-| `@huggingface/transformers` npm package      | Not yet installed. Add to `services/api/package.json` (peer dep of Rampart)                                                                                                                                                                                                                                                                                                      |
+| `@nationaldesignstudio/rampart` npm package  | Not yet installed. Add to `backend/services/api/package.json`                                                                                                                                                                                                                                                                                                                    |
+| `@huggingface/transformers` npm package      | Not yet installed. Add to `backend/services/api/package.json` (peer dep of Rampart)                                                                                                                                                                                                                                                                                              |
 
 **Risk (confirmed):** Object storage is not wired — document upload creates the DB record only and no file bytes are stored anywhere (verified July 2026). M1 uses the `StorageService` local-filesystem adapter as interim, persisting fallback text at the `text_object_key` path so M2's finalize can re-read it; the object-storage adapter and multipart upload land in M3.
 

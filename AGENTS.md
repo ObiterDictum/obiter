@@ -2,6 +2,8 @@
 
 Start with [README.md](README.md) and [docs/roadmap.md](docs/roadmap.md). Load anything else only when the task needs it.
 
+The server side — the API, legal ingestion, search, Verify and the database migrations — lives in the private [`backend`](https://github.com/ObiterDictum/backend) repo, which includes this one as an `obiter/` submodule. Nothing under the backend's paths belongs here; [docs/backend-repo-split.md](docs/backend-repo-split.md) records the boundary and a CI guard enforces it.
+
 Operating model and sync lives in the separate [`obiter-ops`](https://github.com/ObiterDictum/obiter-ops) repo. Repeatable speed and quality measurement lives in the private [`bench`](https://github.com/ObiterDictum/bench) repo; this repo keeps only the bundle and desktop size budgets that gate CI.
 
 ## On-demand docs
@@ -9,22 +11,23 @@ Operating model and sync lives in the separate [`obiter-ops`](https://github.com
 - Rules: [RULES.md](RULES.md) — always follow, load once per task.
 - PR summaries: [PR.md](PR.md) — only when writing one.
 - Verification: [TESTING.md](TESTING.md) — only when deciding what to test.
+- Backend repository: [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) — API, ingestion, search, Verify and migrations; load its README and `AGENTS.md` before server work.
 - Foundation: [docs/phase-0.md](docs/phase-0.md) — only for shell, auth, matter, storage work.
 - System map: [docs/architecture.html](docs/architecture.html) — what runs where.
 - Architecture rationale: [docs/architecture.md](docs/architecture.md) — only for structural decisions.
 - Security: [docs/data-and-compliance.md](docs/data-and-compliance.md) — only when touching matter data, storage, auth, or infra.
-- Specs: [docs/specs/README.md](docs/specs/README.md) — only for the module being built.
+- Specs: [docs/specs/README.md](docs/specs/README.md) — only for the module being built. The Search, Verify, Atlas and Research specs live in `backend/docs/specs/`.
 
 ## Build order
 
 Follow the roadmap. Do not jump ahead.
 
 1. Phase 0 foundation
-2. Search
+2. Search (backend work from stage 3 of the split)
 3. Redact
-4. Verify
-5. Verify Advanced
-6. Research
+4. Verify (backend work)
+5. Verify Advanced (backend work)
+6. Research (backend work)
 
 ## Synthetic Redaction Corpus
 

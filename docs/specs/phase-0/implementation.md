@@ -1,5 +1,7 @@
 # Phase 0 Implementation
 
+> Historical plan. The `services/api`, `packages/database`, `legal-schema`, `legal-source-provider`, `search-client` and `verification-core` paths below, and the `dev:api` and `db:migrate` commands, now live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository; see [backend-repo-split.md](../../backend-repo-split.md).
+
 ## Scope
 
 - mirrored web and Electron product shells

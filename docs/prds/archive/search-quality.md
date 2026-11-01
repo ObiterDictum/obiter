@@ -12,7 +12,7 @@ Search is Obiter's first trust substrate. Before [Verify](verify.md), [Research]
 
 The current implementation is a useful judgment-search foundation. It supports stored Meilisearch retrieval, PostgreSQL fallback, bounded snippets, Find Case Law live fallback and hydration, court/date filters, result keyboard flows, and case detail pages. It does not yet provide a full legal retrieval product, legislation search, stable evidence ids, measured ranking quality, corpus coverage reporting, or a UI that clearly distinguishes stored, live, ambiguous, and unavailable source states.
 
-Detailed implementation guidance lives in [docs/specs/search/](../specs/search/). This PRD defines the product target and rollout gates.
+Detailed implementation guidance lives in the private `ObiterDictum/backend` repository under `docs/specs/search/`. This PRD defines the product target and rollout gates.
 
 ## Current State
 

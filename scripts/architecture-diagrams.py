@@ -118,7 +118,9 @@ class Diagram:
 # ---------------------------------------------------------------- build-time
 d1 = Diagram(920, 430, "Build-time dependency graph",
              "Workspace packages arranged by dependency depth, with arrows "
-             "pointing from a dependent to what it depends on.")
+             "pointing from a dependent to what it depends on. Nodes whose "
+             "sub-label reads backend live in the private ObiterDictum/backend "
+             "repository and are consumed there.")
 d1.band(8, 8, 904, 62, "CONSUMERS", "var(--info)")
 d1.band(8, 108, 904, 62, "FEATURE UI", "var(--warning)")
 d1.band(8, 208, 904, 118, "DOMAIN", "var(--warning)")
@@ -126,8 +128,9 @@ d1.band(8, 348, 904, 62, "PRIMITIVES", "var(--subtle)")
 
 d1.node("web", 40, 26, "@obiter/web", accent="var(--info)")
 d1.node("desktop", 200, 26, "@obiter/desktop", accent="var(--info)")
-d1.node("api", 420, 26, "@obiter/api", accent="var(--brand)")
-d1.node("ingestor", 610, 26, "@obiter/legal-ingestor", accent="var(--brand)")
+d1.node("api", 420, 26, "@obiter/api", "backend", accent="var(--brand)")
+d1.node("ingestor", 610, 26, "@obiter/legal-ingestor", "backend",
+        accent="var(--brand)")
 
 d1.node("shell", 60, 126, "@obiter/app-shell", accent="var(--warning)")
 d1.node("redactui", 250, 126, "@obiter/redact-ui", accent="var(--warning)")
@@ -135,14 +138,18 @@ d1.node("renderer", 470, 126, "@obiter/redaction-renderer", accent="var(--brand)
 
 d1.node("ooxml", 60, 226, "@obiter/ooxml", accent="var(--warning)")
 d1.node("policy", 330, 226, "@obiter/redaction-policy", accent="var(--warning)")
-d1.node("searchc", 560, 226, "@obiter/search-client", accent="var(--warning)")
+d1.node("searchc", 560, 226, "@obiter/search-client", "backend",
+        accent="var(--warning)")
 d1.node("rampart", 728, 226, "@obiter/rampart-inference", accent="var(--warning)")
-d1.node("verifycore", 330, 284, "@obiter/verification-core", accent="var(--warning)")
+d1.node("verifycore", 330, 284, "@obiter/verification-core", "backend",
+        accent="var(--warning)")
 
 d1.node("contracts", 60, 366, "@obiter/contracts", accent="var(--subtle)")
 d1.node("ui", 250, 366, "@obiter/ui", accent="var(--subtle)")
-d1.node("legalschema", 420, 366, "@obiter/legal-schema", accent="var(--subtle)")
-d1.node("database", 640, 366, "@obiter/database", accent="var(--subtle)")
+d1.node("legalschema", 420, 366, "@obiter/legal-schema", "backend",
+        accent="var(--subtle)")
+d1.node("database", 640, 366, "@obiter/database", "backend",
+        accent="var(--subtle)")
 
 for a, b in [("web", "shell"), ("desktop", "shell"), ("web", "redactui"),
              ("desktop", "redactui")]:
@@ -176,8 +183,10 @@ d2 = Diagram(920, 400, "Runtime topology",
              "dependencies. Every store is self-hosted.")
 d2.node("browser", 40, 40, "apps/web", "browser", accent="var(--info)")
 d2.node("electron", 40, 130, "apps/desktop", "Electron", accent="var(--info)")
-d2.node("api", 330, 84, "services/api", "Hono", accent="var(--brand)", h=46)
-d2.node("ingestor", 330, 300, "services/legal-ingestor", accent="var(--brand)")
+d2.node("api", 330, 84, "services/api", "Hono · backend",
+        accent="var(--brand)", h=46)
+d2.node("ingestor", 330, 300, "services/legal-ingestor", "backend",
+        accent="var(--brand)")
 d2.node("renderer", 40, 220, "services/redaction-renderer", "private HTTP", accent="var(--brand)")
 d2.node("chromium", 40, 310, "Chromium", "headless child", accent="var(--warning)")
 
