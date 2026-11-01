@@ -2,46 +2,36 @@
 # Verify that running dev servers provably serve this checkout.
 #
 # Two verification rounds measured code that did not contain the fix: a web
-# dev server kept serving an older checkout, and an API/web pair ran from
-# different checkouts and looked like a product bug. Screenshots of those
-# stale builds were persuasive false claims. This script resolves where each
-# server loads its code from and compares it against the checkout it is run
-# from, failing closed when it cannot.
+# dev server kept serving an older checkout, and a stale API/web pair looked
+# like a product bug. Screenshots of those stale builds were persuasive false
+# claims. This script resolves where the web dev server loads its code from and
+# compares it against the checkout it is run from, failing closed when it
+# cannot.
 #
-# Usage: scripts/verify-provenance.sh [web-origin] [api-origin] [--expect marker]
-#   defaults: http://localhost:3000 http://localhost:8787
+# Usage: scripts/verify-provenance.sh [web-origin] [--expect marker]
+#   default: http://localhost:3000
 #
-# Exit 0 only when the web dev server provably serves this checkout and, when
-# requested, the served module contains the expected marker, and the requested
-# API health check succeeds. Exit 1 when the web or API provenance check fails.
-# A reachable stack health response without development provenance is the one
-# non-failing API exception; production and older servers do not expose it.
+# The API is not probed here: it runs from the private `backend` repository,
+# which has its own copy of the API probe. Exit 0 only when the web dev server
+# provably serves this checkout and, when requested, the served module contains
+# the expected marker. Exit 1 when the web provenance check fails.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/verify-provenance.sh [web-origin] [api-origin] [--expect marker]
+Usage: scripts/verify-provenance.sh [web-origin] [--expect marker]
 
 Defaults:
   web-origin  http://localhost:3000
-  api-origin  http://localhost:8787
 
 --expect marker  require the literal marker in the served web module to check
                  revision freshness as well as checkout path
 
-API check:       the default API origin is always probed. Unreachable APIs,
-                 HTTP errors, and non-stack health responses fail. A reachable
-                 stack health response without development provenance is the
-                 only non-failing absence case. When /api/health reports
-                 commitSha, checkoutRoot or envFile, each reported value is
-                 compared with this checkout and a mismatch fails. A
-                 development API that resolved no .env reports envFile: null,
-                 which fails: unattributable configuration is not a pass.
+The API probe lives in the private `backend` repository, where the API runs.
 EOF
 }
 
 web_origin='http://localhost:3000'
-api_origin='http://localhost:8787'
 expected_marker=''
 expected_marker_given='no'
 positionals=()
@@ -79,13 +69,12 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "${#positionals[@]}" -gt 2 ]; then
-  echo 'error: expected at most web-origin and api-origin' >&2
+if [ "${#positionals[@]}" -gt 1 ]; then
+  echo 'error: expected at most one web-origin' >&2
   usage >&2
   exit 2
 fi
 [ "${#positionals[@]}" -ge 1 ] && web_origin=${positionals[0]}
-[ "${#positionals[@]}" -ge 2 ] && api_origin=${positionals[1]}
 
 cd "$(dirname "$0")/.."
 
@@ -181,71 +170,6 @@ EOF
   fi
 fi
 
-# ---- api: probe and report --------------------------------------------------
-api_reachable='no'
-api_health_pass='FAIL'
-api_note=''
-api_sha=''
-api_root=''
-api_env_file=''
-api_env_file_null='no'
-api_sha_matches='not determinable'
-api_root_matches='not determinable'
-api_env_file_matches='not determinable'
-api_response=''
-api_http_status=''
-if api_response=$(curl -sS -m 5 -w $'\n%{http_code}' "$api_origin/api/health" 2>/dev/null); then
-  api_reachable='yes'
-  api_http_status=${api_response##*$'\n'}
-  api_body=${api_response%$'\n'*}
-  if [[ "$api_http_status" != 2?? ]]; then
-    api_note="HTTP error from $api_origin/api/health (status $api_http_status)"
-  elif printf '%s\n' "$api_body" | grep -q '"service"[[:space:]]*:[[:space:]]*"obiter-api"'; then
-    api_health_pass='PASS'
-    api_sha_pattern='"commitSha"[[:space:]]*:[[:space:]]*"([^\"]+)"'
-    api_root_pattern='"checkoutRoot"[[:space:]]*:[[:space:]]*"([^\"]+)"'
-    api_env_file_pattern='"envFile"[[:space:]]*:[[:space:]]*"([^\"]+)"'
-    api_env_file_null_pattern='"envFile"[[:space:]]*:[[:space:]]*null'
-    if [[ $api_body =~ $api_sha_pattern ]]; then
-      api_sha=${BASH_REMATCH[1]}
-      api_sha_matches='yes'
-      [ "$api_sha" = "$current_sha" ] || api_sha_matches='no'
-    fi
-    if [[ $api_body =~ $api_root_pattern ]]; then
-      api_root=${BASH_REMATCH[1]}
-      api_root_matches='yes'
-      [ "$api_root" = "$current_root" ] || api_root_matches='no'
-    fi
-    if [[ $api_body =~ $api_env_file_pattern ]]; then
-      api_env_file=${BASH_REMATCH[1]}
-      api_env_file_matches='yes'
-      [ "$api_env_file" = "$current_root/.env" ] || api_env_file_matches='no'
-    fi
-    if [[ $api_body =~ $api_env_file_null_pattern ]]; then
-      api_env_file_null='yes'
-      api_env_file_matches='no'
-    fi
-
-    if [ "$api_env_file_null" = 'yes' ]; then
-      api_health_pass='FAIL'
-      api_note='development API resolved no .env (envFile: null); configuration cannot be attributed to a lane'
-    elif [ "$api_sha_matches" = 'no' ] || [ "$api_root_matches" = 'no' ] \
-      || [ "$api_env_file_matches" = 'no' ]; then
-      api_health_pass='FAIL'
-      api_note='provenance mismatch in /api/health'
-    elif [ "$api_sha_matches" = 'yes' ] || [ "$api_root_matches" = 'yes' ] \
-      || [ "$api_env_file_matches" = 'yes' ]; then
-      api_note='reachable, development provenance exposed by /api/health'
-    else
-      api_note='reachable, but development provenance fields are absent (production or old server); API provenance not determinable'
-    fi
-  else
-    api_note="reachable, but response does not look like this stack's /api/health"
-  fi
-else
-  api_note="unreachable at $api_origin/api/health — is the API running?"
-fi
-
 # ---- report -----------------------------------------------------------------
 web_path_pass='FAIL'
 [ "$web_matches" = 'yes' ] && web_path_pass='PASS'
@@ -285,29 +209,6 @@ if [ -n "$web_note" ]; then
 fi
 
 echo
-echo "api  $api_origin"
-echo "  reachable       : $api_reachable"
-if [ -n "$api_http_status" ]; then
-  echo "  HTTP status     : $api_http_status"
-fi
-if [ -n "$api_sha" ]; then
-  echo "  commit sha      : $api_sha"
-  echo "  sha matches     : $api_sha_matches"
-fi
-if [ -n "$api_root" ]; then
-  echo "  checkout root   : $api_root"
-  echo "  root matches    : $api_root_matches"
-fi
-if [ -n "$api_env_file" ]; then
-  echo "  env file        : $api_env_file"
-  echo "  env file matches: $api_env_file_matches"
-fi
-if [ "$api_env_file_null" = 'yes' ]; then
-  echo '  env file        : null (no .env resolved)'
-  echo '  env file matches: no'
-fi
-echo "  provenance      : $api_note [$api_health_pass]"
-echo
 echo 'PR evidence block (paste into the PR body) ======'
 echo "checkout HEAD: $current_sha ($dirty)"
 if [ -n "$web_root" ]; then
@@ -318,23 +219,7 @@ if [ "$expected_marker_given" = 'yes' ]; then
 else
   echo 'revision freshness: NOT CHECKED (no expected-marker given)'
 fi
-if [ -n "$api_sha" ]; then
-  echo "api checkout HEAD: $api_sha"
-fi
-if [ -n "$api_root" ]; then
-  echo "api served: $api_root"
-fi
-if [ -n "$api_env_file" ]; then
-  echo "api env file: $api_env_file"
-fi
-if [ "$api_env_file_null" = 'yes' ]; then
-  echo 'api env file: null [FAIL]'
-fi
-if [ -z "$api_sha" ] && [ -z "$api_root" ] && [ -z "$api_env_file" ] \
-  && [ "$api_env_file_null" != 'yes' ]; then
-  echo "api provenance: not determinable ($api_note)"
-fi
 echo "[screenshot]  (web provenance: $web_pass)"
 echo '=================================================='
 
-[ "$web_pass" = 'PASS' ] && [ "$api_health_pass" = 'PASS' ]
+[ "$web_pass" = 'PASS' ]

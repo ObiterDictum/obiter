@@ -47,11 +47,6 @@ export default defineConfig({
   ],
   overrides: [
     {
-      files: ['scripts/load/*.mjs'],
-      env: { node: true, builtin: true, es2024: true },
-      rules: { 'no-undef': 'error' },
-    },
-    {
       files: [
         '**/*.test.ts',
         '**/*.test.tsx',
