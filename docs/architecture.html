@@ -2316,15 +2316,15 @@
                 </dd>
                 <dt>Domain</dt>
                 <dd>
-                  redaction-detection · redaction-redetect ·
-                  redaction-run-creation · redaction-database ·
-                  redaction-audit-report · redaction-audit-shareable ·
-                  redaction-renderer · redaction-hard-output ·
-                  redaction-secure-pdf · document-extraction · document-layout ·
-                  comments-db · comments-list · comments-create ·
-                  comments-replies · comments-resolution ·
-                  imported-comment-fingerprint · pdf-glyph-layout ·
-                  redaction-pdf-output · storage · authz
+                  redaction-detection · redaction-detection-windows ·
+                  redaction-redetect · redaction-run-creation ·
+                  redaction-database · redaction-audit-report ·
+                  redaction-audit-shareable · redaction-renderer ·
+                  redaction-hard-output · redaction-secure-pdf ·
+                  document-extraction · document-layout · comments-db ·
+                  comments-list · comments-create · comments-replies ·
+                  comments-resolution · imported-comment-fingerprint ·
+                  pdf-glyph-layout · redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
@@ -2736,7 +2736,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>39 migrations, 0001 to 0040, 0008 withdrawn</dd>
+                <dd>40 migrations, 0001 to 0041, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3498,14 +3498,21 @@
                 <tr>
                   <td class="id">GET · POST /api/redaction-runs</td>
                   <td class="id">redact-run-creation.ts</td>
-                  <td>List runs, create a standalone run</td>
+                  <td>
+                    List runs; create a standalone detecting run (202,
+                    previously 201). Upload type, size and OOXML package limits
+                    remain synchronous.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
                     POST /api/documents/:documentId/redaction-runs
                   </td>
                   <td class="id">redact-run-creation.ts</td>
-                  <td>Create a run against a matter document</td>
+                  <td>
+                    Queue a run against an immutable matter document version
+                    (202, previously 201).
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -3517,7 +3524,27 @@
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId</td>
                   <td class="id">redact-review.ts</td>
-                  <td>Run with spans, decisions and summary</td>
+                  <td>
+                    Run with status, detectionProgress (completed/total
+                    sections), spans, decisions and summary. Failed jobs expose
+                    a safe summary.failureReason.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/redaction-runs/:runId/retry</td>
+                  <td class="id">redact-run-creation.ts</td>
+                  <td>
+                    Authorised edit access requeues a failed job from its
+                    retained original source (202).
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/redaction-runs/:runId/spans</td>
+                  <td class="id">redact-review.ts</td>
+                  <td>
+                    Detected spans; spans, text and layout return 409
+                    redaction_run_not_ready while detecting.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">DELETE /api/redaction-runs/:runId</td>
@@ -4721,11 +4748,17 @@
                     <code>source_file_object_key</code>,
                     <code>source_layout_object_key</code> and
                     <code>source_mime_type</code>, each constrained to the
-                    derived key shape and to <code>matter_id is null</code> —
-                    matter-attached runs read the same bytes through
-                    <code>document_versions</code> instead.
+                    derived key shape. Original upload file keys remain
+                    standalone-only; matter-attached runs read original bytes
+                    through <code>document_versions</code>. Migration 0040
+                    permits owned extraction text on linked runs; 0041 likewise
+                    permits owned layout and adds detection input key/type,
+                    section progress, attempt count, lease token/expiry and the
+                    partial claim index.
                   </td>
-                  <td class="id">0005, 0006, 0007, 0010, 0011, 0012</td>
+                  <td class="id">
+                    0005, 0006, 0007, 0010, 0011, 0012, 0040, 0041
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">verification_runs · verification_findings</td>
@@ -5662,6 +5695,28 @@
             <a href="specs/redact/implementation.md">DOCX output ownership</a>.
           </p>
 
+          <p>
+            Migration 0041 adds detection input, completed/total progress,
+            attempts, lease token and lease expiry columns plus a partial claim
+            index; the existing detecting/failed statuses are reused. Bun and
+            Node runtimes start one in-process detection worker that keeps at
+            most two claims active, so a second document is inferred between the
+            windows of a long one. Postgres UPDATE with FOR UPDATE SKIP LOCKED
+            claims each run exclusively across instances. Extraction and
+            detection run outside the request; inference still yields between
+            overlapping windows. A 90-second lease is renewed every 15 seconds.
+            Three abandoned attempts are allowed, then the next claim fails the
+            job. Explicit retry resets that budget. Shutdown stops claims and
+            releases at the next window boundary, with a 120-second API drain
+            deadline. Publication and failure cleanup lock the run and fence by
+            organisation and lease token. Derived text and layout are deleted on
+            failure; original inputs are retained for explicit retry under the
+            existing soft-deletion/restore lifecycle. Matter originals are never
+            deleted by a job. Hosted processing stays inside the API/storage
+            boundary. Shared web/desktop Query hooks poll detecting runs and
+            lists, then open review or offer failure retry.
+          </p>
+
           <figure class="diagram">
             <div class="frame">
               <svg
@@ -5984,7 +6039,10 @@
                 applies the bidi algorithm only on the item path. Vertical
                 writing and non-perpendicular skewed glyph axes are rejected
                 until their geometry is supported. Every generated layout passes
-                the shared schema before it can be returned or stored.</span
+                the shared schema before it can be returned or stored.
+                Extraction refuses text above 2,000,000 characters — roughly
+                1,000 pages at 2,000 characters per page — with a message naming
+                the actual length, the bound and the remedy.</span
               >
             </li>
             <li>
@@ -5997,7 +6055,17 @@
               <span
                 ><b>Model detection.</b> The Rampart classifier runs over masked
                 text; offsets project back to the original. Long documents chunk
-                at 400 tokens with overlap.</span
+                at 400 tokens with overlap. A document longer than 200,000
+                characters is split into 200,000-character windows with 4,000
+                characters of overlap, cut at a paragraph break or whitespace
+                near the limit. Each window runs the full pipeline; spans map
+                back to document offsets and merge. Same-category detections
+                from different windows merge to the union of their character
+                ranges, so a name one window sees truncated and its neighbour
+                sees in part keeps every detected character. Category, source,
+                confidence and id come from the preferred detection: one that
+                does not touch its window's cut edge, then the longer span, then
+                the higher confidence, then the earlier window.</span
               >
             </li>
             <li>
@@ -7309,6 +7377,21 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    Redact detection uses Postgres leases, not the roadmap's
+                    Redis/BullMQ queue.
+                  </td>
+                  <td>
+                    One in-process worker per API instance; atomic claims,
+                    heartbeats and fencing recover interrupted jobs without a
+                    second queue service. Hosted originals remain available
+                    after failure for explicit retry; derived text/layout are
+                    removed. Run deletion remains soft deletion, preserving
+                    existing restore semantics.
+                  </td>
+                  <td class="id">specs/redact/api.md; migration 0041</td>
+                </tr>
                 <tr>
                   <td>
                     Merge overlap is a union, not "Rampart wins" (archived F21)

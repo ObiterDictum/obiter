@@ -162,6 +162,19 @@ export const spanSourceSchema = z.enum([
 ])
 export type SpanSource = z.infer<typeof spanSourceSchema>
 
+export const redactionDetectionProgressSchema = z
+  .object({
+    completed: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .refine(
+    (progress) => progress.completed <= progress.total,
+    'Completed sections cannot exceed the total.',
+  )
+export type RedactionDetectionProgress = z.infer<
+  typeof redactionDetectionProgressSchema
+>
+
 export const redactionRunStatusSchema = z.enum([
   'pending',
   'detecting',

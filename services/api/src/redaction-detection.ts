@@ -20,6 +20,11 @@ import {
 import type { DetectionMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { defaultRampartCacheDir } from './rampart-cache'
+import {
+  mergeWindowDetections,
+  planDetectionWindows,
+  type WindowDetection,
+} from './redaction-detection-windows'
 
 const PACKAGE_VERSION = '0.1.3-vendored'
 
@@ -72,8 +77,13 @@ function provenance(model: string, revision: string, degraded: boolean) {
   }
 }
 
+export type DetectionProgressCallback = (
+  completed: number,
+  total: number,
+) => Promise<void>
+
 export interface RedactionDetector {
-  (text: string): Promise<DetectionResult>
+  (text: string, progress?: DetectionProgressCallback): Promise<DetectionResult>
   warm: () => Promise<void>
 }
 
@@ -109,7 +119,7 @@ export function createRedactionDetector(
   const log =
     dependencies.log ?? ((message, details) => console.info(message, details))
 
-  const detectSpans = async function detectSpans(
+  const detectWindow = async function detectWindow(
     text: string,
   ): Promise<DetectionResult> {
     const supplement = supplementSpans(text)
@@ -176,6 +186,42 @@ export function createRedactionDetector(
     }
   }
 
+  const detectSpans = async function detectSpans(
+    text: string,
+    progress?: DetectionProgressCallback,
+  ): Promise<DetectionResult> {
+    const windows = planDetectionWindows(text)
+    if (progress) await progress(0, windows.length)
+    if (windows.length === 1) {
+      const result = await detectWindow(text)
+      if (progress) await progress(1, 1)
+      return result
+    }
+
+    const started = performance.now()
+    const detections: WindowDetection[] = []
+    const results: DetectionResult[] = []
+    for (const window of windows) {
+      const result = await detectWindow(text.slice(window.start, window.end))
+      results.push(result)
+      detections.push({ window, spans: result.spans })
+      if (progress) await progress(results.length, windows.length)
+    }
+    const degraded = results.some((result) => result.degraded)
+    log('redaction_detection_completed', {
+      textLength: text.length,
+      windows: windows.length,
+      inferenceMs: Math.round(performance.now() - started),
+      model: configuration.model,
+      revision: configuration.revision,
+      degraded,
+    })
+    return {
+      spans: mergeWindowDetections(detections, text),
+      ...provenance(configuration.model, configuration.revision, degraded),
+    }
+  }
+
   const warm = async (): Promise<void> => {
     const pending = (classifier ??= load())
     try {
@@ -205,8 +251,11 @@ function requireConfiguredDetector(): RedactionDetector {
   return configuredDetector
 }
 
-export function detectRedactionSpans(text: string) {
-  return requireConfiguredDetector()(text)
+export function detectRedactionSpans(
+  text: string,
+  progress?: DetectionProgressCallback,
+) {
+  return requireConfiguredDetector()(text, progress)
 }
 
 export function warmRedactionDetector() {

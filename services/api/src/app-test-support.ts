@@ -19,6 +19,7 @@ export const testEnv: ApiEnv = createTestApiEnv()
 export function createPool(query: QueryMock): Pool {
   return {
     query,
+    connect: async () => ({ query, release: () => undefined }),
   } as unknown as Pool
 }
 

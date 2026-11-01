@@ -341,13 +341,39 @@ async function checkInference(ctx) {
     signal: AbortSignal.timeout(60_000),
   })
   const body = await response.json().catch(() => null)
-  const spans = body?.run?.spans?.length ?? 0
+  const runId = typeof body?.run?.id === 'string' ? body.run.id : null
+  const acceptedSpans = body?.run?.spans?.length ?? 'none'
   recorder.record(
-    'native ONNX detection runs and reports model+supplement',
-    response.status === 201 &&
-      body?.run?.detectionMode === 'model+supplement' &&
+    'redaction creation accepts a leased job with detecting status and no spans',
+    response.status === 202 &&
+      body?.run?.status === 'detecting' &&
+      acceptedSpans === 0,
+    `status=${response.status} runStatus=${body?.run?.status ?? 'none'} spans=${String(acceptedSpans)}`,
+  )
+
+  const deadline = Date.now() + 120_000
+  let run = body?.run ?? null
+  let polls = 0
+  while (
+    runId !== null &&
+    (run?.status === 'detecting' || run?.status === 'pending') &&
+    Date.now() < deadline
+  ) {
+    await sleep(500)
+    polls++
+    const polled = await getJson(
+      `${origin}/api/redaction-runs/${runId}`,
+      ids.sessionToken,
+    )
+    run = polled.body?.run ?? null
+  }
+  const spans = run?.spans?.length ?? 0
+  recorder.record(
+    'the leased job completes native ONNX detection with model+supplement spans',
+    run?.status === 'ready_for_review' &&
+      run?.detectionMode === 'model+supplement' &&
       spans > 0,
-    `status=${response.status} detectionMode=${body?.run?.detectionMode ?? 'none'} spans=${spans}`,
+    `status=${run?.status ?? 'none'} detectionMode=${run?.detectionMode ?? 'none'} spans=${spans} polls=${polls}`,
   )
 
   const logged = server.lines.map((entry) => entry.line).join('\n')

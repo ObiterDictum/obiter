@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import type { Span as RampartSpan } from '@obiter/rampart-inference'
+import { applyRedacted } from '@obiter/redaction-policy'
 import { createRedactionDetector, detectionMode } from './redaction-detection'
+import {
+  DETECTION_WINDOW_CHARS,
+  planDetectionWindows,
+} from './redaction-detection-windows'
 
 const classifier = (async () => []) as never
 
@@ -333,6 +338,160 @@ describe('redaction detection', () => {
 
     expect(result.degraded).toBe(false)
     expect(loads).toBe(2)
+  })
+
+  it('detects a document at the old limit in one pass so its spans are unchanged', async () => {
+    const email = 'jane@example.com'
+    const emailAt = 100_000
+    const text =
+      'x'.repeat(emailAt) +
+      ` ${email} ` +
+      'x'.repeat(DETECTION_WINDOW_CHARS - emailAt - email.length - 2)
+    let calls = 0
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async () => {
+        calls++
+        return []
+      },
+      log: () => undefined,
+    })
+
+    const result = await detect(text)
+
+    expect(text.length).toBe(DETECTION_WINDOW_CHARS)
+    expect(calls).toBe(1)
+    expect(
+      result.spans.map(({ start, end, category }) => [start, end, category]),
+    ).toEqual([[emailAt + 1, emailAt + 1 + email.length, 'email']])
+  })
+
+  it('detects every entity once at its document offsets across window boundaries', async () => {
+    const length = 450_000
+    const placed: Array<[number, string]> = [
+      [199_995, 'ZQXWV00001'],
+      [198_000, 'ZQXWV00002'],
+      [395_990, 'ZQXWV00003'],
+      [396_000, 'ZQXWV00004'],
+    ]
+    let text = 'x'.repeat(length)
+    for (const [start, marker] of placed)
+      text = text.slice(0, start) + marker + text.slice(start + marker.length)
+
+    const windows = planDetectionWindows(text)
+    const inputs: string[] = []
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async (masked) => {
+        inputs.push(masked)
+        return [...masked.matchAll(/ZQXWV\d{5}/g)].map((match) => ({
+          start: match.index,
+          end: match.index + match[0].length,
+          label: 'PASSPORT',
+          score: 0.99,
+          source: 'ner',
+          text: match[0],
+        }))
+      },
+      log: () => undefined,
+    })
+
+    const result = await detect(text)
+
+    expect(windows.length).toBe(3)
+    expect(inputs).toHaveLength(windows.length)
+    for (const input of inputs)
+      expect(input.length).toBeLessThanOrEqual(DETECTION_WINDOW_CHARS)
+    expect(
+      result.spans.map(({ start, end, text: spanText }) => [
+        start,
+        end,
+        spanText,
+      ]),
+    ).toEqual(
+      [...placed]
+        .sort(([left], [right]) => left - right)
+        .map(([start, marker]) => [start, start + marker.length, marker]),
+    )
+  })
+
+  it('redacts every character of a name two windows describe differently at their overlap', async () => {
+    const name = 'Alice Mary Jones'
+    const at = 199_989
+    const text = `${'x'.repeat(at)}${name}${'x'.repeat(450_000 - at - name.length)}`
+    const detected = new Map<string, [number, number]>()
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async (masked) => {
+        const spans: RampartSpan[] = []
+        const prefix = masked.indexOf('Alice Mary')
+        if (prefix >= 0 && masked.slice(prefix).trimEnd() === 'Alice Mary') {
+          detected.set('prefix', [prefix, prefix + 'Alice Mary'.length])
+          spans.push({
+            start: prefix,
+            end: prefix + 'Alice Mary'.length,
+            label: 'GIVEN_NAME',
+            score: 0.9,
+            source: 'ner',
+            text: 'Alice Mary',
+          })
+        }
+        const suffix = masked.indexOf('Mary Jones')
+        if (suffix >= 0) {
+          detected.set('suffix', [suffix, suffix + 'Mary Jones'.length])
+          spans.push({
+            start: suffix,
+            end: suffix + 'Mary Jones'.length,
+            label: 'GIVEN_NAME',
+            score: 0.9,
+            source: 'ner',
+            text: 'Mary Jones',
+          })
+        }
+        return spans
+      },
+      log: () => undefined,
+    })
+
+    const result = await detect(text)
+
+    expect([...detected.keys()].sort()).toEqual(['prefix', 'suffix'])
+    for (let index = at; index < at + name.length; index++)
+      expect(
+        result.spans.some((span) => span.start <= index && span.end > index),
+      ).toBe(true)
+    const decisions = Object.fromEntries(
+      result.spans.map((span) => [
+        span.id,
+        {
+          decision: 'accept' as const,
+          decidedBy: 'usr_reviewer',
+          decidedAt: '2026-11-01T00:00:00.000Z',
+        },
+      ]),
+    )
+    const output = applyRedacted(text, result.spans, decisions)
+    expect(output).toBe(
+      `${'x'.repeat(at)}[REDACTED]${'x'.repeat(450_000 - at - name.length)}`,
+    )
+  })
+
+  it('reports degraded detection when any window loses the model', async () => {
+    const text = `ZQXWV99999${'x'.repeat(DETECTION_WINDOW_CHARS + 1_000)}`
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async (masked) => {
+        if (masked.includes('ZQXWV99999'))
+          throw new Error('window inference failed')
+        return []
+      },
+      log: () => undefined,
+    })
+
+    const result = await detect(text)
+
+    expect(result.degraded).toBe(true)
+    expect(result.detectorVersion).toContain('mode=heuristics+supplement')
   })
 
   it('premasks heuristic hits before NER and projects offsets to the original text', async () => {

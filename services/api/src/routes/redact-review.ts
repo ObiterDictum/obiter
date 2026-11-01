@@ -202,6 +202,46 @@ export function createRedactReviewRoutes(
 
   const routes = new Hono<{ Variables: RouteVariables }>()
 
+  routes.use('/api/redaction-runs/:runId/*', async (c, next) => {
+    if (
+      c.req.method !== 'GET' ||
+      !/\/(document-text|source-file|layout|spans)$/.test(c.req.path)
+    )
+      return next()
+    const user = await requireUser(c, pool)
+    if (user instanceof Response) return user
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
+    if (!run)
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    if (run.status === 'detecting' || run.status === 'pending')
+      return errorResponse(
+        c,
+        'redaction_run_not_ready',
+        'Detection is still in progress.',
+        409,
+      )
+    await next()
+  })
+
+  routes.get('/api/redaction-runs/:runId/spans', async (c) => {
+    const user = await requireUser(c, pool)
+    if (user instanceof Response) return user
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
+    if (!run)
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    return c.json({ spans: run.spans })
+  })
+
   routes.get('/api/redaction-runs/:runId', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user

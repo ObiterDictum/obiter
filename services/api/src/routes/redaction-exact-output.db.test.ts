@@ -1,9 +1,14 @@
 import { afterAll, expect, it, mock } from 'bun:test'
 import { Hono } from 'hono'
+import { z } from 'zod'
 import JSZip from 'jszip'
 import { createSyntheticDocx, parseDocx } from '@obiter/ooxml'
 import { PDFDocument } from 'pdf-lib'
 import type { AuthzVariables } from '../authz'
+import {
+  claimDetectionJob,
+  processDetectionJob,
+} from '../redaction-detection-jobs'
 import { createTestPool } from '../test-database.test-support'
 import {
   cleanupMatter,
@@ -107,8 +112,17 @@ it.each(['download', 'return', 'save', 'hard', 'hard-refusal'] as const)(
           body: form,
         })
       }
-      expect(created.status).toBe(201)
-      const { run } = (await created.json()) as {
+      expect(created.status).toBe(202)
+      const queued = z
+        .object({ run: z.object({ id: z.string() }) })
+        .parse(await created.json())
+      const job = await claimDetectionJob(pool)
+      if (!job) throw new Error('Expected queued run')
+      expect(job.id).toBe(queued.run.id)
+      await processDetectionJob(pool, storage, job)
+      const { run } = (await (
+        await app.request(`/api/redaction-runs/${job.id}`)
+      ).json()) as {
         run: { id: string; spans: Array<{ id: string }> }
       }
       expect(storage.text.get(matterTextKey)).toBe(

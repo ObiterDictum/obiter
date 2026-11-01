@@ -25,6 +25,7 @@ export const API_ERROR_CODES = [
   'job_unavailable',
   'conflict_detected',
   'redaction_run_not_found',
+  'redaction_run_not_ready',
   'span_not_found',
   'redaction_run_not_reviewable',
   'redaction_already_finalized',

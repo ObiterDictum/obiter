@@ -5,7 +5,6 @@ import { describe, expect, it, mock } from 'bun:test'
 import { PDFDocument } from 'pdf-lib'
 import { vi } from '../../../scripts/test/vitest-compat'
 
-import { SCANNED_PDF_MESSAGE } from './document-extraction'
 import type { RedactionRunRow } from './redaction-database'
 import type { RedactionRenderer } from './redaction-renderer'
 import { createLocalStorage } from './storage'
@@ -1270,7 +1269,7 @@ describe('createApiApp', () => {
     expect(searchClientMock.search).not.toHaveBeenCalled()
   })
 
-  it('creates an organisation-scoped standalone redaction run and stores its source text', async () => {
+  it('queues an organisation-scoped run and stores uploads without extracting text', async () => {
     const root = await mkdtemp(join(tmpdir(), 'obiter-redaction-upload-'))
     const stored = new Map<string, string>()
     const localStorage = createLocalStorage(root)
@@ -1372,7 +1371,7 @@ describe('createApiApp', () => {
       }),
     })
 
-    expect(response.status).toBe(201)
+    expect(response.status).toBe(202)
     expect(await response.json()).toMatchObject({
       run: {
         id: 'red_1',
@@ -1396,7 +1395,7 @@ describe('createApiApp', () => {
       body: form,
     })
 
-    expect(uploadResponse.status).toBe(201)
+    expect(uploadResponse.status).toBe(202)
     expect(await uploadResponse.json()).toMatchObject({
       run: {
         id: 'red_1',
@@ -1423,7 +1422,7 @@ describe('createApiApp', () => {
       body: demoForm,
     })
 
-    expect(demoResponse.status).toBe(201)
+    expect(demoResponse.status).toBe(202)
 
     const emptyResponse = await app.request('/api/redaction-runs', {
       method: 'POST',
@@ -1431,24 +1430,12 @@ describe('createApiApp', () => {
       body: JSON.stringify({ filename: 'empty.txt', text: '' }),
     })
 
-    expect(emptyResponse.status).toBe(201)
-    expect([...stored.values()]).toEqual([
-      'Synthetic test text.',
-      expect.stringContaining('amina.rahman@example.test'),
-      expect.stringContaining('"version":2'),
-      expect.stringContaining('Mr James Cartwright'),
-      '',
-    ])
+    expect(emptyResponse.status).toBe(202)
+    expect([...stored.values()]).toEqual(['', '', '', ''])
     await rm(root, { recursive: true, force: true })
   })
 
-  it('persists degraded detection mode and returns it from run reads', async () => {
-    detectRedactionSpansMock.mockResolvedValueOnce({
-      spans: [],
-      detectorVersion:
-        'rampart-inference@0.1.3-vendored;mode=heuristics+supplement',
-      degraded: true,
-    })
+  it('persists unknown detection mode until the job completes and returns it from run reads', async () => {
     let persistedMode: unknown
     const row = () => ({
       id: 'red_degraded',
@@ -1493,6 +1480,7 @@ describe('createApiApp', () => {
         storage: {
           readText: async () => 'Synthetic text.',
           writeText: async () => undefined,
+          writeBinary: async () => undefined,
           delete: async () => undefined,
         },
       },
@@ -1503,16 +1491,16 @@ describe('createApiApp', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ filename: 'source.txt', text: 'Synthetic text.' }),
     })
-    expect(createResponse.status).toBe(201)
-    expect(persistedMode).toBe('heuristics+supplement')
+    expect(createResponse.status).toBe(202)
+    expect(persistedMode).toBe('unknown')
     expect(await createResponse.json()).toMatchObject({
-      run: { detectionMode: 'heuristics+supplement' },
+      run: { detectionMode: 'unknown' },
     })
 
     const detailResponse = await app.request('/api/redaction-runs/red_degraded')
     expect(detailResponse.status).toBe(200)
     expect(await detailResponse.json()).toMatchObject({
-      run: { detectionMode: 'heuristics+supplement' },
+      run: { detectionMode: 'unknown' },
     })
 
     const listResponse = await app.request(
@@ -1520,13 +1508,13 @@ describe('createApiApp', () => {
     )
     expect(listResponse.status).toBe(200)
     expect(await listResponse.json()).toMatchObject({
-      runs: [{ detectionMode: 'heuristics+supplement' }],
+      runs: [{ detectionMode: 'unknown' }],
     })
 
     const genericListResponse = await app.request('/api/redaction-runs')
     expect(genericListResponse.status).toBe(200)
     expect(await genericListResponse.json()).toMatchObject({
-      runs: [{ detectionMode: 'heuristics+supplement' }],
+      runs: [{ detectionMode: 'unknown' }],
     })
   })
 
@@ -1667,10 +1655,7 @@ describe('createApiApp', () => {
     expect(writes).toEqual([])
   })
 
-  it('maps unrecoverable detector errors to redaction_detection_failed', async () => {
-    detectRedactionSpansMock.mockRejectedValueOnce(
-      new Error('unrecoverable detection failure'),
-    )
+  it('cleans up both stored upload objects when run insertion fails', async () => {
     const deletedKeys: string[] = []
     const app = createApiApp(
       testEnv,
@@ -1680,6 +1665,7 @@ describe('createApiApp', () => {
         storage: {
           readText: async () => 'Synthetic text.',
           writeText: async () => undefined,
+          writeBinary: async () => undefined,
           delete: async (key) => {
             deletedKeys.push(key)
           },
@@ -1695,12 +1681,12 @@ describe('createApiApp', () => {
 
     expect(response.status).toBe(500)
     expect(((await response.json()) as ErrorBody).error.code).toBe(
-      'redaction_detection_failed',
+      'storage_unavailable',
     )
-    expect(deletedKeys).toHaveLength(1)
+    expect(deletedKeys).toHaveLength(2)
   })
 
-  it('returns a validation error for unreadable redaction uploads', async () => {
+  it('rejects uploads whose file content disagrees with the declared type', async () => {
     const app = createApiApp(
       testEnv,
       createPool(async () => ({ rows: [] })),
@@ -1709,7 +1695,7 @@ describe('createApiApp', () => {
     const form = new FormData()
     form.set(
       'file',
-      new File(['%PDF-corrupt'], 'corrupt.pdf', { type: 'application/pdf' }),
+      new File(['not a PDF'], 'corrupt.pdf', { type: 'application/pdf' }),
     )
     form.set('fileType', 'application/pdf')
 
@@ -1722,14 +1708,18 @@ describe('createApiApp', () => {
     const body = (await response.json()) as ErrorBody
     expect(body.error.code).toBe('validation_failed')
     expect(body.error.message).toBe(
-      'Document text could not be read for redaction.',
+      'The filename, declared type, and file content must agree.',
     )
   })
 
-  it('tells the uploader a scanned PDF needs OCR rather than a generic read failure', async () => {
+  it('queues scanned PDFs without blocking the request on extraction', async () => {
     const app = createApiApp(
       testEnv,
-      createPool(async () => ({ rows: [] })),
+      createPool(async (sql) => ({
+        rows: String(sql).includes('insert into redaction_runs')
+          ? [{ ...finalizedRunRow(), status: 'detecting' }]
+          : [],
+      })),
       { auth: authWithRole('member') },
     )
     const fixture = await readFile(
@@ -1747,10 +1737,9 @@ describe('createApiApp', () => {
       body: form,
     })
 
-    expect(response.status).toBe(400)
-    const body = (await response.json()) as ErrorBody
-    expect(body.error.code).toBe('validation_failed')
-    expect(body.error.message).toBe(SCANNED_PDF_MESSAGE)
+    expect(response.status).toBe(202)
+    const body = await response.json()
+    expect(body).toMatchObject({ run: { status: 'detecting' } })
   })
 })
 
@@ -3681,7 +3670,7 @@ describe('createApiApp soft-delete write races', () => {
     expect(deletedKeys).toHaveLength(1)
   })
 
-  it('returns document_not_found when a linked run parent is deleted during detection', async () => {
+  it('returns document_not_found when a linked run parent is deleted before queue insertion', async () => {
     const directQueries: string[] = []
     const app = createApiApp(
       testEnv,
@@ -3695,6 +3684,8 @@ describe('createApiApp soft-delete write races', () => {
                   matter_id: 'mtr_1',
                   version_id: 'ver_1',
                   filename: 'source.txt',
+                  file_type: 'txt',
+                  object_key: 'org/org_1/original/ver_1',
                   text_object_key: 'org/org_1/text/ver_1',
                 },
               ],

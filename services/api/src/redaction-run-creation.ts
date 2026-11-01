@@ -59,6 +59,8 @@ interface CreateRedactionRunInput {
   matterId?: string
   documentId?: string
   documentVersionId?: string
+  detectionInput?: { objectKey: string; fileType: 'pdf' | 'docx' | 'txt' }
+  requestId?: string
 }
 
 type RedactionRunQueryable = Pick<Pool, 'query'>
@@ -81,8 +83,8 @@ async function insertRedactionRun(
         id, organisation_id, matter_id, document_id, document_version_id, source_filename, source_text_object_key,
         source_file_object_key, source_layout_object_key, source_mime_type,
         status, policy_mode, spans_json, decisions_json, summary_json, detector_version, detection_mode, replaces_run_id,
-        created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ready_for_review', $11, $12::jsonb, '{}'::jsonb, $13::jsonb, $14, $15, $16, $17, now(), now())
+        created_by, created_at, updated_at, detection_input_key, detection_input_type
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $18::text is null then 'ready_for_review' else 'detecting' end, $11, $12::jsonb, '{}'::jsonb, $13::jsonb, $14, $15, $16, $17, now(), now(), $18, $19)
       returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id,
         source_filename, source_text_object_key, source_file_object_key, source_layout_object_key, source_mime_type,
         status, policy_mode, spans_json, decisions_json, output_id,
@@ -107,9 +109,22 @@ async function insertRedactionRun(
       input.detectionMode,
       input.replacesRunId ?? null,
       input.userId,
+      input.detectionInput?.objectKey ?? null,
+      input.detectionInput?.fileType ?? null,
     ],
   )
-  return mapRedactionRun(result.rows[0])
+  const run = mapRedactionRun(result.rows[0])
+  if (input.requestId)
+    await appendAuditLog(queryable, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      entityType: 'redaction_run',
+      entityId: run.id,
+      action: 'redaction.run_create',
+      metadata: { policyMode: run.policyMode, status: run.status },
+      requestId: input.requestId,
+    })
+  return run
 }
 
 async function lockLinkedRunParents(
@@ -161,16 +176,18 @@ export async function createRedactionRun(input: CreateRedactionRunInput) {
       : null
   const { pool, ...runInput } = input
 
-  if (!linkedSource) return insertRedactionRun(pool, runInput)
-
+  if (!linkedSource && !input.requestId)
+    return insertRedactionRun(pool, runInput)
   const client = await pool.connect()
   try {
     await client.query('begin')
-    const parentsExist = await lockLinkedRunParents(client, {
-      organisationId: input.organisationId,
-      userId: input.userId,
-      ...linkedSource,
-    })
+    const parentsExist =
+      !linkedSource ||
+      (await lockLinkedRunParents(client, {
+        organisationId: input.organisationId,
+        userId: input.userId,
+        ...linkedSource,
+      }))
     if (!parentsExist) {
       await client.query('rollback')
       return null

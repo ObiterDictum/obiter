@@ -43,7 +43,7 @@ function createRequestId() {
 }
 
 async function main() {
-  const { env, pools, app } = await createApiRuntime('bun')
+  const { env, pools, app, stopDetectionWorker } = await createApiRuntime('bun')
 
   const server = bun.serve({
     port: env.port,
@@ -75,13 +75,18 @@ async function main() {
     `Obiter API (Bun ${bun.version}) listening on http://localhost:${server.port}`,
   )
 
-  installGracefulShutdown({
-    stopAccepting: () => server.stop(false),
-    closeResources: async () => {
-      await Promise.all([pools.close(), closeDocumentModelWorkers()])
+  installGracefulShutdown(
+    {
+      stopAccepting: async () => {
+        await Promise.all([server.stop(false), stopDetectionWorker()])
+      },
+      closeResources: async () => {
+        await Promise.all([pools.close(), closeDocumentModelWorkers()])
+      },
+      pendingCount: () => server.pendingRequests,
     },
-    pendingCount: () => server.pendingRequests,
-  })
+    { deadlineMs: 120_000 },
+  )
 }
 
 void main().catch(exitOnStartupFailure)

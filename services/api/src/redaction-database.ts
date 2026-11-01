@@ -18,6 +18,7 @@ import type {
   OutputMode,
   RedactionPolicyMode,
   RedactionRunStatus,
+  RedactionDetectionProgress,
   SpanDecision,
 } from '@obiter/contracts'
 import type { AuthenticatedOrgUser } from './authz'
@@ -45,6 +46,7 @@ export interface RedactionRunRecord {
   sourceLayoutObjectKey: string | null
   sourceMimeType: string | null
   status: RedactionRunStatus
+  detectionProgress?: RedactionDetectionProgress
   policyMode: RedactionPolicyMode
   spans: RedactionSpan[]
   decisions: Decisions
@@ -83,6 +85,8 @@ export interface RedactionRunRow {
   source_layout_object_key: string | null
   source_mime_type: string | null
   status: RedactionRunStatus
+  detection_completed?: number
+  detection_total?: number
   policy_mode: RedactionPolicyMode
   spans_json: unknown
   decisions_json: unknown
@@ -111,7 +115,7 @@ interface OutputRecord {
 
 export const redactionRunColumns = `run.id, run.organisation_id, run.matter_id, matter.name as matter_name, run.document_id,
   run.document_version_id, run.source_filename, run.source_text_object_key, run.source_file_object_key,
-  run.source_layout_object_key, run.source_mime_type, run.status, run.policy_mode,
+  run.source_layout_object_key, run.source_mime_type, run.status, run.detection_completed, run.detection_total, run.policy_mode,
   run.spans_json, run.decisions_json, run.output_id, run.summary_json, run.detector_version,
   run.detection_mode, run.replaces_run_id, replacement.id as replacement_run_id, run.returned_document_version_id,
   saved_document.matter_id as returned_matter_id, saved_document.id as returned_document_id,
@@ -229,6 +233,10 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     sourceLayoutObjectKey: row.source_layout_object_key ?? null,
     sourceMimeType: row.source_mime_type ?? null,
     status: row.status,
+    detectionProgress: {
+      completed: row.detection_completed ?? 0,
+      total: row.detection_total ?? 0,
+    },
     policyMode: row.policy_mode,
     spans: parseSpans(row.spans_json),
     decisions: parseDecisions(row.decisions_json),

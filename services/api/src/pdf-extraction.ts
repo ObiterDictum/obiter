@@ -1,5 +1,6 @@
 import {
   DocumentExtractionError,
+  documentTextTooLongMessage,
   MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH,
   MAX_PDF_PAGE_COUNT,
   MINIMUM_PDF_CHARS_PER_PAGE,
@@ -149,7 +150,7 @@ function pushPageBreak(chars: LaidChar[], anchor: LaidChar) {
 function assertWithinLength(chars: LaidChar[]) {
   if (chars.length > MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH)
     throw new DocumentExtractionError(
-      `Extracted text must be at most ${MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH} characters.`,
+      documentTextTooLongMessage(chars.length),
       true,
     )
 }
