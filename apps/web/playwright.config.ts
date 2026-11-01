@@ -5,7 +5,7 @@ const targets = resolveLaneTargets()
 const reuseExistingServer = !process.env.CI
 assertLaneTargets(targets, { reuseExistingServer })
 
-const { apiOrigin, apiPort, webOrigin, webPort } = targets
+const { apiOrigin, webOrigin, webPort } = targets
 const rendererPort = Number(process.env.OBITER_E2E_RENDERER_PORT ?? 8892)
 const rendererOrigin = `http://127.0.0.1:${rendererPort}`
 
@@ -38,27 +38,6 @@ export default defineConfig({
       timeout: 30_000,
       env: {
         OBITER_E2E_RENDERER_PORT: String(rendererPort),
-      },
-    },
-    {
-      command: 'bun run --filter @obiter/api dev',
-      url: `${apiOrigin}/api/health`,
-      reuseExistingServer,
-      timeout: 60_000,
-      env: {
-        DATABASE_URL:
-          process.env.OBITER_E2E_DATABASE_URL ??
-          'postgresql://obiter:obiter@127.0.0.1:5432/obiter',
-        MEILISEARCH_HOST: 'http://127.0.0.1:7700',
-        MEILISEARCH_SEARCH_API_KEY: 'obiter-local-dev-key',
-        MEILISEARCH_ADMIN_API_KEY: 'obiter-local-dev-key',
-        MEILI_MASTER_KEY: 'obiter-local-dev-key',
-        BETTER_AUTH_URL: webOrigin,
-        BETTER_AUTH_SECRET: '0123456789abcdef0123456789abcdef',
-        NODE_ENV: 'development',
-        OBITER_WEB_ORIGIN: webOrigin,
-        OBITER_REDACTION_RENDERER_URL: rendererOrigin,
-        PORT: String(apiPort),
       },
     },
     {

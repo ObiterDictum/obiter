@@ -16,7 +16,7 @@ async function checkMeilisearch() {
   } catch {
     throw new Error(
       `Meilisearch not reachable at ${MEILI_HOST}\n` +
-        `Start it with: docker compose -f infra/docker/compose.yaml up -d`,
+        `Start it with: docker compose -f backend/infra/docker/compose.yaml up -d in a backend checkout`,
     )
   }
 }
