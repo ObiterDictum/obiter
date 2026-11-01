@@ -183,6 +183,11 @@ async function openWorkspace(page: Page) {
   await expect(page.locator('[data-document-desk]')).toBeVisible()
 }
 
+const WEB_WORKSPACE = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+)
+
 function readPdf(pdfPath: string) {
   const script = `
     import { getDocumentProxy, extractText } from 'unpdf'
@@ -199,10 +204,7 @@ function readPdf(pdfPath: string) {
     process.stdout.write(JSON.stringify({ totalPages: result.totalPages, pages: result.text, sizes }))
   `
   const stdout = execFileSync('bun', ['-e', script], {
-    cwd: path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      '../../../services/api',
-    ),
+    cwd: WEB_WORKSPACE,
     env: { ...process.env, OBITER_PDF_PATH: pdfPath },
     encoding: 'utf8',
   })
