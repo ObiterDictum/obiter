@@ -67,8 +67,8 @@ Do not review implementation code unless the docs make a claim that conflicts wi
 
 ### Testing
 
-- `bun run --filter @obiter/api typecheck`
-- `bun run --filter @obiter/api test`
+- `bun run --filter @obiter/api typecheck` in a `backend` checkout
+- `bun run --filter @obiter/api test` in a `backend` checkout
 
 ### Risks / Follow-Ups
 

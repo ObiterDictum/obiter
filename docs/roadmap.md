@@ -4,6 +4,11 @@
 
 This roadmap turns the planning docs into a concrete execution order for a solo-founder build.
 
+The API, legal ingestion, search, Verify and the database migrations are built
+in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend)
+repository, which includes this one as an `obiter/` submodule. See
+[backend-repo-split.md](backend-repo-split.md).
+
 The planning model is:
 
 - milestones for roadmap
@@ -64,7 +69,10 @@ Outcome:
 
 - stable Phase 0 foundation
 
-### Milestone 1.1: Atlas
+### Milestone 1.1: Atlas (backend)
+
+Search, ingestion and the legal schema live in the private
+[`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository.
 
 - define legal schema
 - implement citation normalization
@@ -90,7 +98,7 @@ Outcome:
 
 - privacy workflow exists (achieved for the hosted path)
 
-### Milestone 1.3: Verify
+### Milestone 1.3: Verify (backend, with the Verify UI here)
 
 - implement authority existence checks
 - implement citation resolution checks
@@ -114,7 +122,7 @@ Outcome:
 
 - each matter holds an explicit, bounded list of the sources it relies on
 
-### Milestone 1.35: Verify Advanced
+### Milestone 1.35: Verify Advanced (backend, with the findings UI here)
 
 - implement proposition extraction
 - implement proposition-to-authority support analysis
@@ -125,7 +133,7 @@ Outcome:
 
 - Verify reaches the full intended trust standard
 
-### Milestone 1.4: Research
+### Milestone 1.4: Research (backend, with the surfaces here)
 
 - implement legal search flow
 - implement evidence viewer

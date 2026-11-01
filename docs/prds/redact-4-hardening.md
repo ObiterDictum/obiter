@@ -44,7 +44,7 @@ The choice to degrade rather than fail is defensible on its own: a partial resul
 
 The model integration shipped with `OBITER_RAMPART_MODEL`, `OBITER_RAMPART_REVISION` and `OBITER_RAMPART_CACHE_DIR`. Before Gate 2, `redaction-detection.ts` read those values inline for each call and silently defaulted the model and revision. Minimum confidence and chunk size were not configurable. The earlier claim that no model-id variable existed, and the `REDACT_*` names inherited from Redact 1, were stale.
 
-Gate 2 keeps the deployed `OBITER_RAMPART_*` namespace rather than renaming a live setting for documentary consistency. All five values now pass through `services/api/src/env.ts` and `ApiEnv`, are read once at startup, and fail startup on invalid input. The deliberate defaults remain `qarlus/rampart`, its pinned revision, `0.4` minimum confidence and `400` tokens per chunk.
+Gate 2 keeps the deployed `OBITER_RAMPART_*` namespace rather than renaming a live setting for documentary consistency. All five values now pass through `backend/services/api/src/env.ts` and `ApiEnv`, are read once at startup, and fail startup on invalid input. The deliberate defaults remain `qarlus/rampart`, its pinned revision, `0.4` minimum confidence and `400` tokens per chunk.
 
 This matters for tuning detection recall without a deploy, and for pointing a test environment at a different model revision.
 
@@ -96,12 +96,12 @@ This matters for tuning detection recall without a deploy, and for pointing a te
 - **FR4.2.** `OBITER_RAMPART_MIN_SCORE` MUST configure the minimum confidence score, defaulting to `0.4`.
 - **FR4.3.** `OBITER_RAMPART_CHUNK_TOKENS` MUST configure chunk size, defaulting to `400`.
 - **FR4.4.** Invalid values MUST fail at startup with a clear message naming the variable and the violated constraint rather than silently falling back to defaults. A misconfigured confidence threshold changes what is detected, so it must not fail quietly.
-- **FR4.5.** The API MUST read all detection configuration through `services/api/src/env.ts` once at startup and expose it through `ApiEnv`; detection requests MUST NOT read `process.env`.
+- **FR4.5.** The API MUST read all detection configuration through `backend/services/api/src/env.ts` once at startup and expose it through `ApiEnv`; detection requests MUST NOT read `process.env`.
 
 ### FR5: Confirm the unverified acceptance criteria
 
 - **FR5.1.** Confirmed: the deterministic generator produces 300 independently validated JSONL documents across 7 document types. `scripts/redact-acceptance/synthetic-generator.test.ts` regenerates into a temporary directory and revalidates count, types, fields, offsets, slices, manifest and report.
-- **FR5.2.** Confirmed: `services/api/src/redact-3-acceptance.test.ts` runs the checked-in DOCX fixture through extraction, configured detection, review decisions, finalized output and audit rendering without a model download.
+- **FR5.2.** Confirmed: `backend/services/api/src/redact-3-acceptance.test.ts` runs the checked-in DOCX fixture through extraction, configured detection, review decisions, finalized output and audit rendering without a model download.
 - **FR5.3.** Confirmed: every current edge-case contract from [Redact 3](archive/redact-3-production.md) has an automated check. Gate 1's explicit degraded-mode contract supersedes the archived failed-run expectation. Empty and zero-PII runs remain reviewable; all-rejected and unreviewed spans leave source text unchanged; reruns receive run-scoped span ids and empty decisions; DOCX body/table/header/footer extraction and long-window offsets are covered.
 - **FR5.4.** The checks above run under the repository and affected-package test commands, so the criteria remain release gates rather than one-time observations.
 

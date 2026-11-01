@@ -1,5 +1,7 @@
 # Phase 0 — Codex Implementation Brief
 
+> Historical plan. The `services/api`, `packages/database`, `legal-schema`, `legal-source-provider`, `search-client` and `verification-core` paths below, and the `dev:api` and `db:migrate` commands, now live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository; see [backend-repo-split.md](backend-repo-split.md).
+
 > Give this to Codex CLI as the goal. It contains everything needed to
 > complete the remaining Phase 0 milestones. Start with Milestone 0.3,
 > then 0.4. Read the dependency files listed below first.

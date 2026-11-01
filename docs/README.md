@@ -17,8 +17,9 @@ These documents break the original [guide.md](guide.md) into smaller, reusable r
 - [Data and Compliance](C:\Users\karl-\Documents\source\Obiter\docs\data-and-compliance.md): legal data model, source handling, and external constraints
 - [Roadmap](C:\Users\karl-\Documents\source\Obiter\docs\roadmap.md): milestone-by-milestone build order for a solo-founder implementation
 - [Product Requirements](C:\Users\karl-\Documents\source\Obiter\docs\prds\README.md): PRDs for major implementation areas
-- [Search PRD](prds/search.md): judgment search product target, corpus and acquisition, retrieval and ranking, quality benchmark, and the internal API contract
-- [Phase 1 Search](C:\Users\karl-\Documents\source\Obiter\docs\phase-1-atlas.md): legal corpus ingestion, indexing, search, and authority retrieval. The file path still uses the legacy `atlas` name until route/package cleanup is handled separately.
+- [Backend Repository Split](backend-repo-split.md): why the API and the case-law code live in the private `ObiterDictum/backend` repository, and what moved
+- [Search PRD](prds/search.md): judgment search product target, corpus and acquisition, retrieval and ranking, quality benchmark, and the internal API contract. Implementation lives in `backend`
+- [Phase 1 Search](C:\Users\karl-\Documents\source\Obiter\docs\phase-1-atlas.md): legal corpus ingestion, indexing, search, and authority retrieval. The file path still uses the legacy `atlas` name until route/package cleanup is handled separately. The code and the specs it drives live in the private `ObiterDictum/backend` repository.
 - [Phase 1 Redact](C:\Users\karl-\Documents\source\Obiter\docs\phase-1-redact.md): PII handling, redaction policy, review workflow, and export rules
 - [Phase 1 Verify](C:\Users\karl-\Documents\source\Obiter\docs\phase-1-verify.md): citation resolution, quote checks, proposition checks, and reporting
 - [Phase 1 Research](C:\Users\karl-\Documents\source\Obiter\docs\phase-1-research.md): source-bound legal research flow over Search and Verify

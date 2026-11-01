@@ -1,5 +1,7 @@
 # Phase 1 Verify
 
+> Historical plan. The `services/api`, `packages/database`, `legal-schema`, `legal-source-provider`, `search-client` and `verification-core` paths below, and the `dev:api` and `db:migrate` commands, now live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository; see [backend-repo-split.md](backend-repo-split.md).
+
 ## Purpose
 
 Verify is the trust layer. In Phase 1 it must catch the highest-risk legal drafting failures in stages: first fake authorities, bad citations, and inaccurate quotes, then later proposition support analysis.

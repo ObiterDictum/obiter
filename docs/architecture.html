@@ -944,8 +944,10 @@
           <p class="lede">
             Obiter is legal infrastructure: source-grounded search over UK
             judgments, reviewable redaction of sensitive material, and the
-            matter workspaces those sit inside. A Bun monorepo with four running
-            processes and twelve workspace packages.
+            matter workspaces those sit inside. A Bun monorepo of client
+            workspaces and the packages they share; the API, the case-law
+            packages and the migrations live in the private
+            <code>ObiterDictum/backend</code> repository.
           </p>
           <p>
             Four product surfaces carry code: <b>Search</b> over a locally held
@@ -966,9 +968,12 @@
         <section id="stack">
           <h2>The stack</h2>
           <p class="lede">
-            Dashed nodes are workspaces that exist in
-            <code>bun.lock</code> but contain only a README. They are reserved
-            names, not running code.
+            Nodes marked <b>backend</b> live in the private
+            <code>ObiterDictum/backend</code> repository, which includes this
+            one as an <code>obiter/</code> submodule. They stay on the map
+            because the clients depend on their contracts. Dashed nodes are
+            workspaces that exist in <code>bun.lock</code> but contain only a
+            README. They are reserved names, not running code.
           </p>
 
           <div class="map">
@@ -1003,14 +1008,15 @@
               <div class="nodes">
                 <a
                   class="node"
-                  href="https://github.com/ObiterDictum/obiter/tree/dev/services/api"
-                  ><b>services/api</b><span>Hono · only HTTP surface</span></a
+                  href="https://github.com/ObiterDictum/backend/tree/dev/services/api"
+                  ><b>services/api</b
+                  ><span>Hono · only HTTP surface · backend</span></a
                 >
                 <a
                   class="node"
-                  href="https://github.com/ObiterDictum/obiter/tree/dev/services/legal-ingestor"
+                  href="https://github.com/ObiterDictum/backend/tree/dev/services/legal-ingestor"
                   ><b>services/legal-ingestor</b
-                  ><span>Judgment acquisition</span></a
+                  ><span>Judgment acquisition · backend</span></a
                 >
                 <span class="node stub"
                   ><b>services/worker</b><span>README only</span></span
@@ -1063,16 +1069,17 @@
                 >
                 <a
                   class="node"
-                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/search-client"
+                  href="https://github.com/ObiterDictum/backend/tree/dev/packages/search-client"
                   ><b>@obiter/search-client</b
-                  ><span>Meilisearch index and ranking</span></a
+                  ><span>Meilisearch index and ranking · backend</span></a
                 >
                 <a
                   class="node"
-                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/verification-core"
+                  href="https://github.com/ObiterDictum/backend/tree/dev/packages/verification-core"
                   ><b>@obiter/verification-core</b
                   ><span
-                    >Citation, evidence, finding and existence checks</span
+                    >Citation, evidence, finding and existence checks ·
+                    backend</span
                   ></a
                 >
               </div>
@@ -1091,15 +1098,15 @@
                 >
                 <a
                   class="node"
-                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/legal-schema"
+                  href="https://github.com/ObiterDictum/backend/tree/dev/packages/legal-schema"
                   ><b>@obiter/legal-schema</b
-                  ><span>Legal source shapes</span></a
+                  ><span>Legal source shapes · backend</span></a
                 >
                 <a
                   class="node"
-                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/legal-source-provider"
+                  href="https://github.com/ObiterDictum/backend/tree/dev/packages/legal-source-provider"
                   ><b>@obiter/legal-source-provider</b
-                  ><span>Find Case Law fetch and parse</span></a
+                  ><span>Find Case Law fetch and parse · backend</span></a
                 >
                 <a
                   class="node"
@@ -1108,8 +1115,8 @@
                 >
                 <a
                   class="node"
-                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/database"
-                  ><b>@obiter/database</b><span>Migrations</span></a
+                  href="https://github.com/ObiterDictum/backend/tree/dev/packages/database"
+                  ><b>@obiter/database</b><span>Migrations · backend</span></a
                 >
                 <a
                   class="node"
@@ -1238,17 +1245,17 @@
                   <rect
                     x="330"
                     y="84"
-                    width="94.6"
+                    width="96.2"
                     height="46"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--brand)"
                   />
-                  <text x="377.3" y="101" text-anchor="middle" class="n">
+                  <text x="378.1" y="101" text-anchor="middle" class="n">
                     services/api
                   </text>
-                  <text x="377.3" y="112" text-anchor="middle" class="s">
-                    Hono
+                  <text x="378.1" y="112" text-anchor="middle" class="s">
+                    Hono · backend
                   </text>
                 </g>
                 <g>
@@ -1256,13 +1263,16 @@
                     x="330"
                     y="300"
                     width="161.2"
-                    height="30"
+                    height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--brand)"
                   />
-                  <text x="410.6" y="318.5" text-anchor="middle" class="n">
+                  <text x="410.6" y="317" text-anchor="middle" class="n">
                     services/legal-ingestor
+                  </text>
+                  <text x="410.6" y="328" text-anchor="middle" class="s">
+                    backend
                   </text>
                 </g>
                 <g>
@@ -1422,37 +1432,37 @@
                   bearer token
                 </text>
                 <path
-                  d="M424.6,107.0 L660,40.5"
+                  d="M426.2,107.0 L660,40.5"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-runtime-topology)"
                 />
-                <text x="542.3" y="67.75" text-anchor="middle" class="e">
+                <text x="543.1" y="67.75" text-anchor="middle" class="e">
                   SQL
                 </text>
                 <path
-                  d="M424.6,107.0 L660,120.5"
+                  d="M426.2,107.0 L660,120.5"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-runtime-topology)"
                 />
-                <text x="542.3" y="107.75" text-anchor="middle" class="e">
+                <text x="543.1" y="107.75" text-anchor="middle" class="e">
                   search
                 </text>
                 <path
-                  d="M424.6,107.0 L660,200.5"
+                  d="M426.2,107.0 L660,200.5"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-runtime-topology)"
                 />
-                <text x="542.3" y="163.75" text-anchor="middle" class="e">
+                <text x="543.1" y="163.75" text-anchor="middle" class="e">
                   objects
                 </text>
                 <path
-                  d="M424.6,107.0 L660,360.5"
+                  d="M426.2,107.0 L660,360.5"
                   fill="none"
                   stroke="var(--danger)"
                   stroke-width="1"
@@ -1460,27 +1470,32 @@
                   marker-end="url(#ahd-t-runtime-topology)"
                 />
                 <path
-                  d="M377.3,130 L377.3,200"
+                  d="M378.1,130 L377.3,200"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-runtime-topology)"
                 />
-                <text x="403.3" y="165.0" text-anchor="middle" class="e">
+                <text
+                  x="403.70000000000005"
+                  y="165.0"
+                  text-anchor="middle"
+                  class="e"
+                >
                   load
                 </text>
                 <path
-                  d="M491.2,315.0 L705.45,141"
+                  d="M491.2,320.5 L705.45,141"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-runtime-topology)"
                 />
-                <text x="598.325" y="248.0" text-anchor="middle" class="e">
+                <text x="598.325" y="250.75" text-anchor="middle" class="e">
                   index
                 </text>
                 <path
-                  d="M491.2,315.0 L710.3,301"
+                  d="M491.2,320.5 L710.3,301"
                   fill="none"
                   stroke="var(--danger)"
                   stroke-width="1"
@@ -1537,7 +1552,9 @@
                 </title>
                 <desc>
                   Workspace packages arranged by dependency depth, with arrows
-                  pointing from a dependent to what it depends on.
+                  pointing from a dependent to what it depends on. Nodes whose
+                  sub-label reads backend live in the private
+                  ObiterDictum/backend repository and are consumed there.
                 </desc>
                 <defs>
                   <marker
@@ -1644,13 +1661,16 @@
                     x="420"
                     y="26"
                     width="88.5"
-                    height="30"
+                    height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--brand)"
                   />
-                  <text x="464.25" y="44.5" text-anchor="middle" class="n">
+                  <text x="464.25" y="43" text-anchor="middle" class="n">
                     @obiter/api
+                  </text>
+                  <text x="464.25" y="54" text-anchor="middle" class="s">
+                    backend
                   </text>
                 </g>
                 <g>
@@ -1658,13 +1678,16 @@
                     x="610"
                     y="26"
                     width="155.1"
-                    height="30"
+                    height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--brand)"
                   />
-                  <text x="687.55" y="44.5" text-anchor="middle" class="n">
+                  <text x="687.55" y="43" text-anchor="middle" class="n">
                     @obiter/legal-ingestor
+                  </text>
+                  <text x="687.55" y="54" text-anchor="middle" class="s">
+                    backend
                   </text>
                 </g>
                 <g>
@@ -1742,13 +1765,16 @@
                     x="560"
                     y="226"
                     width="149.1"
-                    height="30"
+                    height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--warning)"
                   />
-                  <text x="634.55" y="244.5" text-anchor="middle" class="n">
+                  <text x="634.55" y="243" text-anchor="middle" class="n">
                     @obiter/search-client
+                  </text>
+                  <text x="634.55" y="254" text-anchor="middle" class="s">
+                    backend
                   </text>
                 </g>
                 <g>
@@ -1770,13 +1796,16 @@
                     x="330"
                     y="284"
                     width="173.2"
-                    height="30"
+                    height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--warning)"
                   />
-                  <text x="416.6" y="302.5" text-anchor="middle" class="n">
+                  <text x="416.6" y="301" text-anchor="middle" class="n">
                     @obiter/verification-core
+                  </text>
+                  <text x="416.6" y="312" text-anchor="middle" class="s">
+                    backend
                   </text>
                 </g>
                 <g>
@@ -1812,13 +1841,16 @@
                     x="420"
                     y="366"
                     width="143.0"
-                    height="30"
+                    height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--subtle)"
                   />
-                  <text x="491.5" y="384.5" text-anchor="middle" class="n">
+                  <text x="491.5" y="383" text-anchor="middle" class="n">
                     @obiter/legal-schema
+                  </text>
+                  <text x="491.5" y="394" text-anchor="middle" class="s">
+                    backend
                   </text>
                 </g>
                 <g>
@@ -1826,13 +1858,16 @@
                     x="640"
                     y="366"
                     width="118.8"
-                    height="30"
+                    height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--subtle)"
                   />
-                  <text x="699.4" y="384.5" text-anchor="middle" class="n">
+                  <text x="699.4" y="383" text-anchor="middle" class="n">
                     @obiter/database
+                  </text>
+                  <text x="699.4" y="394" text-anchor="middle" class="s">
+                    backend
                   </text>
                 </g>
                 <path
@@ -1941,63 +1976,63 @@
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M634.55,256 Q533.025,311.0 491.5,366"
+                  d="M634.55,267 Q533.025,316.5 491.5,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M464.25,56 Q227.27499999999998,141.0 110.3,226"
+                  d="M464.25,67 Q227.27499999999998,146.5 110.3,226"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M464.25,56 Q408.925,141.0 413.6,226"
+                  d="M464.25,67 Q408.925,146.5 413.6,226"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M464.25,56 Q569.4,141.0 634.55,226"
+                  d="M464.25,67 Q569.4,146.5 634.55,226"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M464.25,56 Q699.425,141.0 814.6,226"
+                  d="M464.25,67 Q699.425,146.5 814.6,226"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M464.25,56 Q300.425,170.0 416.6,284"
+                  d="M464.25,67 Q300.425,175.5 416.6,284"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M687.55,56 Q641.05,141.0 634.55,226"
+                  d="M687.55,67 Q641.05,146.5 634.55,226"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M416.6,314 L122.4,366"
+                  d="M416.6,325 L122.4,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M416.6,314 L491.5,366"
+                  d="M416.6,325 L491.5,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
@@ -2280,16 +2315,22 @@
 
         <section id="services">
           <h2>Services</h2>
+          <p class="lede">
+            Two of the three services live in the private
+            <code>ObiterDictum/backend</code> repository; they are described
+            here because the clients call them and the contracts are shared.
+          </p>
           <div class="modules">
             <article class="module">
               <header>
                 <h4>
                   <a
-                    href="https://github.com/ObiterDictum/obiter/tree/dev/services/api"
+                    href="https://github.com/ObiterDictum/backend/tree/dev/services/api"
                     >services/api</a
                   >
                 </h4>
                 <span class="pill live">Live</span>
+                <span class="pill warn">backend</span>
               </header>
               <p>
                 The entire HTTP surface. One bootstrap
@@ -2310,7 +2351,7 @@
                 <dt>Routes</dt>
                 <dd>
                   <a
-                    href="https://github.com/ObiterDictum/obiter/tree/dev/services/api/src/routes"
+                    href="https://github.com/ObiterDictum/backend/tree/dev/services/api/src/routes"
                     >src/routes/</a
                   >
                 </dd>
@@ -2343,11 +2384,12 @@
               <header>
                 <h4>
                   <a
-                    href="https://github.com/ObiterDictum/obiter/tree/dev/services/legal-ingestor"
+                    href="https://github.com/ObiterDictum/backend/tree/dev/services/legal-ingestor"
                     >services/legal-ingestor</a
                   >
                 </h4>
                 <span class="pill warn">Thin</span>
+                <span class="pill warn">backend</span>
               </header>
               <p>
                 Acquires judgments and writes them to Meilisearch. Currently
@@ -2404,8 +2446,11 @@
         <section id="packages">
           <h2>Packages</h2>
           <p class="lede">
-            Twelve packages carry code. Primitives sit at the bottom of the
-            graph and import nothing internal.
+            Nine packages carry code in this repository. Primitives sit at the
+            bottom of the graph and import nothing internal. The packages marked
+            <b>backend</b> live in the private
+            <code>ObiterDictum/backend</code> repository and are consumed there;
+            the clients keep only the contracts they read.
           </p>
 
           <h3>Domain</h3>
@@ -2504,10 +2549,11 @@
               <header>
                 <h4>
                   <a
-                    href="https://github.com/ObiterDictum/obiter/blob/dev/packages/search-client/src/index.ts"
+                    href="https://github.com/ObiterDictum/backend/blob/dev/packages/search-client/src/index.ts"
                     >@obiter/search-client</a
                   >
                 </h4>
+                <span class="pill warn">backend</span>
                 <span class="pill risk">Defect</span>
               </header>
               <p>
@@ -2533,10 +2579,11 @@
               <header>
                 <h4>
                   <a
-                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/verification-core/src"
+                    href="https://github.com/ObiterDictum/backend/tree/dev/packages/verification-core/src"
                     >@obiter/verification-core</a
                   >
                 </h4>
+                <span class="pill warn">backend</span>
               </header>
               <p>
                 Pure domain vocabulary for Verify: the citation and its
@@ -2681,10 +2728,11 @@
               <header>
                 <h4>
                   <a
-                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/legal-schema/src"
+                    href="https://github.com/ObiterDictum/backend/tree/dev/packages/legal-schema/src"
                     >@obiter/legal-schema</a
                   >
                 </h4>
+                <span class="pill warn">backend</span>
               </header>
               <p>
                 Shapes for legal sources: authorities, summaries, paragraphs,
@@ -2725,10 +2773,11 @@
               <header>
                 <h4>
                   <a
-                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/database/migrations"
+                    href="https://github.com/ObiterDictum/backend/tree/dev/packages/database/migrations"
                     >@obiter/database</a
                   >
                 </h4>
+                <span class="pill warn">backend</span>
               </header>
               <p>
                 Plain SQL migrations, numbered and forward-only. No ORM, no
@@ -2856,10 +2905,12 @@
         <section id="http">
           <h2>HTTP surface</h2>
           <p class="lede">
-            Every route is served by <code>services/api</code>. Business routes
-            are organisation-scoped. A few endpoints are deliberately
-            unauthenticated: health, changelog, published-authority search, and
-            a token-gated invite preview.
+            Every route is served by <code>services/api</code> in the private
+            <code>ObiterDictum/backend</code> repository. The table is the
+            contract the clients consume, not a description of where the handler
+            lives. Business routes are organisation-scoped. A few endpoints are
+            deliberately unauthenticated: health, changelog, published-authority
+            search, and a token-gated invite preview.
           </p>
           <div class="scroll">
             <table>
@@ -4982,14 +5033,7 @@
                     must reject
                   </td>
                 </tr>
-                <tr>
-                  <td class="id">data/evals/search/</td>
-                  <td>
-                    Gate 1 judgment search benchmark seed artifacts, plus the
-                    local corpus-relevance dataset card. The corpus suite is not
-                    a CI gate.
-                  </td>
-                </tr>
+
                 <tr>
                   <td class="id">data/bench/uk-legal-pii/</td>
                   <td>
@@ -5022,12 +5066,8 @@
         <section id="config">
           <h2>Configuration</h2>
           <p class="lede">
-            Read from the environment by <code>services/api</code> and
-            <code>services/legal-ingestor</code>, through
-            <code>@obiter/config</code>. That package owns the bounded worktree
-            <code>.env</code> search shared by both services; Vite's
-            <code>loadEnv</code> reads the same file for the web server. The web
-            dev server resolves one API origin through
+            The public clients read a small set of variables. The web dev server
+            resolves one API origin through
             <code>apps/web/dev-api-origin.mjs</code> and gives the same value to
             its Vite proxy and its in-process SSR handler, so a lane cannot
             serve its UI while authenticating against the shared API. The origin
@@ -5039,35 +5079,10 @@
             a dev backend. Shared-default eligibility is decided from the port
             Vite actually binds (including a <code>--port</code> override), and
             a supplied but invalid <code>OBITER_WEB_PORT</code> is refused
-            instead of falling back to the shared <code>3000</code>.
+            instead of falling back to the shared <code>3000</code>. The
+            worktree <code>.env</code> search and its bounded parsing live in
+            <code>@obiter/config</code>, which every client shares.
           </p>
-          <div class="callout">
-            <b>Startup is fail-closed.</b> <code>NODE_ENV</code> must be
-            <code>production</code>, <code>test</code>, or
-            <code>development</code>; an unknown value refuses startup, and an
-            unset one is allowed only with
-            <code>OBITER_LOCAL_DEVELOPMENT=1</code>. Both services resolve it
-            through <code>@obiter/config</code>, sharing one rule: the API and
-            the ingestor fail on the same input rather than one guessing a mode.
-            That matters because the ingestor writes; a missing
-            <code>NODE_ENV</code> used to fall back to development and reach a
-            database and credential nobody chose.
-            <code>BETTER_AUTH_SECRET</code> must be configured for every
-            non-test API boot (no shipped fallback). In production,
-            <code>DATABASE_URL</code>, <code>BETTER_AUTH_URL</code>,
-            <code>OBITER_WEB_ORIGIN</code>, <code>OBITER_RESEND_API_KEY</code>,
-            <code>MEILISEARCH_HOST</code>,
-            <code>MEILISEARCH_SEARCH_API_KEY</code> and
-            <code>MEILISEARCH_ADMIN_API_KEY</code> are also required; the
-            ingestor requires <code>MEILISEARCH_HOST</code>,
-            <code>MEILISEARCH_ADMIN_API_KEY</code> and
-            <code>LEGAL_AUTHORITIES_INDEX</code>. The API refuses to boot
-            without them, which is the right behaviour: a missing search key
-            should not surface later as empty results. The <code>dev-key</code>
-            Meilisearch fallback exists only in
-            <code>development</code>; <code>test</code> and
-            <code>production</code> must name their key.
-          </div>
           <div class="scroll">
             <table>
               <thead>
@@ -5078,201 +5093,48 @@
               </thead>
               <tbody>
                 <tr>
-                  <td class="id">NODE_ENV · OBITER_LOCAL_DEVELOPMENT</td>
+                  <td class="id">OBITER_API_ORIGIN</td>
                   <td>
-                    Runtime mode (<code>production</code>, <code>test</code>, or
-                    <code>development</code>). Unset
-                    <code>NODE_ENV</code> requires
-                    <code>OBITER_LOCAL_DEVELOPMENT=1</code>
+                    API origin used by the web Vite proxy, its SSR handler and
+                    the e2e lane
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">DATABASE_URL · TEST_DATABASE_URL</td>
-                  <td>PostgreSQL connection</td>
-                </tr>
-                <tr>
-                  <td class="id">CORPUS_DATABASE_URL</td>
+                  <td class="id">OBITER_WEB_PORT</td>
                   <td>
-                    Optional. Unset is the compatibility seam: the corpus is the
-                    application database and writes behave as before. Configured
-                    means a separate corpus target, served read-only unless
-                    <code>CORPUS_WRITE_DATABASE_URL</code> names a writer too,
-                    even when it names the same database through another role or
-                    spelling. Under <code>NODE_ENV=test</code> it must resolve
-                    to
-                    <code>TEST_DATABASE_URL</code>
+                    Web dev port. A supplied but invalid value is refused rather
+                    than defaulted
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">CORPUS_WRITE_DATABASE_URL</td>
-                  <td>
-                    Optional. A corpus writer for the explicit indexing run. It
-                    requires <code>CORPUS_DATABASE_URL</code>; a writer with no
-                    explicit reader refuses startup, because reads and writes
-                    must not silently target unrelated databases. The
-                    corpus-only API does not use it; retained for the indexing
-                    service. Only the process that persists ingestion should
-                    receive it, and the credential belongs in a service-private
-                    environment file or systemd credential, never in
-                    <code>.env</code> where lane setup copies it. Under
-                    <code>NODE_ENV=test</code> it must resolve to
-                    <code>TEST_DATABASE_URL</code>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">BETTER_AUTH_SECRET · BETTER_AUTH_URL</td>
-                  <td>Session signing and callback origin</td>
+                  <td class="id">OBITER_E2E_RENDERER_PORT</td>
+                  <td>Port of the renderer the web e2e suite starts</td>
                 </tr>
                 <tr>
                   <td class="id">
-                    OBITER_WEB_ORIGIN · OBITER_DESKTOP_ORIGIN ·
-                    OBITER_API_ORIGIN
-                  </td>
-                  <td>CORS and redirect allowlists</td>
-                </tr>
-                <tr>
-                  <td class="id">
-                    MEILISEARCH_HOST · MEILISEARCH_ADMIN_API_KEY ·
-                    MEILISEARCH_SEARCH_API_KEY
+                    REDACTION_RENDERER_HOST · REDACTION_RENDERER_PORT
                   </td>
                   <td>
-                    Index writes use the admin key, queries the search key
+                    Where <code>services/redaction-renderer</code> binds;
+                    loopback by default
                   </td>
-                </tr>
-                <tr>
-                  <td class="id">LEGAL_AUTHORITIES_INDEX</td>
-                  <td>Meilisearch index name</td>
-                </tr>
-                <tr>
-                  <td class="id">LEGISLATION_PROVISIONS_INDEX</td>
-                  <td>Meilisearch legislation provisions index name</td>
-                </tr>
-                <tr>
-                  <td class="id">
-                    MOJ_FIND_CASE_LAW_BASE_URL · MOJ_FIND_CASE_LAW_RATE_LIMIT ·
-                    MOJ_FIND_CASE_LAW_REQUEST_BUDGET
-                  </td>
-                  <td>
-                    Provider endpoint, per-process fetch backstop, and the
-                    cluster-wide rolling five-minute request budget (<code
-                      >legal_moj_request_charges</code
-                    >
-                    on the application database). It is charged before each
-                    upstream HTTP attempt, so one operation may spend many
-                    charges. The corpus-only API neither contacts the provider
-                    nor constructs the budget; it is retained, with the provider
-                    seam, for the explicit indexing boundary. The default is an
-                    operator assumption, not a verified provider allowance
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">
-                    JSON_BODY_MAX_BYTES · DOCUMENT_UPLOAD_MAX_BYTES ·
-                    DOCUMENT_EDIT_MAX_BYTES
-                  </td>
-                  <td>
-                    Request body caps for JSON routes, multipart document or
-                    redact uploads, and the two document-edit routes (<code
-                      >POST /api/documents/:id/edit</code
-                    >, <code>/api/documents/:id/collaboration/merge</code>; 12
-                    MiB by default). Enforced globally in
-                    <code>createApiApp</code> middleware, not only on routes
-                    that call <code>readLimitedJsonBody</code> or
-                    <code>readLimitedFormData</code>.
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">
-                    OOXML_MAX_ENTRIES · OOXML_MAX_UNCOMPRESSED_BYTES ·
-                    OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES ·
-                    OOXML_MAX_COMPRESSION_RATIO · OOXML_INFLATE_CONCURRENCY
-                  </td>
-                  <td>DOCX/ZIP central-directory and inflate limits</td>
-                </tr>
-                <tr>
-                  <td class="id">
-                    LEGAL_SEARCH_HYDRATION_QUEUE_MAX ·
-                    LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX ·
-                    LEGAL_SEARCH_HYDRATION_WINDOW_MS ·
-                    LEGAL_SEARCH_HYDRATION_LEASE_MS
-                  </td>
-                  <td>
-                    Authenticated search hydration unexpired-lease bound,
-                    per-subject miss budget, rolling window, and lease lifetime.
-                    Enforced by the shared Postgres admission ledger on the
-                    application database, so every API replica shares one miss
-                    window and one unexpired-lease bound. Retained but unused by
-                    the API since the corpus-only decision: no request path
-                    constructs the ledger or reads these values; the indexing
-                    boundary may reuse the ledger. The ledger counts unexpired
-                    leases, not every still-running operation. The admission
-                    transaction bounds its lock wait with transaction-local
-                    timeouts, so a wedged holder fails admission closed. The
-                    per-process MOJ rate limiter is a backstop composed before
-                    the cluster-wide request budget, so it can only tighten the
-                    shared window, never widen it
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">
-                    OBITER_RAMPART_MODEL · OBITER_RAMPART_REVISION ·
-                    OBITER_RAMPART_CACHE_DIR · OBITER_RAMPART_MIN_SCORE ·
-                    OBITER_RAMPART_CHUNK_TOKENS
-                  </td>
-                  <td>
-                    Model selection, revision, cache, confidence threshold and
-                    token-window size; validated once at API startup. The cache
-                    defaults to a per-user directory outside the workspace so a
-                    reinstall does not discard the download
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">OBITER_STORAGE_ROOT</td>
-                  <td>Object storage root directory</td>
-                </tr>
-                <tr>
-                  <td class="id">OBITER_REDACTION_RENDERER_URL</td>
-                  <td>
-                    Base URL of the sandboxed rendering worker. Required in
-                    production. Hard-redaction finalize POSTs a sanitized
-                    <code>.docx</code> to <code>/render</code> and rasterizes
-                    the returned intermediate PDF; the worker is reached only
-                    over HTTP and its package is not imported. A non-2xx,
-                    timeout, network failure or invalid PDF fails the run
-                    visibly instead of downgrading the output.
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">OBITER_RESEND_API_KEY · OBITER_EMAIL_FROM</td>
-                  <td>Transactional email</td>
-                </tr>
-                <tr>
-                  <td class="id">PORT</td>
-                  <td>API port, 8787 in development</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div class="callout note">
-            <b>Detection configuration is startup-scoped.</b> The API keeps the
-            deployed <code>OBITER_RAMPART_*</code> namespace. Model, revision,
-            cache directory, minimum confidence and chunk size are read through
-            <code>ApiEnv</code> once at startup; invalid values stop startup
-            rather than changing detection silently.
-          </div>
-          <div class="callout note">
-            <b
-              >The redaction renderer is an outbound boundary, not a package.</b
-            >
-            Hard-redaction finalize never imports the rendering worker's code.
-            It sends the sanitized <code>.docx</code> bytes to
-            <code>POST {OBITER_REDACTION_RENDERER_URL}/render</code> over HTTP
-            and rasterizes the returned PDF with the same <code>unpdf</code> /
-            <code>@napi-rs/canvas</code> / <code>pdf-lib</code> machinery used
-            for PDF sources. Every failure mode — non-2xx, timeout, unreachable
-            host, or a body that is not a PDF — fails the run; the API never
-            falls back to a text output or finalizes a run without its secure
-            PDF.
+          <div class="callout">
+            <b>Everything server-side is configured in backend.</b>
+            <code>DATABASE_URL</code>, <code>CORPUS_DATABASE_URL</code>,
+            <code>BETTER_AUTH_SECRET</code>, the
+            <code>MEILISEARCH_*</code> indexes and keys,
+            <code>OBITER_RAMPART_*</code>,
+            <code>OBITER_REDACTION_RENDERER_URL</code>, the request body caps,
+            the object storage root, the API port and the indexing credentials
+            belong to the private
+            <a href="https://github.com/ObiterDictum/backend">backend</a>
+            repository, whose README and <code>docs/</code> list them. The API
+            refuses to start without the ones it requires, and none of them are
+            read by a public workspace.
           </div>
           <div class="callout note">
             <b>The ONNX Runtime install is CPU-only.</b>
@@ -5290,21 +5152,9 @@
               >ONNXRUNTIME_NODE_INSTALL_CUDA=v12 bun pm trust
               onnxruntime-node</code
             >, and returns to CPU-only by removing that
-            <code>trustedDependencies</code> entry and reinstalling fresh.
-            <code>services/api/src/rampart-install-config.test.ts</code> fails
-            any workspace Dockerfile that opts in or installs without the
-            lockfile beside it.
-          </div>
-          <div class="callout note">
-            <b>The model is loaded at startup, not on first use.</b>
-            <code>createApiRuntime()</code> (<code>src/runtime.ts</code>) starts
-            warming the detector without blocking boot, under either adapter, so
-            the one-off ~15 MB Hugging Face download happens where a failure is
-            visible instead of inside a user's first redaction. A failed warm is
-            logged with its cause and leaves the API serving; detection still
-            degrades per run to <code>heuristics+supplement</code>, which the
-            review UI labels. <code>bun run prefetch:rampart</code> fills the
-            same cache without booting the API.
+            <code>trustedDependencies</code> entry and reinstalling fresh. The
+            backend API's own install-config test fails any workspace Dockerfile
+            that opts in or installs without the lockfile beside it.
           </div>
           <div class="callout note">
             <b>The web build fixes its own mode and records what it built.</b>
@@ -5361,6 +5211,13 @@
 
         <section id="search-flow">
           <h2>Search flow</h2>
+          <p class="lede">
+            The flow below runs in <code>services/api</code> in the private
+            <a href="https://github.com/ObiterDictum/backend">backend</a>
+            repository. It is recorded here because the response shape the
+            clients render is the public contract in
+            <code>packages/contracts</code>.
+          </p>
           <figure class="diagram">
             <div class="frame">
               <svg
@@ -5682,6 +5539,13 @@
 
         <section id="redact-flow">
           <h2>Redaction flow</h2>
+          <p class="lede">
+            Detection and the storage side of this pipeline run in
+            <code>services/api</code> in the private
+            <a href="https://github.com/ObiterDictum/backend">backend</a>
+            repository; the review and finalize surfaces are
+            <code>packages/redact-ui</code> here.
+          </p>
           <p>
             DOCX review coordinates and output bytes belong to Redact's XML
             walker and burner, never editor edit operations. Only accepted
@@ -6730,8 +6594,7 @@
                   <td class="id">bun run test</td>
                   <td>
                     Every workspace's own test script, then the root script
-                    suites (synthetic-v2, redact-acceptance,
-                    search-corpus-relevance, legislation-relevance)
+                    suites (perf, synthetic-v2, redact-acceptance, lint)
                   </td>
                 </tr>
                 <tr>
@@ -6743,27 +6606,14 @@
                 </tr>
                 <tr>
                   <td class="id">bun run lint</td>
-                  <td>oxlint, then eslint</td>
+                  <td>
+                    oxlint, eslint, the no-comments check, then the private-path
+                    guard
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">bun run format:check</td>
                   <td>Prettier across the repository</td>
-                </tr>
-                <tr>
-                  <td class="id">bun run benchmark:search-corpus</td>
-                  <td>
-                    Local <code>POST /api/search/fetch</code> relevance suite
-                    against the product corpus. Not run in CI or
-                    <code>scripts/ci-local.sh</code>.
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">bun run benchmark:legislation-corpus</td>
-                  <td>
-                    Local <code>POST /api/search/fetch</code> legislation
-                    relevance suite against the product provision corpus. Not
-                    run in CI or <code>scripts/ci-local.sh</code>.
-                  </td>
                 </tr>
                 <tr>
                   <td class="id">bun run --filter &lt;pkg&gt; test</td>
@@ -6773,11 +6623,13 @@
             </table>
           </div>
           <p>
-            API tests need <code>TEST_DATABASE_URL</code>;
-            <code>infra/docker/init/create-test-db.sh</code> provisions it. Live
-            Find Case Law tests are skipped unless
-            <code>OBITER_RUN_LIVE_FIND_CASE_LAW_TESTS</code> is set, which is
-            why a clean run reports skipped tests rather than passing ones.
+            The API, the ingestor, the database migrations and the whole-stack
+            end-to-end suite are tested in the private
+            <a href="https://github.com/ObiterDictum/backend">backend</a>
+            repository, which runs Postgres, Meilisearch, the runtime
+            integration on Bun and Node, the search benchmark, the web e2e suite
+            and the API image builds. Nothing in this repository's test run
+            needs either service.
           </p>
         </section>
 
@@ -6801,22 +6653,10 @@
                   <td class="id">checks</td>
                   <td>Pull request and push</td>
                   <td>
-                    Typecheck, format check, lint, test, and the web and desktop
-                    production builds with their size budgets. This is the gate:
-                    a red check here blocks the merge.
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">bun-api</td>
-                  <td>Pull request and push</td>
-                  <td>
-                    Starts the real API under native <code>Bun.serve</code> at
-                    the pinned <code>.bun-version</code>, and the Node rollback
-                    entry point, then drives
-                    <code>scripts/api-runtime/runtime-integration.mjs</code>
-                    against both: auth, tenancy, body limits, transactions,
-                    streaming, verification, CPU inference and SIGTERM shutdown.
-                    Vitest under Node does not cover this server.
+                    Typecheck, format check, lint (including the private-path
+                    guard), test, and the web and desktop production builds with
+                    their size budgets. This is the gate: a red check here
+                    blocks the merge.
                   </td>
                 </tr>
                 <tr>
@@ -6831,16 +6671,6 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">docker-api</td>
-                  <td>Push only</td>
-                  <td>
-                    Builds both <code>services/api</code> image targets from one
-                    Dockerfile: the Bun image (default) and the Node rollback
-                    (<code>--target runtime-node</code>). Same skip-on-PR rule
-                    as <code>docker-web</code>.
-                  </td>
-                </tr>
-                <tr>
                   <td class="id">desktop-release</td>
                   <td>windows-latest</td>
                   <td>Builds and uploads the Windows installer artifact</td>
@@ -6851,11 +6681,14 @@
           <div class="callout">
             <b>Branch strategy.</b> <code>dev</code> is the integration branch
             and <code>main</code> is the release branch; promoting
-            <code>dev</code> to <code>main</code> is what cuts a deploy. Both
-            <code>apps/web</code> and <code>services/api</code> have Dockerfiles
-            (the API builds a Bun image by default and a Node rollback target);
-            marketing lives in its own repository, and desktop ships as Electron
-            installers rather than server images. See
+            <code>dev</code> to <code>main</code> is what cuts a deploy. This
+            repository builds only the <code>apps/web</code> image; the API
+            images (Bun default, Node rollback target) build from the private
+            <a href="https://github.com/ObiterDictum/backend">backend</a>
+            repository, whose CI also owns the Postgres and Meilisearch
+            services, the migrations, the benchmark, the runtime integration and
+            the e2e suite. Marketing lives in its own repository, and desktop
+            ships as Electron installers rather than server images. See
             <a
               href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/deployment.md"
               >specs/deployment.md</a
@@ -6879,21 +6712,6 @@
               </thead>
               <tbody>
                 <tr>
-                  <td class="id">infra/docker/compose.yaml</td>
-                  <td>
-                    <span class="pill warn">Partial</span> Starts PostgreSQL 16
-                    only. Meilisearch is not in the compose file, so it does not
-                    stand up the full stack.
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">infra/docker/init/create-test-db.sh</td>
-                  <td>
-                    <span class="pill live">Live</span> Provisions the test
-                    database
-                  </td>
-                </tr>
-                <tr>
                   <td class="id">infra/nginx/</td>
                   <td><span class="pill stubbed">README only</span></td>
                 </tr>
@@ -6910,7 +6728,11 @@
           </div>
           <p>
             There are no deployments yet. Data residency is committed to the EU,
-            which constrains hosting choices when that changes.
+            which constrains hosting choices when that changes. The Postgres and
+            Meilisearch compose services and the test database bootstrap live in
+            the private
+            <a href="https://github.com/ObiterDictum/backend">backend</a>
+            repository under <code>infra/</code>.
           </p>
           <div class="callout note">
             <b>The web serving boundary.</b>
@@ -6956,8 +6778,8 @@
                 <tr>
                   <td>A new API endpoint</td>
                   <td class="id">
-                    services/api/src/routes/, thin, delegating to a domain
-                    module
+                    services/api/src/routes/ in backend, thin, delegating to a
+                    domain module
                   </td>
                 </tr>
                 <tr>
@@ -6981,7 +6803,8 @@
                 <tr>
                   <td>A schema change</td>
                   <td class="id">
-                    A new numbered migration; never edit an applied one
+                    A new numbered migration in backend, never an edit to an
+                    applied one
                   </td>
                 </tr>
                 <tr>
@@ -6994,30 +6817,30 @@
                 </tr>
                 <tr>
                   <td>Ranking or index behaviour</td>
-                  <td class="id">packages/search-client</td>
+                  <td class="id">packages/search-client in backend</td>
                 </tr>
                 <tr>
                   <td>Verify vocabulary (citation, finding, evidence)</td>
                   <td class="id">
-                    packages/verification-core, pure values; the V2+ API, worker
-                    and UI consume it
+                    packages/verification-core in backend, pure values; the V2+
+                    API and worker consume it
                   </td>
                 </tr>
                 <tr>
                   <td>Raw citation text to a canonical identity</td>
                   <td class="id">
-                    packages/verification-core for the result vocabulary and
-                    decision; the store-backed resolver is
-                    services/api/src/citation-resolution.ts, and the grammars
-                    are packages/contracts
+                    packages/verification-core in backend for the result
+                    vocabulary and decision; the store-backed resolver is
+                    services/api/src/citation-resolution.ts there, and the
+                    grammars are packages/contracts here
                   </td>
                 </tr>
                 <tr>
                   <td>Quote comparison and its word-boundary policy</td>
                   <td class="id">
-                    packages/verification-core (quote-text.ts,
+                    packages/verification-core in backend (quote-text.ts,
                     quote-fidelity.ts), pure; the store-scoped retrieval and
-                    batch bounds are services/api/src/quote-fidelity.ts
+                    batch bounds are services/api/src/quote-fidelity.ts there
                   </td>
                 </tr>
                 <tr>
@@ -7033,6 +6856,14 @@
 
         <section id="rules">
           <h2>Boundary rules</h2>
+          <p class="lede">
+            These are enforced by tests and lint in this repository. The rules
+            naming <code>services/api</code> modules are enforced in the private
+            <a href="https://github.com/ObiterDictum/backend">backend</a>
+            repository, where those modules live; they stay here because the
+            clients and the shared contracts depend on the behaviour they
+            protect.
+          </p>
           <ul class="rules">
             <li>
               <span
@@ -7203,96 +7034,30 @@
             </li>
             <li>
               <span
-                ><b>Files stay under 500 lines.</b> Thirty non-test TypeScript
-                source files currently exceed it:</span
+                ><b>Files stay under 500 lines.</b> Eight non-test TypeScript
+                source files in this repository currently exceed it. Files in
+                the private
+                <a href="https://github.com/ObiterDictum/backend">backend</a>
+                repository are measured there:</span
               >
               <ul>
                 <li><code>scripts/synthetic-v2/run.ts</code> (1881)</li>
-                <li><code>packages/search-client/src/index.ts</code> (1584)</li>
-                <li><code>services/api/src/database.ts</code> (1559)</li>
-                <li>
-                  <code
-                    >packages/app-shell/src/document-history-baseline.ts</code
-                  >
-                  (1474)
-                </li>
                 <li><code>scripts/synthetic-v2/providers.ts</code> (1426)</li>
                 <li>
                   <code
-                    >services/api/src/routes/legal-search/proxy-routes.ts</code
+                    >packages/app-shell/src/components/document-workspace/editor-commands.tsx</code
                   >
-                  (1332)
-                </li>
-                <li>
-                  <code>packages/app-shell/src/views/home.tsx</code> (1161)
-                </li>
-                <li>
-                  <code>services/api/src/redaction-database.ts</code> (1048)
-                </li>
-                <li>
-                  <code>services/legal-ingestor/src/legislation-ingest.ts</code>
-                  (966)
-                </li>
-                <li>
-                  <code>services/api/src/routes/redact-review.ts</code> (918)
-                </li>
-                <li><code>packages/redact-ui/src/review.tsx</code> (864)</li>
-                <li>
-                  <code>packages/app-shell/src/views/LegalSearchView.tsx</code>
-                  (833)
-                </li>
-                <li>
-                  <code>packages/rampart-inference/src/ner/classifier.ts</code>
-                  (831)
-                </li>
-                <li>
-                  <code>services/api/src/document-extraction.ts</code> (800)
-                </li>
-                <li>
-                  <code>services/api/src/routes/organisations.ts</code> (792)
-                </li>
-                <li>
-                  <code>services/legal-ingestor/src/legislation-clml.ts</code>
-                  (760)
+                  (941)
                 </li>
                 <li><code>scripts/synthetic-v2/governance.ts</code> (722)</li>
                 <li><code>scripts/synthetic-v2/qa.ts</code> (720)</li>
                 <li>
-                  <code
-                    >services/api/src/routes/legal-search/legislation-serve.ts</code
-                  >
-                  (700)
+                  <code>packages/rampart-inference/src/ner/classifier.ts</code>
+                  (621)
                 </li>
                 <li>
-                  <code>services/api/src/extraction-coverage.ts</code> (657)
+                  <code>apps/desktop/src/renderer/src/router.tsx</code> (553)
                 </li>
-                <li>
-                  <code>services/legal-ingestor/src/bulk-ingest.ts</code> (635)
-                </li>
-                <li>
-                  <code>scripts/legislation-relevance/cases.ts</code> (629)
-                </li>
-                <li>
-                  <code>scripts/legislation-relevance/corpus.ts</code> (613)
-                </li>
-                <li>
-                  <code
-                    >packages/legal-source-provider/src/moj-provider.ts</code
-                  >
-                  (598)
-                </li>
-                <li>
-                  <code>packages/search-client/src/benchmark/run.ts</code> (589)
-                </li>
-                <li>
-                  <code>services/legal-ingestor/src/withdrawal-check.ts</code>
-                  (547)
-                </li>
-                <li>
-                  <code>packages/ooxml/src/document-lineage.ts</code> (524)
-                </li>
-                <li><code>services/api/src/pdf-glyph-layout.ts</code> (516)</li>
-                <li><code>services/api/src/env.ts</code> (514)</li>
                 <li>
                   <code>tools/oxlint/anti-slop/shared/dictionary-types.ts</code>
                   (502)
@@ -7458,11 +7223,12 @@
                     >
                     have no <code>Bun.serve</code> equivalent, and there is no
                     configurable header-size limit. The bounds are specified in
-                    <a
-                      href="https://github.com/ObiterDictum/obiter/blob/dev/infra/traefik/entrypoints.yml"
-                      >infra/traefik/entrypoints.yml</a
+                    <code>backend/infra/traefik/entrypoints.yml</code> in the
+                    private
+                    <a href="https://github.com/ObiterDictum/backend"
+                      >backend</a
                     >
-                    and validated locally by
+                    repository and validated locally there by
                     <code>scripts/api-ingress</code> against Traefik v3.6.25;
                     applying them to the deployed Dokploy Traefik is still
                     pending. See
@@ -7749,7 +7515,9 @@
                     (<code>document-model-pool.ts</code>) so the serving event
                     loop stays free; the run contract did not change.
                   </td>
-                  <td class="id">docs/specs/verify/implementation.md</td>
+                  <td class="id">
+                    backend/docs/specs/verify/implementation.md
+                  </td>
                 </tr>
                 <tr>
                   <td>
@@ -8178,11 +7946,35 @@
                 <tr>
                   <td class="id">
                     <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/backend-repo-split.md"
+                      >backend-repo-split.md</a
+                    >
+                  </td>
+                  <td>
+                    Why the API and the case-law code live in the private
+                    backend repository
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
                       href="https://github.com/ObiterDictum/obiter/blob/dev/docs/prds/search.md"
                       >prds/search.md</a
                     >
                   </td>
                   <td>Search product target and gates</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a href="https://github.com/ObiterDictum/backend"
+                      >backend/README.md</a
+                    >
+                  </td>
+                  <td>
+                    Server setup, checks and API images. Its
+                    <code>docs/specs/{search,verify,atlas,research}</code> carry
+                    the implementation specs that used to live here
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -8228,8 +8020,9 @@
         <footer>
           <p>
             Generated from workspace manifests, migrations, route modules and
-            source on <code>feat/m125-access</code>, 2026-08-10. Regenerate
-            rather than patch: a stale map is worse than none.
+            source, then kept current by hand through the backend repository
+            split. Regenerate the diagrams rather than patch them: a stale map
+            is worse than none.
           </p>
         </footer>
       </main>

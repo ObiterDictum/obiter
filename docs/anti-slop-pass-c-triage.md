@@ -10,6 +10,8 @@ Skipped `require-safety-comment-for-type-assertion` (420/426) — own project pe
 
 Counts below measured on Pass B tip (`oxlint` with one extra rule enabled at a time, 465 files). Totals shift ±5 after Pass B formatting, otherwise stable.
 
+Sample paths are recorded as they were at that base commit. The `services/api`, `packages/database` and `packages/legal-source-provider` samples now live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository, so re-measuring this pass means running it there.
+
 ---
 
 ## 1. `no-chained-type-assertions` — 52 violations

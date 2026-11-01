@@ -27,7 +27,7 @@ packagedApiOrigin = app.isPackaged
 
 The packaged renderer is served from `obiter://desktop-auth` (a privileged, standard, secure scheme registered in the main entry). With those privileges, the renderer's `Origin` is the stable `obiter://desktop-auth`.
 
-**Verified empirically** against the local API: the packaged renderer sends `Origin: obiter://desktop-auth` on every request. This is the API's existing default `OBITER_DESKTOP_ORIGIN`, so the exact-match trust in `services/api/src/client-origins.ts` is satisfied with **no wildcard and no trust loosening**. The API deploy sets:
+**Verified empirically** against the local API: the packaged renderer sends `Origin: obiter://desktop-auth` on every request. This is the API's existing default `OBITER_DESKTOP_ORIGIN`, so the exact-match trust in `backend/services/api/src/client-origins.ts` is satisfied with **no wildcard and no trust loosening**. The API deploy sets:
 
 ```
 OBITER_DESKTOP_ORIGIN=obiter://desktop-auth
@@ -83,7 +83,7 @@ electron-builder config lives in `apps/desktop/electron-builder.yml` (kept out o
 bun run --filter @obiter/desktop package:win
 ```
 
-Produces `apps/desktop/release/Obiter Setup <version>.exe`. The desktop app has **no runtime npm dependencies** (the main/preload bundles import only `electron` and `node:` built-ins; the renderer is a fully bundled static asset set), so `node_modules` is excluded from the asar to keep the installer lean. The redaction model is **not** bundled — inference runs server-side in `services/api`, so no `onnxruntime` packaging.
+Produces `apps/desktop/release/Obiter Setup <version>.exe`. The desktop app has **no runtime npm dependencies** (the main/preload bundles import only `electron` and `node:` built-ins; the renderer is a fully bundled static asset set), so `node_modules` is excluded from the asar to keep the installer lean. The redaction model is **not** bundled — inference runs server-side in `backend/services/api`, so no `onnxruntime` packaging.
 
 `apps/desktop/package.json` scripts: `package` (current platform) and `package:win` (Windows). mac/linux targets are configured in the yml but not built or verified in this PR.
 

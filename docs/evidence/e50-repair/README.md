@@ -92,7 +92,7 @@ combined integration signal for the two migrations.
 - `packages/ooxml/src/collaboration-merge.test.ts`: a reconciled-merge lineage
   is retargeted onto the client base, and base-addressed operations are
   rewritten to current addresses before they are applied.
-- `services/api/src/routes/document-collaboration-merge.test.ts`: a true
+- `backend/services/api/src/routes/document-collaboration-merge.test.ts`: a true
   reconciled merge returns a lineage whose `baseVersionId` is the client's base
   and that names the edited base run.
 

@@ -1,5 +1,7 @@
 # Phase 1 Redact
 
+> Historical plan. The `services/api`, `packages/database`, `legal-schema`, `legal-source-provider`, `search-client` and `verification-core` paths below, and the `dev:api` and `db:migrate` commands, now live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository; see [backend-repo-split.md](backend-repo-split.md).
+
 ## Purpose
 
 Redact is the privacy layer. In Phase 1 it needs to make legal documents safer to process by detecting sensitive content, letting a human review it, and exporting controlled outputs.

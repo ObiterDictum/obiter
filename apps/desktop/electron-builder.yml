@@ -9,7 +9,8 @@
 # docs/specs/desktop-release.md.
 #
 # The model does NOT run in the desktop app (redaction inference is server-side
-# in services/api), so onnxruntime / model weights are deliberately not bundled.
+# in the backend API), so onnxruntime / model weights are deliberately not
+# bundled.
 
 appId: dev.obiter.desktop
 productName: Obiter

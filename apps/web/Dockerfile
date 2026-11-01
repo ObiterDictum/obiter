@@ -32,7 +32,8 @@
 # need the API origin at build time either.
 #
 # This Dockerfile builds the web app and the workspace packages it depends on.
-# It does NOT build services/api (owned by the Redact track) or run migrations.
+# It does NOT build the API or run migrations: both live in the private backend
+# repository.
 #
 # Build-verified: this stage and the bun runtime stage below are built and
 # curl-smoked in the Bun migration evidence run (see the PR); serve.mjs also
