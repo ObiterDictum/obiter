@@ -15,7 +15,6 @@ const ALLOWED = [
 ]
 
 const SKIPPED = [
-  /^packages\/database\/migrations\//u,
   /^scripts\/synthetic-v2\//u,
   /\/routeTree\.gen\.ts$/u,
   /\.d\.ts$/u,
