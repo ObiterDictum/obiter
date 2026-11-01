@@ -144,6 +144,25 @@ describe('merging window detections', () => {
     expect(spans[0].text).toBe(text.slice(190, 205))
   })
 
+  it('keeps a redact suggestion when the other window suggests keeping the range', () => {
+    const spans = mergeWindowDetections(
+      [
+        { window: { start: 0, end: 200 }, spans: [span(190, 200)] },
+        {
+          window: { start: 196, end: 300 },
+          spans: [{ ...span(0, 9), suggestion: 'keep' }],
+        },
+      ],
+      'a'.repeat(300),
+    )
+
+    expect(spans[0]).toMatchObject({
+      start: 190,
+      end: 205,
+      suggestion: 'redact',
+    })
+  })
+
   it('covers the union when crossing ranges chain through a third window', () => {
     const spans = mergeWindowDetections(
       [
@@ -217,5 +236,62 @@ describe('merging window detections', () => {
       [10, 20],
       [15, 25],
     ])
+  })
+
+  it('leaves nested spans found inside one window untouched', () => {
+    const spans = mergeWindowDetections(
+      [
+        {
+          window: { start: 0, end: 200 },
+          spans: [span(10, 100), span(20, 90)],
+        },
+      ],
+      'a'.repeat(200),
+    )
+
+    expect(spans.map(({ start, end }) => [start, end])).toEqual([
+      [10, 100],
+      [20, 90],
+    ])
+  })
+
+  it('merges nested spans from one window when another window covers both', () => {
+    const spans = mergeWindowDetections(
+      [
+        {
+          window: { start: 0, end: 200 },
+          spans: [span(10, 100), span(20, 90)],
+        },
+        { window: { start: 50, end: 250 }, spans: [span(30, 40)] },
+      ],
+      'a'.repeat(250),
+    )
+
+    expect(spans.map(({ start, end }) => [start, end])).toEqual([[10, 100]])
+  })
+
+  it('keeps a dense set of disjoint spans near-linear instead of scanning every earlier span', () => {
+    const count = 100_000
+    const spans = Array.from({ length: count }, (_, index) =>
+      span(index * 2, index * 2 + 1),
+    )
+    const started = performance.now()
+
+    const merged = mergeWindowDetections(
+      [
+        { window: { start: 0, end: 200_000 }, spans },
+        { window: { start: 196_000, end: 396_000 }, spans: [] },
+      ],
+      'a'.repeat(400_000),
+    )
+    const elapsed = performance.now() - started
+
+    expect(merged).toHaveLength(count)
+    expect(merged[0]).toMatchObject({ start: 0, end: 1 })
+    expect(merged[count - 1]).toMatchObject({
+      start: (count - 1) * 2,
+      end: (count - 1) * 2 + 1,
+    })
+    expect(elapsed).toBeLessThan(3_000)
   })
 })

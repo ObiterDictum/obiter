@@ -79,6 +79,11 @@ interface Candidate {
   touchesEdge: boolean
 }
 
+interface ClusterEntry {
+  candidate: Candidate
+  current: boolean
+}
+
 function prefers(candidate: Candidate, incumbent: Candidate): boolean {
   if (candidate.touchesEdge !== incumbent.touchesEdge)
     return !candidate.touchesEdge
@@ -117,8 +122,16 @@ export function mergeWindowDetections(
   detections: readonly WindowDetection[],
   text: string,
 ): RedactionSpan[] {
+  const orderedWindows = detections
+    .map((detection, index) => ({ detection, index }))
+    .sort(
+      (left, right) =>
+        left.detection.window.start - right.detection.window.start ||
+        left.index - right.index,
+    )
   const unique = new Map<string, Candidate>()
-  detections.forEach(({ window, spans }, windowIndex) => {
+  orderedWindows.forEach(({ detection }, windowIndex) => {
+    const { window, spans } = detection
     const windowLength = window.end - window.start
     for (const span of spans) {
       if (span.start >= span.end) continue
@@ -139,22 +152,66 @@ export function mergeWindowDetections(
     }
   })
 
-  const ordered = [...unique.values()].sort(
-    (left, right) =>
-      left.span.start - right.span.start || left.span.end - right.span.end,
-  )
-  const merged: Candidate[] = []
-  for (const candidate of ordered) {
-    let next = candidate
-    for (let index = merged.length - 1; index >= 0; index--) {
-      const other = merged[index]
-      if (other.span.category !== next.span.category) continue
-      if (other.windowIndex === next.windowIndex) continue
-      if (other.span.end <= next.span.start) break
-      merged.splice(index, 1)
-      next = unionCandidate(next, other)
+  const byCategory = new Map<
+    RedactionSpan['category'],
+    Map<number, Candidate[]>
+  >()
+  for (const candidate of unique.values()) {
+    let windows = byCategory.get(candidate.span.category)
+    if (windows === undefined) {
+      windows = new Map()
+      byCategory.set(candidate.span.category, windows)
     }
-    merged.push(next)
+    const existing = windows.get(candidate.windowIndex)
+    if (existing === undefined) windows.set(candidate.windowIndex, [candidate])
+    else existing.push(candidate)
+  }
+
+  const merged: Candidate[] = []
+  for (const windows of byCategory.values()) {
+    let pending: Candidate[] = []
+    const finished: Candidate[] = []
+    for (const [windowIndex, { detection }] of orderedWindows.entries()) {
+      pending = pending.filter((candidate) => {
+        if (candidate.span.end > detection.window.start) return true
+        finished.push(candidate)
+        return false
+      })
+      const current = windows.get(windowIndex)
+      if (current === undefined) continue
+      const entries: ClusterEntry[] = [
+        ...pending.map((candidate) => ({ candidate, current: false })),
+        ...current.map((candidate) => ({ candidate, current: true })),
+      ].sort(
+        (left, right) =>
+          left.candidate.span.start - right.candidate.span.start ||
+          left.candidate.span.end - right.candidate.span.end,
+      )
+      const nextPending: Candidate[] = []
+      let cluster: ClusterEntry[] = []
+      let clusterEnd = -1
+      const flushCluster = () => {
+        if (cluster.length === 0) return
+        const hasCurrent = cluster.some((entry) => entry.current)
+        const hasPending = cluster.some((entry) => !entry.current)
+        if (hasCurrent && hasPending)
+          nextPending.push(
+            cluster.map((entry) => entry.candidate).reduce(unionCandidate),
+          )
+        else for (const entry of cluster) nextPending.push(entry.candidate)
+        cluster = []
+        clusterEnd = -1
+      }
+      for (const entry of entries) {
+        if (entry.candidate.span.start >= clusterEnd) flushCluster()
+        cluster.push(entry)
+        if (entry.candidate.span.end > clusterEnd)
+          clusterEnd = entry.candidate.span.end
+      }
+      flushCluster()
+      pending = nextPending
+    }
+    merged.push(...finished, ...pending)
   }
 
   return merged
