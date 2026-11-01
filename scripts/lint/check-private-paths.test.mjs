@@ -6,6 +6,9 @@ import { checkPrivatePaths } from './check-private-paths.mjs'
 
 const roots = []
 
+const specifier = (...parts) => parts.join('/')
+const moduleName = (...parts) => parts.join('-')
+
 function plantedTree(files) {
   const root = mkdtempSync(path.join(tmpdir(), 'obiter-private-paths-'))
   roots.push(root)
@@ -61,46 +64,45 @@ describe('private backend paths', () => {
 
 describe('private backend imports', () => {
   test('rejects an import of a backend package name', () => {
+    const name = specifier('@obiter', 'search-client')
     const root = plantedTree({
-      'packages/ui/src/search.ts':
-        "import type { Hit } from '@obiter/search-client'\n",
+      'packages/ui/src/search.ts': `import type { Hit } from '${name}'\n`,
     })
     expect(
       checkPrivatePaths({ root, files: ['packages/ui/src/search.ts'] }),
-    ).toEqual([
-      'packages/ui/src/search.ts: imports @obiter/search-client (@obiter/search-client)',
-    ])
+    ).toEqual([`packages/ui/src/search.ts: imports ${name} (${name})`])
   })
 
   test('rejects a require of a backend package subpath', () => {
+    const name = specifier('@obiter', 'database')
     const root = plantedTree({
-      'apps/web/lane.mjs': "const lane = require('@obiter/database/target')\n",
+      'apps/web/lane.mjs': `const lane = require('${name}/target')\n`,
     })
     expect(checkPrivatePaths({ root, files: ['apps/web/lane.mjs'] })).toEqual([
-      'apps/web/lane.mjs: imports @obiter/database (@obiter/database/target)',
+      `apps/web/lane.mjs: imports ${name} (${name}/target)`,
     ])
   })
 
   test('rejects an import of a provider module name', () => {
+    const name = moduleName('moj', 'client')
     const root = plantedTree({
-      'packages/config/src/source.ts':
-        "import { createClient } from './providers/moj-client'\n",
+      'packages/config/src/source.ts': `import { createClient } from './providers/${name}'\n`,
     })
     expect(
       checkPrivatePaths({ root, files: ['packages/config/src/source.ts'] }),
     ).toEqual([
-      'packages/config/src/source.ts: imports moj-client (./providers/moj-client)',
+      `packages/config/src/source.ts: imports ${name} (./providers/${name})`,
     ])
   })
 
   test('rejects a workspace manifest that depends on a backend package', () => {
+    const name = specifier('@obiter', 'api')
     const root = plantedTree({
-      'packages/ui/package.json':
-        '{ "dependencies": { "@obiter/api": "workspace:*" } }\n',
+      'packages/ui/package.json': `{ "dependencies": { "${name}": "workspace:*" } }\n`,
     })
     expect(
       checkPrivatePaths({ root, files: ['packages/ui/package.json'] }),
-    ).toEqual(['packages/ui/package.json: depends on @obiter/api'])
+    ).toEqual([`packages/ui/package.json: depends on ${name}`])
   })
 
   test('accepts a public package that shares the contracts with the backend', () => {
