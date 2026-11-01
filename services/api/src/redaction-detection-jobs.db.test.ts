@@ -266,17 +266,19 @@ it('reports that a scanned PDF requires OCR after the request has already return
 
 it('lets a second upload progress while a long document is still detecting on one worker', async () => {
   const f = await fixture()
+  let releaseLong: () => void = () => undefined
+  let worker: ReturnType<typeof startDetectionWorker> | undefined
+  let failure: unknown
   try {
     const longText = 'Email synthetic.person@example.com. '.repeat(7_000)
     const shortText = 'Email synthetic.person@example.com'
     const longId = await f.create(longText)
     const shortId = await f.create(shortText)
-    let releaseLong: () => void = () => undefined
     const longPaused = new Promise<void>((resolve) => {
       releaseLong = resolve
     })
     const started: string[] = []
-    const worker = startDetectionWorker(pool, f.storage, {
+    worker = startDetectionWorker(pool, f.storage, {
       detect: async (text, progress) => {
         const isLong = text === longText
         started.push(isLong ? 'long' : 'short')
@@ -299,11 +301,23 @@ it('lets a second upload progress while a long document is still detecting on on
     )
       await sleep(100)
     expect((await f.read(longId)).status).toBe('ready_for_review')
-    await worker.stop()
     expect(started).toEqual(['long', 'short'])
+  } catch (error) {
+    failure = error
   } finally {
-    await f.cleanup()
+    releaseLong()
+    try {
+      await worker?.stop()
+    } catch (error) {
+      failure ??= error
+    }
+    try {
+      await f.cleanup()
+    } catch (error) {
+      failure ??= error
+    }
   }
+  if (failure !== undefined) throw failure
 })
 
 it('releases its lease after a window when graceful shutdown begins', async () => {
