@@ -1,5 +1,7 @@
 # Phase 1 Search
 
+> Historical plan. The `services/api`, `packages/database`, `legal-schema`, `legal-source-provider`, `search-client` and `verification-core` paths below, and the `dev:api` and `db:migrate` commands, now live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository; see [backend-repo-split.md](backend-repo-split.md).
+
 ## Purpose
 
 Search is the public legal source layer. In Phase 1 it must do one job very well: resolve and retrieve authoritative legal sources fast enough to support research and verification.

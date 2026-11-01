@@ -2,11 +2,17 @@
 
 Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under Dokploy. Nothing else is deployable yet — this spec closes that gap for the API (which includes auth) and the web app.
 
+The API image is built from the private
+[`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository,
+which includes this one as an `obiter/` submodule. Paths below that start with
+`backend/` are in that repository; the `apps/` and `packages/` paths without
+that prefix are here.
+
 ## Verified current state
 
-- **Database**: running on the server (Dokploy). Local dev expects `postgres://obiter:obiter@localhost:5432/obiter` (default in `services/api/src/env.ts`).
+- **Database**: running on the server (Dokploy). Local dev expects `postgres://obiter:obiter@localhost:5432/obiter` (default in `backend/services/api/src/env.ts`).
 - **Web Dockerfile exists** at `apps/web/Dockerfile` (added in the app shell rebuild M3), with a dependency-free SSR host (`apps/web/serve.mjs`) and a repo-root `.dockerignore`. It has been `docker build`-verified locally: a build with `--build-arg OBITER_BUILD_COMMIT=<sha> --build-arg OBITER_BUILD_DIRTY=0` produces an image whose `apps/web/dist/.obiter-build.json` names that commit with `dirty: false`, and the image's `serve.mjs` serves the same marker at `/.well-known/obiter-build` (with `OBITER_BUILD_PROVENANCE=1`). See the Implementation section below.
-- **API Dockerfile** exists at `services/api/Dockerfile`, delivered with the Bun runtime work below. Migrations in `packages/database/migrations/*.sql` are applied by `bun run db:migrate` (`services/api/src/migrate.ts`, tracked in `schema_migrations`) and at API startup; the server schema is no longer applied manually.
+- **API Dockerfile** exists at `backend/services/api/Dockerfile`, delivered with the Bun runtime work below. Migrations in `backend/packages/database/migrations/*.sql` are applied by `bun run db:migrate` (`backend/services/api/src/migrate.ts`, tracked in `schema_migrations`) and at API startup; the server schema is no longer applied manually.
 - `apps/web` is a TanStack Start app — it has an SSR server component, so it deploys as a Node service, not a static bundle.
 - Auth is better-auth with cookie sessions, which constrains routing (below).
 
@@ -14,11 +20,17 @@ Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under
 
 Three Dokploy applications on the existing VPS, plus the existing database:
 
-| App        | Source                    | Runtime                          | Notes                                                                                        |
-| ---------- | ------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------- |
-| `api`      | `services/api` Dockerfile | Bun 1.4.2 (Node rollback target) | Hono server; serves `/api/*` including all better-auth routes. Runs migrations before start. |
-| `web`      | `apps/web` Dockerfile     | Node 22                          | TanStack Start SSR server.                                                                   |
-| `postgres` | already deployed          | —                                | Existing Dokploy service; API connects via internal network `DATABASE_URL`.                  |
+| App        | Source                                          | Runtime                          | Notes                                                                                                                                                                  |
+| ---------- | ----------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api`      | `backend` repository, `services/api/Dockerfile` | Bun 1.4.2 (Node rollback target) | Hono server; serves `/api/*` including all better-auth routes. Runs migrations before start. Builds with the submodule present because it imports `obiter/packages/*`. |
+| `web`      | `apps/web` Dockerfile                           | Node 22                          | TanStack Start SSR server.                                                                                                                                             |
+| `postgres` | already deployed                                | —                                | Existing Dokploy service; API connects via internal network `DATABASE_URL`.                                                                                            |
+
+The `api` application's source is the private `backend` repository, connected
+with a read-only deploy key. Its build context is that repository's root and
+its Dockerfile is `services/api/Dockerfile` there, so the checkout includes the
+`obiter/` submodule the image imports from. `web` and the renderer keep this
+repository as their source.
 
 **Same-domain routing is a hard requirement.** better-auth uses cookie sessions; serving web and API from different origins forces third-party-cookie workarounds that break quietly. Route one domain through Dokploy's Traefik: `/*` → `web`, `/api/*` → `api`. The web app then calls the API with relative URLs and `credentials: 'include'` just works (this matches the contract's `apiFetch` design).
 
@@ -26,24 +38,24 @@ Three Dokploy applications on the existing VPS, plus the existing database:
 
 ### Migration runner — owned by the Redact track (first to need it)
 
-`services/api/src/migrate.ts`: applies `packages/database/migrations/*.sql` in filename order, tracked in a `schema_migrations` table (filename + applied_at), idempotent, each file in its own transaction, stops at the first failure naming the file. Wired as `bun run db:migrate --database-url=<url>` (the URL must be passed explicitly — no default — so the wrong database is never migrated by accident). The API runs it at startup behind a Postgres advisory lock and refuses to start when migrations cannot be applied. Used identically for local dev, tests, and as the API container's pre-start step. The Redact agent needs this anyway to apply `0005_redaction.sql` repeatably.
+`backend/services/api/src/migrate.ts`: applies `backend/packages/database/migrations/*.sql` in filename order, tracked in a `schema_migrations` table (filename + applied_at), idempotent, each file in its own transaction, stops at the first failure naming the file. Wired as `bun run db:migrate --database-url=<url>` (the URL must be passed explicitly — no default — so the wrong database is never migrated by accident). The API runs it at startup behind a Postgres advisory lock and refuses to start when migrations cannot be applied. Used identically for local dev, tests, and as the API container's pre-start step. The Redact agent needs this anyway to apply `0005_redaction.sql` repeatably.
 
 ### API Dockerfile — delivered with the Bun runtime work
 
-The image now exists at `services/api/Dockerfile`. The Bun migration section
+The image now exists at `backend/services/api/Dockerfile`. The Bun migration section
 below is the canonical description of its targets, proxy limits and rollback;
 what remains true from the original plan:
 
-- `services/api/src/runtime.ts` runs migrations before the socket binds, so there
+- `backend/services/api/src/runtime.ts` runs migrations before the socket binds, so there
   is no separate pre-start step for the container.
 - The build stage materialises dependencies with `bun install --frozen-lockfile`
   beside the repo-root `bun.lock`. There is no repo-root `.npmrc`: CPU-only ONNX
   Runtime comes from Bun's dependency trust policy, not an install setting (the
   policy and the GPU opt-in are in the ONNX Runtime note below;
-  `services/api/src/rampart-install-config.test.ts` fails any workspace
+  `backend/services/api/src/rampart-install-config.test.ts` fails any workspace
   Dockerfile stage that installs without `bun.lock` or opts `onnxruntime-node`
   into its install scripts).
-- Env (from `services/api/src/env.ts` + better-auth): `DATABASE_URL` (Dokploy
+- Env (from `backend/services/api/src/env.ts` + better-auth): `DATABASE_URL` (Dokploy
   internal network), better-auth secret/base-URL, CORS origin,
   `OBITER_REDACTION_RENDERER_URL` (required in production: the sandboxed worker
   that renders a sanitized `.docx` into an intermediate PDF for hard-redaction
@@ -106,10 +118,10 @@ Artifacts shipped:
   never runs and the provider payload is never fetched. `bun.lock` is the install
   source of truth: **every dependency-materialising stage must copy the repo-root
   `bun.lock` and install with `bun install --frozen-lockfile`**
-  (`apps/web/Dockerfile` and `services/api/Dockerfile` both do). A stage that
+  (`apps/web/Dockerfile` and `backend/services/api/Dockerfile` both do). A stage that
   installs without the lockfile, or opts the package in with `bun pm trust
 onnxruntime-node` / `ONNXRUNTIME_NODE_INSTALL_CUDA`, fails
-  `services/api/src/rampart-install-config.test.ts`. A GPU builder opts in
+  `backend/services/api/src/rampart-install-config.test.ts`. A GPU builder opts in
   explicitly on its own machine; images stay CPU.
 - **Repo-root `.dockerignore`** — Docker consults only the `.dockerignore` at the build-context root, so all exclusions live here (including `**/.env*` so secrets are never baked into layers). `apps/web/.dockerignore` is a comment-only pointer, not protective, to avoid the trap of a nested file that looks effective but isn't.
 
@@ -129,19 +141,19 @@ production rollout is **not** authorised. The evaluation is
 `obiter-ops d7dd3320fdcee7cfdc94ba123e41a7919ed64ab3`,
 `evaluations/2026-09-18-bun-serve-runtime/revision-2`.
 
-**Runtime.** The API is built once by `services/api/src/runtime.ts`
+**Runtime.** The API is built once by `backend/services/api/src/runtime.ts`
 (`createApiRuntime()`) and served by one of two adapters, selected by entry
 point rather than an environment flag:
 
-| Entry point                      | Adapter             | Image target                        |
-| -------------------------------- | ------------------- | ----------------------------------- |
-| `services/api/src/server-bun.ts` | native `Bun.serve`  | default (`services/api/Dockerfile`) |
-| `services/api/src/server.ts`     | `@hono/node-server` | `--target runtime-node`             |
+| Entry point                              | Adapter             | Image target                                |
+| ---------------------------------------- | ------------------- | ------------------------------------------- |
+| `backend/services/api/src/server-bun.ts` | native `Bun.serve`  | default (`backend/services/api/Dockerfile`) |
+| `backend/services/api/src/server.ts`     | `@hono/node-server` | `--target runtime-node`                     |
 
 - Bun is pinned to **1.4.2** in `.bun-version`, root `package.json`
   `packageManager`, and the `ARG BUN_VERSION` plus the
   `oven/bun:1.4.2-slim` base in both workspace Dockerfiles.
-  `services/api/src/runtime-pins.test.ts` fails a change that lets any of those
+  `backend/services/api/src/runtime-pins.test.ts` fails a change that lets any of those
   drift; a version bump must re-run the Bun-runtime CI job before it merges.
 - `Bun.serve` is configured explicitly: `hostname: '0.0.0.0'`,
   `maxRequestBodySize: 64 MiB` (a transport backstop; the app's 48 KiB JSON and
@@ -156,9 +168,9 @@ point rather than an environment flag:
   commit:
 
   ```sh
-  docker build -f services/api/Dockerfile -t obiter-api \
+  docker build -f backend/services/api/Dockerfile -t obiter-api \
     --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" .          # Bun (default)
-  docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node \
+  docker build -f backend/services/api/Dockerfile --target runtime-node -t obiter-api-node \
     --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" .          # Node rollback
   ```
 
@@ -168,7 +180,7 @@ point rather than an environment flag:
   than a guessed revision. The build installs the production dependency graph
   on Bun, which does not run `onnxruntime-node`'s postinstall, so ONNX Runtime
   stays CPU-only; the policy and its guard are in
-  `services/api/src/rampart-install-config.test.ts`. The Rampart model is
+  `backend/services/api/src/rampart-install-config.test.ts`. The Rampart model is
   prefetched into `/opt/obiter/rampart-models` at build time and
   `OBITER_RAMPART_CACHE_DIR` points there; mounting a volume over that path
   shadows the baked weights, so warm the volume with `bun run prefetch:rampart`
@@ -212,7 +224,7 @@ a change here does **not** change Traefik.
   so the effective rejection point is the configured 16 KiB, not that value plus
   a read buffer.
 
-**Validation.** `scripts/api-ingress/ingress.mjs` runs the fragment verbatim in
+**Validation.** `backend/scripts/api-ingress/ingress.mjs` runs the fragment verbatim in
 a disposable Traefik (pinned to `traefik:v3.6.25`, the image Dokploy pulls, with
 its digest checked) and puts the real Bun and Node images behind it. It proves
 through the proxy: `/api/health` naming the adapter and an authenticated
@@ -232,7 +244,7 @@ re-run the harness after any Traefik or fragment change. TLS, HTTP/2 and HTTP/3
 header limits are not covered.
 
 **Shutdown.** Both adapters use `installGracefulShutdown` in
-`services/api/src/lifecycle.ts`: SIGTERM/SIGINT stops accepting new work
+`backend/services/api/src/lifecycle.ts`: SIGTERM/SIGINT stops accepting new work
 (`server.close()` + `closeIdleConnections()` on Node, `server.stop(false)` on
 Bun), lets in-flight requests finish, closes the Postgres pool, logs
 `drained and database pool closed`, and exits 0. A 10 s deadline forces exit 1 if
@@ -258,7 +270,7 @@ Dokploy does not know the commit it is building, so set `OBITER_BUILD_COMMIT` as
 an application build arg (the same external boundary the web image's provenance
 has above); without it the label is empty and the comparison proves nothing.
 After the switch, `/api/health` reports `runtime: 'node'`. The Node entry point
-is exercised by CI and by `scripts/api-ingress/ingress.mjs`, which switches the
+is exercised by CI and by `backend/scripts/api-ingress/ingress.mjs`, which switches the
 route Bun → Node → Bun behind one proxy, so rollback is tested rather than
 documented.
 

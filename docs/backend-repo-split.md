@@ -1,6 +1,6 @@
 # Backend Repository Split
 
-Status: planned (1 November 2026). Assessed at `origin/dev` `abe9693f`.
+Status: stage 3 in progress (cut-over). Stage 2 landed the private `ObiterDictum/backend` repository with every moving path, its history and the `obiter/` submodule; this repository is removing its half. Planned 1 November 2026, assessed at `origin/dev` `abe9693f`.
 
 ## Decision
 

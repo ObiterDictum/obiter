@@ -32,9 +32,9 @@ every re-vendor**:
   does not call `mergeSpans` and still returns overlapping contributors, then
   run `packages/rampart-inference` tests (including
   `ner/classifier.test.ts > keeps overlapping detections from separate windows
-  as contributors`) and the `services/api` test
-  `redaction-merge-integrity.test.ts` (which drives the real `detectNer` over
-  two windows through the finalize route).
+  as contributors`) and the `redaction-merge-integrity.test.ts` test in the
+  private backend repository's `services/api` (which drives the real `detectNer`
+  over two windows through the finalize route).
 
 ## Formatting / linting
 

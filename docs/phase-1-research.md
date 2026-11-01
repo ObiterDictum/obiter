@@ -1,5 +1,7 @@
 # Phase 1 Research
 
+> Historical plan. The `services/api`, `packages/database`, `legal-schema`, `legal-source-provider`, `search-client` and `verification-core` paths below, and the `dev:api` and `db:migrate` commands, now live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository; see [backend-repo-split.md](backend-repo-split.md).
+
 ## Purpose
 
 Research is the controlled user-facing legal research experience built on top of Atlas and Verify. In Phase 1 it should answer questions with evidence, not just generate prose.

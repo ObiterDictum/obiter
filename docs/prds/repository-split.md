@@ -1,6 +1,12 @@
 # Repository Split PRD
 
-Status: active. Defines how the Obiter monorepo separates into product, data-generation and operations repositories, and what deliberately stays together.
+Status: superseded for the server side by
+[backend-repo-split.md](../backend-repo-split.md), which moves the API, the
+case-law packages and the migrations to the private `ObiterDictum/backend`
+repository because the Find Case Law licence does not permit publishing them.
+The rest of this PRD still governs the corpus and operations split.
+
+Defines how the Obiter monorepo separates into product, data-generation and operations repositories, and what deliberately stays together.
 
 ## Summary
 
@@ -73,7 +79,13 @@ They are also governed by the same rules. One repository means one place for the
 
 ## The Backend Question
 
-`services/api` and `services/legal-ingestor` stay in the public repository under ELv2. This is a decision rather than an omission, so the reasoning is recorded.
+**Superseded.** This section concluded that `services/api` and
+`services/legal-ingestor` stay in the public repository under ELv2. The Find
+Case Law licence answer came back the other way: acquisition and retrieval code
+may not be published, so the whole backend moved to the private
+`ObiterDictum/backend` repository. See
+[backend-repo-split.md](../backend-repo-split.md). The original reasoning is
+kept below because the licence, not the security argument, is what changed.
 
 **What was checked.** No secret value lives in any tracked file; every credential is read from the environment. The matches for "admin", "credential" and "secret" in `services/` are variable names, not values. Nothing in the backend is unpublishable on its face.
 

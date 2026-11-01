@@ -92,23 +92,3 @@ await writeFile(
   new URL('pdf-scanned-like-fixture.pdf', outputDirectory),
   createPdf([[]]),
 )
-
-const uploadCorpusDirectory = new URL(
-  '../services/api/test-fixtures/upload-corpus/',
-  import.meta.url,
-)
-const claimFormLines = [
-  'IN THE COUNTY COURT AT CENTRAL LONDON',
-  'PARTICULARS OF CLAIM',
-  'The Claimant claims damages totalling GBP 162,526.25',
-  'NI number QQ 12 34 56 C was recorded',
-]
-await mkdir(uploadCorpusDirectory, { recursive: true })
-await writeFile(
-  new URL('claim-form-spaced.pdf', uploadCorpusDirectory),
-  createPdf([claimFormLines]),
-)
-await writeFile(
-  new URL('claim-form-fused.pdf', uploadCorpusDirectory),
-  createPdf([claimFormLines.map((line) => line.replaceAll(' ', ''))]),
-)

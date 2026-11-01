@@ -1,5 +1,7 @@
 # App Shell Rebuild — M1 Implementation Plan
 
+> Historical plan. The `services/api`, `packages/database`, `legal-schema`, `legal-source-provider`, `search-client` and `verification-core` paths below, and the `dev:api` and `db:migrate` commands, now live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository; see [backend-repo-split.md](../../backend-repo-split.md).
+
 Milestone 1 scope only, per [PRD](../../prds/archive/app-shell-rebuild.md). Ends at the **contract freeze**. M2 (live surfaces + fixture deletion) and M3 (search restyle + desktop polish) resume after review.
 
 The frozen surface this plan delivers is [contract.md](contract.md).

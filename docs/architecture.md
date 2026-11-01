@@ -35,23 +35,19 @@ obiter/
     desktop/
     docs/
     marketing/
-  services/
-    api/
-    worker/
-    legal-ingestor/
   packages/
     app-shell/
     contracts/
     ui/
-    database/
-    legal-schema/
-    citation-parser/
+    redact-ui/
     redaction-policy/
-    verification-core/
-    search-client/
+    ooxml/
     config/
+    rampart-inference/
+    test-dom/
+  services/
+    redaction-renderer/
   infra/
-    docker/
     monitoring/
     nginx/
     terraform/
@@ -60,6 +56,11 @@ obiter/
     evals/
     fixtures/
 ```
+
+The API, legal ingestion, the database migrations and the case-law packages
+live in the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend)
+repository, which includes this one as an `obiter/` submodule pinned to a
+commit. See [backend-repo-split.md](backend-repo-split.md).
 
 ## Recommended Stack
 
@@ -877,269 +878,30 @@ column) minus cell padding. Typing in a cell emits the same `onWordEdit`
 operations as body text. A typed table model and row splits stay out of
 scope.
 
-### Public search, changelog, and health: no user authorization (30 August 2026)
+### Public routes stay anonymous; the corpus API lives in backend (30 August 2026, cut over 1 November 2026)
 
-Context: `GET /api/search`, `POST /api/search/fetch`,
-`GET /api/search/documents/:documentId`, `GET /api/changelog`, and
+Decision: `GET /api/search`, `POST /api/search/fetch`,
+`GET /api/search/documents/:documentId`, `GET /api/changelog` and
 `GET /api/health` resolve a session when one exists but do not require one.
 That is a product policy for published legal authorities, the product
-changelog, and API liveness, not an omitted gate. The only place it was
-visible was the handlers.
+changelog and API liveness, not an omitted gate. Adding an auth requirement is
+a product change and must fail a test that says so in the backend repository
+rather than landing silently.
 
-Decision: keep these five routes anonymous. They exist to serve public
-judgment search of already stored authorities, GitHub-backed release notes,
-and a minimal liveness probe. Anonymous `POST /api/search/fetch` is stored-only: it
-must not queue hydration, call Find Case Law, or write Postgres or
-Meilisearch. Anonymous `GET /api/search/documents/:documentId` may still answer a
-miss from the provider in a read-only process, as it did before, but it is
-charged to one shared anonymous bucket (a server constant, not a
-caller-supplied id or IP) and it never persists: an anonymous request causes no
-corpus or index write even when the process owns a writer. Authenticated callers may
-queue bounded background hydration, request foreground live results, and fetch
-a document on a miss, but every provider-reaching path crosses one in-process
-`LegalSourceHydrationGate`
-(`services/api/src/legal-search-hydration-budget.ts`). The gate reserves the
-authenticated user's budget before the operation runs, deduplicates equivalent
-in-flight work by a canonical key (a query key and a `document:` key never
-collide), and releases the reservation on success, error, rate limit or
-cancellation. A request the budget rejects never reaches the provider, the
-corpus or the indexer. Deduplication shares one in-flight result across
-subjects, so a concurrent caller for the same key is answered without a second
-upstream fetch and without consuming its own miss. The detached detail pass a
-foreground fetch starts is admitted as its own lease without charging the miss
-window again, so while that lease is unexpired every provider request it makes
-is inside the lease bound rather than outside it. The ledger counts unexpired
-leases, not every still-running operation: once a lease passes
-`LEGAL_SEARCH_HYDRATION_LEASE_MS` its operation drops out of the count, so a
-second operation can be admitted while the first still runs. Bounding every
-running operation would need lease renewal or cancellation, which is
-deliberately not implemented here. The MOJ rate limiter
-(`MOJ_FIND_CASE_LAW_RATE_LIMIT`, one process-wide window) remains a per-process
-backstop; the cluster-wide upstream HTTP allowance is a separate shared budget
-(see the Find Case Law request-budget decision below). The gate bounds
-unexpired leases and per-subject misses in a rolling window; in the default
-single-process configuration it
-also bounds the number of retained per-subject windows. Admission state is
-cluster-visible by default; see the shared-ledger decision below.
+Search and changelog must never return matter data, client documents,
+redaction source or output, session or organisation records, auth secrets, or
+Meilisearch admin keys. Production health must return only
+`{ status: 'ok', service: 'obiter-api' }` and must never expose environment,
+version, port, database or Meilisearch configuration, Rampart settings, matter
+data, or secrets. Development health additively includes the API commit SHA,
+checkout root, resolved `.env` path and the database name derived from the
+API's configured `DATABASE_URL` for local provenance checks; those fields are
+not exposed outside development.
 
-**Superseded for the API by the corpus-only decision (30 September 2026,
-below).** `services/api` no longer constructs the hydration gate, the shared
-hydration ledger or the shared request budget, and no request path reaches
-Find Case Law. The 30-August statement that anonymous `POST /api/search/fetch`
-is stored-only now holds for every caller, and the anonymous document route no
-longer answers a miss from the provider. The gate, ledger and budget remain in
-the tree, unreferenced by a request path, for an explicit indexing run.
-
-Search and changelog must never return
-matter data, client documents, redaction source or output, session or
-organisation records, auth secrets, or Meilisearch admin keys. Production
-health must return only `{ status: 'ok', service: 'obiter-api' }` and must never
-expose environment, version, port, database or Meilisearch configuration,
-Rampart settings, matter data, or secrets. Development health additively
-includes the API commit SHA, checkout root, resolved `.env` path and the
-database name derived from the API's configured `DATABASE_URL` (a malformed
-URL reports `null` rather than a guessed name) for local provenance checks —
-an isolated lane asks the server which database it is bound to instead of
-trusting a CLI flag. These fields are not exposed outside development.
-Adding an auth requirement is a
-product change and must fail `allows anonymous callers on deliberately public
-routes` in `services/api/src/routes/public-access.test.ts` rather than landing
-silently.
-
-### Hydration admission is a cluster-wide Postgres ledger (29 September 2026)
-
-**Retained but unused by the API since the corpus-only decision (30 September
-2026, below).** No request path constructs this ledger; it remains because the
-code and migration are shared with the explicit indexing boundary.
-
-Context: the per-process gate above bounded each API process separately, so N
-replicas gave N per-subject windows, N anonymous buckets and N in-flight
-queues on one shared egress IP. Its `LegalSearchHydrationBudget` was an
-in-memory map, and an advisory lock alone would not help: a lock serialises
-writers without persisting a window, so it neither survives a restart nor
-holds any state to share.
-
-Decision: admission state lives in the application database (`DATABASE_URL`),
-in `legal_hydration_leases` and `legal_hydration_misses` (migration
-`0028_legal_hydration_ledger.sql`), reached through
-`PostgresLegalHydrationLedger` (`services/api/src/legal-hydration-ledger.ts`).
-The application database is the boundary every API process already migrates at
-boot and may write. It is deliberately not the legal corpus: a lane is
-configured with `CORPUS_DATABASE_URL` alone and therefore has no corpus writer,
-and licensed source material must not accumulate operational rows. The corpus
-read-only mode is the reason the ledger cannot live there, not a limitation to
-work around.
-
-One transaction per admission takes
-`pg_advisory_xact_lock(hashtext('legal_hydration_admission'))`, sweeps expired
-leases and out-of-window misses, counts live leases against `queueMax`, and, for
-a charged admission, counts the subject's misses in the rolling window before
-inserting the miss and the lease. The lock only makes check-and-record atomic;
-the window is the persisted rows, so it survives a restart and is shared by
-every replica. The in-flight count reads `expires_at > now()`, so a crashed
-replica's lease, or an operation that outlives its lease, stops counting when
-the lease expires even if no sweep has run. The admission transaction sets
-transaction-local `lock_timeout` (2s) and `statement_timeout` (5s), so a wedged
-lock holder (a stalled event loop, a paused process, a partition after
-`begin`) makes admission fail closed within the bound instead of stalling
-every replica. A failed or timed-out admission returns `unavailable`, the gate
-refuses the operation, and the route answers `503 storage_unavailable` with no
-provider call and no corpus write: a database outage or a wedged lock fails
-new hydration closed, while stored reads, which run on the corpus pool and
-never cross the admission boundary, keep serving.
-
-Cross-replica same-key deduplication is deliberately not claimed. The
-in-process single-flight map remains an optimisation that avoids a duplicate
-fetch inside one process; it is not the source of global truth. Two replicas
-admitting one canonical key both take a lease and both charge a miss, which is
-why the canonical key is not persisted at all. The ledger stores an opaque
-lease id and the server-verified subject (a better-auth user id, so one user
-shares one window across sessions, or the `anonymous:shared` sentinel); no
-query text, canonical key or matter data reaches a row or a log line. The
-detached detail pass a foreground fetch starts is admitted as an uncharged
-lease, so while that lease is unexpired every provider request, including Atom
-pagination and the detail fetches, is inside the lease bound. The per-subject
-miss window and the unexpired-lease bound are therefore cluster-wide; adding
-replicas no longer multiplies them. The MOJ HTTP-rate limiter remains per
-process, so it is a per-replica backstop rather than the cluster allowance.
-
-Deliberately not done here: a second datastore (Redis) for admission state; a
-cross-replica result cache. The lease lifetime
-(`LEGAL_SEARCH_HYDRATION_LEASE_MS`, default five minutes) is
-the ceiling on how long a crashed replica can hold a slot. The shared upstream
-HTTP request budget that was also deferred here is implemented separately; see
-the Find Case Law request-budget decision below.
-
-### Find Case Law HTTP attempts draw on one cluster-wide budget (29 September 2026)
-
-**Retained but unused by the API since the corpus-only decision (30 September
-2026, below).** No request path constructs this budget; it remains, with the
-provider package's `MojRequestBudget` seam, for the explicit indexing boundary.
-
-Context: every Find Case Law path behind the hydration gate could still reach
-the provider once per HTTP attempt, and admission bounded operations rather
-than attempts. One search walk can spend one Atom-page charge per page, then
-one LegalDocML charge per detail fetch and, when the XML path fails, a second
-HTML charge for the same judgment; a document-detail miss spends one; the
-withdrawal and bulk-ingestion walks spend one per URI. The per-process
-`MOJ_FIND_CASE_LAW_RATE_LIMIT` window is copied into every API process, so N
-replicas on one egress IP gave N allowances, and the balance of the provider's
-real published allowance was never established from this repository.
-
-Decision: charge one shared rolling window immediately before each actual
-upstream HTTP attempt, on the application database (`DATABASE_URL`), in
-`legal_moj_request_charges` (migration `0029_moj_request_budget.sql`). The
-window is a count of persisted rows inside one transaction under
-`pg_advisory_xact_lock(hashtext('legal_moj_request_budget'))`; the lock only
-makes check-and-record atomic, the rows are the window, so it survives a
-restart and is shared across replicas. The database clock is the authority for
-both the write and the count, so replica clock skew cannot widen the window.
-The charge is the provider package's one seam (`MojRequestBudget.charge`), so
-the accounting is per attempt and every caller — Atom pagination, LegalDocML,
-HTML fallback, detail and document fetches, retries — draws on it without a
-second code path. An attempt is charged even when the network call then fails;
-a URI refused by the SSRF/origin guard before dispatch is not charged.
-
-Fail-closed: the charge transaction sets transaction-local `lock_timeout`
-(2s) and `statement_timeout` (5s). A database outage, a wedged lock holder or
-a timed-out statement returns `unavailable`, the provider dispatches nothing,
-and a provider-reaching route answers `503 storage_unavailable`. A queued
-background hydration is the one exception: it is best effort, so a budget it
-cannot charge makes no upstream attempt and the request keeps its
-`hydration_queued` transport outcome, degrading to the stored result the poll
-returns exactly as a provider outage does. Foreground live search and
-document-detail fetches fail closed with 503. A full window
-returns `rate_limited` with the wait until the oldest in-window charge frees a
-slot, derived from the database clock, so the caller has a meaningful
-retry-after rather than a fixed guess. A charge row is a timestamp and nothing
-else: no URL, query text, subject, user identity or matter data is persisted,
-so the ledger cannot reconstruct what was fetched or by whom.
-
-Ownership boundary: the shared budget covers the API replicas, which share the
-application database every API process already migrates at boot. It does not
-cover `services/legal-ingestor`, whose `DATABASE_URL` is its own corpus-writer
-connection and which therefore cannot reach the application ledger; wire it to
-an operational connection without a new ownership/deployment decision and its
-Find Case Law traffic stays outside the shared window. `MOJ_FIND_CASE_LAW_REQUEST_BUDGET`
-(default 1000 attempts per rolling five minutes) is an operator assumption,
-not a verified provider allowance: it preserves the previously used per-replica
-cap as a cluster maximum, so it can only reduce upstream traffic, but whether
-1000 is the provider's true allowance remains unproven here. The per-process
-limiter is kept and composed before the shared charge, so it can only tighten
-the window, never widen it, and a request it refuses never spends a shared
-slot.
-
-Deliberately not done here: a Redis counter; a per-subject HTTP budget (the
-hydration ledger already bounds per-subject misses and in-flight work); and
-wiring bulk ingestion and the withdrawal checker to an operational ledger,
-which needs a new credential and deployment decision because their database
-connection is the corpus writer.
-
-### The user-facing API is corpus-only (30 September 2026)
-
-Context: the API's search and document routes reached Find Case Law directly
-(foreground live results, queued background hydration, a detached detail pass
-and document-detail fetch-through), bounded by the hydration ledger and the
-shared request budget. That made the provider a runtime dependency of a
-user-facing request and, because the ingestor sits outside the shared window,
-left the production-wide provider budget unresolved. Product decision: the
-user-facing API must never contact the National Archives. National Archives
-access is permitted only during an explicit document-indexing run.
-
-Decision: `services/api` is corpus-only. `POST /api/search/fetch` and
-`GET /api/search/documents/:documentId` read Obiter-owned records in Postgres
-and the derived Meilisearch index and nothing else. There is no provider
-client, no hydration gate, no request budget and no corpus write on a request
-path: the route module imports no provider fetch function, `runtime.ts`
-constructs neither `PostgresMojRequestBudget` nor
-`PostgresLegalHydrationLedger`, and a structural test scans every non-test API
-source file (all source extensions, the whole package tree) plus the static
-import graph from both production entry points for the provider fetch names,
-provider module specifiers, provider public-entry imports outside an explicit
-pure-symbol allowlist, direct `fetch(` calls outside the one allowlisted file
-(`routes/changelog.ts`, the fixed GitHub changelog endpoint), and the National
-Archives host outside a configuration default, so a future call fails the
-suite. A miss
-answers honestly under the existing contract: search returns its stored-only
-empty (`no_match`, or `recognised_not_held` for a recognised citation) with
-`diagnostics.liveProviderSearched: false` and `hydrationQueued: false`; a
-document miss returns `404 document_not_found` with "Document is not held in
-the local corpus". Neither claims a job was queued, because nothing will run.
-A provider outage cannot turn a miss into `503 storage_unavailable`. Stored
-documents stay readable: every stored read path is unchanged.
-
-Callers: `foregroundLiveResults` is accepted and ignored so an older client is
-not rejected; a request that sends `true` is answered with
-`diagnostics.foregroundLiveIgnored: true` so the client can tell the flag had
-no effect, and the app shell no longer sends it. The API never produces the
-`hydration_queued` transport outcome; the UI's bounded recheck is retained
-defensively and never fires. The document route serves full text from the
-index or the stored `document_json`; a summary-only row (a PDF-only judgment)
-serves its stored metadata, which the case view renders with its full-text
-unavailable state, rather than being completed from the provider.
-
-Retained deliberately: migrations `0028_legal_hydration_ledger.sql` and
-`0029_moj_request_budget.sql`, `moj-request-budget.ts`,
-`legal-hydration-ledger.ts`, `legal-search-hydration-budget.ts` and the
-provider package's `MojRequestBudget` seam are unchanged and currently
-unreferenced by a request path. They are the accounting and admission
-machinery an explicit indexing run needs; this change does not delete them and
-does not delete a migration. `source-store.ts`'s write store is likewise
-retained, unbound from any request path.
-
-Not done here: wiring bulk ingestion and the withdrawal checker to a shared
-operational ledger; and any deployment change. The production egress topology
-is unverified from this repository, so this change claims only that the API no
-longer contributes upstream traffic, not that production is fully covered.
-
-Withdrawal check: `services/legal-ingestor` `withdrawal:check` re-fetches stored
-URIs from Find Case Law. No unit, timer, cron entry or container schedules it
-in this repository or on the inspectable host, and this decision does not
-authorise it as a standalone polling job. The licence obligation to remove
-material no longer published (TNA licence clause (a)(iii)) is therefore
-unresolved: the decision is whether withdrawal detection folds into an explicit
-indexing run or is handled another way. No withdrawal safeguard is removed by
-this change.
+The provider boundary, the hydration ledger, the shared Find Case Law request
+budget and the corpus-only decision are server internals: they live in the
+private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend)
+repository, which records them in `docs/architecture-decisions.md`.
 
 ### Document edit operations: property families without a second compatibility path (31 August 2026)
 
@@ -1623,163 +1385,15 @@ boundary added is browser storage, which holds privileged matter text, so it is
 versioned, scope-keyed, validated on read and cleared on save, discard and
 sign-out.
 
-### Stage 1 legislation search: stored Acts with withheld amended text (September 2026)
+### Legislation search lives in backend (September 2026, cut over 1 November 2026)
 
-Context: search covered judgments only. Stage 1 adds UK Public General Acts
-2020 onwards as a second federated group on `POST /api/search/fetch`.
-
-Decision: store Acts in `legislation_documents` plus addressable
-`legislation_provisions` (migration 0020), keyed by legislation.gov.uk
-`/id/` URI identity with label paths such as `section/13/2`. Ingest reads
-the documented CLML `data.xml` (version-neutral, XSD-declared, stable IdURI
-and RestrictExtent attributes) rather than `data.akn`, politely at one
-request per 5 seconds per the re-fetched `Crawl-delay: 5`, into Postgres
-only; `rebuild-legislation-index.ts` derives the separate
-`legislation_provisions` Meilisearch index afterwards, so the ingestor is
-never a second writer. Per-provision currency comes from the per-Act
-`/changes/affected/` feed's `ukm:Effect Applied` attribute with client-side
-`ukm:Section` filtering and `rel="next"` paging, never from the HTML
-yet-to-be-applied heading, which is whole-Act level. Exact citations
-(chapter numbers, short titles, aliases, section forms) resolve from
-Postgres; keyword queries read the provisions index with a provisional 0.35
-floor (stricter than the judgment 0.25 because provision boilerplate
-inflates keyword scores; re-sweep before trusting). A provision with
-recorded unapplied effects serves an amended-not-held notice with the
-official link and never its text; ambiguity resolves visibly, never to a
-silent winner. Secondary legislation is explicitly next, not dropped.
-
-Fix-up: the negative result distinguishes what is proved from what is merely
-unresolved. A parsed chapter citation (`2099 c. 1`) is authoritative: year and
-number are the canonical identity, so an absent chapter is a genuine
-not-held. A failed _title_ lookup is not: the directory is partial and the
-fold is imperfect, so a whole Act-title request that resolves to no stored Act
-returns an unresolved-title suppression (`legislationTitleUnresolved`, outcome
-`legislation_title_unresolved`) that says only that no exact title matched,
-never that the Act is absent. Whether a query is a whole-title request or a
-clause about one is decided by phrase structure over a closed title grammar,
-not by sentence casing. A title run is the words before `Act <year>` in which
-each word is a name, a number, or one of the grammar's fixed joining words.
-The grammar is compiled in and never mined from the directory, so adding or
-dropping a stored title cannot move how an unrelated query classifies. A query
-that is a stored title with only the final year changed is a title request
-whatever its casing. Otherwise a held title inside the run is stripped and the
-remaining words are the outer enactment's own: when they are a title phrase
-and the held title is a bracketed amendment parenthetical, the query is a
-standalone outer title even though it embeds held titles
-(`Worker Protection (Amendment of Equality Act 2010) Act 2010` suppresses and
-serves nothing); when the residue is not a title phrase, or the held title is
-an unbracketed separate mention, the containment is prose evidence and the
-query stays on the keyword path (`duties under Equality Act 2010`, `the
-Equality Act 2010 and the Human Rights Act 1998`). The boundary is
-conservative: the required sentence-initial and lowercase prose pairs route
-consistently, an unresolved title is never an authoritative not-held, and the
-one residual is an all-lowercase nested outer title whose shape is not a
-stored title's year variant
-(`worker protection (amendment of equality act 2010 and human rights act 1998)
-act 1999`), which without a lexicon is indistinguishable from a lowercase
-clause. A standalone request may arrive with sentence punctuation, balanced
-quotes, the terminal `(repealed)` annotation or the conventional terminal
-`, as amended` qualifier — bounded presentation metadata normalised away
-before the shape test — so `Children Act 1989.`, `"Children Act 1989"` and
-`Children Act 1989, as amended` suppress instead of keyword-serving unrelated
-provisions; arbitrary trailing words, unrecognised parentheticals and any
-longer `as ...` clause are left in place, so `Children Act 1989 extra`,
-`Children Act 1989 (Public Lavatories)` and `Children Act 1989, as amended by
-the Courts Act 2003` stay prose. The stored-title directory hands out frozen
-snapshots of frozen entries, so no caller can mutate an array or an entry and
-reclassify a later query. A relaxed separator-insensitive title key that
-matches more than one stored Act is ambiguous (`legislationAmbiguous`), never
-a selected winner. A schedule citation that names a paragraph but no schedule
-(`Sch. para. 2 Equality Act 2010`) is underspecified rather than absent: the
-response carries `legislationScheduleGuidance` (the path-derived,
-parser-compatible example plus the Act) and the outcome
-`legislation_schedule_underspecified`, so the signed-in search renders a
-resubmittable citation instead of the generic no-match copy. The lookup key strips only the terminal `(repealed)` status
-annotation legislation.gov.uk appends, folds apostrophes by deletion, hyphens
-to spaces, `&` to `and`, and drops the filler token `etc`, so the canonical
-citation and the typed variant converge on the stored title.
-
-Fix-up: extraction completeness is validated, not assumed. Each CLML
-`Legislation` tag declares `NumberOfProvisions`, verified against a real
-Act to count every `P1` open including `BlockAmendment` inserts (quoted
-new-law text for another Act, correctly carrying no document `IdURI` and
-correctly never a row), so the check compares `P1` rows against the
-declaration and never total rows (sub-provisions always exceed it). A
-mismatch stores flagged (`provision_count_note`, migration 0021) and is
-reported in the ingest summary; it never fails the document, because exact
-equality is unachievable by construction and failing on it would drop whole
-Acts over legitimate quoted text. The affected-changes feed likewise has no
-server-side provision filter: a filtered query is silently ignored and the
-whole-Act feed returns, so per-provision currency pages the whole feed and
-filters client-side on document-scoped `ukm:Section` URIs.
-
-Fix-up: the legislation keyword call is bounded like every stored lookup.
-`searchKeywordProvisions` races `searchLegislation` against the same 2s
-deadline its Postgres reads use, and passes the deadline's `AbortSignal`
-through the Meilisearch client, which forwards it to `fetch` — so a hung
-engine request is aborted at the socket, not merely abandoned. Before this,
-`settleSearchHalf` caught rejections but not hangs: a never-resolving
-`legislation_provisions` search held the route's `Promise.all` open
-indefinitely even when the judgment half had already answered, contradicting
-the claim that the two halves are independently bounded. A deadline failure is
-a failed legislation half (P1.35's `legislationSearchFailed`), never a
-completed empty or a `no_match`: a usable judgment hit is kept and the response
-marks partial coverage, and with no usable hit from either half fetch answers
-`503 search_incomplete`. The race owns the engine promise, so a value that
-settles after the deadline is discarded rather than surfacing as a stale
-result or an unhandled rejection, and the single deadline timer is cleared on
-every outcome.
-
-### Act contents hierarchy: Parts and Schedules as rows (September 2026)
-
-Context: whole-Act contents listed sections only; `legislation_provisions`
-held no Part or Schedule-container rows, so the Equality Act 2010 rendered
-as 234 undifferentiated sections while its schedules stayed invisible
-(corpus-wide check during #176). CLML is typed — Part, Pblock (crossheading),
-P1group, P1, P1para, P2 — with schedules mirroring the P1..P5 shape, and the
-parser read P1 and below, dropping everything above.
-
-Level census (sampled across 1998–2026 Acts incl. the dev anchors): primary
-Parts (`part/N`) with optional Chapters (`part/N/chapter/M`), Pblocks
-(crossheadings at Act, part, chapter, schedule and schedule-part levels),
-P1groups (no IdURI, not addressable), P1 sections (flat IdURIs like
-`section/100`); schedules (`schedule/N`) with optional internal Parts
-(`schedule/N/part/X`), Chapters and crossheadings over P1 paragraphs
-(`schedule/N/paragraph/M`); P2..P5 below. Containers may lack an IdURI in
-some Acts (2023/55 carries 23 such Pblocks) and then are not rows.
-Inserted-amendment provisions carry hierarchical IdURIs
-(`part/2/section/100/kn1`) while base provisions are flat, so parentage
-comes from CLML nesting, never label-path prefixes.
-
-Decision: emit rows for every addressable container — Part, Chapter,
-Schedule, crossheading (Pblock) — alongside P1..P5 (migration 0022 adds
-`kind` plus `parent_label_path`; the parent is the nearest addressable
-ancestor in the XML stack). Crossheadings are carried, not dropped: they
-are addressable and are the only grouping level in part-less Acts (Human
-Rights Act 1998 groups entirely by crossheadings), so dropping them would
-leave most of the corpus flat again. P1group Titles are not carried (no
-IdURI, no stable identity to row on). The Act page builds a tree of
-containers plus P1 rows (sections and schedule paragraphs) in document
-order and never sorts numerically, so inserted s. 13A stays between ss. 13
-and 14. Withheld counts in the banner now cover every listed content row
-(sections and schedule paragraphs), with wording "X of Y provisions";
-containers are headings, never withheld, and are excluded from both counts
-(the effects pass flags provision rows only). Container rows never enter
-the derived Meilisearch index: they are headings with no searchable body,
-so keyword search semantics are unchanged. Because ingest skips unchanged
-Acts by content hash, the CLI gained `--force-reparse` to re-extract after
-parsing changes; it goes through the same effects pass as a changed Act and
-rows are only replaced once that pass has succeeded (a failed feed aborts
-before any write, an unreadable one preserves known-good flags), so
-withheld flags survive the row rewrite and text can never become servable
-through it. The migration leaves pre-0022 rows with kind = NULL rather
-than a default, so the transitional window is visible and fail-closed: a
-document that still holds unclassified rows serves 503 for its Act page
-(never a flat list of mis-classified provisions) until the force-reparse
-rewrite fills in real kinds. The gate flag and the contents are read in
-one statement, so they share one snapshot and the rewrite (a single
-transaction) can never land between the two reads and leave a torn,
-incomplete tree served as 200.
+Stored Acts, the withheld amended text, the provision contents hierarchy and
+the legislation index are server code and moved with the rest of the API to
+the private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend)
+repository, where both decisions are recorded in
+`docs/architecture-decisions.md`. What stays
+public is the request and response shape the clients read
+(`packages/contracts`) and the legislation view in `packages/app-shell`.
 
 ### Organisation invite role grants are bounded by the inviter's role (10 September 2026)
 
@@ -1927,27 +1541,13 @@ app-shell auth and API route tests are split into focused suites:
 pre-existing modules covering many unrelated concerns, and splitting them is a
 separate, behaviour-preserving change rather than part of this one.
 
-### Legal-corpus reads get their own database seam (18 September 2026)
+### The legal-corpus database seams live in backend (18-20 September 2026, cut over 1 November 2026)
 
-Findings: five active development databases (`obiter` plus the four lane databases) each hold a byte-identical copy of the legal corpus. The corpus is 99.2% of every one of them — 1,980,448,768 bytes of roughly 1,997,000,000 — so the duplication is about 7.9 GB on a 75 GB filesystem. Consolidating it was blocked by structure rather than by policy: every corpus read and write went through the same pool as matter, auth and audit work, so there was no seam at which a corpus held elsewhere could be introduced. The trace also found no foreign key and no SQL statement that references both a corpus table and a matter table, and the only code path that touches both is `verification-execution.ts`, which reads the corpus before it opens its matter transaction. The boundary was already there in practice; it had no expression in the code.
-
-Decision: give corpus access its own path. `DatabasePools` (`services/api/src/database-pools.ts`) is the single owner of the process's pools and exposes `corpus` as `{ pool, readOnly }`. `CORPUS_DATABASE_URL` unset means no separate corpus target: the corpus pool _is_ the application pool, there is one pool to close, and behaviour is identical to before the seam existed. Configuring it declares a separate corpus target and is always served read-only, because a process with no corpus write credential has no write path. The mode follows configuration provenance rather than a comparison of connection strings, so a URL that spells the application database differently (a host alias, an omitted port, the same host and database under another role) is still a distinct, read-only target rather than a writable one inferred from a name match. Corpus writes are handed to the route factory as a separate value (`options.corpusWrites`), so a read-only process is never given one to attempt, and no route has to swallow a permission error to stay correct.
-
-The seam also narrows the withdrawal/indexing race. Corpus upserts now return whether the post-merge row may be indexed, read by the same statement that wrote it, so a withdrawal that serialises with a hydration write is respected in either order. That orders the database rows but cannot order two independent Meilisearch operations: a withdrawal whose index delete lands after the upsert but before the hydration index write would re-add the document. `indexFetchedAuthoritiesAfterWrite` therefore re-reads the record after indexing and deletes the document again when it is now withdrawn. The withdrawal marks the row before it deletes the index copy, so a re-read that sees the flag proves that delete preceded the index write. A failed re-read or re-delete is logged, not treated as a confirmed live row.
-
-Outcome: no migration, no new dependency, no deployed resource. Under `NODE_ENV=test` the corpus is required to resolve to the same `*_test` database, and a corpus URL resolving anywhere else refuses startup, because several database-backed suites seed and delete corpora rows. `/api/health` reports `corpus.colocated` and `corpus.readOnly`: booleans derived from configuration, with no host, port, database name or credential. Deliberately not done here: no shared corpus database, no reader role, no credential, no migration move, no index rebuild and no disk reclaimed. Each of those is a separate, separately authorised change.
-
-Corpus writers are not all under `services/api`. Postgres writers: `services/legal-ingestor` (`bulk-ingest` writes `legal_source_documents`, `legislation-ingest` writes `legislation_documents` and `legislation_provisions`, `withdrawal-check` marks `provider_json.withdrawn`) through its own `DATABASE_URL`. The corpus-only API writes no corpus row on a request path: its former provider-hydration writer (`services/api/src/routes/legal-search/moj-client.ts`, now `stored-document.ts` for reads only) was unbound from the request path. Meilisearch-only writers and rebuilders: `rebuild-search-index.ts` and `rebuild-legislation-index.ts` derive the product indexes from Postgres and never write Postgres; the API makes no index write on a request path, and its former hydration indexer is retained unbound. Corpus readers: the proxy, search and verification read paths, `check-search-parity.ts` (read-only, it reports drift and never writes), and the `scripts/search-corpus-relevance` and `scripts/legislation-relevance` harnesses, which re-check expectations against Postgres without mutating it. `rebuild-search-index.ts`, `rebuild-legislation-index.ts` and `check-search-parity.ts` already take an explicit `--database-url`, so an operator points them at whichever database holds the corpus rather than the runtime seam reaching into a CLI. At cutover the shared corpus would have one privileged writer, the ingestor pointed at it explicitly, while every lane process is read-only through the seam; that deployment does not exist and this change does not create it.
-
-### A dedicated corpus writer seam, and the missing legislation constraint (20 September 2026)
-
-Findings: the corpus seam above is read-only by construction, which is right for lanes and insufficient for `obiter-live`. That process keeps fetch-through provider hydration, so it must persist a newly fetched judgment into the shared corpus and index it. With only `CORPUS_DATABASE_URL` configured it can answer a live request but cannot store the result, and `liveResultsNotPersisted` is the truthful diagnostic. The selected shared-corpus architecture had no compatible implementation until the runtime could hold a reader connection and a writer connection at once. Separately, `packages/database/migrations/0020_legislation_documents.sql` declares `legislation_documents_act_type_check` inside `create table if not exists`, so the long-lived live table, which pre-existed 0020, never received it. All 259 current rows satisfy `act_type = 'ukpga'`, so the constraint rejects nothing today, but without it a future non-ukpga ingest would be accepted where the schema intends rejection.
-
-Decision: make the corpus writer a separately configured capability rather than a mode the reader implies. `CORPUS_WRITE_DATABASE_URL` is optional, parsed and validated at the environment boundary, and refused unless `CORPUS_DATABASE_URL` is also set, so reads and writes cannot silently target unrelated databases. `DatabasePools` now exposes `corpus.read` and `corpus.write`; `corpus.write` is null when the process has no writer, and `app.ts` hands the write store over only when it is non-null. The compatibility default is unchanged: neither variable set means one application pool serves reads and writes. An explicitly configured reader is still separate even when it names the same database, and an explicitly configured reader and writer are always distinct pools even when their URLs are identical, because a different role is a different access boundary that URL equality cannot see. Empty and whitespace values never enable the writer, and under `NODE_ENV=test` both variables must resolve to `TEST_DATABASE_URL`. The two are expected to name the same shared corpus, because the writer path reconciles withdrawals by re-reading through the reader. The writer credential is a capability rather than a hostname: the product cannot detect which host is `obiter-live`, so deployment must provide the variable only there and must keep it out of `obiter-live/.env`, which lane setup copies into every lane. This change adds no deployment machinery; it makes the boundary explicit, and the tests prove that absence of the variable disables writes. `/api/health` still reports `corpus.colocated` and `corpus.readOnly`; the pair distinguishes the compatibility seam, a read-only lane and a process with a dedicated writer without disclosing a host, port, database name, username or credential.
-
-The second change is a migration. `0025_legislation_act_type_check.sql` adds `legislation_documents_act_type_check check (act_type = 'ukpga')` as `not valid` and then validates it, guarded so a fresh install where 0020 created the constraint inline is a no-op. Adding it `not valid` avoids a full table scan under the lock; the following validation scans once and proves every existing row, failing the migration loudly if any does not.
-
-Outcome: no shared corpus database, role, credential or index was created, no lane or live configuration was changed, and the cutover remains a later, separately authorised operation. The legal ingestor keeps its own explicit writer connection through its `DATABASE_URL`; `CORPUS_WRITE_DATABASE_URL` is the API runtime's writer and is never handed to a lane.
+The corpus reader seam (`DatabasePools.corpus`), the separately configured
+corpus writer, the withdrawal/indexing ordering and the legislation act-type
+constraint are API and database code. They moved with the API to the private
+[`ObiterDictum/backend`](https://github.com/ObiterDictum/backend) repository,
+which records them in `docs/architecture-decisions.md`.
 
 ### Document-model loading moves off the serving event loop (23 September 2026)
 

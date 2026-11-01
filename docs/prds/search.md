@@ -71,7 +71,7 @@ Public API and tool consumers are explicitly later. The internal API contract is
 
 This is the highest-priority item and was not identified in the previous PRD, which framed ranking as needing improvement.
 
-Matching in `packages/search-client` is substring-based. Every comparison asks whether text _contains a sequence of characters_ rather than whether it contains a _word_. Because `"contested".includes("test")` is true, a search for `test` matches contested, testimony, testator, intestate, protest and latest. In case law that vocabulary is near-ubiquitous, so a short query matches most of the corpus.
+Matching in `backend/packages/search-client` is substring-based. Every comparison asks whether text _contains a sequence of characters_ rather than whether it contains a _word_. Because `"contested".includes("test")` is true, a search for `test` matches contested, testimony, testator, intestate, protest and latest. In case law that vocabulary is near-ubiquitous, so a short query matches most of the corpus.
 
 Measured on a six-document fixture corpus, the query `test` returned five documents where one was correct: **precision 0.20**.
 
@@ -230,7 +230,7 @@ Not public, but stable enough that app-shell, Verify and Research consume one sh
 
 ## Module Boundaries
 
-Search logic currently lives in three places: a route directory in `services/api` holding the provider client and parsers, a package holding ranking, and UI components. The provider integration, which the licence now makes central, sits at the architectural standing of a controller.
+Search logic currently lives in three places: a route directory in `backend/services/api` holding the provider client and parsers, a package holding ranking, and UI components. The provider integration, which the licence now makes central, sits at the architectural standing of a controller.
 
 Target separation, within the existing monorepo:
 
@@ -273,7 +273,7 @@ This is a trigger, not an aspiration: the coverage view is built during Gate 3 a
 
 **Reviewer mode**: normalised query, query class, retrieval path, filters applied, rank, score, index health, ingest lag.
 
-Gated by a `reviewer` role on the existing auth model, extending the `owner`/`admin`/`member` roles already in `services/api/src/authz.ts`. A role rather than an internal build, because academic credibility depends on a reviewer running their own query against real data; an environment-gated build cannot offer that without handing over the build. A role is also grantable to a named individual, revocable, and auditable.
+Gated by a `reviewer` role on the existing auth model, extending the `owner`/`admin`/`member` roles already in `backend/services/api/src/authz.ts`. A role rather than an internal build, because academic credibility depends on a reviewer running their own query against real data; an environment-gated build cannot offer that without handing over the build. A role is also grantable to a named individual, revocable, and auditable.
 
 Diagnostics are excluded **server-side**, at response construction. Computing them and hiding them in the UI puts them in the payload, where anyone with developer tools can read them. The role check belongs in the API, not the component.
 
