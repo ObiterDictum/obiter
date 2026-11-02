@@ -17,6 +17,7 @@ import {
   useToast,
 } from '@obiter/ui'
 import { ArrowLeft, DotsThree, Trash } from '@obiter/ui/icons'
+import { ApiError } from '../api'
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
 import { useMatter } from '../matters'
@@ -24,6 +25,7 @@ import { ContentFrame } from '../content-frame'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
 import { DocumentVersionView } from '../components/document-workspace/document-version-view'
 import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
+import { ErrorNotice } from './settings-fields'
 
 export function DocumentDetailLayoutView({
   matterId,
@@ -200,6 +202,7 @@ function DocumentActionsMenu({
   const { toast } = useToast()
   const deleteDocument = useDeleteDocument()
   const [confirming, setConfirming] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
   if (!canManage) return null
   return (
@@ -223,20 +226,37 @@ function DocumentActionsMenu({
           </MenuItem>
         </MenuContent>
       </Menu>
-      <Dialog open={confirming} onOpenChange={setConfirming}>
+      <Dialog
+        open={confirming}
+        onOpenChange={(next) => {
+          setActionError(null)
+          setConfirming(next)
+        }}
+      >
         <DialogContent size="md">
           <DialogTitle>Delete document</DialogTitle>
           <DialogDescription>
             Deleting this document also removes its redaction runs. Removals are
             soft — rows persist for audit and can be restored by an operator.
           </DialogDescription>
+          {actionError ? <ErrorNotice message={actionError} /> : null}
           <div className="flex justify-end gap-2">
             <DialogClose render={<Button variant="ghost">Cancel</Button>} />
             <Button
               variant="danger"
               loading={deleteDocument.isPending}
               onClick={async () => {
-                await deleteDocument.mutateAsync({ documentId, matterId })
+                setActionError(null)
+                try {
+                  await deleteDocument.mutateAsync({ documentId, matterId })
+                } catch (cause) {
+                  setActionError(
+                    cause instanceof ApiError
+                      ? cause.message
+                      : 'The document could not be deleted. Try again.',
+                  )
+                  return
+                }
                 toast({ title: 'Document deleted' })
                 setConfirming(false)
                 onDeleted()

@@ -266,7 +266,7 @@ describe('attention copy', () => {
     expect(attentionStatus(item)).toEqual({ label: 'In review', tone: 'info' })
   })
 
-  it('summarises only the kinds that are actually queued', () => {
+  it('counts the headline by the runs the list shows and names findings as findings', () => {
     const items = build(
       [
         verificationRun({ id: 'flagged' }),
@@ -280,8 +280,9 @@ describe('attention copy', () => {
       [],
     )
 
+    expect(summariseAttention(items).queue).toBe(2)
     expect(attentionSummaryText(summariseAttention(items))).toBe(
-      '4 items need your attention: 1 legal-accuracy risk, 2 citations to review and 1 failed run.',
+      '2 items need your attention: 3 Verify findings (1 legal-accuracy risk and 2 citations to review) and 1 failed run.',
     )
     expect(attentionSummaryText(summariseAttention([]))).toBe(
       'Nothing needs your attention right now.',

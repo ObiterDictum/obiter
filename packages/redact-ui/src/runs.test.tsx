@@ -126,6 +126,32 @@ describe('RedactionRunsView', () => {
     expect(mutateAsync).not.toHaveBeenCalled()
   })
 
+  it('keeps the dialog open and says the run was not deleted when the request fails', async () => {
+    hooks.useDeleteRedactionRun.mockReturnValue({
+      mutateAsync: vi.fn().mockRejectedValue(new Error('network down')),
+      isPending: false,
+    })
+    hooks.useRedactionRuns.mockReturnValue({
+      isPending: false,
+      data: { runs: [run({ status: 'reviewing' })] },
+    })
+    render(<RedactionRunsView onOpenRun={vi.fn()} />)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'More actions for statement.pdf',
+      }),
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: /Delete run/u }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete run' }))
+
+    expect(
+      await screen.findByText(
+        'The redaction run could not be deleted. Try again.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
   it('reports an upload that failed instead of pretending a run started', () => {
     hooks.useCreateUploadedRedactionRun.mockReturnValue({
       mutate: vi.fn(),

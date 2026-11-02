@@ -20,6 +20,7 @@ import {
 import { DotsThree } from '@obiter/ui/icons'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState } from 'react'
+import { ApiError } from '../api'
 import { ContentFrame } from '../content-frame'
 import { useCurrentUser } from '../current-user'
 import { useMatterDocuments } from '../documents'
@@ -38,6 +39,7 @@ import {
   MatterUploadButton,
   NewDocumentButton,
 } from './matter-upload'
+import { ErrorNotice } from './settings-fields'
 
 export function MatterRouteView({
   matterId,
@@ -240,8 +242,15 @@ function DeleteMatterDialog({
   const deleteMatter = useDeleteMatter()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const [actionError, setActionError] = useState<string | null>(null)
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setActionError(null)
+        onOpenChange(next)
+      }}
+    >
       <DialogContent size="md">
         <DialogTitle>Delete matter</DialogTitle>
         <DialogDescription>
@@ -256,6 +265,7 @@ function DeleteMatterDialog({
             </>
           )}
         </DialogDescription>
+        {actionError ? <ErrorNotice message={actionError} /> : null}
         <div className="mt-6 flex justify-end gap-2">
           <DialogClose render={<Button variant="ghost">Cancel</Button>} />
           <Button
@@ -263,7 +273,17 @@ function DeleteMatterDialog({
             loading={deleteMatter.isPending}
             disabled={documentCount === undefined}
             onClick={async () => {
-              await deleteMatter.mutateAsync(matterId)
+              setActionError(null)
+              try {
+                await deleteMatter.mutateAsync(matterId)
+              } catch (cause) {
+                setActionError(
+                  cause instanceof ApiError
+                    ? cause.message
+                    : 'The matter could not be deleted. Try again.',
+                )
+                return
+              }
               toast({ title: 'Matter deleted' })
               await navigate({ to: '/matters' })
             }}
