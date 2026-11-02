@@ -373,7 +373,7 @@ describe('HomeRouteView — greeting and actions', () => {
     ).toBe('/redact')
   })
 
-  it('states only the counts that are on the queue', async () => {
+  it('counts the headline by the queued runs and names findings as findings', async () => {
     mocks.useRedactionRunsList.mockReturnValue(
       runsState([redactionRun({ id: 'run_1' })]),
     )
@@ -393,7 +393,7 @@ describe('HomeRouteView — greeting and actions', () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          '5 items need your attention: 1 legal-accuracy risk, 1 redaction decision, 2 citations to review and 1 failed run.',
+          '3 items need your attention: 3 Verify findings (1 legal-accuracy risk and 2 citations to review), 1 redaction decision and 1 failed run.',
         ),
       ).toBeTruthy()
     })

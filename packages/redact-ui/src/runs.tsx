@@ -26,7 +26,7 @@ import {
   UploadSimple,
   Warning,
 } from '@obiter/ui/icons'
-import { PageScaffold, useCurrentUser } from '@obiter/app-shell'
+import { ApiError, PageScaffold, useCurrentUser } from '@obiter/app-shell'
 import {
   useCreateRedactionRun,
   useCreateUploadedRedactionRun,
@@ -81,6 +81,7 @@ function RunRow({
   const deleteRun = useDeleteRedactionRun()
   const { toast } = useToast()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const status = runStatus[run.status]
   const action =
     run.status === 'finalized'
@@ -142,7 +143,10 @@ function RunRow({
       {canManage ? (
         <Dialog
           open={confirmingDelete}
-          onOpenChange={(next) => setConfirmingDelete(next)}
+          onOpenChange={(next) => {
+            setDeleteError(null)
+            setConfirmingDelete(next)
+          }}
         >
           <DialogContent size="md">
             <DialogTitle>Delete redaction run</DialogTitle>
@@ -159,13 +163,28 @@ function RunRow({
               The redacted copy and the schedule already produced from this run
               stay in the audit record.
             </p>
+            {deleteError ? (
+              <p className="text-meta text-danger" role="alert">
+                {deleteError}
+              </p>
+            ) : null}
             <div className="flex justify-end gap-2">
               <DialogClose render={<Button variant="ghost">Cancel</Button>} />
               <Button
                 variant="danger"
                 loading={deleteRun.isPending}
                 onClick={async () => {
-                  await deleteRun.mutateAsync(run.id)
+                  setDeleteError(null)
+                  try {
+                    await deleteRun.mutateAsync(run.id)
+                  } catch (cause) {
+                    setDeleteError(
+                      cause instanceof ApiError
+                        ? cause.message
+                        : 'The redaction run could not be deleted. Try again.',
+                    )
+                    return
+                  }
                   setConfirmingDelete(false)
                   toast({ title: 'Redaction run deleted' })
                 }}

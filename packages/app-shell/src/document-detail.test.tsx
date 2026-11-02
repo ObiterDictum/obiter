@@ -1,7 +1,14 @@
 import '@obiter/test-dom'
 import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
+import type { ReactNode } from 'react'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -40,9 +47,11 @@ mock.module('./components/document-workspace/workspace', () =>
       DocumentWorkspace: (props: {
         version?: { filename?: string } | null
         document?: { id?: string }
+        headerActions?: ReactNode
       }) => (
         <div data-workspace-stub data-document={props.document?.id}>
           {props.version?.filename}
+          {props.headerActions}
         </div>
       ),
     }))(),
@@ -223,5 +232,36 @@ describe('DocumentDetailLayoutView — matter mismatch', () => {
     await waitFor(() => {
       expect(container.querySelector('[aria-busy="true"]')).toBeTruthy()
     })
+  })
+})
+
+describe('DocumentDetailLayoutView — delete document', () => {
+  it('keeps the dialog open and says the document was not deleted when the request fails', async () => {
+    docs.useDocument.mockReturnValue(
+      successQuery(sampleDocumentDetail('mtr_1')),
+    )
+    const navigate = vi.fn()
+    nav.useNavigate.mockReturnValue(navigate)
+    docs.useDeleteDocument.mockReturnValue({
+      mutateAsync: vi.fn().mockRejectedValue(new Error('network down')),
+      isPending: false,
+    })
+    render(<RouterProvider router={buildRouter('mtr_1', 'doc_1')} />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'More document actions' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Delete document' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete document' }),
+    )
+
+    expect(
+      await screen.findByText('The document could not be deleted. Try again.'),
+    ).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
   })
 })

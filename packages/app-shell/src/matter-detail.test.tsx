@@ -339,6 +339,32 @@ describe('delete matter', () => {
     })
   })
 
+  it('keeps the dialog open and says the matter was not deleted when the request fails', async () => {
+    const navigate = vi.fn()
+    mocks.useNavigate.mockReturnValue(navigate)
+    mocks.useDeleteMatter.mockReturnValue({
+      mutateAsync: vi.fn().mockRejectedValue(new Error('network down')),
+      isPending: false,
+    })
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'More matter actions' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Delete matter' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete matter' }),
+    )
+
+    expect(
+      await screen.findByText('The matter could not be deleted. Try again.'),
+    ).toBeTruthy()
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
   it('waits for the document count before enabling confirmation', async () => {
     mocks.useMatterDocuments.mockReturnValue({
       isLoading: true,

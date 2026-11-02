@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy, PageViewport } from 'pdfjs-dist'
-import { cn } from '@obiter/ui'
+import { Button, cn } from '@obiter/ui'
 import {
   coverRectsForSpan,
   snapDeviceCoverOutward,
@@ -40,6 +40,7 @@ export function PdfReviewDocument({
 
   useEffect(() => {
     let cancelled = false
+    setError(null)
     const objectUrl = URL.createObjectURL(file)
     void import('pdfjs-dist').then(async (pdfjs) => {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -100,7 +101,6 @@ export function PdfReviewDocument({
           decisions={decisions}
           selectedId={selectedId}
           onSelect={onSelect}
-          onError={setError}
           categoryClassName={categoryClassName}
         />
       ))}
@@ -150,7 +150,6 @@ function PdfPage({
   decisions,
   selectedId,
   onSelect,
-  onError,
   categoryClassName,
 }: {
   pdf: PDFDocumentProxy
@@ -161,12 +160,14 @@ function PdfPage({
   decisions: Decisions
   selectedId: string | null
   onSelect: (id: string) => void
-  onError: (message: string) => void
   categoryClassName: Record<string, string>
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [viewport, setViewport] = useState<PageViewport | null>(null)
+  const [failedFor, setFailedFor] = useState<PDFDocumentProxy | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const failed = failedFor === pdf
 
   useEffect(() => {
     let cancelled = false
@@ -209,14 +210,11 @@ function PdfPage({
         await task.promise
         if (cancelled) return
         setViewport(nextViewport)
+        setFailedFor(null)
       } catch (error: unknown) {
         if (cancelled) return
         if (isRenderingCancelled(error)) return
-        onError(
-          error instanceof Error
-            ? error.message
-            : 'PDF page could not be rendered.',
-        )
+        setFailedFor(pdf)
       }
     }
 
@@ -239,7 +237,7 @@ function PdfPage({
       renderTask?.cancel()
       observer?.disconnect()
     }
-  }, [pdf, pageNumber, onError])
+  }, [pdf, pageNumber, attempt])
 
   const pageSpans =
     viewport == null
@@ -261,42 +259,63 @@ function PdfPage({
 
   return (
     <div ref={hostRef} className="w-full max-w-[1080px]">
-      <div
-        className="relative mx-auto overflow-hidden rounded-lg border border-line-strong bg-raised shadow-lg"
-        style={
-          viewport
-            ? { width: viewport.width, height: viewport.height }
-            : undefined
-        }
-      >
-        <canvas ref={canvasRef} className="block" />
-        <div className="pointer-events-none absolute inset-0">
-          {pageSpans.map((box) => (
-            <button
-              key={box.key}
-              type="button"
-              data-span-id={box.span.id}
-              aria-label={`${box.span.category.replaceAll('_', ' ')}: ${box.span.text}`}
-              aria-pressed={selectedId === box.span.id}
-              className={cn(
-                'pointer-events-auto absolute rounded-sm border border-transparent transition-opacity hover:opacity-95',
-                categoryClassName[box.span.category],
-                decisionOverlayClass[
-                  spanDecisionState(decisions[box.span.id]?.decision)
-                ],
-                selectedId === box.span.id && 'opacity-100 ring-2 ring-ring',
-              )}
-              style={{
-                left: box.left,
-                top: box.top,
-                width: box.width,
-                height: box.height,
-              }}
-              onClick={() => onSelect(box.span.id)}
-            />
-          ))}
+      {failed ? (
+        <div
+          className="flex flex-col items-center gap-3 rounded-lg border border-line-strong bg-raised p-6"
+          role="alert"
+        >
+          <p className="text-sm text-danger">
+            This page could not be displayed.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setFailedFor(null)
+              setAttempt((count) => count + 1)
+            }}
+          >
+            Try again
+          </Button>
         </div>
-      </div>
+      ) : (
+        <div
+          className="relative mx-auto overflow-hidden rounded-lg border border-line-strong bg-raised shadow-lg"
+          style={
+            viewport
+              ? { width: viewport.width, height: viewport.height }
+              : undefined
+          }
+        >
+          <canvas ref={canvasRef} className="block" />
+          <div className="pointer-events-none absolute inset-0">
+            {pageSpans.map((box) => (
+              <button
+                key={box.key}
+                type="button"
+                data-span-id={box.span.id}
+                aria-label={`${box.span.category.replaceAll('_', ' ')}: ${box.span.text}`}
+                aria-pressed={selectedId === box.span.id}
+                className={cn(
+                  'pointer-events-auto absolute rounded-sm border border-transparent transition-opacity hover:opacity-95',
+                  categoryClassName[box.span.category],
+                  decisionOverlayClass[
+                    spanDecisionState(decisions[box.span.id]?.decision)
+                  ],
+                  selectedId === box.span.id && 'opacity-100 ring-2 ring-ring',
+                )}
+                style={{
+                  left: box.left,
+                  top: box.top,
+                  width: box.width,
+                  height: box.height,
+                }}
+                onClick={() => onSelect(box.span.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

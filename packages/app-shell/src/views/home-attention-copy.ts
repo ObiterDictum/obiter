@@ -7,23 +7,28 @@ import { formatDateTime } from '../format'
 import type { AttentionItem, AttentionSummary } from './home-attention'
 
 export function attentionSummaryText(summary: AttentionSummary): string {
-  if (summary.total === 0) return 'Nothing needs your attention right now.'
+  if (summary.queue === 0) return 'Nothing needs your attention right now.'
   const parts: string[] = []
-  if (summary.flagged > 0) {
-    parts.push(count(summary.flagged, 'legal-accuracy risk'))
+  const findings = summary.flagged + summary.reviews
+  if (findings > 0) {
+    const detail: string[] = []
+    if (summary.flagged > 0) {
+      detail.push(count(summary.flagged, 'legal-accuracy risk'))
+    }
+    if (summary.reviews > 0) {
+      detail.push(
+        count(summary.reviews, 'citation to review', 'citations to review'),
+      )
+    }
+    parts.push(`${count(findings, 'Verify finding')} (${list(detail)})`)
   }
   if (summary.redactDecisions > 0) {
     parts.push(count(summary.redactDecisions, 'redaction decision'))
   }
-  if (summary.reviews > 0) {
-    parts.push(
-      count(summary.reviews, 'citation to review', 'citations to review'),
-    )
-  }
   if (summary.failed > 0) parts.push(count(summary.failed, 'failed run'))
-  const noun = summary.total === 1 ? 'item' : 'items'
-  const verb = summary.total === 1 ? 'needs' : 'need'
-  return `${summary.total} ${noun} ${verb} your attention: ${list(parts)}.`
+  const noun = summary.queue === 1 ? 'item' : 'items'
+  const verb = summary.queue === 1 ? 'needs' : 'need'
+  return `${summary.queue} ${noun} ${verb} your attention: ${list(parts)}.`
 }
 
 function count(value: number, singular: string, plural = `${singular}s`) {
