@@ -3025,7 +3025,10 @@
                   <td>
                     Owner-only removal of a member; last owner is refused.
                     Concurrent owner removals serialise on the
-                    organisation&apos;s owner rows.
+                    organisation&apos;s owner rows. Optional per-matter
+                    transfers and a 409 listing uncovered matters are planned
+                    (backend stage 3); the shared removal dialog blocks until
+                    ownership can be loaded and assigned.
                   </td>
                 </tr>
                 <tr>
@@ -3046,6 +3049,40 @@
                     Verified user accepts an invite. Refused when the
                     invitee&apos;s current organisation still has matters, other
                     members, or pending invites.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    GET
+                    /api/organisations/:organisationId/members/:userId/matters
+                  </td>
+                  <td class="id">Planned (backend stage 3)</td>
+                  <td>
+                    Owner/admin-only complete list of a member's owned matters,
+                    including archived and soft-deleted matters, as { matters:
+                    [{ matterId, title }] }. Not limited to matters shared with
+                    the actor. Existing GET /api/matters has no creator filter.
+                    Member pickers use the active organisation membership list;
+                    departed users are not candidates.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/matters/:matterId/transfer</td>
+                  <td class="id">Planned (backend stage 3)</td>
+                  <td>
+                    Request { newOwnerUserId }; response { matter }. Owner/admin
+                    authorization, same-organisation active recipient,
+                    transactional created_by update, redundant recipient-share
+                    cleanup and matter.ownership_transferred audit are backend
+                    work. The UI also offers the action to the creator as
+                    requested for stage 1; stage 3 must settle creator
+                    authorization (the board specifies owner/admin only), and
+                    server refusals remain visible. Removal must retain user
+                    records for attribution and revoke departing grants
+                    atomically with transfers. Existing author contracts expose
+                    no former-member marker; marking authors as “Name (former
+                    member)” is deferred until the backend supplies it. No
+                    production mocks.
                   </td>
                 </tr>
                 <tr>
@@ -7142,6 +7179,23 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    S9 stage-1 brief requests creator-visible ownership
+                    transfer; the board and planned API authorize owners/admins
+                    only.
+                  </td>
+                  <td>
+                    The shared UI offers transfer to the creator as well as
+                    owners/admins, but grants no authority itself. API refusals
+                    remain visible. Resolve creator authorization in backend
+                    stage 3; until then the transfer and member-owned-matters
+                    routes are planned and removal fails closed if ownership
+                    cannot be listed. Former-member attribution also awaits a
+                    backend author marker.
+                  </td>
+                  <td class="id">S9; obiter PR #417</td>
+                </tr>
                 <tr>
                   <td>
                     Redact detection uses Postgres leases, not the roadmap's

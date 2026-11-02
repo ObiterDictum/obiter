@@ -33,6 +33,7 @@ import { MatterDocumentsTable } from './matter-documents-table'
 import { MatterSavedSources } from './matter-saved-sources'
 import { MatterOverview } from './matter-overview'
 import { MatterShareControls } from './matter-share-dialog'
+import { MatterTransferControls } from './matter-transfer-dialog'
 import { openWorkByMatter, openWorkFor } from './matters-rows'
 import {
   MatterDropZone,
@@ -141,6 +142,7 @@ export function MatterRouteView({
           {isOwner ? (
             <MatterShareControls matter={m} organisationId={m.organisationId} />
           ) : null}
+          <MatterTransferControls matter={m} user={me.user} />
           {canManage ? (
             <MatterActionsMenu
               matterId={m.id}

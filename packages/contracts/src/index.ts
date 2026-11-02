@@ -18,6 +18,7 @@ export * from './legal-search'
 export * from './legislation-paths'
 export * from './neutral-citation'
 export * from './organisation'
+export * from './matter'
 export * from './saved-sources'
 export * from './xml-text'
 export * from './verification'
@@ -26,9 +27,6 @@ export type AppPlatform = 'web' | 'desktop'
 
 export const dataRegionSchema = z.enum(['eu'])
 export type DataRegion = z.infer<typeof dataRegionSchema>
-
-export const matterStatusSchema = z.enum(['active', 'archived', 'deleted'])
-export type MatterStatus = z.infer<typeof matterStatusSchema>
 
 export const matterAccessLevelSchema = z.enum(['view', 'edit'])
 export type MatterAccessLevel = z.infer<typeof matterAccessLevelSchema>

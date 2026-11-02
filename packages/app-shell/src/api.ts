@@ -2,6 +2,7 @@ import {
   parseApiErrorResponse,
   type ApiErrorCode,
 } from '@obiter/contracts/api-error-response'
+import type { OwnedMatter } from '@obiter/contracts'
 import { apiUrl } from './lib/api-url'
 import { getDesktopAuthToken } from './lib/auth-token'
 import { readDesktopBridge } from './lib/desktop-bridge'
@@ -17,6 +18,7 @@ export class ApiError extends Error {
     message: string,
     status: number,
     requestId: string,
+    readonly uncoveredMatters?: OwnedMatter[],
   ) {
     super(message)
     this.name = 'ApiError'
@@ -46,6 +48,7 @@ async function throwApiError(response: Response): Promise<never> {
       result.error.message,
       response.status,
       result.error.requestId,
+      response.status === 409 ? result.error.uncoveredMatters : undefined,
     )
   }
 

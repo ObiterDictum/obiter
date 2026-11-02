@@ -11,17 +11,21 @@ import {
 } from '@obiter/ui'
 import { Plus } from '@obiter/ui/icons'
 import { useState, type FormEvent } from 'react'
-import { userRoleSchema, type UserRole } from '@obiter/contracts'
+import {
+  userRoleSchema,
+  type UserRole,
+  type OrganisationMember,
+} from '@obiter/contracts'
 import { ApiError } from '../api'
 import {
   useCreateOrganisationInvite,
   useOrganisationInvites,
   useOrganisationMembers,
-  useRemoveOrganisationMember,
   useRevokeOrganisationInvite,
 } from '../organisation-membership'
 import { formatDate, initialsOf } from '../format'
 import { ErrorNotice } from './settings-fields'
+import { RemoveMemberDialog } from './remove-member-dialog'
 
 export function OrganisationPeople({
   organisationId,
@@ -39,7 +43,7 @@ export function OrganisationPeople({
   const invites = useOrganisationInvites(organisationId, { enabled: active })
   const invite = useCreateOrganisationInvite(organisationId)
   const revoke = useRevokeOrganisationInvite(organisationId)
-  const remove = useRemoveOrganisationMember(organisationId)
+  const [removing, setRemoving] = useState<OrganisationMember | null>(null)
   const [email, setEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<UserRole>('member')
   const [actionError, setActionError] = useState<string | null>(null)
@@ -55,19 +59,6 @@ export function OrganisationPeople({
         cause instanceof ApiError
           ? cause.message
           : 'Could not send the invite.',
-      )
-    }
-  }
-
-  async function handleRemove(userId: string) {
-    setActionError(null)
-    try {
-      await remove.mutateAsync(userId)
-    } catch (cause) {
-      setActionError(
-        cause instanceof ApiError
-          ? cause.message
-          : 'Could not remove the member.',
       )
     }
   }
@@ -88,6 +79,14 @@ export function OrganisationPeople({
   return (
     <div className="flex flex-col gap-6 border-t border-line pt-6">
       <h3 className="text-section text-ink">Members</h3>
+      {removing ? (
+        <RemoveMemberDialog
+          organisationId={organisationId}
+          member={removing}
+          selfId={selfId}
+          onClose={() => setRemoving(null)}
+        />
+      ) : null}
       {actionError ? <ErrorNotice message={actionError} /> : null}
 
       {members.data && members.data.length > 0 ? (
@@ -131,8 +130,7 @@ export function OrganisationPeople({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          loading={remove.isPending}
-                          onClick={() => void handleRemove(member.id)}
+                          onClick={() => setRemoving(member)}
                         >
                           Remove
                         </Button>

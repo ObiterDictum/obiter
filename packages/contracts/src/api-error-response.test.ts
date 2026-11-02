@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { API_ERROR_CODES } from './api-error-codes'
 import { parseApiErrorResponse } from './api-error-response'
 import { apiErrorResponseSchema } from './api-error'
+import { removeOrganisationMemberConflictResponseSchema } from './matter'
 
 function expectAgreement(value: unknown) {
   const parsed = parseApiErrorResponse(value)
@@ -41,6 +42,53 @@ describe('parseApiErrorResponse — the light parser matches the zod contract', 
     expectAgreement({
       error: { code: 'forbidden', message: 'Failed.', requestId: '' },
     })
+  })
+
+  it('preserves validated uncovered matters without loading schemas in the client entry point', () => {
+    const body = {
+      error: {
+        code: 'conflict_detected',
+        message: 'Transfer required.',
+        requestId: 'req_1',
+        uncoveredMatters: [
+          { matterId: 'm1', title: 'Synthetic matter', ignored: true },
+        ],
+      },
+    }
+    expect(parseApiErrorResponse(body)).toEqual(
+      removeOrganisationMemberConflictResponseSchema.parse(body),
+    )
+  })
+
+  it('does not expose malformed or unrelated uncovered-matter data', () => {
+    for (const uncoveredMatters of [
+      [],
+      null,
+      [{ matterId: 'm1' }],
+      [{ matterId: '', title: 'Matter' }],
+      [{ matterId: 'm1', title: 42 }],
+    ]) {
+      expect(
+        parseApiErrorResponse({
+          error: {
+            code: 'conflict_detected',
+            message: 'Conflict.',
+            requestId: 'req_1',
+            uncoveredMatters,
+          },
+        })?.error.uncoveredMatters,
+      ).toBeUndefined()
+    }
+    expect(
+      parseApiErrorResponse({
+        error: {
+          code: 'forbidden',
+          message: 'Forbidden.',
+          requestId: 'req_1',
+          uncoveredMatters: [{ matterId: 'm1', title: 'Matter' }],
+        },
+      })?.error.uncoveredMatters,
+    ).toBeUndefined()
   })
 
   it('rejects a body that is not an error envelope', () => {
