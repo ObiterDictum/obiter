@@ -20,6 +20,15 @@ export function footnoteIdsForBlock(
   extraRuns: ExtraRuns,
   pendingRedlines?: PendingRedlines,
 ): string[] {
+  if (
+    block.type === 'paragraph' &&
+    !block.paragraph.runs.some((run) =>
+      run.preservedXmlFragments.some((xml) =>
+        xml.includes('footnoteReference'),
+      ),
+    )
+  )
+    return []
   const paragraphs =
     block.type === 'paragraph'
       ? [block.paragraph]
@@ -30,6 +39,19 @@ export function footnoteIdsForBlock(
               ?.paragraphs.filter((p) => p.id === id) ?? [],
         )
   return paragraphs.flatMap((paragraph) => {
+    if (
+      !paragraph.runs.some((run) =>
+        run.preservedXmlFragments.some((xml) =>
+          xml.includes('footnoteReference'),
+        ),
+      ) &&
+      !(extraRuns[paragraph.id] ?? []).some((run) =>
+        run.preservedXmlFragments.some((xml) =>
+          xml.includes('footnoteReference'),
+        ),
+      )
+    )
+      return []
     const measure = paragraphMeasure(
       paragraph,
       model,
@@ -54,6 +76,35 @@ export function footnoteIdsForBlock(
         .map((ref) => ref.noteId)
     })
   })
+}
+
+export function attachFootnotes(
+  pages: LaidOutPage[],
+  notes: readonly LaidOutPage['footnotes'][],
+  model: DocumentModelWire,
+): void {
+  for (const [index, page] of pages.entries()) page.footnotes = notes[index]
+  for (let index = pages.length; index < notes.length; index += 1) {
+    const last = pages[pages.length - 1]
+    if (!last) break
+    const frame = contentFrame(
+      last.box,
+      marginBandHeights(model, last.sectionIndex, false),
+    )
+    pages.push({
+      ...emptyPage(
+        last.box,
+        {
+          ...frame,
+          heightPx: Math.max(1, frame.heightPx - (notes[index]?.heightPx ?? 0)),
+        },
+        last.columns,
+      ),
+      sectionIndex: last.sectionIndex,
+      firstPageOfSection: false,
+      footnotes: notes[index],
+    })
+  }
 }
 
 export function layoutFootnotes(

@@ -5,6 +5,7 @@ import { layoutDocument } from './document-page-engine'
 import { clearParagraphMeasureCache } from './document-page-measure'
 import { clearLineBreakCache } from './document-page-flow'
 import { pageReferenceMap } from './document-page-references'
+import { storyBlocks } from './document-page-tables'
 
 async function noteModel() {
   const { model } = await parseDocx(
@@ -88,6 +89,58 @@ it('remeasures edited footnotes without reusing a previous note reservation', as
   clearParagraphMeasureCache()
   clearLineBreakCache()
   expect(layoutDocument(model, drafts)).toEqual(warm)
+})
+
+it('returns the latest note pages after eight unstable reservations instead of throwing', async () => {
+  const model = await noteModel()
+  let reads = 0
+  const drafts = {
+    get 'note-run'() {
+      reads += 1
+      return reads % 2 ? 'Short note' : 'Expanded note '.repeat(30)
+    },
+  }
+  const pages = layoutDocument(model, drafts)
+  expect(reads).toBe(8)
+  expect(pages.length).toBeGreaterThan(0)
+  expect(
+    pages[0]?.footnotes?.blocks.some(
+      (block) =>
+        block.type === 'paragraph' &&
+        block.paragraph.runs[0]?.text === 'Expanded note '.repeat(30),
+    ),
+  ).toBe(true)
+})
+
+it('matches a cold layout after warm body edits grow, shrink, split, or move a reference', async () => {
+  const model = await noteModel()
+  const body = model.stories.find((story) => story.kind === 'document')
+  const run = body?.paragraphs[0]?.runs[0]
+  if (!run || !body) throw new Error('Missing reference run')
+  layoutDocument(model)
+  for (const blocks of [undefined, storyBlocks(body)]) {
+    for (const text of [
+      'Claim!',
+      'Claim?',
+      'Long body '.repeat(300),
+      'Claim',
+      '',
+    ]) {
+      const drafts = { [run.id]: text }
+      expect(layoutDocument(model, drafts, [], {}, blocks)).toEqual(
+        layoutDocument(structuredClone(model), drafts),
+      )
+    }
+  }
+})
+
+it('preserves trailing note-only pages when reusing an unchanged reservation', async () => {
+  const model = await noteModel()
+  const drafts = { 'note-run': 'Long note '.repeat(400) }
+  layoutDocument(model, drafts)
+  expect(layoutDocument(model, drafts)).toEqual(
+    layoutDocument(structuredClone(model), drafts),
+  )
 })
 
 it('keeps endnotes at the document end while footnotes remain on reference pages', async () => {

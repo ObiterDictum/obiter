@@ -23,7 +23,15 @@ import { marginBandHeights } from './document-page-margin'
 import { documentNotes } from './document-page-notes'
 import { storyBlocks, type StoryBlock } from './document-page-tables'
 import { layoutTable } from './document-page-table-flow'
-import { layoutFootnotes, footnoteIdsForBlock } from './document-page-footnotes'
+import {
+  layoutFootnotes,
+  footnoteIdsForBlock,
+  attachFootnotes,
+} from './document-page-footnotes'
+import {
+  previousFootnotePlacement,
+  rememberFootnotePlacement,
+} from './document-page-footnote-cache'
 import {
   emptyPage,
   layoutParagraph,
@@ -44,6 +52,7 @@ export type {
 export type DocumentLayoutFlow = { kind: 'web'; widthPx: number }
 
 const WEB_FRAME_HEIGHT_PX = 10_000_000
+const MAX_FOOTNOTE_PASSES = 8
 
 export function layoutDocument(
   model: DocumentModelWire,
@@ -55,7 +64,10 @@ export function layoutDocument(
   flow?: DocumentLayoutFlow,
   pendingRedlines?: PendingRedlines,
 ): LaidOutPage[] {
-  if (flow?.kind === 'web')
+  const hasFootnotes = documentNotes(model).some(
+    (note) => note.kind === 'footnote',
+  )
+  if (flow?.kind === 'web' || !hasFootnotes)
     return layoutBody(
       model,
       drafts,
@@ -66,13 +78,20 @@ export function layoutDocument(
       flow,
       pendingRedlines,
     )
-  let notes: LaidOutPage['footnotes'][] = []
-  const minimumPages = new Map<string, number>()
-  const hasFootnotes = documentNotes(model).some(
-    (note) => note.kind === 'footnote',
-  )
-  for (let pass = 0; pass < 100; pass += 1) {
-    const pages = layoutBody(
+  const cacheable =
+    !inserts.length &&
+    !Object.keys(extraRuns).length &&
+    !pageBreaks.length &&
+    !pendingRedlines
+  const previous = cacheable
+    ? previousFootnotePlacement(model, drafts, blocks)
+    : undefined
+  let notes: LaidOutPage['footnotes'][] =
+    previous?.pages.map((page) => page.footnotes) ?? []
+  const minimumPages = new Map(previous?.minimumPages)
+  let pages: LaidOutPage[] = []
+  for (let pass = 0; pass < MAX_FOOTNOTE_PASSES; pass += 1) {
+    pages = layoutBody(
       model,
       drafts,
       inserts,
@@ -84,6 +103,11 @@ export function layoutDocument(
       notes,
       hasFootnotes ? minimumPages : undefined,
     )
+    if (previous) {
+      attachFootnotes(pages, notes, model)
+      rememberFootnotePlacement(model, drafts, pages, minimumPages, blocks)
+      return pages
+    }
     if (hasFootnotes) {
       const seen = new Set<string>()
       for (const [index, page] of pages.entries()) {
@@ -109,36 +133,21 @@ export function layoutDocument(
       extraRuns,
       pendingRedlines,
     )
-    if (JSON.stringify(next) === JSON.stringify(notes)) {
-      for (let index = pages.length; index < notes.length; index += 1) {
-        const last = pages[pages.length - 1]
-        if (!last) break
-        const frame = contentFrame(
-          last.box,
-          marginBandHeights(model, last.sectionIndex, false),
-        )
-        pages.push({
-          ...emptyPage(
-            last.box,
-            {
-              ...frame,
-              heightPx: Math.max(
-                1,
-                frame.heightPx - (notes[index]?.heightPx ?? 0),
-              ),
-            },
-            last.columns,
-          ),
-          sectionIndex: last.sectionIndex,
-          firstPageOfSection: false,
-          footnotes: notes[index],
-        })
-      }
+    const stable =
+      next.length === notes.length &&
+      Array.from(
+        { length: next.length },
+        (_, index) => next[index]?.heightPx === notes[index]?.heightPx,
+      ).every(Boolean)
+    notes = next
+    if (stable || pass === MAX_FOOTNOTE_PASSES - 1) {
+      attachFootnotes(pages, notes, model)
+      if (cacheable && stable)
+        rememberFootnotePlacement(model, drafts, pages, minimumPages, blocks)
       return pages
     }
-    notes = next
   }
-  throw new Error('Footnote pagination did not converge')
+  return pages
 }
 
 function layoutBody(
@@ -186,7 +195,7 @@ function layoutBody(
       box: sectionBox,
       frame: contentFrame(
         sectionBox,
-        marginBandHeights(model, sectionIndex, firstPage),
+        marginBandHeights(model, sectionIndex, firstPage, sections),
       ),
       columns: sectionColumns(sectionBox, sectionXml),
     }

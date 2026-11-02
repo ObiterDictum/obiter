@@ -109,11 +109,13 @@ export function marginStories(
   kind: 'header' | 'footer',
   sectionIndex?: number,
   firstPage = true,
+  sections = documentSections(model),
 ): DocumentStoryWire[] {
   const all = model.stories.filter((story) => story.kind === kind)
-  const ids = sectionReferenceIds(model, kind, sectionIndex, firstPage)
+  if (!all.length) return []
+  const ids = sectionReferenceIds(kind, sectionIndex, firstPage, sections)
   if (ids.length === 0)
-    return documentSections(model).some((section) =>
+    return sections.some((section) =>
       section.xml.includes(`<w:${kind}Reference`),
     )
       ? []
@@ -184,12 +186,11 @@ export function documentSections(model: DocumentModelWire): DocumentSection[] {
 }
 
 function sectionReferenceIds(
-  model: DocumentModelWire,
   kind: 'header' | 'footer',
   sectionIndex: number | undefined,
   firstPage: boolean,
+  sections: DocumentSection[],
 ): string[] {
-  const sections = documentSections(model)
   const selected = sectionIndex ?? sections.length - 1
   const sect = sections[selected]?.xml ?? ''
   const type = firstPage && /<w:titlePg\b/.test(sect) ? 'first' : 'default'

@@ -120,17 +120,37 @@ export function marginBandHeights(
   model: DocumentModelWire,
   sectionIndex?: number,
   firstPage = true,
+  sections?: ReturnType<typeof documentSections>,
 ): MarginBandHeights {
+  if (
+    !model.stories.some(
+      (story) => story.kind === 'header' || story.kind === 'footer',
+    )
+  )
+    return { headerPx: 0, footerPx: 0 }
+  sections ??= documentSections(model)
   const box =
     sectionIndex === undefined
       ? documentPageBox(model)
-      : pageBoxForSection(documentSections(model)[sectionIndex]?.xml ?? '')
+      : pageBoxForSection(sections[sectionIndex]?.xml ?? '')
   let headerPx = 0
   let footerPx = 0
-  for (const story of marginStories(model, 'header', sectionIndex, firstPage)) {
+  for (const story of marginStories(
+    model,
+    'header',
+    sectionIndex,
+    firstPage,
+    sections,
+  )) {
     headerPx = Math.max(headerPx, storyBandHeight(story, box, model))
   }
-  for (const story of marginStories(model, 'footer', sectionIndex, firstPage)) {
+  for (const story of marginStories(
+    model,
+    'footer',
+    sectionIndex,
+    firstPage,
+    sections,
+  )) {
     footerPx = Math.max(footerPx, storyBandHeight(story, box, model))
   }
   return { headerPx, footerPx }

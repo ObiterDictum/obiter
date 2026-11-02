@@ -71,8 +71,14 @@ let measured = new WeakMap<DocumentParagraphWire, Measured>()
 let floatTargets = new WeakMap<DocumentParagraphWire, ParagraphFloatTargets>()
 let fontsWatched = false
 const MAX_LINE_COUNTS = 64
+let generation = 0
+
+export function paragraphMeasureGeneration(): number {
+  return generation
+}
 
 export function clearParagraphMeasureCache(): void {
+  generation += 1
   measured = new WeakMap()
   floatTargets = new WeakMap()
 }
