@@ -108,27 +108,12 @@ export function layoutDocument(
       rememberFootnotePlacement(model, drafts, pages, minimumPages, blocks)
       return pages
     }
-    const seen = new Set<string>()
-    for (const [index, page] of pages.entries()) {
-      for (const block of page.blocks) {
-        for (const id of footnoteIdsForBlock(
-          block,
-          model,
-          drafts,
-          extraRuns,
-          pendingRedlines,
-        )) {
-          if (seen.has(id)) continue
-          seen.add(id)
-          minimumPages.set(id, Math.max(index, minimumPages.get(id) ?? 0))
-        }
-      }
-    }
     const next = layoutFootnotes(
       pages,
       model,
       drafts,
       extraRuns,
+      minimumPages,
       pendingRedlines,
     )
     const stable =
@@ -294,7 +279,7 @@ function layoutBody(
     session.trailingBreak = false
   }
 
-  const beforePlace = minimumPages
+  const beforePlace = minimumPages?.size
     ? (block: LaidOutBlock) =>
         footnoteIdsForBlock(
           block,

@@ -99,6 +99,7 @@ export function layoutFootnotes(
   model: DocumentModelWire,
   drafts: Record<string, string> | undefined,
   extraRuns: ExtraRuns,
+  minimumPages: Map<string, number>,
   pendingRedlines?: PendingRedlines,
 ): LaidOutPage['footnotes'][] {
   const notes = new Map(
@@ -174,6 +175,7 @@ export function layoutFootnotes(
         const note = notes.get(id)
         if (!note || used.has(note.noteId)) continue
         used.add(note.noteId)
+        minimumPages.set(id, Math.max(pageIndex, minimumPages.get(id) ?? 0))
         if (!session || notePage < pageIndex) {
           save()
           notePage = pageIndex
