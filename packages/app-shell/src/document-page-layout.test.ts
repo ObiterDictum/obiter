@@ -76,6 +76,80 @@ describe('documentPageBox', () => {
 })
 
 describe('marginStories', () => {
+  it('inherits each reference variant separately and uses first-page headers only on the section first page', () => {
+    const story = emptyModel.stories[0]
+    if (!story) throw new Error('Missing document story')
+    const model: DocumentModelWire = {
+      ...emptyModel,
+      stories: [
+        {
+          ...story,
+          paragraphs: [
+            {
+              ...story.paragraphs[0],
+              id: 'first',
+              runs: [],
+              preservedXmlFragments: [
+                '<w:sectPr><w:headerReference w:type="default" r:id="default"/><w:headerReference w:type="first" r:id="first"/></w:sectPr>',
+              ],
+            },
+          ],
+          preservedXmlFragments: ['<w:sectPr><w:titlePg/></w:sectPr>'],
+        },
+        ...['default', 'first'].map((id) => ({
+          ...story,
+          kind: 'header' as const,
+          partName: `word/${id}.xml`,
+        })),
+      ],
+      relationships: ['default', 'first'].map((id) => ({
+        id,
+        sourcePartName: 'word/document.xml',
+        type: 'header',
+        target: `${id}.xml`,
+        sourceFragment: '',
+      })),
+    }
+    expect(marginStories(model, 'header', 0, true)[0]?.partName).toBe(
+      'word/default.xml',
+    )
+    expect(marginStories(model, 'header', 1, true)[0]?.partName).toBe(
+      'word/first.xml',
+    )
+    expect(marginStories(model, 'header', 1, false)[0]?.partName).toBe(
+      'word/default.xml',
+    )
+  })
+
+  it('leaves a first-page header blank when no first variant is defined', () => {
+    const story = emptyModel.stories[0]
+    if (!story) throw new Error('Missing document story')
+    const model: DocumentModelWire = {
+      ...emptyModel,
+      stories: [
+        {
+          ...story,
+          preservedXmlFragments: [
+            '<w:sectPr><w:titlePg/><w:headerReference w:type="default" r:id="default"/></w:sectPr>',
+          ],
+        },
+        { ...story, kind: 'header', partName: 'word/default.xml' },
+      ],
+      relationships: [
+        {
+          id: 'default',
+          sourcePartName: 'word/document.xml',
+          type: 'header',
+          target: 'default.xml',
+          sourceFragment: '',
+        },
+      ],
+    }
+    expect(marginStories(model, 'header', 0, true)).toEqual([])
+    expect(marginStories(model, 'header', 0, false)[0]?.partName).toBe(
+      'word/default.xml',
+    )
+  })
   it('keeps a single unnamed footer and drops extra footer parts', () => {
     const model: DocumentModelWire = {
       ...emptyModel,

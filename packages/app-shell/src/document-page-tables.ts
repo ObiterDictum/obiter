@@ -22,7 +22,11 @@ export type DisplayTableCell = {
 
 export type DisplayTable = {
   bordered: boolean
-  rows: Array<{ cells: DisplayTableCell[]; heightPx?: number }>
+  rows: Array<{
+    cells: DisplayTableCell[]
+    heightPx?: number
+    header?: boolean
+  }>
   paragraphIds: string[]
 }
 
@@ -147,6 +151,7 @@ function bindTableParagraphs(
   const unused = paragraphs.filter((paragraph) => !used.has(paragraph.id))
   let index = 0
   const rows = table.rows.map((row) => ({
+    ...row,
     cells: row.cells.map((cell) => {
       const take = Math.max(
         cell.paragraphCount ?? cell.paragraphIds.length,
@@ -187,6 +192,11 @@ function parseWordTable(xml: string): DisplayTable | undefined {
     const heightPx = rowHeightPx(tr)
     return {
       ...(heightPx ? { heightPx } : {}),
+      ...(children(children(tr, 'trPr')[0], 'tblHeader').some(
+        (el) => !['0', 'false', 'off'].includes(attr(el, 'val') ?? 'true'),
+      )
+        ? { header: true }
+        : {}),
       cells: tableCells(tr).map((tc) => {
         const tcPr = children(tc, 'tcPr')[0]
         const spanEl = tcPr ? children(tcPr, 'gridSpan')[0] : undefined

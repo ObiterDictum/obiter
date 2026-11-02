@@ -118,6 +118,9 @@ export function DocumentModelPage({
     frame: ContentFrame
     columns: ColumnFrame[]
     contentPx?: number
+    sectionIndex?: number
+    firstPageOfSection?: boolean
+    footnotes?: { blocks: LaidOutBlock[]; heightPx: number }
   }
   pageNumber?: number
   pageReferences?: ReadonlyMap<string, number>
@@ -133,8 +136,6 @@ export function DocumentModelPage({
 }) {
   const derived = useMemo(() => {
     const story = model.stories.find((item) => item.kind === 'document')
-    const headers = marginStories(model, 'header')
-    const footers = marginStories(model, 'footer')
     const listMarkers = documentListMarkers(model)
     const notes = documentNotes(model)
     const noteParagraphIds = new Set(
@@ -151,23 +152,13 @@ export function DocumentModelPage({
     const storyOf = paragraphStoryResolver(model)
     return {
       story,
-      headers,
-      footers,
       listMarkers,
       noteParagraphIds,
       noteMarks,
       storyOf,
     }
   }, [model])
-  const {
-    story,
-    headers,
-    footers,
-    listMarkers,
-    noteParagraphIds,
-    noteMarks,
-    storyOf,
-  } = derived
+  const { story, listMarkers, noteParagraphIds, noteMarks, storyOf } = derived
 
   const { order, neighbors } = useMemo(() => {
     const order = storyFlowParagraphIds(story, inserts, deletedParagraphIds)
@@ -183,6 +174,18 @@ export function DocumentModelPage({
   }, [model, story, extraRuns, inserts, deletedParagraphIds])
   const latestNeighbors = useLatestCallback(neighbors)
 
+  const headers = marginStories(
+    model,
+    'header',
+    pageLayout?.sectionIndex,
+    pageLayout?.firstPageOfSection ?? true,
+  )
+  const footers = marginStories(
+    model,
+    'footer',
+    pageLayout?.sectionIndex,
+    pageLayout?.firstPageOfSection ?? true,
+  )
   const page = pageLayout?.box ?? documentPageBox(model)
   const frame =
     pageLayout?.frame ?? contentFrame(page, marginBandHeights(model))
@@ -375,6 +378,29 @@ export function DocumentModelPage({
           pageNumber={pageNumber}
         />
       </div>
+      {pageLayout?.footnotes && (
+        <div
+          aria-label="Page footnotes"
+          className="flex shrink-0 flex-col justify-end"
+          style={{
+            height: pageLayout.footnotes.heightPx,
+            marginLeft: frame.left,
+            width: frame.widthPx,
+            paddingTop: 12,
+          }}
+        >
+          {pageLayout.footnotes.blocks.flatMap((block, index) =>
+            renderBlock(block, index, {
+              ...sharedCtx,
+              storyPartName: story.partName,
+              editing: bodyEditing,
+              paragraphs: story.paragraphs,
+              columnWidthPx: frame.widthPx,
+              neighbors: latestNeighbors,
+            }),
+          )}
+        </div>
+      )}
       {!chromeless && (
         <PageMarginBand
           stories={footers}

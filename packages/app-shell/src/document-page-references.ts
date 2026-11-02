@@ -10,7 +10,7 @@ export function pageReferenceMap(
 ): ReadonlyMap<string, number> {
   const pageOf = new Map<string, number>()
   pages.forEach((page, index) => {
-    for (const block of page.blocks) {
+    for (const block of [...page.blocks, ...(page.footnotes?.blocks ?? [])]) {
       if (block.type === 'paragraph') {
         if (!pageOf.has(block.paragraph.id)) {
           pageOf.set(block.paragraph.id, index + 1)

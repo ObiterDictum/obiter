@@ -134,16 +134,23 @@ describe('takeLine', () => {
     expect(takeLine('Hello\nWorld', 0, 16, 400)).toBe(6)
   })
 
-  it('keeps an overflowing first word on the line, as Word does', () => {
+  it('breaks an overflowing first word at the measured fit point', () => {
     const word = 'Supercalifragilistic'
     const taken = takeLine(`${word} next`, 0, 16, 10)
-    expect(taken).toBe(word.length + 1)
+    expect(taken).toBe(1)
   })
 
   it('wraps a long unbroken token without scanning every prefix', () => {
     const token = 'A'.repeat(4000)
-    expect(takeLine(`${token} tail`, 0, 16, 80)).toBe(4000 + 1)
+    expect(takeLine(`${token} tail`, 0, 16, 80)).toBe(10)
     expect(takeLine(token, 0, 16, 50_000)).toBe(4000)
+  })
+
+  it('keeps surrogate pairs and combining marks together even in a narrow column', () => {
+    for (const cluster of ['😀', 'e\u0301', 'a\u0301\u0327']) {
+      expect(takeLine(`${cluster}next`, 0, 16, 1)).toBe(cluster.length)
+      expect(takeLine(`b${cluster}next`, 0, 16, 12)).toBe(1)
+    }
   })
 
   it('carries the newline with the overflowing character it terminates', () => {

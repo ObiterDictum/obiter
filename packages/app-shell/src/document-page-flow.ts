@@ -247,10 +247,6 @@ function measureLine(
   if (textWidthPx(haystack, fontSizePx, fontFamily) <= widthPx) {
     return newline === -1 ? rest.length : newline + 1
   }
-  const first = haystack[0]
-  if (first && textWidthPx(first, fontSizePx, fontFamily) > widthPx) {
-    return newline === 1 ? 2 : 1
-  }
   let lo = 1
   let hi = haystack.length
   while (lo < hi) {
@@ -268,12 +264,22 @@ function measureLine(
     const char = haystack[index]
     if (char === ' ' || char === '-') lastBreak = index + 1
   }
-  if (lastBreak > 0) return lastBreak
-  for (let index = lo; index < haystack.length; index += 1) {
-    const char = haystack[index]
-    if (char === ' ' || char === '-') return index + 1
+  let boundary = lastBreak || lo
+  while (boundary > 0 && !textBoundary(haystack, boundary)) boundary -= 1
+  if (boundary === 0) {
+    boundary = 1
+    while (boundary < haystack.length && !textBoundary(haystack, boundary))
+      boundary += 1
   }
-  return newline === -1 ? rest.length : newline + 1
+  return boundary === newline ? boundary + 1 : boundary
+}
+
+function textBoundary(text: string, offset: number): boolean {
+  const code = text.charCodeAt(offset)
+  return (
+    !(code >= 0xdc00 && code <= 0xdfff) &&
+    !/^\p{Mark}/u.test(text.slice(offset, offset + 2))
+  )
 }
 
 function textWidthPx(
