@@ -1,4 +1,8 @@
 @media print {
+  body:has([data-document-desk]) {
+    margin: 0 !important;
+  }
+
   body:has([data-document-desk]) * {
     visibility: hidden !important;
   }
@@ -20,6 +24,11 @@
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
+    background: none !important;
+  }
+
+  body:has([data-document-desk]) [data-document-desk] > div {
+    padding: 0 !important;
   }
 
   body:has([data-document-desk])
