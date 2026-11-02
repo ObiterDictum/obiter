@@ -1,4 +1,5 @@
 import { API_ERROR_CODES, type ApiErrorCode } from './api-error-codes'
+import type { OwnedMatter } from './matter'
 
 export type { ApiErrorCode }
 
@@ -9,6 +10,7 @@ export interface ApiErrorResponse {
     code: ApiErrorCode
     message: string
     requestId: string
+    uncoveredMatters?: OwnedMatter[]
   }
 }
 
@@ -28,5 +30,33 @@ export function parseApiErrorResponse(value: unknown): ApiErrorResponse | null {
   if (!isApiErrorCode(code)) return null
   if (typeof message !== 'string' || message.length === 0) return null
   if (typeof requestId !== 'string' || requestId.length === 0) return null
-  return { error: { code, message, requestId } }
+  const uncoveredMatters =
+    code === 'conflict_detected'
+      ? parseUncoveredMatters(error.uncoveredMatters)
+      : undefined
+  return {
+    error: {
+      code,
+      message,
+      requestId,
+      ...(uncoveredMatters ? { uncoveredMatters } : {}),
+    },
+  }
+}
+
+function parseUncoveredMatters(value: unknown): OwnedMatter[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+  const matters: OwnedMatter[] = []
+  for (const matter of value) {
+    if (
+      !isRecord(matter) ||
+      typeof matter.matterId !== 'string' ||
+      !matter.matterId ||
+      typeof matter.title !== 'string' ||
+      !matter.title
+    )
+      return undefined
+    matters.push({ matterId: matter.matterId, title: matter.title })
+  }
+  return matters
 }
