@@ -22,11 +22,13 @@ import {
 import { marginBandHeights } from './document-page-margin'
 import { documentNotes } from './document-page-notes'
 import { storyBlocks, type StoryBlock } from './document-page-tables'
+import { layoutTable } from './document-page-table-flow'
+import { layoutFootnotes, footnoteIdsForBlock } from './document-page-footnotes'
 import {
   emptyPage,
   layoutParagraph,
-  tableHeight,
   type LaidOutPage,
+  type LaidOutBlock,
   type PageSession,
 } from './document-page-blocks'
 
@@ -53,6 +55,104 @@ export function layoutDocument(
   flow?: DocumentLayoutFlow,
   pendingRedlines?: PendingRedlines,
 ): LaidOutPage[] {
+  if (flow?.kind === 'web')
+    return layoutBody(
+      model,
+      drafts,
+      inserts,
+      extraRuns,
+      blocks,
+      pageBreaks,
+      flow,
+      pendingRedlines,
+    )
+  let notes: LaidOutPage['footnotes'][] = []
+  const minimumPages = new Map<string, number>()
+  const hasFootnotes = documentNotes(model).some(
+    (note) => note.kind === 'footnote',
+  )
+  for (let pass = 0; pass < 100; pass += 1) {
+    const pages = layoutBody(
+      model,
+      drafts,
+      inserts,
+      extraRuns,
+      blocks,
+      pageBreaks,
+      flow,
+      pendingRedlines,
+      notes,
+      hasFootnotes ? minimumPages : undefined,
+    )
+    if (hasFootnotes) {
+      const seen = new Set<string>()
+      for (const [index, page] of pages.entries()) {
+        for (const block of page.blocks) {
+          for (const id of footnoteIdsForBlock(
+            block,
+            model,
+            drafts,
+            extraRuns,
+            pendingRedlines,
+          )) {
+            if (seen.has(id)) continue
+            seen.add(id)
+            minimumPages.set(id, Math.max(index, minimumPages.get(id) ?? 0))
+          }
+        }
+      }
+    }
+    const next = layoutFootnotes(
+      pages,
+      model,
+      drafts,
+      extraRuns,
+      pendingRedlines,
+    )
+    if (JSON.stringify(next) === JSON.stringify(notes)) {
+      for (let index = pages.length; index < notes.length; index += 1) {
+        const last = pages[pages.length - 1]
+        if (!last) break
+        const frame = contentFrame(
+          last.box,
+          marginBandHeights(model, last.sectionIndex, false),
+        )
+        pages.push({
+          ...emptyPage(
+            last.box,
+            {
+              ...frame,
+              heightPx: Math.max(
+                1,
+                frame.heightPx - (notes[index]?.heightPx ?? 0),
+              ),
+            },
+            last.columns,
+          ),
+          sectionIndex: last.sectionIndex,
+          firstPageOfSection: false,
+          footnotes: notes[index],
+        })
+      }
+      return pages
+    }
+    notes = next
+  }
+  throw new Error('Footnote pagination did not converge')
+}
+
+function layoutBody(
+  model: DocumentModelWire,
+  drafts?: Record<string, string>,
+  inserts: LocalInsert[] = [],
+  extraRuns: ExtraRuns = {},
+  blocks?: StoryBlock[],
+  pageBreaks: readonly BreakDraft[] = [],
+  flow?: DocumentLayoutFlow,
+  pendingRedlines?: PendingRedlines,
+  notes: readonly LaidOutPage['footnotes'][] = [],
+  minimumPages?: ReadonlyMap<string, number>,
+): LaidOutPage[] {
   const web = flow?.kind === 'web' ? flow : undefined
   const sections = documentSections(model)
   const breakOffsets = new Map<string, number[]>()
@@ -65,7 +165,11 @@ export function layoutDocument(
   for (const list of breakOffsets.values()) {
     list.sort((left, right) => left - right)
   }
-  const geometryFor = (sectionXml: string) => {
+  const geometryFor = (
+    sectionXml: string,
+    sectionIndex = 0,
+    firstPage = true,
+  ) => {
     if (web) {
       const box: PageBox = {
         widthPx: web.widthPx,
@@ -80,11 +184,19 @@ export function layoutDocument(
     const sectionBox = pageBoxForSection(sectionXml)
     return {
       box: sectionBox,
-      frame: contentFrame(sectionBox, marginBandHeights(model)),
+      frame: contentFrame(
+        sectionBox,
+        marginBandHeights(model, sectionIndex, firstPage),
+      ),
       columns: sectionColumns(sectionBox, sectionXml),
     }
   }
-  const geometries = sections.map((section) => geometryFor(section.xml))
+  const geometries = sections.map((section, index) =>
+    geometryFor(section.xml, index),
+  )
+  const continuationGeometries = sections.map((section, index) =>
+    geometryFor(section.xml, index, false),
+  )
   let geometry = geometries[0] ?? geometryFor('')
   const story = documentStory(model)
   if (!story || story.paragraphs.length === 0) {
@@ -106,8 +218,27 @@ export function layoutDocument(
     inserts,
   )
   const pages: LaidOutPage[] = []
+  let sectionIndex = 0
+  let sectionStartPage = 0
+  const newPage = () => {
+    const footnotes = notes[pages.length]
+    const firstPageOfSection = pages.length === sectionStartPage
+    const base = firstPageOfSection
+      ? geometry
+      : (continuationGeometries[sectionIndex] ?? geometry)
+    const frame = {
+      ...base.frame,
+      heightPx: Math.max(1, base.frame.heightPx - (footnotes?.heightPx ?? 0)),
+    }
+    return {
+      ...emptyPage(base.box, frame, base.columns),
+      sectionIndex,
+      firstPageOfSection,
+      footnotes,
+    }
+  }
   const session: PageSession = {
-    page: emptyPage(geometry.box, geometry.frame, geometry.columns),
+    page: newPage(),
     col: 0,
     y: 0,
     broken: false,
@@ -132,14 +263,13 @@ export function layoutDocument(
       return
     }
     pushPage()
-    session.page = emptyPage(geometry.box, geometry.frame, geometry.columns)
+    session.page = newPage()
     session.col = 0
     session.y = 0
     session.broken = true
     session.trailingBreak = false
   }
 
-  let sectionIndex = 0
   const startSection = () => {
     sectionIndex += 1
     geometry = geometries[sectionIndex] ?? geometry
@@ -150,34 +280,39 @@ export function layoutDocument(
     ) {
       pushPage()
     }
-    session.page = emptyPage(geometry.box, geometry.frame, geometry.columns)
+    sectionStartPage = pages.length
+    session.page = newPage()
     session.col = 0
     session.y = 0
     session.broken = true
     session.trailingBreak = false
   }
 
+  const beforePlace = minimumPages
+    ? (block: LaidOutBlock) =>
+        footnoteIdsForBlock(
+          block,
+          model,
+          drafts,
+          extraRuns,
+          pendingRedlines,
+        ).every((id) => pages.length >= (minimumPages.get(id) ?? 0))
+    : undefined
+
   for (let index = 0; index < source.length; index += 1) {
     const item = source[index]
     if (item.type === 'table') {
-      const heightPx = tableHeight(
+      layoutTable(
         item.table,
         model,
         drafts,
         extraRuns,
-        column().widthPx,
-        undefined,
+        session,
+        column,
+        advance,
         pendingRedlines,
+        beforePlace,
       )
-      if (session.y > 0 && heightPx > geometry.frame.heightPx - session.y)
-        advance()
-      session.page.blocks.push({
-        type: 'table',
-        table: item.table,
-        column: session.col,
-      })
-      session.y += heightPx
-      if (session.y >= geometry.frame.heightPx) advance()
       continue
     }
     keepWithNext(
@@ -186,7 +321,7 @@ export function layoutDocument(
       model,
       drafts,
       extraRuns,
-      geometry.frame,
+      session.page.frame,
       column(),
       session,
       advance,
@@ -200,12 +335,13 @@ export function layoutDocument(
       extraRuns,
       hosts,
       geometry.box,
-      geometry.frame,
+      session.page.frame,
       session,
       column,
       advance,
       offsets,
       pendingRedlines,
+      beforePlace,
     )
     if (
       sections[sectionIndex]?.endParagraphId === item.paragraph.id &&
@@ -221,11 +357,12 @@ export function layoutDocument(
     extraRuns,
     hosts,
     geometry.box,
-    geometry.frame,
+    session.page.frame,
     session,
     column,
     advance,
     pendingRedlines,
+    Boolean(web),
   )
 
   if (
@@ -251,8 +388,11 @@ function layoutNotes(
   column: () => ColumnFrame,
   advance: () => void,
   pendingRedlines?: PendingRedlines,
+  includeFootnotes = false,
 ): void {
-  const notes = documentNotes(model)
+  const notes = documentNotes(model).filter(
+    (note) => includeFootnotes || note.kind === 'endnote',
+  )
   if (notes.length === 0) return
   if (session.y > 0) {
     session.y += 12

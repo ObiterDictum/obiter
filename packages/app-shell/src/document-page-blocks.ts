@@ -22,6 +22,7 @@ import {
 } from './document-page-measure'
 import {
   rowPaintHeight,
+  cellWrapWidthPx,
   type DisplayTable,
   type StoryBlock,
 } from './document-page-tables'
@@ -55,6 +56,9 @@ export type LaidOutPage = {
   floats: PageFloat[]
   textBoxes: PageTextBox[]
   contentPx?: number
+  sectionIndex?: number
+  firstPageOfSection?: boolean
+  footnotes?: { blocks: LaidOutBlock[]; heightPx: number }
 }
 
 export type PageSession = {
@@ -78,6 +82,7 @@ export function layoutParagraph(
   advance: () => void,
   pageBreaks: readonly number[] = [],
   pendingRedlines?: PendingRedlines,
+  beforePlace?: (block: LaidOutParagraph) => boolean,
 ): void {
   const measure = paragraphMeasure(
     item.paragraph,
@@ -130,6 +135,7 @@ export function layoutParagraph(
   }
 
   while (!complete) {
+    const frame = session.page.frame
     const nextBreak = breaks.find((at) => at > offset)
     const pageStart = session.y === 0 && session.broken && !continuation
     const before = continuation || pageStart ? 0 : (face.marginTopPx ?? 0)
@@ -195,7 +201,7 @@ export function layoutParagraph(
       placed = false
       continue
     }
-    session.page.blocks.push({
+    const block: LaidOutParagraph = {
       type: 'paragraph',
       paragraph,
       from: offset,
@@ -209,7 +215,13 @@ export function layoutParagraph(
       ),
       continuation,
       pageStart,
-    })
+    }
+    if (beforePlace && !beforePlace(block)) {
+      advance()
+      placed = false
+      continue
+    }
+    session.page.blocks.push(block)
     session.y = startY + used
     offset += fragment.consumed
     complete = fragment.complete
@@ -260,11 +272,10 @@ export function tableHeight(
     paragraphs.map((paragraph) => [paragraph.id, paragraph]),
   )
   return table.rows.reduce((sum, row) => {
-    const cellWidth = Math.max(1, widthPx / Math.max(1, row.cells.length))
     const content = Math.max(
       0,
-      ...row.cells.map((cell) =>
-        cell.paragraphIds.reduce((height, id) => {
+      ...row.cells.map((cell) => {
+        const textHeight = cell.paragraphIds.reduce((height, id) => {
           const paragraph = paras.get(id)
           if (!paragraph) return height
           return (
@@ -274,12 +285,17 @@ export function tableHeight(
               model,
               drafts,
               extraRuns,
-              cellWidth,
+              cellWrapWidthPx(cell, widthPx, row.cells.length),
               pendingRedlines,
             ).heightPx
           )
-        }, 0),
-      ),
+        }, 0)
+        return (
+          Math.max(textHeight, cell.minHeightPx ?? 0, cell.fill ? 48 : 0) +
+          (cell.fill ? 0 : 4) +
+          (table.bordered ? 1 : 0)
+        )
+      }),
     )
     return sum + Math.max(rowPaintHeight(row), content)
   }, 0)

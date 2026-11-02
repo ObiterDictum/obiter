@@ -107,10 +107,17 @@ export function pageBoxForSection(sect: string): PageBox {
 export function marginStories(
   model: DocumentModelWire,
   kind: 'header' | 'footer',
+  sectionIndex?: number,
+  firstPage = true,
 ): DocumentStoryWire[] {
   const all = model.stories.filter((story) => story.kind === kind)
-  const ids = sectionReferenceIds(model, kind)
-  if (ids.length === 0) return all.slice(0, 1)
+  const ids = sectionReferenceIds(model, kind, sectionIndex, firstPage)
+  if (ids.length === 0)
+    return documentSections(model).some((section) =>
+      section.xml.includes(`<w:${kind}Reference`),
+    )
+      ? []
+      : all.slice(0, 1)
   const parts = new Set(
     ids.flatMap((id) => {
       const relationship = model.relationships.find(
@@ -126,7 +133,7 @@ export function marginStories(
     }),
   )
   const matched = all.filter((story) => parts.has(story.partName))
-  return matched.length > 0 ? matched : all.slice(0, 1)
+  return matched
 }
 
 export function editingStoryFor(
@@ -179,21 +186,26 @@ export function documentSections(model: DocumentModelWire): DocumentSection[] {
 function sectionReferenceIds(
   model: DocumentModelWire,
   kind: 'header' | 'footer',
+  sectionIndex: number | undefined,
+  firstPage: boolean,
 ): string[] {
-  const sect = documentSectionXml(model)
+  const sections = documentSections(model)
+  const selected = sectionIndex ?? sections.length - 1
+  const sect = sections[selected]?.xml ?? ''
+  const type = firstPage && /<w:titlePg\b/.test(sect) ? 'first' : 'default'
   const tag = kind === 'header' ? 'headerReference' : 'footerReference'
-  const refs = [...sect.matchAll(new RegExp(`<w:${tag}\\b([^>]*)\\/?>`, 'gi'))]
-  const ofType = (type: string) =>
-    refs
-      .map((match) => ({
-        type: xmlAttr(match[1], 'type')?.toLowerCase() ?? 'default',
-        id: xmlAttr(match[1], 'id'),
-      }))
-      .filter((item) => item.type === type && item.id)
-      .map((item) => item.id)
+  for (let index = selected; index >= 0; index -= 1) {
+    const xml = sections[index]?.xml ?? ''
+    const ids = [...xml.matchAll(new RegExp(`<w:${tag}\\b([^>]*)\\/?>`, 'gi'))]
+      .filter(
+        (match) =>
+          (xmlAttr(match[1], 'type')?.toLowerCase() ?? 'default') === type,
+      )
+      .map((match) => xmlAttr(match[1], 'id'))
       .filter((id): id is string => Boolean(id))
-  const first = /<w:titlePg\b/.test(sect) ? ofType('first') : []
-  return first.length > 0 ? first : ofType('default')
+    if (ids.length > 0) return ids
+  }
+  return []
 }
 
 function pxOr(twips: number | undefined, fallback: number): number {

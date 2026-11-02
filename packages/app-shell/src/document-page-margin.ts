@@ -9,6 +9,8 @@ import type {
 import {
   marginStories,
   documentPageBox,
+  documentSections,
+  pageBoxForSection,
   type PageBox,
 } from './document-page-layout'
 import { paragraphPlainText } from './document-model-text'
@@ -114,14 +116,21 @@ export type MarginBandHeights = {
   footerPx: number
 }
 
-export function marginBandHeights(model: DocumentModelWire): MarginBandHeights {
-  const box = documentPageBox(model)
+export function marginBandHeights(
+  model: DocumentModelWire,
+  sectionIndex?: number,
+  firstPage = true,
+): MarginBandHeights {
+  const box =
+    sectionIndex === undefined
+      ? documentPageBox(model)
+      : pageBoxForSection(documentSections(model)[sectionIndex]?.xml ?? '')
   let headerPx = 0
   let footerPx = 0
-  for (const story of marginStories(model, 'header')) {
+  for (const story of marginStories(model, 'header', sectionIndex, firstPage)) {
     headerPx = Math.max(headerPx, storyBandHeight(story, box, model))
   }
-  for (const story of marginStories(model, 'footer')) {
+  for (const story of marginStories(model, 'footer', sectionIndex, firstPage)) {
     footerPx = Math.max(footerPx, storyBandHeight(story, box, model))
   }
   return { headerPx, footerPx }

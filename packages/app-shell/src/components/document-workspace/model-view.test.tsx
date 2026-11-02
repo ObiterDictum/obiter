@@ -1348,6 +1348,7 @@ describe('DocumentModelPage', () => {
       <DocumentModelPage
         model={listed}
         pageBlocks={pages[0]?.blocks}
+        pageLayout={pages[0]}
         selectedParagraphId={null}
         onSelectParagraph={() => undefined}
       />,

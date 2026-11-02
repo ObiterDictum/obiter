@@ -10,6 +10,30 @@ import {
 const tableXml = `<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single"/></w:tblBorders></w:tblPr><w:tr><w:tc><w:tcPr><w:shd w:fill="1F4E79"/><w:gridSpan w:val="1"/></w:tcPr><w:p w14:paraId="AABBCCDD"><w:r><w:t>Particulars</w:t></w:r></w:p></w:tc><w:tc><w:p w14:paraId="EEFF0011"><w:r><w:t>Details</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
 
 describe('storyTables', () => {
+  it('preserves enabled repeating headers when table paragraphs need rebinding', () => {
+    const story = {
+      partName: 'word/document.xml',
+      kind: 'document' as const,
+      paragraphs: [
+        {
+          id: 'rebound',
+          runs: [{ id: 'r', text: 'Heading', preservedXmlFragments: [] }],
+          preservedXmlFragments: [],
+        },
+      ],
+      preservedXmlFragments: [
+        '<w:tbl><w:tr><w:trPr><w:tblHeader/><w:trHeight w:val="720"/></w:trPr><w:tc><w:p/></w:tc></w:tr></w:tbl>',
+      ],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
+    }
+    const block = storyBlocks(story)[0]
+    expect(block?.type).toBe('table')
+    if (block?.type !== 'table') throw new Error('Expected table')
+    expect(block.table.rows[0]?.header).toBe(true)
+    expect(block.table.rows[0]?.heightPx).toBe(48)
+    expect(block.table.paragraphIds).toEqual(['rebound'])
+  })
   it('reads cell fill, spans and paragraph ids', () => {
     const tables = storyTables({
       partName: 'word/document.xml',
