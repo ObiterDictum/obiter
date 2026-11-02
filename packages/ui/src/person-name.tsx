@@ -1,24 +1,22 @@
-import { cn } from './lib/cn'
-
 export const FORMER_MEMBER_MARKER = '(former member)'
+
+export type PersonSummary = { name: string; formerMember?: boolean }
 
 export function formerMemberName(name: string, formerMember?: boolean) {
   return formerMember ? `${name} ${FORMER_MEMBER_MARKER}` : name
 }
 
 export function PersonName({
-  name,
-  formerMember,
+  person,
   className,
 }: {
-  name: string
-  formerMember?: boolean
+  person: PersonSummary
   className?: string
 }) {
   return (
-    <span className={cn(className)}>
-      {name}
-      {formerMember ? (
+    <span className={className}>
+      {person.name}
+      {person.formerMember ? (
         <span className="text-muted"> {FORMER_MEMBER_MARKER}</span>
       ) : null}
     </span>

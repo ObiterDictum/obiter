@@ -232,10 +232,7 @@ function CommentCard({
     <li className="flex flex-col gap-2 border-t border-line pt-3">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-medium text-ink">
-          <PersonName
-            name={comment.author.name}
-            formerMember={comment.author.formerMember}
-          />
+          <PersonName person={comment.author} />
         </p>
         <p className="text-caption text-subtle">
           {formatDateTime(comment.createdAt)}
@@ -365,10 +362,7 @@ function ReplyBody({ reply }: { reply: DocumentCommentReply }) {
           {reply.imported ? (
             (reply.author.name ?? 'Unknown author')
           ) : (
-            <PersonName
-              name={reply.author.name}
-              formerMember={reply.author.formerMember}
-            />
+            <PersonName person={reply.author} />
           )}
         </p>
         {reply.createdAt ? (

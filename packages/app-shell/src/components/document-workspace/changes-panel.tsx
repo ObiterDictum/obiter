@@ -382,10 +382,7 @@ function CommentRow({
   const comment = row.comment
   const resolved =
     'resolvedAt' in comment ? comment.resolvedAt !== null : comment.resolved
-  const person =
-    typeof comment.author === 'string' || comment.author === null
-      ? null
-      : comment.author
+  const person = typeof comment.author === 'string' ? null : comment.author
   const author =
     person?.name ??
     (typeof comment.author === 'string' ? comment.author : null) ??
@@ -421,8 +418,7 @@ function CommentRow({
             {style.initials}
           </span>
           <PersonName
-            name={author}
-            formerMember={person?.formerMember}
+            person={{ name: author, formerMember: person?.formerMember }}
             className="min-w-0 truncate text-item text-ink"
           />
           <span className="ms-auto shrink-0 text-caption text-subtle">

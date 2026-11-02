@@ -24,7 +24,7 @@ describe('formerMemberName', () => {
 
 describe('PersonName', () => {
   it('renders the marker in muted text that assistive technology still reads', () => {
-    render(<PersonName name="Alex Morgan" formerMember />)
+    render(<PersonName person={{ name: 'Alex Morgan', formerMember: true }} />)
     expect(screen.getByText('Alex Morgan').textContent).toBe(
       'Alex Morgan (former member)',
     )
@@ -34,7 +34,7 @@ describe('PersonName', () => {
   })
 
   it('renders only the name for a current member', () => {
-    render(<PersonName name="Alex Morgan" />)
+    render(<PersonName person={{ name: 'Alex Morgan' }} />)
     expect(screen.getByText('Alex Morgan').textContent).toBe('Alex Morgan')
     expect(screen.queryByText(FORMER_MEMBER_MARKER)).toBeNull()
   })

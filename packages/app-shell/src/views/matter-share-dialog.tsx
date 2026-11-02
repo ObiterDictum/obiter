@@ -153,7 +153,9 @@ function MatterShareDialog({
     (member) => member.id === shares.data?.ownerUserId,
   )
   const ownerPerson = shares.data?.owner
-  const ownerName = ownerPerson?.name ?? owner?.name ?? 'The matter owner'
+  const ownerLabel = ownerPerson ?? {
+    name: owner?.name ?? 'The matter owner',
+  }
   const ownerIsYou = shares.data?.ownerUserId === currentUserId
   const sharedIds = new Set(people.map((share) => share.granteeUserId))
   const addable = (members.data ?? []).filter(
@@ -201,10 +203,7 @@ function MatterShareDialog({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-item text-ink">
-                    <PersonName
-                      name={ownerName}
-                      formerMember={ownerPerson?.formerMember}
-                    />
+                    <PersonName person={ownerLabel} />
                     {ownerIsYou ? (
                       <span className="text-muted"> (you)</span>
                     ) : null}

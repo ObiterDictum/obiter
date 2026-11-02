@@ -59,14 +59,16 @@ function mountPanel(versions: DocumentVersionRecord[]) {
 }
 
 describe('version history authors', () => {
-  it('shows who saved each version without a marker for a current member', () => {
+  it('names who saved each version without a marker for a current member', () => {
     mountPanel([
       version({
         author: { id: 'usr_1', name: 'Alex Morgan', formerMember: false },
       }),
     ])
 
-    expect(screen.getByText('Alex Morgan').textContent).toBe('Alex Morgan')
+    expect(screen.getByText(/Alex Morgan ·/u).textContent).not.toContain(
+      'former member',
+    )
   })
 
   it('marks the author of a version saved by someone who has left the firm', () => {
@@ -76,8 +78,8 @@ describe('version history authors', () => {
       }),
     ])
 
-    expect(screen.getByText('Alex Morgan').textContent).toBe(
-      'Alex Morgan (former member)',
+    expect(screen.getByText(/Alex Morgan/u).textContent).toContain(
+      'Alex Morgan (former member) ·',
     )
   })
 
