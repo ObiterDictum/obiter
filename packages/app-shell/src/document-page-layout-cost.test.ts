@@ -6,7 +6,10 @@ import { layoutDocument } from './document-page-engine'
 const DEV_BODY_KEYSTROKE_TEXT_READS = 1598
 const DEV_FOOTNOTE_KEYSTROKE_TEXT_READS = 1678
 
-async function measure(noteCount: number) {
+async function measure(
+  noteCount: number,
+  draftKey?: (runId: string) => string,
+) {
   const { model } = await parseDocx(await createSyntheticDocx(['Body']))
   const body = model.stories[0]
   if (!body) throw new Error('Missing synthetic body')
@@ -66,7 +69,9 @@ async function measure(noteCount: number) {
   if (!run) throw new Error('Missing edited run')
   const reads: number[] = []
   const times = Array.from({ length: 10 }, (_, index) => {
-    const drafts = { [run.id]: `${run.text}${index}` }
+    const drafts = {
+      [draftKey?.(run.id) ?? run.id]: `${run.text}${index}`,
+    }
     textReads = 0
     const start = performance.now()
     layoutDocument(model, drafts)
@@ -94,4 +99,10 @@ it('bounds 40-footnote keystroke text reads to 1.25 times the dev footnote budge
   expect(await measure(40)).toBeLessThanOrEqual(
     DEV_FOOTNOTE_KEYSTROKE_TEXT_READS * 1.25,
   )
+})
+
+it('reuses a cached footnote placement when a keystroke changes no measured run', async () => {
+  expect(
+    await measure(40, (runId) => runId.replace('-run', '')),
+  ).toBeLessThanOrEqual(DEV_BODY_KEYSTROKE_TEXT_READS * 1.25)
 })

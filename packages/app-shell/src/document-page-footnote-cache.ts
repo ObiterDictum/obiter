@@ -54,8 +54,8 @@ export function previousFootnotePlacement(
   if (cached.pages.some((page) => page.floats.length || page.textBoxes.length))
     return
   if (!changed.size) return cached
-  const body = model.stories.find((story) => story.kind === 'document')
-  for (const paragraph of body?.paragraphs ?? []) {
+  const paragraphs = model.stories.flatMap((story) => story.paragraphs)
+  for (const paragraph of paragraphs) {
     if (!paragraph.runs.some((run) => changed.has(run.id))) continue
     const fragments = cached.pages.flatMap((page) =>
       page.blocks.flatMap((block) =>
@@ -87,4 +87,5 @@ export function previousFootnotePlacement(
     for (const run of paragraph.runs) changed.delete(run.id)
     if (!changed.size) return cached
   }
+  return cached
 }
