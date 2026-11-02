@@ -27,10 +27,12 @@ import {
   layoutFootnotes,
   footnoteIdsForBlock,
   attachFootnotes,
+  sameFootnotePlacement,
 } from './document-page-footnotes'
 import {
   previousFootnotePlacement,
   rememberFootnotePlacement,
+  type FootnotePlacement,
 } from './document-page-footnote-cache'
 import {
   emptyPage,
@@ -86,9 +88,38 @@ export function layoutDocument(
   const previous = cacheable
     ? previousFootnotePlacement(model, drafts, blocks)
     : undefined
-  let notes: LaidOutPage['footnotes'][] =
-    previous?.pages.map((page) => page.footnotes) ?? []
-  const minimumPages = new Map(previous?.minimumPages)
+  if (previous?.reusable) {
+    const notes = previous.layout.notes
+    const minimumPages = new Map(previous.minimumPages)
+    const pages = layoutBody(
+      model,
+      drafts,
+      inserts,
+      extraRuns,
+      blocks,
+      pageBreaks,
+      flow,
+      pendingRedlines,
+      notes,
+      minimumPages,
+    )
+    attachFootnotes(pages, notes, model)
+    rememberFootnotePlacement(
+      model,
+      drafts,
+      pages,
+      previous.layout,
+      minimumPages,
+      blocks,
+    )
+    return pages
+  }
+  if (previous) {
+    const reseeded = reuseFootnotePlacement(previous, model, drafts, blocks)
+    if (reseeded) return reseeded
+  }
+  let notes: LaidOutPage['footnotes'][] = []
+  const minimumPages = new Map<string, number>()
   let pages: LaidOutPage[] = []
   for (let pass = 0; pass < MAX_FOOTNOTE_PASSES; pass += 1) {
     pages = layoutBody(
@@ -103,12 +134,7 @@ export function layoutDocument(
       notes,
       minimumPages,
     )
-    if (previous) {
-      attachFootnotes(pages, notes, model)
-      rememberFootnotePlacement(model, drafts, pages, minimumPages, blocks)
-      return pages
-    }
-    const next = layoutFootnotes(
+    const layout = layoutFootnotes(
       pages,
       model,
       drafts,
@@ -116,19 +142,57 @@ export function layoutDocument(
       minimumPages,
       pendingRedlines,
     )
-    const stable =
-      next.length === notes.length &&
-      Array.from(next).every(
-        (note, index) => note?.heightPx === notes[index]?.heightPx,
-      )
-    notes = next
+    const stable = sameFootnotePlacement(layout.notes, notes)
+    notes = layout.notes
     if (stable || pass === MAX_FOOTNOTE_PASSES - 1) {
       attachFootnotes(pages, notes, model)
       if (cacheable && stable)
-        rememberFootnotePlacement(model, drafts, pages, minimumPages, blocks)
+        rememberFootnotePlacement(
+          model,
+          drafts,
+          pages,
+          layout,
+          minimumPages,
+          blocks,
+        )
       return pages
     }
   }
+  return pages
+}
+
+function reuseFootnotePlacement(
+  previous: FootnotePlacement,
+  model: DocumentModelWire,
+  drafts: Record<string, string> | undefined,
+  blocks?: StoryBlock[],
+): LaidOutPage[] | undefined {
+  const minimumPages = new Map<string, number>()
+  const notes = previous.layout.notes
+  const pages = layoutBody(
+    model,
+    drafts,
+    [],
+    {},
+    blocks,
+    [],
+    undefined,
+    undefined,
+    notes,
+    minimumPages,
+  )
+  const layout = layoutFootnotes(
+    pages,
+    model,
+    drafts,
+    {},
+    minimumPages,
+    undefined,
+    previous.layout,
+  )
+  if (layout !== previous.layout) return
+  attachFootnotes(pages, notes, model)
+  rememberFootnotePlacement(model, drafts, pages, layout, minimumPages, blocks)
   return pages
 }
 

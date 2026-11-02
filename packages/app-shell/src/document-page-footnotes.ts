@@ -3,7 +3,7 @@ import type { PendingRedlines } from './document-pending-redlines'
 import type { ExtraRuns } from './document-word-edits'
 import { documentNotes, runNoteRefs } from './document-page-notes'
 import { paragraphMeasure } from './document-page-measure'
-import { contentFrame } from './document-page-layout'
+import { contentFrame, type ContentFrame } from './document-page-layout'
 import { marginBandHeights } from './document-page-margin'
 import {
   emptyPage,
@@ -94,6 +94,40 @@ export function attachFootnotes(
   }
 }
 
+export function sameFootnotePlacement(
+  left: readonly LaidOutPage['footnotes'][],
+  right: readonly LaidOutPage['footnotes'][],
+): boolean {
+  const length = (notes: readonly LaidOutPage['footnotes'][]) => {
+    let end = notes.length
+    while (end > 0 && !notes[end - 1]) end -= 1
+    return end
+  }
+  if (length(left) !== length(right)) return false
+  return left.every((note, index) => {
+    const other = right[index]
+    if (!note || !other) return note === other
+    if (note.heightPx !== other.heightPx) return false
+    if (note.blocks.length !== other.blocks.length) return false
+    return note.blocks.every((block, at) => {
+      const counterpart = other.blocks[at]
+      if (!counterpart || block.type !== 'paragraph') return false
+      if (counterpart.type !== 'paragraph') return false
+      return (
+        block.paragraph.id === counterpart.paragraph.id &&
+        block.from === counterpart.from &&
+        block.to === counterpart.to
+      )
+    })
+  })
+}
+
+export type FootnoteLayout = {
+  notes: LaidOutPage['footnotes'][]
+  frames: Map<number, ContentFrame>
+  references: Map<string, number>
+}
+
 export function layoutFootnotes(
   pages: LaidOutPage[],
   model: DocumentModelWire,
@@ -101,19 +135,29 @@ export function layoutFootnotes(
   extraRuns: ExtraRuns,
   minimumPages: Map<string, number>,
   pendingRedlines?: PendingRedlines,
-): LaidOutPage['footnotes'][] {
+  previous?: FootnoteLayout,
+): FootnoteLayout {
   const notes = new Map(
     documentNotes(model)
       .filter((note) => note.kind === 'footnote')
       .map((note) => [note.noteId, note]),
   )
-  if (notes.size === 0) return []
-  const used = new Set<string>()
-  const result: LaidOutPage['footnotes'][] = []
-  let notePage = 0
-  let session: PageSession | undefined
+  const references = new Map<string, number>()
+  const idsByPage = pages.map((page) =>
+    page.blocks.flatMap((block) =>
+      footnoteIdsForBlock(block, model, drafts, extraRuns, pendingRedlines),
+    ),
+  )
+  idsByPage.forEach((ids, index) => {
+    for (const id of ids) {
+      if (!references.has(id)) references.set(id, index)
+    }
+  })
+  const frames = new Map<number, ContentFrame>()
   const pageAt = (index: number) => pages[index] ?? pages[pages.length - 1]
-  const create = (index: number): PageSession => {
+  const frameAt = (index: number): ContentFrame => {
+    const known = frames.get(index)
+    if (known) return known
     const page = pageAt(index)
     if (!page) throw new Error('Footnotes require a document page')
     const base = contentFrame(
@@ -144,6 +188,30 @@ export function layoutFootnotes(
       ...base,
       heightPx: Math.max(1, base.heightPx - 2 * bodyLinePx - 12),
     }
+    frames.set(index, frame)
+    return frame
+  }
+  const reuse =
+    previous !== undefined &&
+    sameReferences(previous.references, references) &&
+    [...previous.references.values()].every((index) =>
+      sameFrame(previous.frames.get(index), frameAt(index)),
+    )
+  if (reuse && previous) {
+    for (const [id, index] of previous.references) {
+      minimumPages.set(id, Math.max(index, minimumPages.get(id) ?? 0))
+    }
+    return previous
+  }
+  if (notes.size === 0) return { notes: [], frames, references }
+  const used = new Set<string>()
+  const result: LaidOutPage['footnotes'][] = []
+  let notePage = 0
+  let session: PageSession | undefined
+  const create = (index: number): PageSession => {
+    const page = pageAt(index)
+    if (!page) throw new Error('Footnotes require a document page')
+    const frame = frameAt(index)
     return {
       page: emptyPage(page.box, frame, [{ left: 0, widthPx: frame.widthPx }]),
       col: 0,
@@ -163,43 +231,61 @@ export function layoutFootnotes(
     const next = create(notePage)
     Object.assign(session, next)
   }
-  for (const [pageIndex, page] of pages.entries()) {
-    for (const block of page.blocks) {
-      for (const id of footnoteIdsForBlock(
-        block,
-        model,
-        drafts,
-        extraRuns,
-        pendingRedlines,
-      )) {
-        const note = notes.get(id)
-        if (!note || used.has(note.noteId)) continue
-        used.add(note.noteId)
-        minimumPages.set(id, Math.max(pageIndex, minimumPages.get(id) ?? 0))
-        if (!session || notePage < pageIndex) {
-          save()
-          notePage = pageIndex
-          session = create(notePage)
-        }
-        for (const paragraph of note.paragraphs) {
-          layoutParagraph(
-            { type: 'paragraph', paragraph },
-            model,
-            drafts,
-            extraRuns,
-            new Set(),
-            session.page.box,
-            session.page.frame,
-            session,
-            () => ({ left: 0, widthPx: session?.page.frame.widthPx ?? 1 }),
-            advance,
-            [],
-            pendingRedlines,
-          )
-        }
+  for (const [pageIndex, ids] of idsByPage.entries()) {
+    for (const id of ids) {
+      const note = notes.get(id)
+      if (!note || used.has(note.noteId)) continue
+      used.add(note.noteId)
+      minimumPages.set(id, Math.max(pageIndex, minimumPages.get(id) ?? 0))
+      if (!session || notePage < pageIndex) {
+        save()
+        notePage = pageIndex
+        session = create(notePage)
+      }
+      for (const paragraph of note.paragraphs) {
+        layoutParagraph(
+          { type: 'paragraph', paragraph },
+          model,
+          drafts,
+          extraRuns,
+          new Set(),
+          session.page.box,
+          session.page.frame,
+          session,
+          () => ({ left: 0, widthPx: session?.page.frame.widthPx ?? 1 }),
+          advance,
+          [],
+          pendingRedlines,
+        )
       }
     }
   }
   save()
-  return result
+  return { notes: result, frames, references }
+}
+
+function sameReferences(
+  left: ReadonlyMap<string, number>,
+  right: ReadonlyMap<string, number>,
+): boolean {
+  if (left.size !== right.size) return false
+  for (const [id, index] of left) {
+    if (right.get(id) !== index) return false
+  }
+  return true
+}
+
+function sameFrame(
+  left: ContentFrame | undefined,
+  right: ContentFrame | undefined,
+): boolean {
+  if (!left || !right) return left === right
+  return (
+    left.top === right.top &&
+    left.right === right.right &&
+    left.bottom === right.bottom &&
+    left.left === right.left &&
+    left.widthPx === right.widthPx &&
+    left.heightPx === right.heightPx
+  )
 }
