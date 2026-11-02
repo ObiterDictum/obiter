@@ -7181,6 +7181,23 @@
               <tbody>
                 <tr>
                   <td>
+                    S9 stage-1 brief requests creator-visible ownership
+                    transfer; the board and planned API authorize owners/admins
+                    only.
+                  </td>
+                  <td>
+                    The shared UI offers transfer to the creator as well as
+                    owners/admins, but grants no authority itself. API refusals
+                    remain visible. Resolve creator authorization in backend
+                    stage 3; until then the transfer and member-owned-matters
+                    routes are planned and removal fails closed if ownership
+                    cannot be listed. Former-member attribution also awaits a
+                    backend author marker.
+                  </td>
+                  <td class="id">S9; obiter PR #417</td>
+                </tr>
+                <tr>
+                  <td>
                     Redact detection uses Postgres leases, not the roadmap's
                     Redis/BullMQ queue.
                   </td>
