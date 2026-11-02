@@ -3026,9 +3026,11 @@
                     Owner-only removal of a member; last owner is refused.
                     Concurrent owner removals serialise on the
                     organisation&apos;s owner rows. Optional per-matter
-                    transfers and a 409 listing uncovered matters are planned
-                    (backend stage 3); the shared removal dialog blocks until
-                    ownership can be loaded and assigned.
+                    transfers and a 409 listing uncovered matters run in the
+                    same transaction as the removal, so removal is blocked until
+                    every matter the member owns has a new owner. The user row
+                    is deactivated rather than deleted: organisation and role
+                    are cleared and the name stays for attribution.
                   </td>
                 </tr>
                 <tr>
@@ -3056,7 +3058,7 @@
                     GET
                     /api/organisations/:organisationId/members/:userId/matters
                   </td>
-                  <td class="id">Planned (backend stage 3)</td>
+                  <td class="id">organisations.ts</td>
                   <td>
                     Owner/admin-only complete list of a member's owned matters,
                     including archived and soft-deleted matters, as { matters:
@@ -3068,21 +3070,17 @@
                 </tr>
                 <tr>
                   <td class="id">POST /api/matters/:matterId/transfer</td>
-                  <td class="id">Planned (backend stage 3)</td>
+                  <td class="id">matters.ts</td>
                   <td>
                     Request { newOwnerUserId }; response { matter }. Owner/admin
                     authorization, same-organisation active recipient,
                     transactional created_by update, redundant recipient-share
-                    cleanup and matter.ownership_transferred audit are backend
-                    work. The UI also offers the action to the creator as
-                    requested for stage 1; stage 3 must settle creator
-                    authorization (the board specifies owner/admin only), and
-                    server refusals remain visible. Removal must retain user
-                    records for attribution and revoke departing grants
-                    atomically with transfers. Existing author contracts expose
-                    no former-member marker; marking authors as “Name (former
-                    member)” is deferred until the backend supplies it. No
-                    production mocks.
+                    cleanup and matter.ownership_transferred audit. Removal
+                    retains user records for attribution and revokes departing
+                    grants atomically with transfers. The UI also offers the
+                    action to the creator as requested for stage 1; the server
+                    settles creator authorization, and refusals remain visible.
+                    No production mocks.
                   </td>
                 </tr>
                 <tr>
@@ -3103,7 +3101,14 @@
                 <tr>
                   <td class="id">GET · POST /api/matters/:matterId/shares</td>
                   <td class="id">document-access.ts</td>
-                  <td>Owner-only list and upsert of matter share grants</td>
+                  <td>
+                    Owner-only list and upsert of matter share grants. The list
+                    also carries the owner as
+                    <code>{ id, name, formerMember }</code> beside
+                    <code>ownerUserId</code>, so the matter owner reads
+                    &quot;Name (former member)&quot; after a member leaves
+                    (planned, backend stage 3 of the former-member marker).
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -3152,7 +3157,11 @@
                     Document with immutable versions. A view grantee sees only
                     the current version's row; the full version list is returned
                     to grantees who may read history (matter-level
-                    <code>edit</code>). Secondary records can still carry a
+                    <code>edit</code>). Each version's author is returned as
+                    <code>{ id, name, formerMember }</code> and the UI reads
+                    &quot;Name (former member)&quot; after a member leaves;
+                    <code>formerMember</code> is planned, backend stage 3 of the
+                    former-member marker. Secondary records can still carry a
                     denied id as provenance — a comment's
                     <code>anchorVersionId</code>, a redaction run's
                     <code>documentVersionId</code> — but every content route
@@ -3514,7 +3523,10 @@
                     on a real selected range or caret insertion point. An
                     optional <code>clientKey</code> replays the stored comment
                     on a canonically identical retry and answers a typed 409
-                    when the key was used for a different intent
+                    when the key was used for a different intent. Comment and
+                    reply authors carry an optional <code>formerMember</code>
+                    flag that renders &quot;Name (former member)&quot; (planned,
+                    backend stage 3 of the former-member marker).
                   </td>
                 </tr>
                 <tr>
@@ -3693,7 +3705,10 @@
                   <td>
                     Accept, reject, override, pseudonymise;
                     <code>applyToSameText</code> repeats the decision on every
-                    span reading the same text, audited as one action
+                    span reading the same text, audited as one action. A
+                    decision's reviewer carries an optional
+                    <code>decidedByFormerMember</code> flag (planned, backend
+                    stage 3 of the former-member marker).
                   </td>
                 </tr>
                 <tr>
@@ -3836,7 +3851,9 @@
                     Edit-gated. Records who dismissed one stored finding, when
                     and why. Upserts the reason on a repeat dismissal. A finding
                     that matched its checked source is refused, because there is
-                    nothing to decide.
+                    nothing to decide. <code>dismissedByFormerMember</code>
+                    renders &quot;Dismissed by Name (former member)&quot;
+                    (planned, backend stage 3 of the former-member marker).
                   </td>
                 </tr>
                 <tr>
@@ -7188,13 +7205,15 @@
                   <td>
                     The shared UI offers transfer to the creator as well as
                     owners/admins, but grants no authority itself. API refusals
-                    remain visible. Resolve creator authorization in backend
-                    stage 3; until then the transfer and member-owned-matters
-                    routes are planned and removal fails closed if ownership
-                    cannot be listed. Former-member attribution also awaits a
-                    backend author marker.
+                    remain visible. Creator authorization is settled by the
+                    server; the transfer and member-owned-matters routes are
+                    live. Former-member attribution is contract and UI work in
+                    obiter: author responses accept an optional
+                    <code>formerMember</code> flag and read &quot;Name (former
+                    member)&quot; once backend stage 3 of the former-member
+                    marker supplies it.
                   </td>
-                  <td class="id">S9; obiter PR #417</td>
+                  <td class="id">S9; obiter PR #417, former-member marker</td>
                 </tr>
                 <tr>
                   <td>

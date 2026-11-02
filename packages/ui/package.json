@@ -6,6 +6,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./person-name": "./src/person-name.tsx",
     "./brand/*": "./src/brand/*",
     "./icons": "./src/icons/index.ts",
     "./icons/shell": "./src/icons/shell.ts",

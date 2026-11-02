@@ -140,7 +140,11 @@ export function MatterRouteView({
             </>
           )}
           {isOwner ? (
-            <MatterShareControls matter={m} organisationId={m.organisationId} />
+            <MatterShareControls
+              matter={m}
+              organisationId={m.organisationId}
+              currentUserId={me.user.id}
+            />
           ) : null}
           <MatterTransferControls matter={m} user={me.user} />
           {canManage ? (

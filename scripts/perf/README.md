@@ -25,9 +25,10 @@ client entry):
 - **pdf worker** — budgeted separately; it is a fixed third-party asset.
 
 Budgets live in `scripts/perf/bundle-budget.mjs` with the measured baseline and
-roughly 3% headroom. They are a ratchet against regression, not a target. The
-script refuses a dist whose build marker names another commit, so a stale build
-cannot measure as current.
+a small headroom: about 2% on the initial graph, 1% on the lazy total, and the
+least on the largest lazy chunk, which the document route dominates. They are a
+ratchet against regression, not a target. The script refuses a dist whose build
+marker names another commit, so a stale build cannot measure as current.
 
 ## Desktop size budget
 

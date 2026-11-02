@@ -9,6 +9,7 @@ import type {
   DecisionRecord,
   RedactionSpan,
 } from '@obiter/redaction-policy'
+import { formerMemberName } from '@obiter/ui/person-name'
 
 export const categoryLabel = {
   person_name: 'Person name',
@@ -150,7 +151,10 @@ function reviewerName(
   currentUserId: string | undefined,
 ) {
   if (currentUserId && record.decidedBy === currentUserId) return 'you'
-  return record.decidedByName ?? 'another reviewer'
+  return formerMemberName(
+    record.decidedByName ?? 'another reviewer',
+    record.decidedByFormerMember,
+  )
 }
 
 export function decisionRecord(

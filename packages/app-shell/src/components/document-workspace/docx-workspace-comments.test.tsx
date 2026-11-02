@@ -282,6 +282,32 @@ describe('comment anchors', () => {
 })
 
 describe('comment cards', () => {
+  it('marks a comment author who has left the organisation', () => {
+    mountWorkspace({
+      models: { doc_1: model() },
+      comments: {
+        comments: [
+          productComment({
+            author: { id: 'usr_1', name: 'Lex', formerMember: true },
+          }),
+        ],
+      },
+    })
+    openCommentsPanel()
+
+    expect(screen.getByText('Lex').textContent).toBe('Lex (former member)')
+  })
+
+  it("leaves a current member's comment author unmarked", () => {
+    mountWorkspace({
+      models: { doc_1: model() },
+      comments: { comments: [productComment()] },
+    })
+    openCommentsPanel()
+
+    expect(screen.getByText('Lex').textContent).toBe('Lex')
+  })
+
   it('shows a product comment and navigates back to its anchored range', () => {
     mountWorkspace({
       models: { doc_1: model() },

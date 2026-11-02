@@ -69,6 +69,11 @@ export {
   type PanelPosition,
 } from './docked-panel'
 export { StatusDot, type StatusDotProps } from './status-dot'
+export {
+  FORMER_MEMBER_MARKER,
+  PersonName,
+  formerMemberName,
+} from './person-name'
 export { KeyboardHint } from './keyboard-hint'
 export { ObiterMark } from './brand/obiter-mark'
 export type { IconProps, IconWeight } from './icon-base'

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { personAttributionSchema } from './person'
 import { isValidXmlText } from './xml-text'
 
 export const DOCUMENT_COMMENT_BODY_MAX_LENGTH = 10_000
@@ -58,16 +59,11 @@ export type DocumentCommentCreateRequest = z.infer<
   typeof documentCommentCreateRequestSchema
 >
 
-const documentCommentUserSchema = z
-  .object({
-    id: z.string().min(1),
-    name: plainTextSchema
-      .refine((value) => value.trim().length > 0)
-      .refine(
-        (value) => value.length <= DOCUMENT_COMMENT_AUTHOR_NAME_MAX_LENGTH,
-      ),
-  })
-  .strict()
+const documentCommentUserSchema = personAttributionSchema.extend({
+  name: plainTextSchema
+    .refine((value) => value.trim().length > 0)
+    .refine((value) => value.length <= DOCUMENT_COMMENT_AUTHOR_NAME_MAX_LENGTH),
+})
 
 export const documentCommentReplySchema = z.discriminatedUnion('imported', [
   z

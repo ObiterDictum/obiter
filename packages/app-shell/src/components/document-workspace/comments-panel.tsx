@@ -4,7 +4,7 @@ import type {
   DocumentCommentReply,
   DocumentImportedCommentThread,
 } from '@obiter/contracts'
-import { Button, EmptyState, Input } from '@obiter/ui'
+import { Button, EmptyState, Input, PersonName } from '@obiter/ui'
 import { useState } from 'react'
 import { formatDateTime } from '../../format'
 
@@ -231,7 +231,9 @@ function CommentCard({
   return (
     <li className="flex flex-col gap-2 border-t border-line pt-3">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-ink">{comment.author.name}</p>
+        <p className="text-sm font-medium text-ink">
+          <PersonName person={comment.author} />
+        </p>
         <p className="text-caption text-subtle">
           {formatDateTime(comment.createdAt)}
         </p>
@@ -353,13 +355,16 @@ function ReplyList({ replies }: { replies: DocumentCommentReply[] }) {
 }
 
 function ReplyBody({ reply }: { reply: DocumentCommentReply }) {
-  const name = reply.imported
-    ? (reply.author.name ?? 'Unknown author')
-    : reply.author.name
   return (
     <>
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-medium text-ink">{name}</p>
+        <p className="text-xs font-medium text-ink">
+          {reply.imported ? (
+            (reply.author.name ?? 'Unknown author')
+          ) : (
+            <PersonName person={reply.author} />
+          )}
+        </p>
         {reply.createdAt ? (
           <p className="text-caption text-subtle">
             {formatDateTime(reply.createdAt)}

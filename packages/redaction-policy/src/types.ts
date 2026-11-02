@@ -30,6 +30,7 @@ export type DecisionRecord = {
   decidedBy: string
   decidedAt: string
   decidedByName?: string | null
+  decidedByFormerMember?: boolean
 }
 
 export type Decisions = Record<string, DecisionRecord>

@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import type {
   CitationTargetsResponse,
   DocumentOpenResponse,
+  PersonAttribution,
   RecentlyOpenedDocumentResponse,
 } from '@obiter/contracts'
 import { apiFetch, ApiError } from './api'
@@ -31,6 +32,7 @@ export interface DocumentVersionRecord {
   contentSha256: string
   syncState: SyncState
   createdBy: string
+  author?: PersonAttribution | null
   createdAt: string
   updatedAt: string
   redaction?: VersionRedaction | null

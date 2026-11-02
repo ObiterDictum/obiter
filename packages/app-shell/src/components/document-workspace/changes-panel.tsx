@@ -3,6 +3,7 @@ import {
   Button,
   DockedPanel,
   EmptyState,
+  PersonName,
   cn,
   type PanelPopout,
 } from '@obiter/ui'
@@ -381,10 +382,11 @@ function CommentRow({
   const comment = row.comment
   const resolved =
     'resolvedAt' in comment ? comment.resolvedAt !== null : comment.resolved
+  const person = typeof comment.author === 'string' ? null : comment.author
   const author =
-    typeof comment.author === 'string'
-      ? comment.author
-      : (comment.author?.name ?? 'Unknown author')
+    person?.name ??
+    (typeof comment.author === 'string' ? comment.author : null) ??
+    'Unknown author'
   const style = reviewerStyle(author)
   const body = 'body' in comment ? comment.body : ''
   return (
@@ -415,7 +417,10 @@ function CommentRow({
           >
             {style.initials}
           </span>
-          <span className="min-w-0 truncate text-item text-ink">{author}</span>
+          <PersonName
+            person={{ name: author, formerMember: person?.formerMember }}
+            className="min-w-0 truncate text-item text-ink"
+          />
           <span className="ms-auto shrink-0 text-caption text-subtle">
             <ChatText size={12} aria-hidden /> Comment
           </span>
