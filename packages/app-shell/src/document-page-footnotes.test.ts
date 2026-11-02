@@ -49,11 +49,15 @@ it('anchors a reference at paragraph end to the last fragment rather than every 
   if (!first || !paragraph) throw new Error('Missing synthetic paragraph')
   first.text = 'long body '.repeat(500)
   const pages = layoutDocument(model)
-  const lastFragmentPage = pages.findLastIndex((page) =>
-    page.blocks.some(
-      (block) =>
-        block.type === 'paragraph' && block.paragraph.id === paragraph.id,
-    ),
+  const lastFragmentPage = pages.reduce(
+    (last, page, index) =>
+      page.blocks.some(
+        (block) =>
+          block.type === 'paragraph' && block.paragraph.id === paragraph.id,
+      )
+        ? index
+        : last,
+    -1,
   )
   expect(lastFragmentPage).toBeGreaterThan(0)
   expect(pages.findIndex((page) => page.footnotes)).toBe(lastFragmentPage)
