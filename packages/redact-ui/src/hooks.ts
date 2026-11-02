@@ -185,7 +185,13 @@ export function useSpanDecision(runId: string) {
           }),
         },
       ),
-    onSuccess: ({ run }) => queryClient.setQueryData(runKey(runId), run),
+    onSuccess: ({ run }) => {
+      queryClient.setQueryData(runKey(runId), run)
+      void queryClient.invalidateQueries({ queryKey: runsKey })
+      void queryClient.invalidateQueries({
+        queryKey: ['document-redaction-runs'],
+      })
+    },
   })
 }
 
