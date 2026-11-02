@@ -1,4 +1,10 @@
-import { Badge, Button, DockedPanel, type PanelPopout } from '@obiter/ui'
+import {
+  Badge,
+  Button,
+  DockedPanel,
+  PersonName,
+  type PanelPopout,
+} from '@obiter/ui'
 import { ArrowRight } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
 import type {
@@ -117,6 +123,15 @@ export function DocumentInfoPanel({
                     />
                   </span>
                   <span className="truncate text-caption text-subtle">
+                    {version.author ? (
+                      <>
+                        <PersonName
+                          name={version.author.name}
+                          formerMember={version.author.formerMember}
+                        />{' '}
+                        ·{' '}
+                      </>
+                    ) : null}
                     {formatDateTime(version.createdAt)} ·{' '}
                     {formatBytes(Number(version.sizeBytes))}
                   </span>

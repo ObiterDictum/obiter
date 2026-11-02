@@ -8,6 +8,7 @@ import type {
   VerificationRunSummary,
 } from '@obiter/contracts'
 import type { DocumentStoryKind } from '@obiter/contracts'
+import { formerMemberName } from '@obiter/ui/person-name'
 import type { UnmappedReason } from './components/verification/verification-mapping'
 
 export function verificationStoryLabel(kind: DocumentStoryKind | undefined) {
@@ -330,6 +331,9 @@ export function verificationDismissalRecord(
   const who =
     currentUserId && dismissal.dismissedBy === currentUserId
       ? 'you'
-      : (dismissal.dismissedByName ?? 'another reviewer')
+      : formerMemberName(
+          dismissal.dismissedByName ?? 'another reviewer',
+          dismissal.dismissedByFormerMember,
+        )
   return `Dismissed by ${who} · ${time}`
 }

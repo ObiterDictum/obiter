@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
+  PersonName,
   Select,
   cn,
   useToast,
@@ -31,9 +32,11 @@ const ACCESS_OPTIONS = [
 export function MatterShareControls({
   matter,
   organisationId,
+  currentUserId,
 }: {
   matter: MatterRecord
   organisationId: string | null
+  currentUserId: string
 }) {
   const [open, setOpen] = useState(false)
   const people = useMatterPeople(matter.id, organisationId)
@@ -61,6 +64,7 @@ export function MatterShareControls({
       <MatterShareDialog
         matter={matter}
         organisationId={organisationId}
+        currentUserId={currentUserId}
         open={open}
         onOpenChange={setOpen}
       />
@@ -129,11 +133,13 @@ function MatterPeopleStack({ people }: { people: MatterPerson[] }) {
 function MatterShareDialog({
   matter,
   organisationId,
+  currentUserId,
   open,
   onOpenChange,
 }: {
   matter: MatterRecord
   organisationId: string | null
+  currentUserId: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -146,6 +152,9 @@ function MatterShareDialog({
   const owner = members.data?.find(
     (member) => member.id === shares.data?.ownerUserId,
   )
+  const ownerPerson = shares.data?.owner
+  const ownerName = ownerPerson?.name ?? owner?.name ?? 'The matter owner'
+  const ownerIsYou = shares.data?.ownerUserId === currentUserId
   const sharedIds = new Set(people.map((share) => share.granteeUserId))
   const addable = (members.data ?? []).filter(
     (member) =>
@@ -192,8 +201,13 @@ function MatterShareDialog({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-item text-ink">
-                    {owner?.name ?? 'The matter owner'}
-                    <span className="text-muted"> (you)</span>
+                    <PersonName
+                      name={ownerName}
+                      formerMember={ownerPerson?.formerMember}
+                    />
+                    {ownerIsYou ? (
+                      <span className="text-muted"> (you)</span>
+                    ) : null}
                   </span>
                   {owner ? (
                     <span className="block truncate text-caption text-subtle">

@@ -154,6 +154,22 @@ describe('finding state wording', () => {
     })
   })
 
+  it('marks a dismissal recorded by someone who has since left the organisation', () => {
+    const dismissal = {
+      reason: null,
+      dismissedBy: 'usr_1',
+      dismissedByName: 'Priya Shah',
+      dismissedByFormerMember: true,
+      dismissedAt: '2026-10-26T14:52:00.000Z',
+    }
+    expect(verificationDismissalRecord(dismissal, 'usr_2')).toBe(
+      `Dismissed by Priya Shah (former member) · ${formatRunTime(dismissal.dismissedAt)}`,
+    )
+    expect(verificationDismissalRecord(dismissal, 'usr_1')).toBe(
+      `Dismissed by you · ${formatRunTime(dismissal.dismissedAt)}`,
+    )
+  })
+
   it('records who dismissed a finding and when, without inventing a name', () => {
     const dismissal = {
       reason: null,

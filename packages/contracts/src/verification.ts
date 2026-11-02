@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { documentStoryKindSchema } from './document-model'
+import { formerMemberFieldSchema } from './person'
 
 export const verificationPassageSchema = z
   .object({
@@ -111,6 +112,7 @@ export const verificationFindingDismissalSchema = z
     reason: z.string().min(1).nullable(),
     dismissedBy: z.string().min(1),
     dismissedByName: z.string().min(1).nullable(),
+    dismissedByFormerMember: formerMemberFieldSchema,
     dismissedAt: z.string().datetime({ offset: true }),
   })
   .strict()

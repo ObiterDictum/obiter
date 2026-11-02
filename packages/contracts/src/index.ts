@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { personAttributionSchema } from './person'
 
 export * from './account'
 export * from './api-error'
@@ -19,6 +20,7 @@ export * from './legislation-paths'
 export * from './neutral-citation'
 export * from './organisation'
 export * from './matter'
+export * from './person'
 export * from './saved-sources'
 export * from './xml-text'
 export * from './verification'
@@ -54,6 +56,7 @@ export type MatterShareCreateRequest = z.infer<
 
 export const matterShareListResponseSchema = z.object({
   ownerUserId: z.string().min(1),
+  owner: personAttributionSchema.optional(),
   shares: z.array(matterShareGrantSchema),
 })
 export type MatterShareListResponse = z.infer<
