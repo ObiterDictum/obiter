@@ -41,6 +41,24 @@ async function noteModel() {
   return model
 }
 
+it('anchors a reference at paragraph end to the last fragment rather than every fragment', async () => {
+  const model = await noteModel()
+  const paragraph = model.stories.find((story) => story.kind === 'document')
+    ?.paragraphs[0]
+  const first = paragraph?.runs[0]
+  if (!first || !paragraph) throw new Error('Missing synthetic paragraph')
+  first.text = 'long body '.repeat(500)
+  const pages = layoutDocument(model)
+  const lastFragmentPage = pages.findLastIndex((page) =>
+    page.blocks.some(
+      (block) =>
+        block.type === 'paragraph' && block.paragraph.id === paragraph.id,
+    ),
+  )
+  expect(lastFragmentPage).toBeGreaterThan(0)
+  expect(pages.findIndex((page) => page.footnotes)).toBe(lastFragmentPage)
+})
+
 it('remeasures edited footnotes without reusing a previous note reservation', async () => {
   const model = await noteModel()
   const first = layoutDocument(model)

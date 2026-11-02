@@ -44,7 +44,9 @@ export function footnoteIdsForBlock(
       if (
         block.type === 'paragraph' &&
         (at < (block.from ?? 0) ||
-          (at >= (block.to ?? measure.text.length) && at < measure.text.length))
+          at > (block.to ?? measure.text.length) ||
+          (at === (block.to ?? measure.text.length) &&
+            at < measure.text.length))
       )
         return []
       return runNoteRefs(run.preservedXmlFragments.join(''), run.id)

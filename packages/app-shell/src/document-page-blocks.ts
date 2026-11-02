@@ -114,7 +114,7 @@ export function layoutParagraph(
 
   const place = () => {
     if (placed) return
-    placeAnchors(measure.anchors, box, frame, column(), session)
+    placeAnchors(measure.anchors, box, session.page.frame, column(), session)
     placed = true
   }
 
