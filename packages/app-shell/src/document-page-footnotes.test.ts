@@ -4,6 +4,7 @@ import { createSyntheticDocx, parseDocx } from '@obiter/ooxml'
 import { layoutDocument } from './document-page-engine'
 import { clearParagraphMeasureCache } from './document-page-measure'
 import { clearLineBreakCache } from './document-page-flow'
+import { pageReferenceMap } from './document-page-references'
 
 async function noteModel() {
   const { model } = await parseDocx(
@@ -61,6 +62,19 @@ it('anchors a reference at paragraph end to the last fragment rather than every 
   )
   expect(lastFragmentPage).toBeGreaterThan(0)
   expect(pages.findIndex((page) => page.footnotes)).toBe(lastFragmentPage)
+})
+
+it('keeps page references to footnote bookmarks after notes leave the body block list', async () => {
+  const model = await noteModel()
+  const note = model.stories.find((story) => story.kind === 'footnotes')
+    ?.paragraphs[0]
+  if (!note) throw new Error('Missing synthetic note')
+  note.preservedXmlFragments.push(
+    '<w:bookmarkStart w:id="1" w:name="NoteBookmark"/>',
+  )
+  expect(
+    pageReferenceMap(model, layoutDocument(model)).get('NoteBookmark'),
+  ).toBe(1)
 })
 
 it('remeasures edited footnotes without reusing a previous note reservation', async () => {
