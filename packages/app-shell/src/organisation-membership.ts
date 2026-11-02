@@ -10,8 +10,10 @@ import type {
   OrganisationInviteAccountExists,
   OrganisationInvitePreview,
   OrganisationMember,
+  RemoveOrganisationMemberRequest,
 } from '@obiter/contracts'
 import { apiFetch, ApiError } from './api'
+import { mattersKeys } from './matters'
 
 export const organisationMembershipKeys = {
   members: (organisationId: string) =>
@@ -166,12 +168,21 @@ export function useRevokeOrganisationInvite(organisationId: string) {
 export function useRemoveOrganisationMember(organisationId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async ({
+      userId,
+      ...input
+    }: RemoveOrganisationMemberRequest & { userId: string }) => {
       await apiFetch(`/api/organisations/${organisationId}/members/${userId}`, {
         method: 'DELETE',
+        body: JSON.stringify(input),
       })
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: mattersKeys.all })
+      void queryClient.invalidateQueries({ queryKey: ['matter-shares'] })
+      void queryClient.invalidateQueries({
+        queryKey: ['member-owned-matters', organisationId],
+      })
       void queryClient.invalidateQueries({
         queryKey: organisationMembershipKeys.members(organisationId),
       })

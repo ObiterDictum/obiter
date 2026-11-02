@@ -2,6 +2,10 @@ import {
   parseApiErrorResponse,
   type ApiErrorCode,
 } from '@obiter/contracts/api-error-response'
+import {
+  removeOrganisationMemberConflictResponseSchema,
+  type OwnedMatter,
+} from '@obiter/contracts'
 import { apiUrl } from './lib/api-url'
 import { getDesktopAuthToken } from './lib/auth-token'
 import { readDesktopBridge } from './lib/desktop-bridge'
@@ -17,6 +21,7 @@ export class ApiError extends Error {
     message: string,
     status: number,
     requestId: string,
+    readonly uncoveredMatters?: OwnedMatter[],
   ) {
     super(message)
     this.name = 'ApiError'
@@ -39,6 +44,18 @@ async function readJsonOrNull(response: Response) {
 
 async function throwApiError(response: Response): Promise<never> {
   const parsed = await readJsonOrNull(response)
+  const conflict =
+    removeOrganisationMemberConflictResponseSchema.safeParse(parsed)
+  if (response.status === 409 && conflict.success) {
+    const error = conflict.data.error
+    throw new ApiError(
+      error.code,
+      error.message,
+      response.status,
+      error.requestId,
+      error.uncoveredMatters,
+    )
+  }
   const result = parseApiErrorResponse(parsed)
   if (result) {
     throw new ApiError(

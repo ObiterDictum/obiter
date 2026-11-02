@@ -8,24 +8,8 @@ import { queryOptions } from '@tanstack/react-query'
 import { apiFetch } from './api'
 import { documentsKeys } from './documents'
 
-export type MatterStatus = 'active' | 'archived' | 'deleted'
-
-export interface MatterRecord {
-  id: string
-  organisationId: string
-  name: string
-  description: string | null
-  primaryJurisdiction: string
-  secondaryJurisdictions: string[]
-  legalDomains: string[]
-  clientReference: string
-  status: MatterStatus
-  createdBy: string
-  createdAt: string
-  updatedAt: string
-  deletedAt: string | null
-  deletedBy: string | null
-}
+import type { MatterRecord } from '@obiter/contracts'
+export type { MatterRecord, MatterStatus } from '@obiter/contracts'
 
 interface MatterListResponse {
   matters: MatterRecord[]
