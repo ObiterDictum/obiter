@@ -8,7 +8,10 @@ const DEV_FOOTNOTE_KEYSTROKE_TEXT_READS = 1678
 
 async function measure(
   noteCount: number,
-  draftKey?: (runId: string) => string,
+  keystroke: {
+    draftKey?: (runId: string) => string
+    draft?: (text: string, index: number) => string
+  } = {},
 ) {
   const { model } = await parseDocx(await createSyntheticDocx(['Body']))
   const body = model.stories[0]
@@ -70,7 +73,8 @@ async function measure(
   const reads: number[] = []
   const times = Array.from({ length: 10 }, (_, index) => {
     const drafts = {
-      [draftKey?.(run.id) ?? run.id]: `${run.text}${index}`,
+      [keystroke.draftKey?.(run.id) ?? run.id]:
+        keystroke.draft?.(run.text, index) ?? `${run.text}${index}`,
     }
     textReads = 0
     const start = performance.now()
@@ -101,8 +105,17 @@ it('bounds 40-footnote keystroke text reads to 1.25 times the dev footnote budge
   )
 })
 
-it('reuses a cached footnote placement when a keystroke changes no measured run', async () => {
+it('reuses a cached footnote placement when a draft key matches no run', async () => {
   expect(
-    await measure(40, (runId) => runId.replace('-run', '')),
+    await measure(40, { draftKey: (runId) => runId.replace('-run', '') }),
+  ).toBeLessThanOrEqual(DEV_BODY_KEYSTROKE_TEXT_READS * 1.25)
+})
+
+it('bounds 40-footnote text reads when a keystroke adds lines', async () => {
+  expect(
+    await measure(40, {
+      draft: (text, index) =>
+        `${text}${' added words'.repeat((index + 1) * 12)}`,
+    }),
   ).toBeLessThanOrEqual(DEV_BODY_KEYSTROKE_TEXT_READS * 1.25)
 })
