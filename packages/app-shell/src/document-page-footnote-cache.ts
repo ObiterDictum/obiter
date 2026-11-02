@@ -28,7 +28,7 @@ export function rememberFootnotePlacement(
     drafts: { ...drafts },
     pages,
     minimumPages,
-    generation: paragraphMeasureGeneration(),
+    generation: paragraphMeasureGeneration,
     blocks,
   })
 }
@@ -41,13 +41,13 @@ export function previousFootnotePlacement(
   const cached = placements.get(model)
   if (
     !cached ||
-    cached.generation !== paragraphMeasureGeneration() ||
+    cached.generation !== paragraphMeasureGeneration ||
     cached.blocks !== blocks ||
     model.changes.length
   )
     return
   const changed = new Set(
-    [...Object.keys(cached.drafts), ...Object.keys(drafts ?? {})].filter(
+    Object.keys({ ...cached.drafts, ...drafts }).filter(
       (id) => cached.drafts[id] !== drafts?.[id],
     ),
   )
@@ -56,14 +56,11 @@ export function previousFootnotePlacement(
   if (!changed.size) return cached
   const body = model.stories.find((story) => story.kind === 'document')
   for (const paragraph of body?.paragraphs ?? []) {
-    const ids = paragraph.runs
-      .filter((run) => changed.has(run.id))
-      .map((run) => run.id)
-    if (!ids.length) continue
+    if (!paragraph.runs.some((run) => changed.has(run.id))) continue
     const fragments = cached.pages.flatMap((page) =>
       page.blocks.flatMap((block) =>
         block.type === 'paragraph' && block.paragraph.id === paragraph.id
-          ? [{ page, block }]
+          ? [block]
           : [],
       ),
     )
@@ -71,36 +68,23 @@ export function previousFootnotePlacement(
     if (
       fragments.length !== 1 ||
       !fragment ||
-      fragment.block.continuation ||
-      fragment.block.from
+      fragment.continuation ||
+      fragment.from
     )
       return
     const before = paragraphMeasure(paragraph, model, cached.drafts, {})
     const after = paragraphMeasure(paragraph, model, drafts, {})
-    if (fragment.block.to !== before.text.length) return
-    if (
-      before.anchors.length ||
-      after.anchors.length ||
-      before.imagePx ||
-      after.imagePx ||
-      before.pageBreaks.length ||
-      after.pageBreaks.length
-    )
+    if (fragment.to !== before.text.length) return
+    if (before.anchors.length || before.imagePx || before.pageBreaks.length)
       return
-    const width = fragment.page.columns[fragment.block.column ?? 0]?.widthPx
+    const width = fragment.wrapWidthPx
     if (
       !width ||
-      paragraphLineCount(
-        before,
-        width - before.indent,
-        0,
-        before.textIndentPx,
-      ) !==
-        paragraphLineCount(after, width - after.indent, 0, after.textIndentPx)
+      paragraphLineCount(before, width, 0, before.textIndentPx) !==
+        paragraphLineCount(after, width, 0, after.textIndentPx)
     )
       return
-    for (const id of ids) changed.delete(id)
+    for (const run of paragraph.runs) changed.delete(run.id)
     if (!changed.size) return cached
   }
-  return changed.size ? undefined : cached
 }

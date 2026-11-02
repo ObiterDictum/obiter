@@ -112,7 +112,6 @@ export function marginStories(
   sections = documentSections(model),
 ): DocumentStoryWire[] {
   const all = model.stories.filter((story) => story.kind === kind)
-  if (!all.length) return []
   const ids = sectionReferenceIds(kind, sectionIndex, firstPage, sections)
   if (ids.length === 0)
     return sections.some((section) =>

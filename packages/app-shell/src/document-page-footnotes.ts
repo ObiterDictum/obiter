@@ -39,19 +39,6 @@ export function footnoteIdsForBlock(
               ?.paragraphs.filter((p) => p.id === id) ?? [],
         )
   return paragraphs.flatMap((paragraph) => {
-    if (
-      !paragraph.runs.some((run) =>
-        run.preservedXmlFragments.some((xml) =>
-          xml.includes('footnoteReference'),
-        ),
-      ) &&
-      !(extraRuns[paragraph.id] ?? []).some((run) =>
-        run.preservedXmlFragments.some((xml) =>
-          xml.includes('footnoteReference'),
-        ),
-      )
-    )
-      return []
     const measure = paragraphMeasure(
       paragraph,
       model,

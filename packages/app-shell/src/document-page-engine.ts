@@ -101,28 +101,26 @@ export function layoutDocument(
       flow,
       pendingRedlines,
       notes,
-      hasFootnotes ? minimumPages : undefined,
+      minimumPages,
     )
     if (previous) {
       attachFootnotes(pages, notes, model)
       rememberFootnotePlacement(model, drafts, pages, minimumPages, blocks)
       return pages
     }
-    if (hasFootnotes) {
-      const seen = new Set<string>()
-      for (const [index, page] of pages.entries()) {
-        for (const block of page.blocks) {
-          for (const id of footnoteIdsForBlock(
-            block,
-            model,
-            drafts,
-            extraRuns,
-            pendingRedlines,
-          )) {
-            if (seen.has(id)) continue
-            seen.add(id)
-            minimumPages.set(id, Math.max(index, minimumPages.get(id) ?? 0))
-          }
+    const seen = new Set<string>()
+    for (const [index, page] of pages.entries()) {
+      for (const block of page.blocks) {
+        for (const id of footnoteIdsForBlock(
+          block,
+          model,
+          drafts,
+          extraRuns,
+          pendingRedlines,
+        )) {
+          if (seen.has(id)) continue
+          seen.add(id)
+          minimumPages.set(id, Math.max(index, minimumPages.get(id) ?? 0))
         }
       }
     }
@@ -135,10 +133,9 @@ export function layoutDocument(
     )
     const stable =
       next.length === notes.length &&
-      Array.from(
-        { length: next.length },
-        (_, index) => next[index]?.heightPx === notes[index]?.heightPx,
-      ).every(Boolean)
+      Array.from(next).every(
+        (note, index) => note?.heightPx === notes[index]?.heightPx,
+      )
     notes = next
     if (stable || pass === MAX_FOOTNOTE_PASSES - 1) {
       attachFootnotes(pages, notes, model)
