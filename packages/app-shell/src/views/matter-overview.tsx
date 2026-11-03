@@ -19,6 +19,9 @@ export function MatterOverview({
       <Card aria-labelledby="matter-details">
         <CardHead title="Matter details" titleId="matter-details" />
         <CardBody>
+          {matter.description ? (
+            <p className="mb-3 text-meta text-muted">{matter.description}</p>
+          ) : null}
           <dl className="grid grid-cols-[minmax(84px,auto)_minmax(0,1fr)] gap-x-3 gap-y-2 text-meta">
             {factsOf(matter).map(([label, value]) => (
               <div key={label} className="contents">

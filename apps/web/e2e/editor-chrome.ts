@@ -79,12 +79,19 @@ export function selectedValue(page: Page, control: string) {
   return page.getByRole('combobox', { name: control, exact: true })
 }
 
-export function trackChangesSwitch(page: Page) {
-  return page.getByRole('switch', { name: 'Track changes' })
+export function trackChangesItem(page: Page) {
+  return page.getByRole('menuitemcheckbox', { name: 'Track changes' })
+}
+
+export function trackChangesIndicator(page: Page) {
+  return page.locator('[data-track-changes="on"]')
 }
 
 export async function setTrackChanges(page: Page, on: boolean) {
-  const toggle = trackChangesSwitch(page)
-  if ((await toggle.isChecked()) !== on) await toggle.click()
-  await expect(toggle).toBeChecked({ checked: on })
+  const indicator = trackChangesIndicator(page)
+  if ((await indicator.count()) === on) return
+  await openMenu(page, 'Review')
+  await menuItem(page, 'Track changes').click()
+  await closeMenu(page)
+  await expect(indicator).toHaveCount(on ? 1 : 0)
 }

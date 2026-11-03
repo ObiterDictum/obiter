@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
-import { openRibbonTab } from './editor-test-commands'
+import { openRibbonTab, setTrackChanges } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -92,7 +92,7 @@ describe('the paragraph formatting controls', () => {
   it('keeps paragraph formatting available under track changes and saves tracked', async () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
+    setTrackChanges(true)
     openRibbonTab('Home')
     clickParagraph('p1')
 

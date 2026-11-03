@@ -3,7 +3,11 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
-import { commandDisabled, openRibbonTab } from './editor-test-commands'
+import {
+  commandDisabled,
+  openRibbonTab,
+  setTrackChanges,
+} from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -59,7 +63,7 @@ describe('the page setup controls', () => {
 
   it('disables page setup while tracked changes are on', () => {
     mountWorkspace({ models: { doc_1: helloModel() } })
-    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
+    setTrackChanges(true)
     openRibbonTab('Layout')
     for (const name of ['Margins', 'Page size']) {
       expect((select(name) as HTMLButtonElement).disabled).toBe(true)

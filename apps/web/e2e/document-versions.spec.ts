@@ -38,7 +38,7 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   await page.keyboard.press('End')
   await page.keyboard.type(' DRAFTX')
 
-  await page.getByRole('button', { name: 'Document information' }).click()
+  await runMenuCommand(page, 'View', 'Document information')
   const history = page.getByRole('complementary', {
     name: 'Document information',
   })

@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
+  MenuItem,
   Select,
 } from '@obiter/ui'
 import type { CurrentUser, MatterRecord } from '@obiter/contracts'
@@ -18,9 +19,11 @@ import { ErrorNotice } from './settings-fields'
 export function MatterTransferControls({
   matter,
   user,
+  as = 'button',
 }: {
   matter: MatterRecord
   user: CurrentUser
+  as?: 'button' | 'menu-item'
 }) {
   const [open, setOpen] = useState(false)
   if (
@@ -31,9 +34,13 @@ export function MatterTransferControls({
     return null
   return (
     <>
-      <Button variant="ghost" onClick={() => setOpen(true)}>
-        Transfer ownership
-      </Button>
+      {as === 'menu-item' ? (
+        <MenuItem onClick={() => setOpen(true)}>Transfer ownership</MenuItem>
+      ) : (
+        <Button variant="ghost" onClick={() => setOpen(true)}>
+          Transfer ownership
+        </Button>
+      )}
       {open ? (
         <MatterTransferDialog matter={matter} onClose={() => setOpen(false)} />
       ) : null}

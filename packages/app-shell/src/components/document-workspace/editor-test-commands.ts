@@ -34,6 +34,8 @@ const COMMAND_HOME = {
   'Redact this document': 'File',
   'Document information': 'File',
   'Verify citations': 'Review',
+  'Check citations': 'Review',
+  'Track changes': 'Review',
   'List of authorities': 'Review',
   'Check defined terms': 'Review',
   'Check cross-references': 'Review',
@@ -202,15 +204,21 @@ export function commandDisabled(element: HTMLElement) {
   )
 }
 
-export function trackChangesSwitch() {
-  return screen.getByRole('switch', { name: 'Track changes' })
+function closeRibbonMenu(name: string) {
+  const popup = screen.queryByRole('menu', { name })
+  if (popup) fireEvent.keyDown(popup, { key: 'Escape' })
+}
+
+export function trackChangesState() {
+  return command('Track changes').getAttribute('aria-checked')
 }
 
 export function setTrackChanges(on: boolean) {
-  const toggle = trackChangesSwitch()
+  const toggle = command('Track changes')
   if ((toggle.getAttribute('aria-checked') === 'true') !== on) {
     fireEvent.click(toggle)
   }
+  closeRibbonMenu('Review')
 }
 
 export function menuItem(name: string | RegExp) {

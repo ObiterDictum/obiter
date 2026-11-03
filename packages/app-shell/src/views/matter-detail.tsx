@@ -18,13 +18,14 @@ import {
   useToast,
 } from '@obiter/ui'
 import { DotsThree } from '@obiter/ui/icons'
-import type { AppPlatform } from '@obiter/contracts'
+import type { AppPlatform, CurrentUser } from '@obiter/contracts'
 import { useState } from 'react'
 import { ApiError } from '../api'
 import { ContentFrame } from '../content-frame'
 import { useCurrentUser } from '../current-user'
 import { useMatterDocuments } from '../documents'
 import { useDeleteMatter, useMatter } from '../matters'
+import type { MatterRecord } from '../matters'
 import { useRedactionRunsList } from '../redaction-runs'
 import { PageScaffold } from '../page-scaffold'
 import { useOrganisationVerificationRuns } from '../verification-runs'
@@ -107,16 +108,10 @@ export function MatterRouteView({
 
   return (
     <PageScaffold
+      compact
+      title={m.name}
       eyebrow={
-        <span className="flex flex-wrap items-center gap-2">
-          {m.legalDomains.map((domain) => (
-            <span
-              key={domain}
-              className="inline-flex h-6 items-center rounded-sm bg-fill px-2 text-caption text-muted"
-            >
-              {domain}
-            </span>
-          ))}
+        <>
           {m.clientReference ? (
             <span className="font-mono">{m.clientReference}</span>
           ) : null}
@@ -127,16 +122,14 @@ export function MatterRouteView({
                 ? 'Archived'
                 : 'Deleted'}
           </StatusDot>
-        </span>
+        </>
       }
-      title={m.name}
-      description={m.description ?? undefined}
       actions={
         <>
           {documents.data && documents.data.length === 0 ? null : (
             <>
-              <MatterUploadButton matterId={m.id} />
-              <NewDocumentButton matterId={m.id} />
+              <MatterUploadButton matterId={m.id} size="sm" />
+              <NewDocumentButton matterId={m.id} size="sm" />
             </>
           )}
           {isOwner ? (
@@ -144,12 +137,14 @@ export function MatterRouteView({
               matter={m}
               organisationId={m.organisationId}
               currentUserId={me.user.id}
+              size="sm"
             />
           ) : null}
-          <MatterTransferControls matter={m} user={me.user} />
-          {canManage ? (
+          {canManage || isOwner ? (
             <MatterActionsMenu
-              matterId={m.id}
+              matter={m}
+              user={me.user}
+              canDelete={canManage}
               documentCount={documents.data?.length}
             />
           ) : null}
@@ -203,10 +198,14 @@ export function MatterRouteView({
 }
 
 function MatterActionsMenu({
-  matterId,
+  matter,
+  user,
+  canDelete,
   documentCount,
 }: {
-  matterId: string
+  matter: MatterRecord
+  user: CurrentUser
+  canDelete: boolean
   documentCount: number | undefined
 }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -215,17 +214,22 @@ function MatterActionsMenu({
       <Menu>
         <MenuTrigger
           render={
-            <Button variant="ghost" size="md" aria-label="More matter actions">
+            <Button variant="ghost" size="sm" aria-label="More matter actions">
               <DotsThree size={18} aria-hidden />
             </Button>
           }
         />
         <MenuContent aria-label="Matter actions">
-          <MenuItem onClick={() => setDeleteOpen(true)}>Delete matter</MenuItem>
+          <MatterTransferControls matter={matter} user={user} as="menu-item" />
+          {canDelete ? (
+            <MenuItem onClick={() => setDeleteOpen(true)}>
+              Delete matter
+            </MenuItem>
+          ) : null}
         </MenuContent>
       </Menu>
       <DeleteMatterDialog
-        matterId={matterId}
+        matterId={matter.id}
         documentCount={documentCount}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}

@@ -13,10 +13,9 @@ import {
   MenuItem,
   MenuTrigger,
   Skeleton,
-  buttonClassName,
   useToast,
 } from '@obiter/ui'
-import { ArrowLeft, DotsThree, Trash } from '@obiter/ui/icons'
+import { DotsThree, Trash } from '@obiter/ui/icons'
 import { ApiError } from '../api'
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
@@ -128,23 +127,7 @@ export function DocumentDetailLayoutView({
             document={loaded.document}
             versions={loaded.versions}
             onViewVersion={setSelectedVersionId}
-            headerLinks={{
-              back: (
-                <Link
-                  to="/matters/$matterId"
-                  params={{ matterId: String(matterId) }}
-                  aria-label="Back to matter"
-                  className={buttonClassName({
-                    variant: 'ghost',
-                    size: 'sm',
-                    className: 'size-7 px-0',
-                  })}
-                >
-                  <ArrowLeft size={16} aria-hidden />
-                </Link>
-              ),
-              matter: matterLink,
-            }}
+            headerLinks={{ matter: matterLink }}
             headerActions={
               <DocumentActionsMenu
                 documentId={documentId}

@@ -1,4 +1,4 @@
-import { buttonClassName, cn, useToast } from '@obiter/ui'
+import { buttonClassName, cn, useToast, type ButtonSize } from '@obiter/ui'
 import { FileArrowUp, Plus, Upload } from '@obiter/ui/icons'
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { blankDocumentFile } from '../document-blank'
@@ -95,15 +95,17 @@ export function MatterUploadButton({
   matterId,
   label = 'Upload',
   variant = 'secondary',
+  size = 'md',
 }: {
   matterId: string
   label?: string
   variant?: 'primary' | 'secondary' | 'ghost'
+  size?: ButtonSize
 }) {
   const { pending, activeFile, send } = useMatterDocumentUpload(matterId)
   return (
     <label
-      className={`${buttonClassName({ variant, size: 'md' })} cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring`}
+      className={`${buttonClassName({ variant, size })} cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring`}
     >
       {pending ? (
         activeFile ? (
@@ -136,16 +138,18 @@ export function MatterUploadButton({
 export function NewDocumentButton({
   matterId,
   variant = 'primary',
+  size = 'md',
 }: {
   matterId: string
   variant?: 'primary' | 'secondary'
+  size?: ButtonSize
 }) {
   const { pending, send } = useMatterDocumentUpload(matterId)
   const { toast } = useToast()
   return (
     <button
       type="button"
-      className={buttonClassName({ variant, size: 'md' })}
+      className={buttonClassName({ variant, size })}
       disabled={pending}
       onClick={() => {
         void blankDocumentFile()

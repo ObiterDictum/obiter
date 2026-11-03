@@ -80,8 +80,7 @@ export function DocxWorkspace({
   layout?: DocumentWorkspaceLayout
   document?: MatterDocumentRecord
   versions?: DocumentVersionRecord[]
-  back?: React.ReactNode
-  headerLinks?: { back?: React.ReactNode; matter?: React.ReactNode }
+  headerLinks?: { matter?: React.ReactNode }
   headerActions?: React.ReactNode
   onViewVersion?: (versionId: string) => void
 }) {
@@ -390,14 +389,7 @@ export function DocxWorkspace({
           presence={presence}
           presenceNames={presenceNames}
           currentUserId={me?.user.id}
-          trackChanges={trackChanges}
-          onToggleTrackChanges={() => drafts.setTrackChangesFlip(!trackChanges)}
           versions={versions}
-          onOpenVerify={() => panels.toggle('verify')}
-          infoOpen={panels.active === 'info'}
-          onToggleInfo={documentRecord ? () => togglePanel('info') : undefined}
-          back={headerLinks?.back}
-          matterLink={headerLinks?.matter}
           actions={headerActions}
         />
         {modelQuery.isLoading ? (
@@ -425,6 +417,7 @@ export function DocxWorkspace({
               onCommentSelection={commentSelection}
               citation={citation}
               citationCanInsert={selectedParagraphId !== null}
+              versions={versions}
             />
             <DocxWorkspaceDesk
               compareOpen={compareOpen}

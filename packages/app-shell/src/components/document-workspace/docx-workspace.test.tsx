@@ -9,7 +9,7 @@ import {
   menuItem,
   openRibbonTab,
   setTrackChanges,
-  trackChangesSwitch,
+  trackChangesState,
 } from './editor-test-commands'
 import {
   downloadBlob,
@@ -595,8 +595,7 @@ describe('DocxWorkspace track changes toggle', () => {
         },
       },
     })
-    const toggle = trackChangesSwitch()
-    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(trackChangesState()).toBe('true')
   })
 
   it('saves a lone toggle flip as a settings-only version', async () => {
@@ -629,14 +628,10 @@ describe('DocxWorkspace track changes toggle', () => {
     }
     const view = mountWorkspace({ models: { doc_1: tracked } })
     setTrackChanges(false)
-    await waitFor(() =>
-      expect(trackChangesSwitch().getAttribute('aria-checked')).toBe('false'),
-    )
+    await waitFor(() => expect(trackChangesState()).toBe('false'))
 
     view.unmount()
     mountWorkspace({ models: { doc_1: tracked } })
-    await waitFor(() =>
-      expect(trackChangesSwitch().getAttribute('aria-checked')).toBe('false'),
-    )
+    await waitFor(() => expect(trackChangesState()).toBe('false'))
   })
 })
