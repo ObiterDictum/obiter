@@ -353,9 +353,9 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('runs the query an example search names', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse([], { cached: true }),
-    )
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createSearchResponse([], { cached: true }))
     vi.stubGlobal('fetch', fetchMock)
     container = mount()
 
