@@ -19,15 +19,21 @@ export function CreateMatterDialog({
   trigger = 'Create matter',
   variant = 'primary',
   size = 'sm',
+  open: controlledOpen,
+  onOpenChange,
 }: {
-  trigger?: string
+  trigger?: string | null
   variant?: 'primary' | 'secondary'
   size?: 'sm' | 'md'
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const navigate = useNavigate()
   const { toast } = useToast()
   const createMatter = useCreateMatter()
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = controlledOpen ?? uncontrolledOpen
+  const setOpen = onOpenChange ?? setUncontrolledOpen
   const [name, setName] = useState('')
   const [clientReference, setClientReference] = useState('')
   const [primaryJurisdiction, setPrimaryJurisdiction] = useState('')
@@ -70,17 +76,19 @@ export function CreateMatterDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button
-            variant={variant}
-            size={size}
-            iconStart={<Plus size={14} weight="bold" aria-hidden="true" />}
-          >
-            {trigger}
-          </Button>
-        }
-      />
+      {trigger === null ? null : (
+        <DialogTrigger
+          render={
+            <Button
+              variant={variant}
+              size={size}
+              iconStart={<Plus size={14} weight="bold" aria-hidden="true" />}
+            >
+              {trigger}
+            </Button>
+          }
+        />
+      )}
       <DialogContent size="md">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">

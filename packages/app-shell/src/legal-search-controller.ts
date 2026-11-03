@@ -1,5 +1,11 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { apiUrl } from './lib/api-url'
 import { caseResultLocation } from './case-navigation'
 import { rememberFirstRunSearched } from './first-run-checklist'
@@ -24,7 +30,6 @@ import {
 } from './legal-search-recents'
 import {
   isTextEntryTarget,
-  readInitialSearchQuery,
   readSearchErrorMessage,
 } from './legal-search-runtime'
 import {
@@ -37,9 +42,9 @@ import {
   shouldRunLegalSearchRequest,
 } from './legal-search-state'
 
-export function useLegalSearch() {
+export function useLegalSearch(initialQuery = '') {
   const navigate = useNavigate()
-  const [query, setQuery] = useState(() => readInitialSearchQuery())
+  const [query, setQuery] = useState(initialQuery)
   const [court, setCourt] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -163,6 +168,19 @@ export function useLegalSearch() {
       window.removeEventListener('keydown', handleSearchKeyDown)
     }
   }, [navigate, rows, selectedResultIndex, shortcutsOpen, state.status])
+
+  const initialQueryStarted = useRef('')
+  const runInitialSearch = useEffectEvent((value: string) => {
+    void runSearch(value)
+  })
+
+  useEffect(() => {
+    const trimmed = initialQuery.trim()
+    if (!trimmed || initialQueryStarted.current === trimmed) return
+    initialQueryStarted.current = trimmed
+    setQuery(initialQuery)
+    runInitialSearch(initialQuery)
+  }, [initialQuery])
 
   useEffect(() => {
     return () => {

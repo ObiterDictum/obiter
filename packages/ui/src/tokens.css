@@ -113,6 +113,8 @@
   --obiter-radius-pill: 9999px;
   --obiter-row-height: 52px;
   --obiter-panel-width: 380px;
+  --obiter-palette-width: 36rem;
+  --obiter-palette-offset: 12dvh;
   --obiter-control-compact: 28px;
   --obiter-control-default: 32px;
   --obiter-control-large: 40px;

@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useAuth } from './auth'
+import { CommandPaletteProvider } from './command-palette'
 import { currentUserQueryOptions } from './current-user'
 import { ShellBootLoading, ShellOfflineBanner } from './shell-states'
 import { Sidebar } from './sidebar'
@@ -187,71 +188,77 @@ export function ShellFrame({
   const navControls = home ? 'app-shell-sidebar' : 'app-shell-contents'
 
   return (
-    <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
-      {focusMode ? null : rail ? (
-        <SidebarRail
-          platform={platform}
-          rightSlotOpen={rightSlotOpen}
-          onToggleRightSlot={toggleRightSlot}
-        />
-      ) : (
-        <Sidebar
-          orgName={me?.organisation?.name}
-          platform={platform}
-          rightSlotOpen={rightSlotOpen}
-          onToggleRightSlot={toggleRightSlot}
-        />
-      )}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <TitleBar
-          platform={platform}
-          navLabel={navLabel}
-          navExpanded={home ? !sidebarCollapsed : contentsVisible}
-          navControls={navControls}
-          onToggleNav={toggleNav}
-          navRef={navToggleRef}
-        />
-        <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
-          <div
-            id="app-shell-pane"
-            className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
-          >
-            {contentsVisible ? (
-              <Suspense fallback={null}>
-                {narrow ? (
-                  <ContentsScrim onClose={closeContentsOverlay} />
-                ) : null}
-                <ContentsPanelLazy
-                  section={section}
-                  pathname={pathname}
-                  overlay={narrow}
-                />
-              </Suspense>
-            ) : null}
-            <main
-              className={cn(
-                'min-h-0 min-w-0 flex-1 overflow-y-auto',
-                documentIdFromPath(pathname) ? null : '@container',
-              )}
+    <CommandPaletteProvider
+      onToggleNav={toggleNav}
+      onToggleRightSlot={toggleRightSlot}
+      onToggleFocusMode={() => setFocusMode(!focusMode)}
+    >
+      <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
+        {focusMode ? null : rail ? (
+          <SidebarRail
+            platform={platform}
+            rightSlotOpen={rightSlotOpen}
+            onToggleRightSlot={toggleRightSlot}
+          />
+        ) : (
+          <Sidebar
+            orgName={me?.organisation?.name}
+            platform={platform}
+            rightSlotOpen={rightSlotOpen}
+            onToggleRightSlot={toggleRightSlot}
+          />
+        )}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <TitleBar
+            platform={platform}
+            navLabel={navLabel}
+            navExpanded={home ? !sidebarCollapsed : contentsVisible}
+            navControls={navControls}
+            onToggleNav={toggleNav}
+            navRef={navToggleRef}
+          />
+          <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
+            <div
+              id="app-shell-pane"
+              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
             >
-              <ShellOfflineBanner />
-              {children}
-            </main>
-          </div>
-          {rightSlotOpen && !focusMode ? (
-            <div id="app-shell-right-slot" className="contents">
-              <Suspense fallback={null}>
-                <RightSlotLazy
-                  section={section}
-                  tab={normaliseTab(rightSlotTab)}
-                  onTabChange={setRightSlotTab}
-                />
-              </Suspense>
+              {contentsVisible ? (
+                <Suspense fallback={null}>
+                  {narrow ? (
+                    <ContentsScrim onClose={closeContentsOverlay} />
+                  ) : null}
+                  <ContentsPanelLazy
+                    section={section}
+                    pathname={pathname}
+                    overlay={narrow}
+                  />
+                </Suspense>
+              ) : null}
+              <main
+                className={cn(
+                  'min-h-0 min-w-0 flex-1 overflow-y-auto',
+                  documentIdFromPath(pathname) ? null : '@container',
+                )}
+              >
+                <ShellOfflineBanner />
+                {children}
+              </main>
             </div>
-          ) : null}
+            {rightSlotOpen && !focusMode ? (
+              <div id="app-shell-right-slot" className="contents">
+                <Suspense fallback={null}>
+                  <RightSlotLazy
+                    section={section}
+                    tab={normaliseTab(rightSlotTab)}
+                    onTabChange={setRightSlotTab}
+                  />
+                </Suspense>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
-    </div>
+    </CommandPaletteProvider>
   )
 }
 

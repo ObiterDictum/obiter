@@ -5,6 +5,15 @@ import { cn } from './lib/cn'
 
 type Size = 'sm' | 'md' | 'lg'
 
+type DialogSurface = 'dialog' | 'palette'
+
+const surfaceClasses = {
+  dialog:
+    'top-1/2 max-h-[calc(100dvh-var(--obiter-space-48))] w-[calc(100%-var(--obiter-space-48))] -translate-y-1/2 overflow-y-auto rounded-lg p-6',
+  palette:
+    'top-[var(--obiter-palette-offset)] max-h-[calc(100dvh-var(--obiter-space-56))] w-[min(var(--obiter-palette-width),calc(100%-var(--obiter-space-32)))] overflow-hidden rounded-xl',
+} satisfies Record<DialogSurface, string>
+
 const sizeClasses = {
   sm: 'max-w-sm',
   md: 'max-w-lg',
@@ -26,12 +35,14 @@ export function DialogTrigger(
 export interface DialogContentProps {
   children: ReactNode
   size?: Size
+  surface?: DialogSurface
   className?: string
 }
 
 export function DialogContent({
   children,
   size = 'md',
+  surface = 'dialog',
   className,
 }: DialogContentProps) {
   return (
@@ -39,8 +50,8 @@ export function DialogContent({
       <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-overlay" />
       <BaseDialog.Popup
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 w-[calc(100%-var(--obiter-space-48))] max-h-[calc(100dvh-var(--obiter-space-48))] overflow-y-auto -translate-x-1/2 -translate-y-1/2 p-6',
-          'rounded-lg border border-line bg-raised shadow-lg outline-none',
+          'fixed left-1/2 z-50 -translate-x-1/2 border border-line bg-raised shadow-lg outline-none',
+          surfaceClasses[surface],
           sizeClasses[size],
           className,
         )}

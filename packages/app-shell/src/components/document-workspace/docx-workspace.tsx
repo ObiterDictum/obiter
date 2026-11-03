@@ -38,6 +38,7 @@ import {
 import { useChangeReview } from './use-change-review'
 import { usePublishDocumentDirty } from './document-draft-status'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
+import { usePresenceNames } from './use-presence-names'
 import { chromeSaveOf, useDocumentSave } from './use-document-save'
 import { useWorkspaceDerivations } from './use-workspace-derivations'
 import { chromeDraftsOf, useWorkspaceDrafts } from './use-workspace-drafts'
@@ -139,6 +140,7 @@ export function DocxWorkspace({
   } = useWorkspaceView(Boolean(model))
 
   const presence = syncQuery.data?.participants ?? []
+  const presenceNames = usePresenceNames()
   const remoteChange = syncQuery.data?.changed === true
   const handleSaved = (version: string | null) => {
     setSavedVersion(version ? { documentId, versionId: version } : null)
@@ -386,6 +388,7 @@ export function DocxWorkspace({
           save={save}
           remoteChange={remoteChange}
           presence={presence}
+          presenceNames={presenceNames}
           currentUserId={me?.user.id}
           trackChanges={trackChanges}
           onToggleTrackChanges={() => drafts.setTrackChangesFlip(!trackChanges)}
