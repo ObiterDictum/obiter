@@ -1,6 +1,7 @@
 :root {
   color-scheme: light;
   --obiter-bg: #f4f0e7;
+  --obiter-canvas: #e6dfd1;
   --obiter-surface: #fbf8f2;
   --obiter-surface-raised: #fffdf9;
   --obiter-inset: #e4ddd0;
@@ -149,6 +150,7 @@
 [data-theme='dark'] {
   color-scheme: dark;
   --obiter-bg: #14161a;
+  --obiter-canvas: #101215;
   --obiter-surface: #191b1f;
   --obiter-surface-raised: #1e2126;
   --obiter-inset: #20242a;

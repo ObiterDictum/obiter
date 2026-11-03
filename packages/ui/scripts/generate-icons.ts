@@ -62,6 +62,7 @@ const ICONS = [
   'Scales',
   'ShareNetwork',
   'ShieldCheck',
+  'SidebarSimple',
   'Sun',
   'Swap',
   'TextAa',

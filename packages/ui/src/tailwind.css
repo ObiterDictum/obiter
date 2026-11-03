@@ -6,7 +6,7 @@
 @custom-variant dark (&:where([data-theme='dark'] *));
 
 @theme inline {
-  --color-canvas: var(--obiter-bg);
+  --color-canvas: var(--obiter-canvas);
   --color-surface: var(--obiter-surface);
   --color-raised: var(--obiter-surface-raised);
   --color-line: var(--obiter-border);
@@ -148,13 +148,13 @@
 
 @layer base {
   html {
-    background-color: var(--obiter-bg);
+    background-color: var(--obiter-canvas);
     color: var(--obiter-text);
     font-family: var(--obiter-font-sans);
   }
 
   body {
-    background-color: var(--obiter-bg);
+    background-color: var(--obiter-canvas);
     color: var(--obiter-text);
     font-family: var(--obiter-font-sans);
     font-size: var(--obiter-text-body);
@@ -182,5 +182,15 @@
       outline: 1px solid Highlight;
       outline-offset: -1px;
     }
+  }
+}
+
+@layer utilities {
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+
+  .app-no-drag {
+    -webkit-app-region: no-drag;
   }
 }
