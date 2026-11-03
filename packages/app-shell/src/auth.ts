@@ -59,25 +59,12 @@ export interface SignInEmailInput {
   password: string
 }
 
-export interface SignUpEmailInput {
-  name: string
-  email: string
-  password: string
-  callbackURL?: string
-  pendingOrganisationName?: string
-}
-
 export interface UseAuthReturn {
   session: AuthSessionPresence | null
   isPending: boolean
   signInWithEmail: (
     input: SignInEmailInput,
   ) => Promise<{ ok: boolean; message?: string; code?: string }>
-  signUpWithEmail: (input: SignUpEmailInput) => Promise<{
-    ok: boolean
-    message?: string
-    verificationRequired?: boolean
-  }>
   requestMagicLink: (
     email: string,
     callbackURL?: string,
@@ -138,22 +125,6 @@ export function useAuth(): UseAuthReturn {
         message: result.error.message ?? 'Sign-in failed.',
         code:
           typeof result.error.code === 'string' ? result.error.code : undefined,
-      }
-    }
-    await refreshSessionAfterAuth()
-    return { ok: true }
-  }
-
-  async function signUpWithEmail(input: SignUpEmailInput) {
-    const result = await authClient.signUp.email(input)
-    if (result.error) {
-      return { ok: false, message: result.error.message ?? 'Sign-up failed.' }
-    }
-    if (!result.data?.token) {
-      return {
-        ok: true,
-        verificationRequired: true,
-        message: 'Check your email to verify your account before signing in.',
       }
     }
     await refreshSessionAfterAuth()
@@ -263,7 +234,6 @@ export function useAuth(): UseAuthReturn {
     session: realSession.data,
     isPending: realSession.isPending,
     signInWithEmail,
-    signUpWithEmail,
     requestMagicLink,
     requestPasswordReset,
     resetPassword,

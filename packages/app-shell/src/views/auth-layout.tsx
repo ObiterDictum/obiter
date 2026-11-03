@@ -7,9 +7,11 @@ import authArtLight from '../assets/auth/auth-art-light.webp'
 
 export function AuthLayout({
   footnote,
+  columnClassName,
   children,
 }: {
   footnote: ReactNode
+  columnClassName?: string
   children: ReactNode
 }) {
   return (
@@ -24,7 +26,9 @@ export function AuthLayout({
         </header>
 
         <div className="flex flex-1 items-center justify-center py-10">
-          <div className="w-full max-w-[360px]">{children}</div>
+          <div className={cn('w-full max-w-[360px]', columnClassName)}>
+            {children}
+          </div>
         </div>
 
         <p className="text-center text-caption text-subtle">{footnote}</p>
@@ -38,14 +42,23 @@ export function AuthLayout({
 export function AuthHeading({
   title,
   description,
+  descriptionClassName,
 }: {
   title: ReactNode
   description: ReactNode
+  descriptionClassName?: string
 }) {
   return (
     <>
       <h1 className="text-page text-ink">{title}</h1>
-      <p className="mt-2 max-w-[38ch] text-body text-muted">{description}</p>
+      <p
+        className={cn(
+          'mt-2 max-w-[38ch] text-body text-muted',
+          descriptionClassName,
+        )}
+      >
+        {description}
+      </p>
     </>
   )
 }

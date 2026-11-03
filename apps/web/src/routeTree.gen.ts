@@ -18,8 +18,10 @@ import { Route as SearchRouteImport } from './routes/search'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RequestAccessIndexRouteImport } from './routes/request-access/index'
 import { Route as RedactIndexRouteImport } from './routes/redact/index'
 import { Route as MattersIndexRouteImport } from './routes/matters/index'
+import { Route as RequestAccessConfirmRouteImport } from './routes/request-access/confirm'
 import { Route as RedactRunIdRouteImport } from './routes/redact/$runId'
 import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
 import { Route as LnSplatRouteImport } from './routes/ln/$'
@@ -76,6 +78,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RequestAccessIndexRoute = RequestAccessIndexRouteImport.update({
+  id: '/request-access/',
+  path: '/request-access/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RedactIndexRoute = RedactIndexRouteImport.update({
   id: '/redact/',
   path: '/redact/',
@@ -84,6 +91,11 @@ const RedactIndexRoute = RedactIndexRouteImport.update({
 const MattersIndexRoute = MattersIndexRouteImport.update({
   id: '/matters/',
   path: '/matters/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RequestAccessConfirmRoute = RequestAccessConfirmRouteImport.update({
+  id: '/request-access/confirm',
+  path: '/request-access/confirm',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RedactRunIdRoute = RedactRunIdRouteImport.update({
@@ -155,8 +167,10 @@ export interface FileRoutesByFullPath {
   '/ln/$': typeof LnSplatRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
+  '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/matters/': typeof MattersIndexRoute
   '/redact/': typeof RedactIndexRoute
+  '/request-access/': typeof RequestAccessIndexRoute
   '/matters/$matterId/verify': typeof MattersMatterIdVerifyRoute
   '/matters/$matterId/': typeof MattersMatterIdIndexRoute
   '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
@@ -177,8 +191,10 @@ export interface FileRoutesByTo {
   '/invites/accept': typeof InvitesAcceptRoute
   '/ln/$': typeof LnSplatRoute
   '/redact/$runId': typeof RedactRunIdRoute
+  '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/matters': typeof MattersIndexRoute
   '/redact': typeof RedactIndexRoute
+  '/request-access': typeof RequestAccessIndexRoute
   '/matters/$matterId/verify': typeof MattersMatterIdVerifyRoute
   '/matters/$matterId': typeof MattersMatterIdIndexRoute
   '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
@@ -201,8 +217,10 @@ export interface FileRoutesById {
   '/ln/$': typeof LnSplatRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
+  '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/matters/': typeof MattersIndexRoute
   '/redact/': typeof RedactIndexRoute
+  '/request-access/': typeof RequestAccessIndexRoute
   '/matters/$matterId/verify': typeof MattersMatterIdVerifyRoute
   '/matters/$matterId/': typeof MattersMatterIdIndexRoute
   '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
@@ -226,8 +244,10 @@ export interface FileRouteTypes {
     | '/ln/$'
     | '/matters/$matterId'
     | '/redact/$runId'
+    | '/request-access/confirm'
     | '/matters/'
     | '/redact/'
+    | '/request-access/'
     | '/matters/$matterId/verify'
     | '/matters/$matterId/'
     | '/matters/$matterId/documents/$documentId'
@@ -248,8 +268,10 @@ export interface FileRouteTypes {
     | '/invites/accept'
     | '/ln/$'
     | '/redact/$runId'
+    | '/request-access/confirm'
     | '/matters'
     | '/redact'
+    | '/request-access'
     | '/matters/$matterId/verify'
     | '/matters/$matterId'
     | '/matters/$matterId/documents/$documentId'
@@ -271,8 +293,10 @@ export interface FileRouteTypes {
     | '/ln/$'
     | '/matters/$matterId'
     | '/redact/$runId'
+    | '/request-access/confirm'
     | '/matters/'
     | '/redact/'
+    | '/request-access/'
     | '/matters/$matterId/verify'
     | '/matters/$matterId/'
     | '/matters/$matterId/documents/$documentId'
@@ -295,8 +319,10 @@ export interface RootRouteChildren {
   LnSplatRoute: typeof LnSplatRoute
   MattersMatterIdRoute: typeof MattersMatterIdRouteWithChildren
   RedactRunIdRoute: typeof RedactRunIdRoute
+  RequestAccessConfirmRoute: typeof RequestAccessConfirmRoute
   MattersIndexRoute: typeof MattersIndexRoute
   RedactIndexRoute: typeof RedactIndexRoute
+  RequestAccessIndexRoute: typeof RequestAccessIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -364,6 +390,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/request-access/': {
+      id: '/request-access/'
+      path: '/request-access'
+      fullPath: '/request-access/'
+      preLoaderRoute: typeof RequestAccessIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/redact/': {
       id: '/redact/'
       path: '/redact'
@@ -376,6 +409,13 @@ declare module '@tanstack/react-router' {
       path: '/matters'
       fullPath: '/matters/'
       preLoaderRoute: typeof MattersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/request-access/confirm': {
+      id: '/request-access/confirm'
+      path: '/request-access/confirm'
+      fullPath: '/request-access/confirm'
+      preLoaderRoute: typeof RequestAccessConfirmRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/redact/$runId': {
@@ -486,8 +526,10 @@ const rootRouteChildren: RootRouteChildren = {
   LnSplatRoute: LnSplatRoute,
   MattersMatterIdRoute: MattersMatterIdRouteWithChildren,
   RedactRunIdRoute: RedactRunIdRoute,
+  RequestAccessConfirmRoute: RequestAccessConfirmRoute,
   MattersIndexRoute: MattersIndexRoute,
   RedactIndexRoute: RedactIndexRoute,
+  RequestAccessIndexRoute: RequestAccessIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

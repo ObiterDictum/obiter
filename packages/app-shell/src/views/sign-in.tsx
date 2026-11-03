@@ -193,13 +193,9 @@ export function SignInRouteView({
       </AuthForm>
 
       <AuthFoot>
-        New to Obiter?{' '}
-        <Link
-          to="/sign-up"
-          search={inviteToken ? { token: inviteToken } : undefined}
-          className="text-ink hover:text-brand"
-        >
-          Create an account
+        Need access?{' '}
+        <Link to="/request-access" className="text-ink hover:text-brand">
+          Request access
         </Link>
       </AuthFoot>
     </AuthLayout>

@@ -20,12 +20,13 @@ Search owns:
 - `POST /api/search/fetch`
 - `GET /api/search/documents/:documentId`
 
-- Auth: sign-in, sign-out, self-registration, and password reset are wired to the real auth API (better-auth email/password + magic link + forgot/reset password). `useCurrentUser()` is backed by the real `GET /api/me`; signed-out users are redirected to `/sign-in` and session expiry is handled gracefully. Email verification is required on self-registration; the sign-up screen ends on a check-your-email state rather than a session, and both that state and an unverified sign-in can resend the verification email. Registration is org-less: a new user has no organisation until they create one explicitly via `POST /api/organisations`; an org-less user lands on Home's create-organisation surface, and org-scoped routes redirect them there. Password reset uses a single-use token; the request endpoint never reveals whether the email exists.
+- Auth: sign-in, sign-out and password reset are wired to the real auth API (better-auth email/password + magic link + forgot/reset password). Self-registration is closed in the clients: `/sign-up` redirects to `/request-access`, which posts an access request to the API's planned `/api/access-requests` routes and shows the API's refusal until they exist. `useCurrentUser()` is backed by the real `GET /api/me`; signed-out users are redirected to `/sign-in` and session expiry is handled gracefully. Email verification is required on self-registration; the sign-up screen ends on a check-your-email state rather than a session, and both that state and an unverified sign-in can resend the verification email. Registration is org-less: a new user has no organisation until they create one explicitly via `POST /api/organisations`; an org-less user lands on Home's create-organisation surface, and org-scoped routes redirect them there. Password reset uses a single-use token; the request endpoint never reveals whether the email exists.
 
 Auth owns:
 
 - `/sign-in`
-- `/sign-up`
+- `/request-access` (public; replaces `/sign-up`, which now redirects)
+- `/request-access/confirm`
 - `/invites/accept`
 - `/forgot-password`
 - `/reset-password`

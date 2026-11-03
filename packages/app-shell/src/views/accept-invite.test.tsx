@@ -39,7 +39,6 @@ mock.module('../auth', () =>
         session: mocks.session,
         isPending: mocks.isPending,
         signInWithEmail: vi.fn(),
-        signUpWithEmail: vi.fn(),
         requestMagicLink: vi.fn(),
         requestPasswordReset: vi.fn(),
         resetPassword: vi.fn(),
@@ -139,7 +138,7 @@ describe('AcceptInviteRouteView', () => {
     cleanup()
   })
 
-  it('names the organisation and inviter before asking a signed-out user to sign up', async () => {
+  it('names the organisation and inviter before asking a signed-out user to request access', async () => {
     renderAccept()
     await waitFor(() => {
       expect(screen.getByText('Join North Chambers.')).toBeTruthy()
@@ -149,9 +148,9 @@ describe('AcceptInviteRouteView', () => {
     })
     expect(
       screen
-        .getByRole('link', { name: /create an account/i })
+        .getByRole('link', { name: /request access/i })
         .getAttribute('href'),
-    ).toBe('/sign-up?token=invite-token')
+    ).toBe('/request-access')
   })
 
   it('offers a sign-in link carrying the token to signed-out invitees', async () => {
@@ -240,9 +239,7 @@ describe('AcceptInviteRouteView', () => {
       expect(
         screen.getByText(/ask your administrator for a new invite/i),
       ).toBeTruthy()
-      expect(
-        screen.queryByRole('link', { name: /create an account/i }),
-      ).toBeNull()
+      expect(screen.queryByRole('link', { name: /request access/i })).toBeNull()
     },
   )
 
