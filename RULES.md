@@ -63,6 +63,7 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 ## PRs and tests
 
 - PR summaries: what changed, why, implementation notes, exact tests run, risks and follow-ups. Engineer-to-engineer tone, no filler. Details in [PR.md](PR.md).
+- This repository is public. PR titles and descriptions, commit messages, review comments and issues never mention private repositories: not their names, PRs, branches, file paths, stages or plans. Describe server-side work as "the API" or "a later change", and add no new references to private repositories in docs.
 - Verify proportionate to risk; legal-critical paths need happy path plus failure path. Do not claim done without the appropriate verification. Details in [TESTING.md](TESTING.md).
 
 ## Quality bar
