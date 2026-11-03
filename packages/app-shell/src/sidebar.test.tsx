@@ -1,7 +1,7 @@
 import '@obiter/test-dom'
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   RouterProvider,
@@ -15,7 +15,9 @@ import type { MatterRecord } from './matters'
 import { matterInitials } from './matters'
 import type { RedactionRunListItem } from './redaction-runs'
 import { buildAttentionItems, summariseAttention } from './views/home-attention'
-import { Sidebar, recentMatters } from './sidebar'
+import { Sidebar } from './sidebar'
+import { SidebarRail } from './sidebar-rail'
+import { recentMatters } from './sidebar-counts'
 import { openWorkCount } from './open-work'
 
 const mocks = vi.hoisted(() => ({
@@ -38,6 +40,12 @@ const verificationModule = { ...(await import('./verification-runs')) }
 mock.module('./verification-runs', () => ({
   ...verificationModule,
   useOrganisationVerificationRuns: () => ({ runs: mocks.verificationRuns }),
+}))
+
+const accountMenuModule = { ...(await import('./account-menu')) }
+mock.module('./account-menu', () => ({
+  ...accountMenuModule,
+  AccountMenu: () => null,
 }))
 
 function matter(overrides: Partial<MatterRecord> = {}): MatterRecord {
@@ -99,15 +107,14 @@ function redactionRun(
   }
 }
 
-function renderSidebar(path = '/') {
+function renderSidebar(path = '/', variant: 'full' | 'rail' = 'full') {
   const rootRoute = createRootRoute()
-  const sidebar = () => (
-    <Sidebar
-      orgName="Harrington Vale LLP"
-      agentOpen={false}
-      onToggleAgent={() => {}}
-    />
-  )
+  const sidebar = () =>
+    variant === 'full' ? (
+      <Sidebar orgName="Harrington Vale LLP" platform="web" />
+    ) : (
+      <SidebarRail platform="web" />
+    )
   const routes = [
     createRoute({
       getParentRoute: () => rootRoute,
@@ -265,39 +272,36 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'Redact, 1 waiting' })).toBeTruthy()
   })
 
-  it('offers Agent as a panel toggle, second in the list, not a route', async () => {
+  it('orders the modules with Home first and no Agent entry', async () => {
     renderSidebar('/')
-    const agent = await screen.findByRole('button', { name: 'Agent' })
-    expect(agent.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByRole('link', { name: /Agent/ })).toBeNull()
-
-    const nav = screen.getByRole('navigation', { name: 'Workspace' })
+    const nav = await screen.findByRole('navigation', { name: 'Workspace' })
     const rows = Array.from(nav.querySelectorAll('ul:first-of-type > li')).map(
-      (item) => item.querySelector('a, button')?.getAttribute('aria-label'),
+      (item) => item.querySelector('a')?.getAttribute('aria-label'),
     )
     expect(rows).toEqual([
       'Home',
-      'Agent',
+      expect.stringMatching(/^Matters/),
       'Search',
-      'Matters',
       expect.stringMatching(/^Verify/),
       expect.stringMatching(/^Redact/),
     ])
+    expect(screen.queryByRole('button', { name: 'Agent' })).toBeNull()
   })
+})
 
-  it('collapses to the icon rail and remembers the choice', async () => {
-    renderSidebar('/')
-    const toggle = await screen.findByRole('button', {
-      name: 'Collapse sidebar',
-    })
-    fireEvent.click(toggle)
+describe('SidebarRail', () => {
+  it('keeps every module reachable as a labelled icon', async () => {
+    mocks.matters = [matter()]
+    renderSidebar('/matters', 'rail')
 
-    expect(window.localStorage.getItem('obiter.sidebar.collapsed')).toBe('true')
-    expect(
-      screen
-        .getByRole('button', { name: 'Expand sidebar' })
-        .getAttribute('aria-expanded'),
-    ).toBe('false')
-    expect(screen.getByRole('link', { name: 'Matters' })).toBeTruthy()
+    const home = await screen.findByRole('link', { name: 'Obiter home' })
+    expect(home).toBeTruthy()
+    const matters = screen.getByRole('link', { name: 'Matters, 1 active' })
+    expect(matters.getAttribute('aria-current')).toBe('page')
+    expect(matters.textContent).toBe('')
+    expect(screen.getByRole('link', { name: 'Search' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Verify' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Redact' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Settings' })).toBeTruthy()
   })
 })

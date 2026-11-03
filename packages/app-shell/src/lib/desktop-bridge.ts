@@ -1,5 +1,6 @@
 export interface DesktopBridge {
   platform: 'desktop'
+  osPlatform: string
   shellVersion: string
   apiOrigin: string | null
   getAuthToken(): Promise<string | null>

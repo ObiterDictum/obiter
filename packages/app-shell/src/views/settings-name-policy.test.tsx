@@ -59,6 +59,8 @@ mock.module('../organisation-membership', () =>
   ),
 )
 
+const { SettingsContents } = await import('../contents-sections')
+const { ShellContentsProvider } = await import('../shell-contents')
 const { SettingsRouteView } = await import('./settings')
 
 const ME: MeResponse = {
@@ -84,7 +86,14 @@ function renderSettings(me: MeResponse = ME) {
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <SettingsRouteView />,
+    component: () => (
+      <ShellContentsProvider>
+        <div className="flex">
+          <SettingsContents />
+          <SettingsRouteView />
+        </div>
+      </ShellContentsProvider>
+    ),
   })
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute]),

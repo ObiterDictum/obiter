@@ -2,150 +2,16 @@ import { Link } from '@tanstack/react-router'
 import { matterInitials, type MatterRecord } from './matters'
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
 import type { ReactElement, ReactNode, Ref } from 'react'
+import { ShortcutHint, type ShellCommand } from './shell-shortcuts'
 
-export function ModuleRow({
-  label,
-  to,
-  icon: Icon,
-  count,
-  alertTone,
-  current,
-  collapsed,
-  onClick,
-  expanded,
-  actionRef,
-}: {
-  label: string
-  to?: string
-  icon: (props: {
-    size?: number
-    weight?: 'regular' | 'fill'
-    className?: string
-    'aria-hidden'?: boolean
-  }) => ReactNode
-  count?: number
-  alertTone?: 'danger' | 'warning' | 'success'
-  current?: boolean
-  collapsed: boolean
-  onClick?: () => void
-  expanded?: boolean
-  actionRef?: Ref<HTMLButtonElement>
-}) {
-  const countNote = countToneLabel(label, count)
-  const toneClass = countToneClass(label, alertTone)
-  const accessibleName = countNote ? `${label}, ${countNote}` : label
-  const body = (
-    <>
-      <Icon size={16} weight={current ? 'fill' : 'regular'} aria-hidden />
-      {collapsed ? null : (
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-      )}
-      {collapsed || !count ? null : (
-        <span
-          aria-hidden
-          className={cn(
-            'text-caption tabular-nums',
-            count > 0 ? toneClass : 'text-subtle',
-          )}
-        >
-          {count}
-        </span>
-      )}
-    </>
-  )
-  const rowClass = cn(
-    'flex h-9 items-center gap-3 rounded-md text-item',
-    'transition-colors duration-150',
-    collapsed ? 'relative mx-auto w-10 justify-center' : 'px-3',
-    current
-      ? 'bg-brand-soft font-medium text-ink'
-      : 'text-muted hover:bg-hover hover:text-ink',
-  )
-  const badge =
-    collapsed && count && toneClass !== 'text-subtle' ? (
-      <span
-        aria-hidden
-        className={cn(
-          'absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-pill px-1',
-          'text-[10px] leading-none font-medium tabular-nums',
-          toneClass === 'text-danger'
-            ? 'bg-danger text-danger-fg'
-            : toneClass === 'text-warning'
-              ? 'bg-warning text-warning-fg'
-              : 'bg-info text-info-fg',
-        )}
-      >
-        {count > 99 ? '99+' : count}
-      </span>
-    ) : null
+type IconComponent = (props: {
+  size?: number
+  weight?: 'regular' | 'fill'
+  className?: string
+  'aria-hidden'?: boolean
+}) => ReactNode
 
-  if (onClick) {
-    const button = (
-      <button
-        type="button"
-        ref={actionRef}
-        aria-label={accessibleName}
-        aria-expanded={expanded}
-        onClick={onClick}
-        className={cn(rowClass, 'w-full text-left')}
-      >
-        {body}
-        {badge}
-      </button>
-    )
-    return collapsed ? (
-      <RailTooltip label={tooltipLabel(label, countNote)}>{button}</RailTooltip>
-    ) : (
-      button
-    )
-  }
-
-  if (!to) {
-    return (
-      <span aria-disabled="true" className={cn(rowClass, 'text-subtle')}>
-        {body}
-      </span>
-    )
-  }
-
-  const row = (
-    <Link
-      to={to}
-      aria-label={accessibleName}
-      aria-current={current ? 'page' : undefined}
-      className={rowClass}
-    >
-      {body}
-      {badge}
-    </Link>
-  )
-  return collapsed ? (
-    <RailTooltip label={tooltipLabel(label, countNote)}>{row}</RailTooltip>
-  ) : (
-    row
-  )
-}
-
-function tooltipLabel(label: string, countNote: string | null) {
-  return countNote ? `${label} · ${countNote}` : label
-}
-
-function RailTooltip({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactElement<Record<string, unknown>>
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger render={children} />
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-function countToneLabel(label: string, count?: number) {
+function countNote(label: string, count?: number) {
   if (!count) return null
   if (label === 'Matters') return `${count} active`
   if (label === 'Verify')
@@ -164,16 +30,158 @@ function countToneClass(
   return 'text-subtle'
 }
 
+export function ModuleRow({
+  label,
+  to,
+  icon: Icon,
+  count,
+  alertTone,
+  current,
+}: {
+  label: string
+  to: string
+  icon: IconComponent
+  count?: number
+  alertTone?: 'danger' | 'warning' | 'success'
+  current?: boolean
+}) {
+  const note = countNote(label, count)
+  const toneClass = countToneClass(label, alertTone)
+  return (
+    <Link
+      to={to}
+      aria-label={note ? `${label}, ${note}` : label}
+      aria-current={current ? 'page' : undefined}
+      className={cn(
+        'flex h-[30px] items-center gap-2.5 rounded-lg px-2 text-meta',
+        'transition-colors duration-150',
+        current
+          ? 'bg-fill font-medium text-ink'
+          : 'text-muted hover:bg-hover hover:text-ink',
+      )}
+    >
+      <Icon size={16} weight={current ? 'fill' : 'regular'} aria-hidden />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {alertTone === 'danger' && count ? (
+        <span aria-hidden className="size-1.5 rounded-pill bg-danger" />
+      ) : null}
+      {count ? (
+        <span
+          aria-hidden
+          className={cn('text-caption tabular-nums', toneClass)}
+        >
+          {count}
+        </span>
+      ) : null}
+    </Link>
+  )
+}
+
+export function RailItem({
+  label,
+  to,
+  icon: Icon,
+  count,
+  alertTone,
+  current,
+  shortcut,
+  onClick,
+  expanded,
+  actionRef,
+}: {
+  label: string
+  to?: string
+  icon: IconComponent
+  count?: number
+  alertTone?: 'danger' | 'warning' | 'success'
+  current?: boolean
+  shortcut: ShellCommand
+  onClick?: () => void
+  expanded?: boolean
+  actionRef?: Ref<HTMLButtonElement>
+}) {
+  const note = countNote(label, count)
+  const control = (
+    <>
+      <Icon size={18} weight={current ? 'fill' : 'regular'} aria-hidden />
+      {alertTone === 'danger' && count ? (
+        <span
+          aria-hidden
+          className="absolute top-1 right-1 size-1.5 rounded-pill bg-danger"
+        />
+      ) : null}
+    </>
+  )
+  const className = cn(
+    'relative grid size-9 place-items-center rounded-lg',
+    'transition-colors duration-150',
+    current ? 'bg-fill text-ink' : 'text-muted hover:bg-hover hover:text-ink',
+  )
+  const accessibleName = note ? `${label}, ${note}` : label
+  const tooltip = (
+    <>
+      <span className="flex items-center gap-2">
+        {label}
+        <ShortcutHint command={shortcut} />
+      </span>
+      {note ? <span className="mt-1 block text-subtle">{note}</span> : null}
+    </>
+  )
+
+  if (onClick) {
+    const button = (
+      <button
+        type="button"
+        ref={actionRef}
+        aria-label={accessibleName}
+        aria-expanded={expanded}
+        onClick={onClick}
+        className={className}
+      >
+        {control}
+      </button>
+    )
+    return <RailTooltip content={tooltip}>{button}</RailTooltip>
+  }
+
+  const link = (
+    <Link
+      to={to ?? '/'}
+      aria-label={accessibleName}
+      aria-current={current ? 'page' : undefined}
+      className={className}
+    >
+      {control}
+    </Link>
+  )
+  return <RailTooltip content={tooltip}>{link}</RailTooltip>
+}
+
+function RailTooltip({
+  content,
+  children,
+}: {
+  content: ReactNode
+  children: ReactElement<Record<string, unknown>>
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent side="right" className="max-md:hidden">
+        {content}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function MatterRow({
   matter,
   current,
-  collapsed,
 }: {
   matter: MatterRecord
   current: boolean
-  collapsed: boolean
 }) {
-  const link = (
+  return (
     <Link
       to="/matters/$matterId"
       params={{ matterId: matter.id }}
@@ -184,8 +192,8 @@ export function MatterRow({
       }
       aria-current={current ? 'page' : undefined}
       className={cn(
-        'flex min-h-9 items-center gap-2 rounded-md transition-colors duration-150 hover:bg-hover',
-        collapsed ? 'mx-auto w-10 justify-center py-1' : 'px-2 py-1',
+        'flex min-h-9 items-center gap-2 rounded-lg px-2 py-1.5',
+        'transition-colors duration-150 hover:bg-hover',
         current && 'bg-hover',
       )}
     >
@@ -198,30 +206,22 @@ export function MatterRow({
       >
         {matterInitials(matter)}
       </span>
-      {collapsed ? null : (
-        <span className="min-w-0 flex-1">
-          <span
-            className={cn(
-              'block truncate text-meta',
-              current ? 'text-ink' : 'text-muted',
-            )}
-            title={matter.name}
-          >
-            {matter.name}
-          </span>
-          {matter.clientReference ? (
-            <span className="mt-1 block truncate text-caption text-subtle">
-              {matter.clientReference}
-            </span>
-          ) : null}
+      <span className="min-w-0 flex-1">
+        <span
+          className={cn(
+            'block truncate text-meta',
+            current ? 'text-ink' : 'text-muted',
+          )}
+          title={matter.name}
+        >
+          {matter.name}
         </span>
-      )}
+        {matter.clientReference ? (
+          <span className="mt-0.5 block truncate text-caption text-subtle">
+            {matter.clientReference}
+          </span>
+        ) : null}
+      </span>
     </Link>
-  )
-
-  return collapsed ? (
-    <RailTooltip label={matter.name}>{link}</RailTooltip>
-  ) : (
-    link
   )
 }

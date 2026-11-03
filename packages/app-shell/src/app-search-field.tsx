@@ -60,7 +60,7 @@ const MODE_HITS: AppSearchHit[] = [
   },
 ]
 
-export function AppSearchField() {
+export function AppSearchField({ className }: { className?: string }) {
   const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const floatInputRef = useRef<HTMLTextAreaElement | null>(null)
@@ -196,7 +196,10 @@ export function AppSearchField() {
   return (
     <div
       ref={shellRef}
-      className="relative w-[min(300px,32vw)] shrink-0 max-compact:w-8"
+      className={cn(
+        'relative w-[min(300px,32vw)] shrink-0 max-compact:w-8',
+        className,
+      )}
     >
       <form
         className={cn(

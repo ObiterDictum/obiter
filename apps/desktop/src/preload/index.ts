@@ -5,6 +5,7 @@ const apiOrigin = typeof rawApiOrigin === 'string' ? rawApiOrigin : null
 
 contextBridge.exposeInMainWorld('obiterDesktop', {
   platform: 'desktop' as const,
+  osPlatform: process.platform,
   shellVersion: 'phase-0.1',
   apiOrigin,
   getAuthToken: () => ipcRenderer.invoke('obiter:get-auth-token'),

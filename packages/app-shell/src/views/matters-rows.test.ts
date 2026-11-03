@@ -179,6 +179,7 @@ describe('filters', () => {
         search,
         domain: null,
         needsAttention: false,
+        status: 'all',
       }).map((row) => row.matter.id)
     expect(ids('okafor')).toEqual(['mtr_2'])
     expect(ids('OKA-0233')).toEqual(['mtr_2'])
@@ -193,6 +194,7 @@ describe('filters', () => {
         search: '',
         domain: 'Employment',
         needsAttention: false,
+        status: 'all',
       }).map((row) => row.matter.id),
     ).toEqual(['mtr_2'])
     expect(
@@ -200,6 +202,7 @@ describe('filters', () => {
         search: '',
         domain: null,
         needsAttention: true,
+        status: 'all',
       }).map((row) => row.matter.id),
     ).toEqual(['mtr_1'])
   })
