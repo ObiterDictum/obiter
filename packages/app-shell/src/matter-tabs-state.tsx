@@ -68,7 +68,7 @@ export function useHydrateMatterTabs(): void {
   }, [])
 }
 
-export function sideFromSearch(search: string): string | null {
+function sideFromSearch(search: string): string | null {
   return new URLSearchParams(search).get('side')
 }
 
