@@ -106,7 +106,7 @@ export function VerifyRouteView() {
         <EmptyState
           icon={<ShieldCheck size={28} className="text-muted" />}
           title="No verification runs yet"
-          body="Verification starts from a document, not from this page. Open a matter, open a document, then use Run verification there."
+          body="Verify checks a document’s citations, quotations and authorities against stored UK sources. Open a document in a matter and run it there."
           action={
             <Link
               to="/matters"

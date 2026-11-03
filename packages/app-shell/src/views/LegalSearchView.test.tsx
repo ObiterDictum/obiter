@@ -329,9 +329,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain(
       'the records ingested so far, not every published judgment',
     )
-    expect(container.textContent).toContain('Case name')
-    expect(container.textContent).toContain('Neutral citation')
-    expect(container.textContent).toContain('Keyword')
+    expect(container.textContent).toContain('Example searches')
+    expect(container.textContent).toContain('unfair dismissal time limit')
+    expect(container.textContent).toContain('without prejudice privilege')
     expect(container.textContent).toContain('Court shortcuts')
 
     await clickButton(container, 'UKSC')
@@ -350,6 +350,23 @@ describe('LegalSearchView debounce lifecycle', () => {
       '1 recent case for UK Supreme Court',
     )
     expect(container.textContent).toContain('Potanina v Potanin')
+  })
+
+  it('runs the query an example search names', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse([], { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    container = mount()
+
+    await clickButton(container, 'unfair dismissal time limit')
+    await flushMicrotasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(request?.body))).toEqual({
+      query: 'unfair dismissal time limit',
+    })
   })
 
   it('names the unheld Act instead of claiming a judgment was sought', async () => {

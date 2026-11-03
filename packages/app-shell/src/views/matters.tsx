@@ -136,9 +136,9 @@ export function MattersRouteView({
         />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No matters yet"
-          body="A matter holds the documents, checks and sources for one client instruction. Create one when a client instructs you."
-          action={<CreateMatterDialog trigger="Create the first matter" />}
+          title="Create your first matter"
+          body="A matter holds one client instruction: its documents, the checks run on them and the sources you rely on."
+          action={<CreateMatterDialog trigger="Create a matter" />}
         />
       ) : (
         <div className="flex flex-col gap-6">

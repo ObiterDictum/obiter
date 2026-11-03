@@ -1,38 +1,16 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { StatusDot, buttonClassName } from '@obiter/ui'
-import { BookOpen, MagnifyingGlass, Scales, Upload } from '@obiter/ui/icons'
+import { MagnifyingGlass, Upload } from '@obiter/ui/icons'
 import { useState, type FormEvent } from 'react'
+import { SEARCH_EXAMPLE_QUERIES } from '../legal-search-examples'
 import { getRecentLegalSearches } from '../legal-search-recents'
 import { CreateMatterDialog } from './create-matter-dialog'
 
-const SUGGESTED_SEARCHES = [
-  {
-    query: 'Wood v Capita Insurance Services Ltd',
-    label: 'Wood v Capita Insurance Services Ltd',
-    detail: '[2017] UKSC 24',
-    icon: Scales,
-  },
-  {
-    query: 'Rock Advertising v MWB',
-    label: 'Rock Advertising v MWB',
-    detail: '[2018] UKSC 24',
-    icon: Scales,
-  },
-  {
-    query: 'Secretary of State for Business and Trade v Mercer',
-    label: 'Secretary of State for Business and Trade v Mercer',
-    detail: '[2024] UKSC 12',
-    icon: Scales,
-  },
-  {
-    query: 'Limitation Act 1980 section 5',
-    label: 'Limitation Act 1980, s. 5',
-    detail: 'Act provision',
-    icon: BookOpen,
-  },
-]
-
-export function HomeEmpty() {
+export function HomeEmpty({
+  showSetupSteps = true,
+}: {
+  showSetupSteps?: boolean
+}) {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const recentSearches =
@@ -54,59 +32,61 @@ export function HomeEmpty() {
 
   return (
     <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
-      <section aria-labelledby="setup">
-        <div className="mb-4 flex items-baseline justify-between gap-4">
-          <h2 id="setup" className="text-section text-ink">
-            Set up your workspace
-          </h2>
-          <span className="text-meta text-subtle">
-            Three steps, in any order
-          </span>
-        </div>
+      {showSetupSteps ? (
+        <section aria-labelledby="setup">
+          <div className="mb-4 flex items-baseline justify-between gap-4">
+            <h2 id="setup" className="text-section text-ink">
+              Set up your workspace
+            </h2>
+            <span className="text-meta text-subtle">
+              Three steps, in any order
+            </span>
+          </div>
 
-        <ol className="list-none rounded-lg bg-surface" role="list">
-          <Step
-            number={1}
-            title="Create your first matter"
-            text="A matter holds the client file, its documents and the sources you rely on. You can change the details later."
-          >
-            <CreateMatterDialog
-              trigger="New matter"
-              variant="primary"
-              size="md"
-            />
-          </Step>
-          <Step
-            number={2}
-            title="Add a document"
-            text="Open a matter and upload a Word document or PDF. Every save becomes a stored version you can compare and share."
-          >
-            <Link
-              to="/matters"
-              className={buttonClassName({ variant: 'secondary' })}
+          <ol className="list-none rounded-lg bg-surface" role="list">
+            <Step
+              number={1}
+              title="Create your first matter"
+              text="A matter holds the client file, its documents and the sources you rely on. You can change the details later."
             >
-              <Upload size={16} aria-hidden /> Choose a matter
-            </Link>
-          </Step>
-          <Step
-            number={3}
-            title="Search the law"
-            text="Find UK case law and legislation, then keep what you rely on with the matter it belongs to."
-          >
-            <Link
-              to="/search"
-              className={buttonClassName({ variant: 'ghost' })}
+              <CreateMatterDialog
+                trigger="New matter"
+                variant="primary"
+                size="md"
+              />
+            </Step>
+            <Step
+              number={2}
+              title="Add a document"
+              text="Open a matter and upload a Word document or PDF. Every save becomes a stored version you can compare and share."
             >
-              <MagnifyingGlass size={16} aria-hidden /> Search the law
-            </Link>
-          </Step>
-        </ol>
+              <Link
+                to="/matters"
+                className={buttonClassName({ variant: 'secondary' })}
+              >
+                <Upload size={16} aria-hidden /> Choose a matter
+              </Link>
+            </Step>
+            <Step
+              number={3}
+              title="Search the law"
+              text="Find UK case law and legislation, then keep what you rely on with the matter it belongs to."
+            >
+              <Link
+                to="/search"
+                className={buttonClassName({ variant: 'ghost' })}
+              >
+                <MagnifyingGlass size={16} aria-hidden /> Search the law
+              </Link>
+            </Step>
+          </ol>
 
-        <p className="mt-4 max-w-[68ch] text-meta text-muted">
-          Nothing here is permanent: you can rename a matter or delete a
-          document at any time.
-        </p>
-      </section>
+          <p className="mt-4 max-w-[68ch] text-meta text-muted">
+            Nothing here is permanent: you can rename a matter or delete a
+            document at any time.
+          </p>
+        </section>
+      ) : null}
 
       <aside
         aria-label="Getting started"
@@ -145,20 +125,18 @@ export function HomeEmpty() {
                   <SearchRow
                     label={recentQuery}
                     detail="Recent search"
-                    icon={MagnifyingGlass}
                     onSelect={() => search(recentQuery)}
                   />
                 </li>
               ))}
             </ul>
           ) : (
-            <ul aria-label="Suggested searches" className="mt-4">
-              {SUGGESTED_SEARCHES.map((suggestion) => (
+            <ul aria-label="Example searches" className="mt-4">
+              {SEARCH_EXAMPLE_QUERIES.map((suggestion) => (
                 <li key={suggestion.query}>
                   <SearchRow
-                    label={suggestion.label}
+                    label={suggestion.query}
                     detail={suggestion.detail}
-                    icon={suggestion.icon}
                     onSelect={() => search(suggestion.query)}
                   />
                 </li>
@@ -202,12 +180,10 @@ export function HomeEmpty() {
 function SearchRow({
   label,
   detail,
-  icon: Icon,
   onSelect,
 }: {
   label: string
   detail: string
-  icon: typeof MagnifyingGlass
   onSelect: () => void
 }) {
   return (
@@ -220,7 +196,7 @@ function SearchRow({
         className="grid size-7 shrink-0 place-items-center rounded-sm bg-fill text-subtle"
         aria-hidden="true"
       >
-        <Icon size={16} />
+        <MagnifyingGlass size={16} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-item text-ink">{label}</span>

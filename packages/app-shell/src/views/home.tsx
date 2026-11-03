@@ -4,8 +4,20 @@ import { PencilSimple, Upload } from '@obiter/ui/icons'
 import { useQueries, useQueryClient } from '@tanstack/react-query'
 import type { AppPlatform, MeResponse } from '@obiter/contracts'
 import { PERSONAL_WORKSPACE_NAME } from '@obiter/contracts'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useCurrentUser } from '../current-user'
+import {
+  firstRunAudience,
+  firstRunComplete,
+  firstRunSteps,
+  readFirstRunDismissed,
+  rememberFirstRunDismissed,
+} from '../first-run-checklist'
+import { getRecentLegalSearches } from '../legal-search-recents'
+import {
+  useOrganisationInvites,
+  useOrganisationMembers,
+} from '../organisation-membership'
 import {
   matterDocumentsQueryOptions,
   useRecentlyOpenedDocument,
@@ -26,6 +38,7 @@ import {
 import { attentionSummaryText } from './home-attention-copy'
 import { ATTENTION_LIMIT, AttentionSection } from './home-attention-list'
 import { CreateMatterDialog } from './create-matter-dialog'
+import { FirstRunChecklist } from './first-run-checklist'
 import { HomeEmpty } from './home-empty'
 import {
   RecentDocumentsCard,
@@ -114,6 +127,43 @@ function HomeDashboard({ me }: { me: MeResponse }) {
     if (identity.status === 'available') {
       documentFilenames.set(documentId, identity.filename)
     }
+  }
+
+  const audience = firstRunAudience(me.user.role)
+  const organisationId = me.organisation?.id ?? null
+  const managesOrganisation = audience === 'admin' && organisationId !== null
+  const members = useOrganisationMembers(organisationId ?? '', {
+    enabled: managesOrganisation,
+  })
+  const invites = useOrganisationInvites(organisationId ?? '', {
+    enabled: managesOrganisation,
+  })
+  const [checklistDismissed, setChecklistDismissed] = useState(() =>
+    typeof window === 'undefined'
+      ? false
+      : readFirstRunDismissed(window.localStorage, me.user.id),
+  )
+  const checklistSteps = firstRunSteps(audience, {
+    hasInviteOrSecondMember:
+      (members.data?.length ?? 0) > 1 || (invites.data?.length ?? 0) > 0,
+    hasMatter: (matters.data?.length ?? 0) > 0,
+    hasDocument: documentQueries.some((query) => (query.data?.length ?? 0) > 0),
+    hasVerificationRun: verificationRuns.length > 0,
+    hasRedactionRun: (redactionRuns.data?.runs.length ?? 0) > 0,
+    hasRecentSearch:
+      typeof window !== 'undefined' &&
+      getRecentLegalSearches(window.sessionStorage).length > 0,
+  })
+  const showChecklist =
+    matters.isSuccess &&
+    !checklistDismissed &&
+    !firstRunComplete(checklistSteps)
+
+  function dismissChecklist() {
+    if (typeof window !== 'undefined') {
+      rememberFirstRunDismissed(window.localStorage, me.user.id)
+    }
+    setChecklistDismissed(true)
   }
 
   const matterSources = new Map(
@@ -219,8 +269,15 @@ function HomeDashboard({ me }: { me: MeResponse }) {
         )
       }
     >
+      {showChecklist ? (
+        <FirstRunChecklist
+          steps={checklistSteps}
+          showOrganisationSettings={managesOrganisation}
+          onDismiss={dismissChecklist}
+        />
+      ) : null}
       {empty ? (
-        <HomeEmpty />
+        <HomeEmpty showSetupSteps={!showChecklist} />
       ) : (
         <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
           <AttentionSection

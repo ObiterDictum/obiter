@@ -298,7 +298,9 @@ describe('matter documents', () => {
 
   it('offers an empty state with both ways in, not a bare empty table', async () => {
     render(<RouterProvider router={buildRouter('mtr_1')} />)
-    expect(await screen.findByText('No documents yet')).toBeTruthy()
+    expect(
+      await screen.findByText('Upload documents, or start a blank document'),
+    ).toBeTruthy()
     expect(screen.getByLabelText('Upload document')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'New document' })).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
