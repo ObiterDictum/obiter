@@ -7,7 +7,7 @@ import {
   PopoverTrigger,
   cn,
 } from '@obiter/ui'
-import { CaretDown, Check } from '@obiter/ui/icons'
+import { CaretRight } from '@obiter/ui/icons/shell'
 import { useState } from 'react'
 import { paletteScore } from './command-palette-rows'
 import { useMattersList, type MatterRecord } from './matters'
@@ -65,7 +65,11 @@ export function MatterSwitcher({
         }
       >
         <span className="min-w-0 truncate">{matterName}</span>
-        <CaretDown size={12} aria-hidden className="shrink-0 text-subtle" />
+        <CaretRight
+          size={12}
+          aria-hidden
+          className="shrink-0 rotate-90 text-subtle"
+        />
       </PopoverTrigger>
       <PopoverPortal>
         <PopoverPositioner sideOffset={6} align="start">
@@ -101,7 +105,10 @@ export function MatterSwitcher({
                     >
                       <span className="grid size-4 shrink-0 place-items-center">
                         {matter.id === matterId ? (
-                          <Check size={12} aria-hidden />
+                          <span
+                            aria-hidden
+                            className="size-1.5 rounded-pill bg-brand"
+                          />
                         ) : null}
                       </span>
                       <span className="min-w-0 flex-1">

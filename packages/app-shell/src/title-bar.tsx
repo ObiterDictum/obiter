@@ -14,12 +14,16 @@ import {
   MagnifyingGlass,
   SidebarSimple,
 } from '@obiter/ui/icons/shell'
-import { Fragment, type ReactNode, type Ref } from 'react'
+import { Fragment, Suspense, lazy, type ReactNode, type Ref } from 'react'
 import type { AppPlatform } from '@obiter/contracts'
 import { useCommandPalette } from './command-palette'
 import { currentUserQueryOptions } from './current-user'
 import { formatShortcut, useIsMacPlatform } from './keyboard-platform'
-import { MatterSwitcher } from './matter-switcher'
+const MatterSwitcherLazy = lazy(() =>
+  import('./matter-switcher').then((module) => ({
+    default: module.MatterSwitcher,
+  })),
+)
 import { useMattersList } from './matters'
 import { breadcrumbTrail, matterIdFromPath } from './navigation'
 import { useSourceTitle } from './source-title'
@@ -143,10 +147,18 @@ export function TitleBar({
           <Fragment key={`${crumb.label}-${index}`}>
             {index > 0 ? <CrumbSeparator /> : null}
             {currentMatterId && index === trail.length - 1 && !crumb.to ? (
-              <MatterSwitcher
-                matterId={currentMatterId}
-                matterName={crumb.label}
-              />
+              <Suspense
+                fallback={
+                  <span className="max-w-[24rem] truncate px-1 text-ink">
+                    {crumb.label}
+                  </span>
+                }
+              >
+                <MatterSwitcherLazy
+                  matterId={currentMatterId}
+                  matterName={crumb.label}
+                />
+              </Suspense>
             ) : crumb.to ? (
               <Link
                 to={crumb.to}
