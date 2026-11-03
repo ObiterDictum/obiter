@@ -3106,8 +3106,7 @@
                     also carries the owner as
                     <code>{ id, name, formerMember }</code> beside
                     <code>ownerUserId</code>, so the matter owner reads
-                    &quot;Name (former member)&quot; after a member leaves
-                    (planned, backend stage 3 of the former-member marker).
+                    &quot;Name (former member)&quot; after a member leaves.
                   </td>
                 </tr>
                 <tr>
@@ -3159,14 +3158,12 @@
                     to grantees who may read history (matter-level
                     <code>edit</code>). Each version's author is returned as
                     <code>{ id, name, formerMember }</code> and the UI reads
-                    &quot;Name (former member)&quot; after a member leaves;
-                    <code>formerMember</code> is planned, backend stage 3 of the
-                    former-member marker. Secondary records can still carry a
-                    denied id as provenance — a comment's
-                    <code>anchorVersionId</code>, a redaction run's
-                    <code>documentVersionId</code> — but every content route
-                    enforces the gate, so the id alone grants nothing. A version
-                    Redact produced carries its run's provenance (<code
+                    &quot;Name (former member)&quot; after a member leaves.
+                    Secondary records can still carry a denied id as provenance
+                    — a comment's <code>anchorVersionId</code>, a redaction
+                    run's <code>documentVersionId</code> — but every content
+                    route enforces the gate, so the id alone grants nothing. A
+                    version Redact produced carries its run's provenance (<code
                       >redaction: { runId, producedBy, canOpen }</code
                     >) in this response and in the matter's document list, so
                     the &quot;Redacted&quot; mark follows the copy wherever a
@@ -3525,8 +3522,7 @@
                     on a canonically identical retry and answers a typed 409
                     when the key was used for a different intent. Comment and
                     reply authors carry an optional <code>formerMember</code>
-                    flag that renders &quot;Name (former member)&quot; (planned,
-                    backend stage 3 of the former-member marker).
+                    flag that renders &quot;Name (former member)&quot;.
                   </td>
                 </tr>
                 <tr>
@@ -3707,8 +3703,7 @@
                     <code>applyToSameText</code> repeats the decision on every
                     span reading the same text, audited as one action. A
                     decision's reviewer carries an optional
-                    <code>decidedByFormerMember</code> flag (planned, backend
-                    stage 3 of the former-member marker).
+                    <code>decidedByFormerMember</code> flag.
                   </td>
                 </tr>
                 <tr>
@@ -3852,8 +3847,9 @@
                     and why. Upserts the reason on a repeat dismissal. A finding
                     that matched its checked source is refused, because there is
                     nothing to decide. <code>dismissedByFormerMember</code>
-                    renders &quot;Dismissed by Name (former member)&quot;
-                    (planned, backend stage 3 of the former-member marker).
+                    marks a dismissal by someone who has left; their name stays
+                    within the tenant, so it reads &quot;another reviewer
+                    (former member)&quot;.
                   </td>
                 </tr>
                 <tr>
@@ -7207,13 +7203,13 @@
                     owners/admins, but grants no authority itself. API refusals
                     remain visible. Creator authorization is settled by the
                     server; the transfer and member-owned-matters routes are
-                    live. Former-member attribution is contract and UI work in
-                    obiter: author responses accept an optional
-                    <code>formerMember</code> flag and read &quot;Name (former
-                    member)&quot; once backend stage 3 of the former-member
-                    marker supplies it.
+                    live. Author responses carry an optional
+                    <code>formerMember</code>
+                    flag, true when the person no longer belongs to the
+                    organisation, and the UI reads &quot;Name (former
+                    member)&quot;.
                   </td>
-                  <td class="id">S9; obiter PR #417, former-member marker</td>
+                  <td class="id">S9; PRs #417 and #419</td>
                 </tr>
                 <tr>
                   <td>
