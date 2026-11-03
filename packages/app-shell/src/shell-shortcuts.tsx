@@ -1,5 +1,10 @@
 import { KeyboardHint } from '@obiter/ui'
 import { useEffect, useRef } from 'react'
+import {
+  isPrimaryModifier,
+  shortcutLabels,
+  useIsMacPlatform,
+} from './keyboard-platform'
 import type { ModuleId } from './navigation'
 
 export type ShellCommand =
@@ -59,25 +64,11 @@ export function moduleShortcut(module: ModuleId): ShellCommand {
   }
 }
 
-function isMacPlatform() {
-  if (typeof navigator === 'undefined') return false
-  return /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent)
-}
-
-function primaryLabel() {
-  return isMacPlatform() ? '⌘' : 'Ctrl'
-}
-
-export function shortcutParts(command: ShellCommand): string[] {
-  return COMMAND_KEYS[command].map((part) =>
-    part === 'primary' ? primaryLabel() : part,
-  )
-}
-
 export function ShortcutHint({ command }: { command: ShellCommand }) {
+  const isMac = useIsMacPlatform()
   return (
     <span className="inline-flex items-center gap-0.5">
-      {shortcutParts(command).map((part, index) => (
+      {shortcutLabels(COMMAND_KEYS[command], isMac).map((part, index) => (
         <KeyboardHint key={`${part}-${index}`}>{part}</KeyboardHint>
       ))}
     </span>
@@ -114,7 +105,7 @@ export function matchShellKey(
 ): ShellKeyMatch {
   if (event.defaultPrevented || event.isComposing || event.altKey) return null
   const key = event.key.toLowerCase()
-  if (event.metaKey || event.ctrlKey) {
+  if (isPrimaryModifier(event)) {
     const command = PRIMARY_KEYS.get(key)
     return command ? { kind: 'command', command } : null
   }

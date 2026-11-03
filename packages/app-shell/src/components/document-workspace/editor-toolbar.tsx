@@ -21,6 +21,7 @@ import {
 } from './editor-controls'
 import type { EditorChromeProps } from './editor-commands'
 import { styleDisplayName } from './editor-commands'
+import { formatShortcut, useIsMacPlatform } from '../../keyboard-platform'
 import { workspaceDataEqual } from './workspace-data-equal'
 
 const MIXED_STYLE_VALUE = '__mixed__'
@@ -56,6 +57,7 @@ function EditorToolbarInner({
   const editing = props.canEdit && Boolean(format)
   const styles = format?.paragraphStyles ?? []
   const mixed = Boolean(format?.paragraphStyleMixed)
+  const paletteHint = formatShortcut(['primary', 'K'], useIsMacPlatform())
   return (
     <div
       data-editor-toolbar
@@ -188,7 +190,7 @@ function EditorToolbarInner({
         />
         <EditorIconButton
           label="All commands"
-          hint="Ctrl K"
+          hint={paletteHint}
           onClick={onOpenPalette}
           icon={<Command size={16} aria-hidden />}
         />

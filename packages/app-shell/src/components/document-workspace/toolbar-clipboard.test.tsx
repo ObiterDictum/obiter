@@ -268,7 +268,7 @@ describe('the character-formatting keyboard layer', () => {
     return control(name).getAttribute('aria-pressed')
   }
 
-  it('toggles Bold, Italic and Underline from Ctrl/Cmd chords', () => {
+  it('toggles Bold, Italic and Underline from Ctrl chords', () => {
     mountWorkspace({ models: { doc_1: model() } })
     clickParagraph('p1')
 
@@ -277,7 +277,7 @@ describe('the character-formatting keyboard layer', () => {
     fireEvent.keyDown(bodyField(), { key: 'b', ctrlKey: true })
     expect(pressed('Bold')).toBe('false')
 
-    fireEvent.keyDown(bodyField(), { key: 'i', metaKey: true })
+    fireEvent.keyDown(bodyField(), { key: 'i', ctrlKey: true })
     expect(pressed('Italic')).toBe('true')
 
     fireEvent.keyDown(bodyField(), { key: 'u', ctrlKey: true })

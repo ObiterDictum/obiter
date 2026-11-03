@@ -1,7 +1,28 @@
 import '@obiter/test-dom'
-import { describe, expect, it } from 'bun:test'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import { handleDocumentWorkspaceKeys } from './document-workspace-keys'
+
+const DEFAULT_PLATFORM = navigator.platform
+const DEFAULT_USER_AGENT = navigator.userAgent
+
+const MAC_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+
+function stubPlatform(platform: string, userAgent: string) {
+  Object.defineProperty(window.navigator, 'platform', {
+    value: platform,
+    configurable: true,
+  })
+  Object.defineProperty(window.navigator, 'userAgent', {
+    value: userAgent,
+    configurable: true,
+  })
+}
+
+afterEach(() => {
+  stubPlatform(DEFAULT_PLATFORM, DEFAULT_USER_AGENT)
+})
 
 function event(
   key: string,
@@ -53,6 +74,19 @@ describe('document workspace keys', () => {
     handleDocumentWorkspaceKeys(findEvent, handlers)
     expect(findEvent.preventDefault).toHaveBeenCalled()
     expect(focusFind).toHaveBeenCalledTimes(1)
+  })
+
+  it('takes ⌘ on a Mac and Ctrl elsewhere for save', () => {
+    const save = vi.fn()
+    stubPlatform('MacIntel', MAC_USER_AGENT)
+    handleDocumentWorkspaceKeys(
+      { ...event('s'), ctrlKey: false, metaKey: true },
+      { save },
+    )
+    expect(save).toHaveBeenCalledTimes(1)
+
+    handleDocumentWorkspaceKeys(event('s'), { save })
+    expect(save).toHaveBeenCalledTimes(1)
   })
 
   it('fires a review letter only when focus is not in a text field', () => {
@@ -161,7 +195,7 @@ describe('document workspace keys', () => {
     expect(save).toHaveBeenCalledTimes(1)
   })
 
-  it('routes print from Ctrl/Cmd+P and from inside a document field', () => {
+  it('routes print from Ctrl+P and from inside a document field', () => {
     const print = vi.fn()
     const fromPage = event('p')
     handleDocumentWorkspaceKeys(fromPage, { save: vi.fn(), print })
@@ -175,7 +209,7 @@ describe('document workspace keys', () => {
     expect(print).toHaveBeenCalledTimes(2)
   })
 
-  it('leaves Ctrl/Cmd+Shift+P and Alt+P to the platform', () => {
+  it('leaves Ctrl+Shift+P and Alt+P to the platform', () => {
     const print = vi.fn()
     const shiftP = event('p', { shiftKey: true })
     handleDocumentWorkspaceKeys(shiftP, { save: vi.fn(), print })
@@ -200,7 +234,7 @@ describe('document workspace keys', () => {
     expect(undoEvent.preventDefault).toHaveBeenCalled()
   })
 
-  it('routes Ctrl/Cmd+B, I and U to the format toggles', () => {
+  it('routes Ctrl+B, I and U to the format toggles', () => {
     const toggleBold = vi.fn()
     const toggleItalic = vi.fn()
     const toggleUnderline = vi.fn()

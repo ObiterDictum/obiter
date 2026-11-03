@@ -1,6 +1,26 @@
 import '@obiter/test-dom'
 import { afterEach, describe, expect, it } from 'bun:test'
-import { isTypingTarget, matchShellKey, shortcutParts } from './shell-shortcuts'
+import { cleanup, render, screen } from '@testing-library/react'
+import { isTypingTarget, matchShellKey, ShortcutHint } from './shell-shortcuts'
+
+const DEFAULT_PLATFORM = navigator.platform
+const DEFAULT_USER_AGENT = navigator.userAgent
+
+const MAC_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+const WINDOWS_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+
+function stubPlatform(platform: string, userAgent: string) {
+  Object.defineProperty(window.navigator, 'platform', {
+    value: platform,
+    configurable: true,
+  })
+  Object.defineProperty(window.navigator, 'userAgent', {
+    value: userAgent,
+    configurable: true,
+  })
+}
 
 function key(
   overrides: Partial<{
@@ -24,12 +44,15 @@ function key(
 }
 
 afterEach(() => {
+  cleanup()
   document.body.innerHTML = ''
+  stubPlatform(DEFAULT_PLATFORM, DEFAULT_USER_AGENT)
 })
 
 describe('shell shortcuts', () => {
   it('maps the primary-modifier keys to the shell commands', () => {
-    expect(matchShellKey(key({ key: '\\', metaKey: true }), false)).toEqual({
+    stubPlatform('Win32', WINDOWS_USER_AGENT)
+    expect(matchShellKey(key({ key: '\\', ctrlKey: true }), false)).toEqual({
       kind: 'command',
       command: 'toggle-nav',
     })
@@ -37,10 +60,19 @@ describe('shell shortcuts', () => {
       kind: 'command',
       command: 'toggle-right-slot',
     })
-    expect(matchShellKey(key({ key: '.', metaKey: true }), false)).toEqual({
+    expect(matchShellKey(key({ key: '.', ctrlKey: true }), false)).toEqual({
       kind: 'command',
       command: 'focus-mode',
     })
+  })
+
+  it('takes ⌘ on a Mac and rejects Ctrl there', () => {
+    stubPlatform('MacIntel', MAC_USER_AGENT)
+    expect(matchShellKey(key({ key: 'j', metaKey: true }), false)).toEqual({
+      kind: 'command',
+      command: 'toggle-right-slot',
+    })
+    expect(matchShellKey(key({ key: 'j', ctrlKey: true }), false)).toBeNull()
   })
 
   it('waits for the second key of the go sequence', () => {
@@ -78,18 +110,23 @@ describe('shell shortcuts', () => {
     const input = document.createElement('input')
     document.body.append(input)
     expect(
-      matchShellKey(key({ key: 'j', metaKey: true, target: input }), false),
+      matchShellKey(key({ key: 'j', ctrlKey: true, target: input }), false),
     ).toEqual({
       kind: 'command',
       command: 'toggle-right-slot',
     })
   })
 
-  it('shows the same keys it matches', () => {
-    expect(shortcutParts('toggle-right-slot')).toEqual([
-      expect.stringMatching(/^(⌘|Ctrl)$/),
-      'j',
-    ])
-    expect(shortcutParts('go-verify')).toEqual(['g', 'v'])
+  it('shows the keys it matches on Windows and on a Mac', () => {
+    stubPlatform('Win32', WINDOWS_USER_AGENT)
+    render(<ShortcutHint command="toggle-right-slot" />)
+    expect(screen.getAllByText('Ctrl')).toHaveLength(1)
+    expect(screen.getAllByText('j')).toHaveLength(1)
+
+    cleanup()
+    stubPlatform('MacIntel', MAC_USER_AGENT)
+    render(<ShortcutHint command="toggle-right-slot" />)
+    expect(screen.getAllByText('⌘')).toHaveLength(1)
+    expect(screen.getAllByText('j')).toHaveLength(1)
   })
 })

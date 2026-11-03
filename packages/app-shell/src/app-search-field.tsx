@@ -15,6 +15,11 @@ import {
   X,
 } from '@obiter/ui/icons/shell'
 import { useMattersList } from './matters'
+import {
+  formatShortcut,
+  isPrimaryModifier,
+  useIsMacPlatform,
+} from './keyboard-platform'
 import { useRedactionRunsList } from './redaction-runs'
 
 type AppSearchHit =
@@ -71,6 +76,7 @@ export function AppSearchField({ className }: { className?: string }) {
   const [openedExpanded, setOpenedExpanded] = useState(false)
   const mattersQuery = useMattersList()
   const runsQuery = useRedactionRunsList()
+  const isMac = useIsMacPlatform()
 
   const expanded = focused && (openedExpanded || overflows)
 
@@ -88,7 +94,7 @@ export function AppSearchField({ className }: { className?: string }) {
 
   useEffect(() => {
     function onKey(event: globalThis.KeyboardEvent) {
-      if (!(event.metaKey || event.ctrlKey) || event.key !== 'k') return
+      if (!isPrimaryModifier(event) || event.key !== 'k') return
       event.preventDefault()
       if (expanded) {
         floatInputRef.current?.focus()
@@ -255,7 +261,7 @@ export function AppSearchField({ className }: { className?: string }) {
           </button>
         ) : (
           <KeyboardHint className="max-compact:hidden">
-            {modKeyLabel()}K
+            {formatShortcut(['primary', 'K'], isMac)}
           </KeyboardHint>
         )}
       </form>
@@ -357,14 +363,6 @@ function HitIcon({ kind }: { kind: AppSearchHit['kind'] }) {
   return (
     <MagnifyingGlass size={16} className="shrink-0 text-subtle" aria-hidden />
   )
-}
-
-function modKeyLabel() {
-  if (typeof navigator === 'undefined') return 'Ctrl+'
-  const platform = navigator.platform ?? ''
-  const ua = navigator.userAgent ?? ''
-  const isApple = /Mac|iPhone|iPad|iPod/i.test(platform) || /Mac OS/i.test(ua)
-  return isApple ? '⌘' : 'Ctrl+'
 }
 
 function buildHits(

@@ -10,6 +10,11 @@ import {
 } from '@obiter/ui'
 import type { EditorCommand, EditorMenu } from './editor-commands'
 import { editorCommandList } from './editor-commands'
+import {
+  formatShortcut,
+  shortcutLabels,
+  useIsMacPlatform,
+} from '../../keyboard-platform'
 
 type Hit = { menu: EditorMenu; group: string; command: EditorCommand }
 
@@ -134,7 +139,7 @@ function EditorCommandPaletteInner({
                     </span>
                     {hit.command.shortcut ? (
                       <span className="shrink-0 font-mono text-caption text-subtle">
-                        {hit.command.shortcut}
+                        {formatShortcut(hit.command.shortcut)}
                       </span>
                     ) : null}
                   </button>
@@ -148,13 +153,13 @@ function EditorCommandPaletteInner({
   )
 }
 
-const SHORTCUTS: ReadonlyArray<{ keys: string[]; action: string }> = [
-  { keys: ['Ctrl', 'S'], action: 'Save' },
-  { keys: ['Ctrl', 'Z'], action: 'Undo' },
-  { keys: ['Ctrl', 'Shift', 'Z'], action: 'Redo' },
-  { keys: ['Ctrl', 'K'], action: 'All commands' },
-  { keys: ['Ctrl', 'F'], action: 'Find and replace' },
-  { keys: ['Ctrl', 'P'], action: 'Print' },
+const SHORTCUTS: ReadonlyArray<{ keys: readonly string[]; action: string }> = [
+  { keys: ['primary', 'S'], action: 'Save' },
+  { keys: ['primary', 'Z'], action: 'Undo' },
+  { keys: ['primary', 'shift', 'Z'], action: 'Redo' },
+  { keys: ['primary', 'K'], action: 'All commands' },
+  { keys: ['primary', 'F'], action: 'Find and replace' },
+  { keys: ['primary', 'P'], action: 'Print' },
   { keys: ['A'], action: 'Accept the current change' },
   { keys: ['R'], action: 'Reject the current change' },
   { keys: ['J', '↓'], action: 'Next change' },
@@ -162,6 +167,7 @@ const SHORTCUTS: ReadonlyArray<{ keys: string[]; action: string }> = [
 ]
 
 function ShortcutHelp() {
+  const isMac = useIsMacPlatform()
   return (
     <dl
       className="flex flex-col gap-1 border-b border-line px-4 py-3"
@@ -173,8 +179,8 @@ function ShortcutHelp() {
           className="flex items-center justify-between gap-3"
         >
           <dt className="flex items-center gap-1">
-            {shortcut.keys.map((key) => (
-              <KeyboardHint key={key}>{key}</KeyboardHint>
+            {shortcutLabels(shortcut.keys, isMac).map((label, index) => (
+              <KeyboardHint key={`${label}-${index}`}>{label}</KeyboardHint>
             ))}
           </dt>
           <dd className="text-caption text-muted">{shortcut.action}</dd>

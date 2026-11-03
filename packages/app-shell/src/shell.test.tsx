@@ -262,10 +262,10 @@ describe('shell frame', () => {
     ).toBeNull()
   })
 
-  it('toggles the right slot with ⌘J and only lists tabs with content', async () => {
+  it('toggles the right slot with Ctrl+J and only lists tabs with content', async () => {
     renderShell('/matters/mtr_1')
     await screen.findByRole('button', { name: 'Hide contents' })
-    fireEvent.keyDown(window, { key: 'j', metaKey: true })
+    fireEvent.keyDown(window, { key: 'j', ctrlKey: true })
     const slot = await screen.findByRole('complementary', {
       name: 'Agent panel',
     })
@@ -295,7 +295,7 @@ describe('shell frame', () => {
   it('fades the panes into focus mode and returns focus on Escape', async () => {
     renderShell('/matters/mtr_1')
     const toggle = await screen.findByRole('button', { name: 'Hide contents' })
-    fireEvent.keyDown(window, { key: '.', metaKey: true })
+    fireEvent.keyDown(window, { key: '.', ctrlKey: true })
 
     expect(
       screen.getByRole('button', { name: 'Leave focus mode' }),
