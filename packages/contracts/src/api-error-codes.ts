@@ -44,6 +44,8 @@ export const API_ERROR_CODES = [
   'hydration_budget_exceeded',
   'share_safe_export_refused',
   'redaction_return_unavailable',
+  'agent_run_not_found',
+  'agent_unavailable',
 ] as const
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number]

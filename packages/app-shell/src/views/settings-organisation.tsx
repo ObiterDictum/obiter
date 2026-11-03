@@ -15,6 +15,7 @@ import {
   SavedNotice,
   roleLabel,
 } from './settings-fields'
+import { OrganisationAgentSettingsSection } from './settings-agent'
 import { OrganisationPeople } from './settings-members'
 import { useCanonicalNameField } from './use-canonical-name-field'
 
@@ -71,6 +72,11 @@ export function OrganisationSection({
               value={me.user.role ? roleLabel(me.user.role) : 'Member'}
             />
           </dl>
+
+          <OrganisationAgentSettingsSection
+            organisationId={organisation.id}
+            role={me.user.role}
+          />
 
           {me.user.role === 'owner' || me.user.role === 'admin' ? (
             <OrganisationPeople

@@ -80,55 +80,59 @@ async function serverCookieHeader(): Promise<Record<string, string>> {
   return {}
 }
 
-export async function apiFetch<T>(
+async function authorisedFetch(
   input: string,
-  init?: RequestInit,
-): Promise<T> {
+  init: RequestInit | undefined,
+  headers: Record<string, string>,
+): Promise<Response> {
   const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
   const serverCookie = await serverCookieHeader()
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
     ...init,
     headers: {
-      Accept: 'application/json',
+      ...headers,
       ...serverCookie,
       ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
-      ...(init?.body && !(init.body instanceof FormData)
-        ? { 'Content-Type': 'application/json' }
-        : {}),
       ...init?.headers,
     },
   })
+  if (!response.ok) await throwApiError(response)
+  return response
+}
 
-  if (response.ok && (response.status === 204 || response.status === 205)) {
+export async function apiFetch<T>(
+  input: string,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await authorisedFetch(input, init, {
+    Accept: 'application/json',
+    ...(init?.body && !(init.body instanceof FormData)
+      ? { 'Content-Type': 'application/json' }
+      : {}),
+  })
+
+  if (response.status === 204 || response.status === 205) {
     // SAFETY: 204/205 carry no body by HTTP semantics, so undefined is the only honest value; callers instantiate T as the empty-response type for such endpoints.
     return undefined as T
   }
 
-  if (!response.ok) await throwApiError(response)
-
   // SAFETY: non-ok responses throw above; each call site instantiates T with that endpoint's contract response type.
   return (await response.json()) as T
+}
+
+export function apiFetchEventStream(
+  input: string,
+  init?: RequestInit,
+): Promise<Response> {
+  return authorisedFetch(input, init, { Accept: 'text/event-stream' })
 }
 
 export async function apiFetchBlobResult(
   input: string,
   init?: RequestInit,
 ): Promise<{ blob: Blob; headers: Headers }> {
-  const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
-  const serverCookie = await serverCookieHeader()
-  const response = await fetch(apiUrl(input), {
-    credentials: 'include',
-    ...init,
-    headers: {
-      ...serverCookie,
-      ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
-      ...init?.headers,
-    },
-  })
-
-  if (!response.ok) await throwApiError(response)
-
+  const response = await authorisedFetch(input, init, {})
   return { blob: await response.blob(), headers: response.headers }
 }
 
