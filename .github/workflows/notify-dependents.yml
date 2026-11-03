@@ -1,0 +1,33 @@
+name: Notify dependents
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    name: Tell dependent repositories that dev moved
+    if: github.repository == 'ObiterDictum/obiter'
+    runs-on: ubuntu-latest
+    env:
+      CONFIGURED: ${{ secrets.PIN_BOT_APP_ID != '' && secrets.DEPENDENT_REPOSITORY != '' }}
+    steps:
+      - name: Get a token for the dependent repository
+        id: token
+        if: env.CONFIGURED == 'true'
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.PIN_BOT_APP_ID }}
+          private-key: ${{ secrets.PIN_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ secrets.DEPENDENT_REPOSITORY }}
+
+      - name: Send the dispatch
+        if: env.CONFIGURED == 'true'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          DEPENDENT: ${{ secrets.DEPENDENT_REPOSITORY }}
+        run: gh api "repos/${GITHUB_REPOSITORY_OWNER}/${DEPENDENT}/dispatches" -f event_type=obiter-dev-moved -F "client_payload[sha]=${GITHUB_SHA}"
