@@ -19,7 +19,7 @@ export type ShellCommand =
 
 const COMMAND_KEYS = {
   'toggle-nav': ['primary', '\\'],
-  'toggle-right-slot': ['primary', 'j'],
+  'toggle-right-slot': ['primary', 'J'],
   'focus-mode': ['primary', '.'],
   'go-home': ['g', 'h'],
   'go-matters': ['g', 'm'],
