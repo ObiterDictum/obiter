@@ -71,20 +71,22 @@ export function MatterTabStrip({
       {compact ? (
         <CompactTabs tabs={named} activeId={activeId} />
       ) : (
-        <div
-          role="group"
-          aria-label="Open in this matter"
-          className="flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto [scrollbar-width:none]"
-        >
-          {named.map((tab) => (
-            <MatterTabButton
-              key={tab.id}
-              tab={tab}
-              platform={platform}
-              active={tab.id === activeId}
-              onTabDrag={onTabDrag}
-            />
-          ))}
+        <div className="flex min-w-0 flex-1 items-stretch gap-0.5">
+          <div
+            role="group"
+            aria-label="Open in this matter"
+            className="flex min-w-0 items-stretch gap-0.5 overflow-x-auto [scrollbar-width:none]"
+          >
+            {named.map((tab) => (
+              <MatterTabButton
+                key={tab.id}
+                tab={tab}
+                platform={platform}
+                active={tab.id === activeId}
+                onTabDrag={onTabDrag}
+              />
+            ))}
+          </div>
           <MatterNewItemMenu />
         </div>
       )}
