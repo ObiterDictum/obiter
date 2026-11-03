@@ -174,7 +174,7 @@ export function LegislationActView({ identity }: { identity: string }) {
         </>
       }
     >
-      <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
         <Card>
           <CardHead title="Contents">
             <span className="text-meta text-subtle">

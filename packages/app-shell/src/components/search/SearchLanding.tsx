@@ -20,7 +20,7 @@ export function SearchLanding({
   onClearRecents: () => void
 }) {
   return (
-    <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex min-w-0 flex-col gap-6">
         <section aria-labelledby="search-recent">
           <div className="mb-4 flex items-baseline justify-between gap-4">

@@ -72,7 +72,7 @@ export function DecisionBar({
   if (!span) {
     return (
       <section
-        className="border-t border-line bg-surface px-12 py-4 max-compact:px-8"
+        className="border-t border-line bg-surface px-12 py-4 @max-pane:px-8"
         aria-label="Decide the selected span"
       >
         <p className="text-meta text-muted">
@@ -94,7 +94,7 @@ export function DecisionBar({
 
   return (
     <section
-      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line bg-surface px-12 py-3 max-compact:px-8"
+      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line bg-surface px-12 py-3 @max-pane:px-8"
       aria-label="Decide the selected span"
     >
       <div className="flex min-w-0 flex-1 basis-[20rem] items-start gap-3">

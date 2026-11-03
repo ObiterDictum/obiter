@@ -9,6 +9,8 @@ import {
 } from '@tanstack/react-router'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import type { MeResponse } from '@obiter/contracts'
+import { SettingsContents } from '../contents-sections'
+import { ShellContentsProvider } from '../shell-contents'
 import { SettingsRouteView } from './settings'
 
 export const ORGLESS_ME: MeResponse = {
@@ -58,7 +60,14 @@ export function renderSettings() {
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <SettingsRouteView />,
+    component: () => (
+      <ShellContentsProvider>
+        <div className="flex">
+          <SettingsContents />
+          <SettingsRouteView />
+        </div>
+      </ShellContentsProvider>
+    ),
   })
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute]),

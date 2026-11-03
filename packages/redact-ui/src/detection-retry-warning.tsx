@@ -19,7 +19,7 @@ export function DetectionRetryWarning({
   const replacementRunId = run.replacementRunId
 
   return (
-    <div className="flex flex-col gap-2 border-b border-line px-12 py-3 max-compact:px-8">
+    <div className="flex flex-col gap-2 border-b border-line px-12 py-3 @max-pane:px-8">
       <DetectionModeWarning
         detectionMode={limitedDetectionMode}
         action={

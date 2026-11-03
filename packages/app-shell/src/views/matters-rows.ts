@@ -129,10 +129,13 @@ export function lastActivityOf(
   return newest
 }
 
+export type MatterStatusFilter = 'active' | 'archived' | 'all'
+
 export interface MatterFilter {
   search: string
   domain: string | null
   needsAttention: boolean
+  status: MatterStatusFilter
 }
 
 export function filterMatterRows(
@@ -142,6 +145,7 @@ export function filterMatterRows(
   const search = filter.search.trim().toLowerCase()
   return rows.filter((row) => {
     const matter = row.matter
+    if (filter.status !== 'all' && matter.status !== filter.status) return false
     if (filter.domain && !matter.legalDomains.includes(filter.domain)) {
       return false
     }

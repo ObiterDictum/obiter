@@ -31,10 +31,10 @@ export function HomeEmpty({
   }
 
   return (
-    <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
       {showSetupSteps ? (
         <section aria-labelledby="setup">
-          <div className="mb-4 flex items-baseline justify-between gap-4">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
             <h2 id="setup" className="text-section text-ink">
               Set up your workspace
             </h2>
@@ -90,7 +90,7 @@ export function HomeEmpty({
 
       <aside
         aria-label="Getting started"
-        className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] max-compact:grid-cols-1 wide:grid-cols-1"
+        className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] @max-pane:grid-cols-1 @pane-wide:grid-cols-1"
       >
         <section aria-labelledby="try-search" className="rounded-lg bg-surface">
           <div className="flex items-center justify-between gap-4 px-6 pt-6 pb-4">

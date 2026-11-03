@@ -23,7 +23,7 @@ export function FirstRunChecklist({
 
   return (
     <section aria-labelledby="first-run">
-      <div className="mb-4 flex items-baseline justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
         <h2 id="first-run" className="text-section text-ink">
           Getting started
         </h2>
@@ -43,7 +43,7 @@ export function FirstRunChecklist({
                 aria-hidden="true"
                 className="size-5 shrink-0 rounded-pill border border-line-strong"
               />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 grow basis-[min(100%,20rem)]">
                 <h3 className="text-item text-ink">{step.title}</h3>
                 <p className="mt-1 max-w-[60ch] text-meta text-muted">
                   {step.description}

@@ -39,7 +39,7 @@ export function MattersTable({
   openWorkUnavailable: boolean
 }) {
   return (
-    <Table>
+    <Table className="min-w-[38rem]">
       <THead>
         <TR className="hover:bg-transparent">
           <TH className="w-[45%] pl-4">Matter</TH>

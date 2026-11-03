@@ -19,6 +19,7 @@ import { formatDateTime } from '../format'
 import { useMattersList } from '../matters'
 import { useRedactionRunsList } from '../redaction-runs'
 import { PageScaffold } from '../page-scaffold'
+import { useShellContents } from '../shell-contents'
 import { useOrganisationVerificationRuns } from '../verification-runs'
 import { buildAttentionItems } from './home-attention'
 import { CreateMatterDialog } from './create-matter-dialog'
@@ -44,6 +45,7 @@ export function MattersRouteView({
   const [domain, setDomain] = useState<string | null>(null)
   const [needsAttention, setNeedsAttention] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const { mattersStatus } = useShellContents()
 
   const list = matters.data ?? []
   const documentQueries = useQueries({
@@ -83,7 +85,12 @@ export function MattersRouteView({
     documentsByMatter,
     openWork: attentionReady ? openWork : null,
   })
-  const filter: MatterFilter = { search, domain, needsAttention }
+  const filter: MatterFilter = {
+    search,
+    domain,
+    needsAttention,
+    status: mattersStatus,
+  }
   const visible = filterMatterRows(rows, filter)
   const selected =
     visible.find((row) => row.matter.id === selectedId) ?? visible[0] ?? null
@@ -204,8 +211,8 @@ export function MattersRouteView({
             ) : null}
           </div>
 
-          <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
-            <Card className="overflow-hidden">
+          <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
+            <Card className="min-w-0 overflow-hidden">
               {visible.length === 0 ? (
                 <div className="px-6 py-8">
                   <p className="text-body text-muted">
@@ -225,12 +232,14 @@ export function MattersRouteView({
                   </Button>
                 </div>
               ) : (
-                <MattersTable
-                  rows={visible}
-                  selectedId={selected?.matter.id ?? null}
-                  onSelect={select}
-                  openWorkUnavailable={attentionFailed}
-                />
+                <div className="overflow-x-auto">
+                  <MattersTable
+                    rows={visible}
+                    selectedId={selected?.matter.id ?? null}
+                    onSelect={select}
+                    openWorkUnavailable={attentionFailed}
+                  />
+                </div>
               )}
               <CardFoot>
                 <span>

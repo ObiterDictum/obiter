@@ -31,7 +31,7 @@ export function AttentionSection({
 
   return (
     <section aria-labelledby="attention">
-      <div className="mb-4 flex items-baseline justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
         <h2 id="attention" className="text-section text-ink">
           Needs your attention
         </h2>

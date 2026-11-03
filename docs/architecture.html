@@ -2205,7 +2205,13 @@
             redirects unauthenticated callers to <code>/sign-in</code>; auth
             routes render bare, with no workspace chrome. Light is the default
             product theme and dark is a saved choice, applied from each document
-            root before first paint; auth routes follow the theme.
+            root before first paint; auth routes follow the theme. The sidebar
+            or rail spans the window's full height and the title bar is the top
+            row of the right-hand column, so the title bar starts at the pane
+            edge without an offset. The main content pane is a CSS container and
+            pages lay themselves out with container queries, so a page responds
+            to the space the sidebar, contents panel and right slot actually
+            leave it rather than to the window width.
           </p>
           <div class="scroll">
             <table>
@@ -2219,35 +2225,90 @@
               <tbody>
                 <tr>
                   <td class="id">Sidebar</td>
-                  <td>Global</td>
+                  <td>Home</td>
                   <td>
-                    One labelled column: the Obiter monogram with the
-                    organisation name; Home, Search, Matters, Verify and Redact;
-                    Research as a disabled “Soon” entry; then recent matters.
-                    Counts come from queries the frame already runs — active
-                    matters, findings waiting on a person across completed
-                    Verify runs, redaction runs awaiting a decision. Collapses
-                    to a 64px icon rail (persisted in local storage, always
-                    compact at 1024 and under).
+                    On Home only, one labelled column drawn straight on the
+                    canvas: the Obiter monogram with the organisation name level
+                    with the title bar, Home, Matters, Search, Verify and Redact
+                    with their counts and alert dots, an Agent row that toggles
+                    the right slot, recent matters, and settings, theme and
+                    account at the foot. Counts come from queries the frame
+                    already runs — active matters, findings waiting on a person
+                    across completed Verify runs, redaction runs awaiting a
+                    decision. It spans the window's full height and collapses to
+                    an icon rail (persisted in local storage), and every other
+                    section always shows that rail instead.
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">Top bar</td>
+                  <td class="id">Title bar</td>
                   <td>Global</td>
                   <td>
-                    Breadcrumb (organisation, module, current page), app-wide
-                    search, theme toggle and account menu, on the same content
-                    column as the page. The account menu is a disclosure with
-                    the full keyboard contract: arrows, Home/End, Escape
-                    returning focus to the avatar.
+                    One 40px row, the top row of the right-hand column: the
+                    sidebar toggle, back and forward, the breadcrumb
+                    (organisation, module, current page) and the app search
+                    field at the far right. Because the sidebar runs the full
+                    height, these controls start exactly at the pane's left edge
+                    and follow it when the sidebar collapses or expands, without
+                    hard-coded offsets. The toggle collapses the full sidebar on
+                    Home and hides or shows the contents panel elsewhere
+                    (persisted per person); the right slot has no title-bar
+                    toggle. The account menu is a disclosure with the full
+                    keyboard contract: arrows, Home/End, Escape returning focus
+                    to the avatar. On desktop the row is the window drag region
+                    with the controls no-drag, and on darwin the sidebar's
+                    top-left is padded so the monogram clears the traffic
+                    lights.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">Contents panel</td>
+                  <td>Sections</td>
+                  <td>
+                    Every section except Home splits its work area into one
+                    rounded pane: a 250px contents column and the page, divided
+                    by a hairline. Matters shows Active/Archived/All filters and
+                    recent matters; a matter shows documents, then its Verify
+                    and Redact runs; Verify and Redact group runs by status,
+                    attention first; Search lists stored recent searches;
+                    Settings carries the section nav. At 1023px and under it
+                    opens as an overlay from the same title-bar toggle.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">Right slot</td>
+                  <td>Global</td>
+                  <td>
+                    A docked 330px pane with tabs (Agent, Comments, Checks,
+                    History) and one open tab at a time, remembered per person.
+                    A tab appears only where the shell registry gives it
+                    content; today only Agent has any. ⌘J / Ctrl+J toggles it,
+                    as does the Agent row in the sidebar or rail, and at 767px
+                    and under it opens as a bottom sheet above the bottom bar.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">App search field</td>
-                  <td>Content column</td>
+                  <td>Title bar</td>
                   <td>
-                    Shell-level search, distinct from the case-law search view;
-                    icon-only at 1024 and under.
+                    Shell-level search at the right of the title bar, distinct
+                    from the case-law search view; icon-only at 1024 and under,
+                    opened with ⌘K / Ctrl+K.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">Shell shortcuts</td>
+                  <td>Global</td>
+                  <td>
+                    One module (<code>shell-shortcuts.tsx</code>): ⌘\ / Ctrl+\
+                    sidebar toggle, ⌘J / Ctrl+J right slot, ⌘. / Ctrl+. focus
+                    mode, and a <code>g</code> then <code>h</code>,
+                    <code>m</code>, <code>v</code>, <code>r</code> or
+                    <code>s</code> sequence for Home, Matters, Verify, Redact
+                    and Search. Bare letters are ignored while typing and any
+                    key the editor or a dialog has already claimed is left
+                    alone. Focus mode hides the rail, contents panel and slot,
+                    and Escape leaves it.
                   </td>
                 </tr>
                 <tr>
@@ -2266,17 +2327,18 @@
                     <code>/matters/:matterId</code>
                   </td>
                   <td>
-                    The list is a table of every matter (documents, open work,
-                    last activity) with search and legal-domain filters over the
-                    fields the API returns, and the selected matter beside it.
-                    Below 1181px the preview is a modal drawer instead of a
-                    column. “Open work” is the same attention items Home ranks,
-                    grouped by matter (<code>views/matters-rows.ts</code>), so
-                    the queue, the list and the sidebar count cannot disagree.
-                    The matter page shows the document table with each
-                    document’s Verify state, the details rail, upload and new
-                    document, and a share dialog listing named people with
-                    access from
+                    The list is a table of matters (documents, open work, last
+                    activity) filtered by status from the contents panel
+                    (Active, Archived, All) and by search and legal domain over
+                    the fields the API returns, and the selected matter beside
+                    it. The matter preview keeps its own column while the pane
+                    is at least 1088px wide. “Open work” is the same attention
+                    items Home ranks, grouped by matter
+                    (<code>views/matters-rows.ts</code>), so the queue, the list
+                    and the sidebar count cannot disagree. The matter page shows
+                    the document table with each document’s Verify state, the
+                    details rail, upload and new document, and a share dialog
+                    listing named people with access from
                     <code>GET /api/matters/:matterId/shares</code> (owner only,
                     as the API requires). There is no matter-level activity,
                     artefact, archive or export endpoint, so none of those is
@@ -2292,10 +2354,14 @@
                     findings, Redact runs awaiting a decision and failed runs
                     (<code>views/home-attention.ts</code>, one pure ranker).
                     Recent documents and your matters come from the existing
-                    matters and per-matter documents queries; the empty
-                    workspace offers create matter, choose a matter and search.
-                    No assignment, activity or totals are stored, so none are
-                    shown.
+                    matters and per-matter documents queries; a first-run
+                    checklist (<code>views/first-run-checklist.tsx</code>)
+                    tracks inviting a colleague, creating a matter, uploading a
+                    document and running Verify, is dismissed per person, and
+                    hands over to the teaching empty workspace once it is
+                    complete or hidden. The empty workspace offers create
+                    matter, choose a matter and search. No assignment, activity
+                    or totals are stored, so none are shown.
                   </td>
                 </tr>
               </tbody>
@@ -2648,8 +2714,10 @@
                 </dd>
                 <dt>Shell</dt>
                 <dd>
-                  frame · sidebar · top-bar · shell-states · content-frame ·
-                  page-scaffold · app-search-field · navigation
+                  frame · title-bar · sidebar · sidebar-rail · sidebar-rows ·
+                  contents-panel · right-slot · shell-shortcuts ·
+                  shell-preferences · shell-states · page-scaffold ·
+                  app-search-field · navigation
                 </dd>
                 <dt>Contract</dt>
                 <dd>

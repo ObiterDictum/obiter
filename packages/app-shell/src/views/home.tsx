@@ -281,7 +281,7 @@ function HomeDashboard({ me }: { me: MeResponse }) {
       {empty ? (
         <HomeEmpty showSetupSteps={!showChecklist} />
       ) : (
-        <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
           <AttentionSection
             items={ranked.slice(0, ATTENTION_LIMIT)}
             total={summary.queue}
@@ -290,7 +290,7 @@ function HomeDashboard({ me }: { me: MeResponse }) {
           />
           <aside
             aria-label="Recent work"
-            className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] max-compact:grid-cols-1 wide:grid-cols-1"
+            className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] @max-pane:grid-cols-1 @pane-wide:grid-cols-1"
           >
             <RecentDocumentsCard
               documents={recentDocuments.slice(0, RAIL_LIMIT)}

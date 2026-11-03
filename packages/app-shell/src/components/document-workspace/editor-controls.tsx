@@ -11,6 +11,7 @@ import {
   cn,
 } from '@obiter/ui'
 import { Check } from '@obiter/ui/icons'
+import { formatShortcut } from '../../keyboard-platform'
 function controlReason(
   soon: boolean | string | undefined,
   disabled: boolean | undefined,
@@ -162,7 +163,7 @@ export function EditorMenuItem({
   closeOnClick = true,
 }: EditorControl & {
   icon?: ReactNode
-  shortcut?: string
+  shortcut?: readonly string[]
   checked?: boolean
   kind?: EditorMenuItemKind
   onSelect?: () => void
@@ -204,7 +205,7 @@ export function EditorMenuItem({
           aria-hidden
           className="shrink-0 font-mono text-caption text-subtle"
         >
-          {shortcut}
+          {formatShortcut(shortcut)}
         </span>
       ) : null}
     </>

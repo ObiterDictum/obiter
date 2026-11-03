@@ -157,9 +157,9 @@ export function MatterRouteView({
       }
     >
       <MatterDropZone matterId={m.id}>
-        <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
-          <section aria-labelledby="matter-documents">
-            <div className="mb-4 flex items-baseline justify-between gap-4">
+        <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
+          <section aria-labelledby="matter-documents" className="min-w-0">
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
               <h2 id="matter-documents" className="text-section text-ink">
                 Documents
               </h2>

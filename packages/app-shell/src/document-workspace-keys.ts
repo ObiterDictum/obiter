@@ -1,3 +1,5 @@
+import { isPrimaryModifier } from './keyboard-platform'
+
 export type WorkspaceKeyEvent = {
   key: string
   metaKey: boolean
@@ -66,7 +68,7 @@ export function handleDocumentWorkspaceKeys(
     if (key === 'j' || key === 'arrowdown') return act(handlers.review.onNext)
     if (key === 'k' || key === 'arrowup') return act(handlers.review.onPrevious)
   }
-  if (!(event.metaKey || event.ctrlKey)) return
+  if (!isPrimaryModifier(event)) return
   if (event.altKey) return
   const claim = event.preventDefault.bind(event)
   const run = (handler: (() => void) | undefined) => {

@@ -18,7 +18,7 @@ export type EditorCommand = {
   id: string
   label: string
   icon?: ReactNode
-  shortcut?: string
+  shortcut?: readonly string[]
   hint?: string
   pressed?: boolean
   checked?: boolean
@@ -127,7 +127,7 @@ export function editorMenus(
             {
               id: 'save',
               label: 'Save',
-              shortcut: 'Ctrl S',
+              shortcut: ['primary', 'S'],
               disabled: !props.canSave,
               disabledReason: props.saveReason,
               run: props.onSave,
@@ -155,7 +155,7 @@ export function editorMenus(
             {
               id: 'print',
               label: 'Print',
-              shortcut: 'Ctrl P',
+              shortcut: ['primary', 'P'],
               run: props.onPrint,
             },
           ],
@@ -195,14 +195,14 @@ export function editorMenus(
             {
               id: 'undo',
               label: 'Undo',
-              shortcut: 'Ctrl Z',
+              shortcut: ['primary', 'Z'],
               disabled: !props.canEdit || !props.canUndo,
               run: props.onUndo,
             },
             {
               id: 'redo',
               label: 'Redo',
-              shortcut: 'Ctrl Shift Z',
+              shortcut: ['primary', 'shift', 'Z'],
               disabled: !props.canEdit || !props.canRedo,
               run: props.onRedo,
             },
@@ -214,7 +214,7 @@ export function editorMenus(
             {
               id: 'cut',
               label: 'Cut',
-              shortcut: 'Ctrl X',
+              shortcut: ['primary', 'X'],
               disabled: !clipboard?.canCut,
               disabledReason: clipboard?.cutReason,
               run: clipboard?.onCut,
@@ -222,7 +222,7 @@ export function editorMenus(
             {
               id: 'copy',
               label: 'Copy',
-              shortcut: 'Ctrl C',
+              shortcut: ['primary', 'C'],
               disabled: !clipboard?.canCopy,
               disabledReason: clipboard?.copyReason,
               run: clipboard?.onCopy,
@@ -230,7 +230,7 @@ export function editorMenus(
             {
               id: 'paste',
               label: 'Paste',
-              shortcut: 'Ctrl V',
+              shortcut: ['primary', 'V'],
               disabled: !clipboard?.canPaste,
               disabledReason: clipboard?.pasteReason,
               run: clipboard?.onPaste,
@@ -262,7 +262,7 @@ export function editorMenus(
             {
               id: 'find',
               label: 'Find and replace',
-              shortcut: 'Ctrl F',
+              shortcut: ['primary', 'F'],
               hint: find ? undefined : EDITING_HINT,
               disabled: !find,
               opensSurface: true,
@@ -271,7 +271,7 @@ export function editorMenus(
             {
               id: 'commands',
               label: 'All commands',
-              shortcut: 'Ctrl K',
+              shortcut: ['primary', 'K'],
               opensSurface: true,
               run: actions.openPalette,
             },
@@ -503,7 +503,7 @@ export function editorMenus(
             {
               id: 'bold',
               label: 'Bold',
-              shortcut: 'Ctrl B',
+              shortcut: ['primary', 'B'],
               pressed: Boolean(format?.bold),
               disabled: !editing || Boolean(format?.emphasisUnavailable),
               disabledReason: format?.emphasisUnavailable,
@@ -513,7 +513,7 @@ export function editorMenus(
             {
               id: 'italic',
               label: 'Italic',
-              shortcut: 'Ctrl I',
+              shortcut: ['primary', 'I'],
               pressed: Boolean(format?.italic),
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
@@ -523,7 +523,7 @@ export function editorMenus(
             {
               id: 'underline',
               label: 'Underline',
-              shortcut: 'Ctrl U',
+              shortcut: ['primary', 'U'],
               pressed: Boolean(format?.underline),
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
@@ -649,7 +649,7 @@ export function editorMenus(
             {
               id: 'accept-change',
               label: 'Accept change',
-              shortcut: 'A',
+              shortcut: ['A'],
               disabled: !review || Boolean(review.targetUnavailable),
               disabledReason: review?.targetUnavailable ?? reviewAbsent,
               run: review?.onAcceptChange,
@@ -657,7 +657,7 @@ export function editorMenus(
             {
               id: 'reject-change',
               label: 'Reject change',
-              shortcut: 'R',
+              shortcut: ['R'],
               disabled: !review || Boolean(review.targetUnavailable),
               disabledReason: review?.targetUnavailable ?? reviewAbsent,
               run: review?.onRejectChange,
@@ -691,7 +691,7 @@ export function editorMenus(
             {
               id: 'previous-change',
               label: 'Previous change',
-              shortcut: 'K',
+              shortcut: ['K'],
               stayOpen: true,
               disabled: !review || !review.canPrevious,
               disabledReason: review
@@ -702,7 +702,7 @@ export function editorMenus(
             {
               id: 'next-change',
               label: 'Next change',
-              shortcut: 'J',
+              shortcut: ['J'],
               stayOpen: true,
               disabled: !review || !review.canNext,
               disabledReason: review

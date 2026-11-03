@@ -3,19 +3,17 @@ import {
   House,
   MagnifyingGlass,
   PencilSimple,
-  Robot,
   ShieldCheck,
 } from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 
-export type ModuleId =
-  'home' | 'agent' | 'search' | 'matters' | 'verify' | 'redact'
+export type ModuleId = 'home' | 'search' | 'matters' | 'verify' | 'redact'
 export type ShellSection = ModuleId | 'settings' | 'other'
 
 export interface ModuleItem {
   id: ModuleId
   label: string
-  to?: string
+  to: string
   icon: (props: {
     size?: number
     weight?: 'regular' | 'fill'
@@ -26,9 +24,8 @@ export interface ModuleItem {
 
 export const MODULES: ModuleItem[] = [
   { id: 'home', label: 'Home', to: '/', icon: House },
-  { id: 'agent', label: 'Agent', icon: Robot },
-  { id: 'search', label: 'Search', to: '/search', icon: MagnifyingGlass },
   { id: 'matters', label: 'Matters', to: '/matters', icon: Folders },
+  { id: 'search', label: 'Search', to: '/search', icon: MagnifyingGlass },
   { id: 'verify', label: 'Verify', to: '/verify', icon: ShieldCheck },
   { id: 'redact', label: 'Redact', to: '/redact', icon: PencilSimple },
 ]
@@ -51,7 +48,6 @@ export function resolveSection(path: string): ShellSection {
 
 const SECTION_LABELS = {
   home: 'Home',
-  agent: 'Agent',
   search: 'Search',
   matters: 'Matters',
   verify: 'Verify',
@@ -70,6 +66,10 @@ function sectionPath(section: ShellSection): string | null {
 
 export function matterIdFromPath(path: string): string | null {
   return path.match(/^\/matters\/([^/]+)/)?.[1] ?? null
+}
+
+export function documentIdFromPath(path: string): string | null {
+  return path.match(/^\/matters\/[^/]+\/documents\/([^/]+)/)?.[1] ?? null
 }
 
 export interface Crumb {

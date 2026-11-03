@@ -1,133 +1,54 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import type { VerificationRun } from '@obiter/contracts'
-import { cn, ObiterMark } from '@obiter/ui'
-import { CaretLeft, CaretRight } from '@obiter/ui/icons/shell'
-import { useState, type Ref } from 'react'
-import { useMattersList, type MatterRecord } from './matters'
-import {
-  MODULES,
-  matterIdFromPath,
-  resolveSection,
-  type ModuleId,
-} from './navigation'
-import { useRedactionRunsList } from './redaction-runs'
-import { MatterRow, ModuleRow } from './sidebar-rows'
-import { useMediaQuery } from './use-media-query'
-import type { VerificationRunSummary } from '@obiter/contracts'
-import { attentionRunsPerDocument, openWorkCount } from './open-work'
-import { useOrganisationVerificationRuns } from './verification-runs'
-
-const COLLAPSE_STORAGE_KEY = 'obiter.sidebar.collapsed'
-const NARROW_QUERY = '(max-width: 1023px)'
-const RECENT_MATTERS_LIMIT = 4
-
-function verificationAttentionTone(
-  runs: VerificationRun[],
-): 'danger' | 'warning' | 'success' {
-  const tones = attentionRunsPerDocument(runs)
-    .filter((run) => run.status === 'completed')
-    .map((run) => verificationAttentionToneFor(run.summary))
-  if (tones.includes('danger')) return 'danger'
-  if (tones.includes('warning')) return 'warning'
-  return 'success'
-}
-
-function verificationAttentionToneFor(summary: VerificationRunSummary) {
-  if (summary.flaggedCount > 0) return 'danger' as const
-  if (summary.reviewRequiredCount > 0 || summary.notCheckedCount > 0)
-    return 'warning' as const
-  return 'success' as const
-}
-
-export function recentMatters(matters: MatterRecord[]): MatterRecord[] {
-  return [...matters]
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, RECENT_MATTERS_LIMIT)
-}
-
-function readStoredCollapsed(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === 'true'
-}
+import type { AppPlatform } from '@obiter/contracts'
+import { ObiterMark, cn } from '@obiter/ui'
+import { GearSix } from '@obiter/ui/icons'
+import { AccountMenu } from './account-menu'
+import { hasDarwinWindowControls } from './lib/desktop-bridge'
+import { AgentRow, ModuleRow, MatterRow } from './sidebar-rows'
+import { moduleTone, useSidebarData } from './sidebar-counts'
+import { MODULES, matterIdFromPath, resolveSection } from './navigation'
+import { ThemeToggle } from './theme-toggle'
 
 export function Sidebar({
   orgName,
-  agentOpen,
-  onToggleAgent,
-  agentTriggerRef,
+  platform,
+  rightSlotOpen,
+  onToggleRightSlot,
 }: {
   orgName?: string | null
-  agentOpen: boolean
-  onToggleAgent: () => void
-  agentTriggerRef?: Ref<HTMLButtonElement>
+  platform: AppPlatform
+  rightSlotOpen: boolean
+  onToggleRightSlot: () => void
 }) {
-  const narrow = useMediaQuery(NARROW_QUERY)
-  const [chosenCollapsed, setChosenCollapsed] = useState(readStoredCollapsed)
-  const collapsed = narrow || chosenCollapsed
   const currentPath = useRouterState({
     select: (state) => state.location.pathname,
   })
   const section = resolveSection(currentPath)
   const currentMatterId = matterIdFromPath(currentPath)
-
-  const matters = useMattersList().data ?? []
-  const runs = useRedactionRunsList().data?.runs ?? []
-  const verificationRuns = useOrganisationVerificationRuns(true).runs
-
-  const work = openWorkCount({ verificationRuns, redactionRuns: runs })
-  const counts = new Map<ModuleId, number>([
-    ['matters', matters.filter((matter) => matter.status === 'active').length],
-    ['verify', work.verify],
-    ['redact', work.redact],
-  ])
-  const verifyTone = verificationAttentionTone(verificationRuns)
-  const recent = recentMatters(matters)
-
-  function toggleCollapsed() {
-    const next = !chosenCollapsed
-    window.localStorage.setItem(COLLAPSE_STORAGE_KEY, String(next))
-    setChosenCollapsed(next)
-  }
+  const { counts, verifyTone, recent } = useSidebarData()
 
   return (
     <aside
-      id="app-sidebar"
+      id="app-shell-sidebar"
       aria-label="Workspace"
       className={cn(
-        'flex min-h-0 shrink-0 flex-col bg-surface',
-        'transition-[width] duration-150 ease-out motion-reduce:transition-none',
-        collapsed ? 'w-16' : 'w-[252px]',
+        'flex w-[236px] shrink-0 flex-col gap-2 pr-2 pb-1 pl-1',
+        hasDarwinWindowControls(platform) && 'pt-10',
       )}
     >
-      <div
-        className={cn(
-          'flex h-12 shrink-0 items-center gap-3',
-          collapsed ? 'justify-center px-0' : 'px-4',
-        )}
-      >
-        <Link
-          to="/"
-          aria-label="Obiter home"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md"
-        >
-          <ObiterMark className="size-6" title="" />
-        </Link>
-        {collapsed ? null : (
-          <div className="min-w-0">
-            <p className="truncate text-item font-normal text-ink">Obiter</p>
-            {orgName ? (
-              <p className="truncate text-caption text-subtle">{orgName}</p>
-            ) : null}
-          </div>
-        )}
+      <div className="flex h-10 items-center gap-2.5 px-1.5">
+        <ObiterMark className="size-7 shrink-0" title="" />
+        <div className="min-w-0">
+          <p className="truncate text-item text-ink">Obiter</p>
+          {orgName ? (
+            <p className="truncate text-caption text-muted">{orgName}</p>
+          ) : null}
+        </div>
       </div>
 
       <nav
         aria-label="Workspace"
-        className={cn(
-          'flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto',
-          collapsed ? 'py-3' : 'px-2 pt-3 pb-4',
-        )}
+        className="flex min-h-0 flex-1 flex-col gap-px overflow-x-hidden overflow-y-auto"
       >
         <ul className="flex flex-col gap-px">
           {MODULES.map((module) => (
@@ -137,35 +58,28 @@ export function Sidebar({
                 to={module.to}
                 icon={module.icon}
                 count={counts.get(module.id)}
-                alertTone={module.id === 'verify' ? verifyTone : undefined}
+                alertTone={moduleTone(module.id, verifyTone)}
                 current={section === module.id}
-                collapsed={collapsed}
-                onClick={module.id === 'agent' ? onToggleAgent : undefined}
-                expanded={module.id === 'agent' ? agentOpen : undefined}
-                actionRef={module.id === 'agent' ? agentTriggerRef : undefined}
               />
             </li>
           ))}
         </ul>
 
+        <div className="mt-3 flex flex-col gap-px">
+          <AgentRow expanded={rightSlotOpen} onClick={onToggleRightSlot} />
+        </div>
+
         {recent.length > 0 ? (
-          <div
-            className={cn('flex flex-col', collapsed ? 'mt-4' : 'mt-6 gap-1')}
-          >
-            {collapsed ? (
-              <div className="mx-auto mb-2 w-5 border-t border-line" />
-            ) : (
-              <p className="px-3 pt-2 pb-1 text-caption text-subtle">
-                Recent matters
-              </p>
-            )}
-            <ul className="flex flex-col">
+          <div className="mt-4 flex flex-col gap-px">
+            <p className="px-2 pt-2 pb-1 text-caption text-muted">
+              Recent matters
+            </p>
+            <ul className="flex flex-col gap-px">
               {recent.map((matter) => (
                 <li key={matter.id}>
                   <MatterRow
                     matter={matter}
                     current={matter.id === currentMatterId}
-                    collapsed={collapsed}
                   />
                 </li>
               ))}
@@ -174,29 +88,20 @@ export function Sidebar({
         ) : null}
       </nav>
 
-      {narrow ? null : (
-        <div className={cn('shrink-0 pb-3', collapsed ? 'px-0' : 'px-3')}>
-          <button
-            type="button"
-            aria-expanded={!collapsed}
-            aria-controls="app-sidebar"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            onClick={toggleCollapsed}
-            className={cn(
-              'flex h-8 items-center gap-3 rounded-md text-meta text-subtle',
-              'transition-colors duration-150 hover:bg-hover hover:text-ink',
-              collapsed ? 'mx-auto w-10 justify-center' : 'w-full px-2',
-            )}
-          >
-            {collapsed ? (
-              <CaretRight size={16} aria-hidden className="shrink-0" />
-            ) : (
-              <CaretLeft size={16} aria-hidden className="shrink-0" />
-            )}
-            {collapsed ? null : <span>Collapse sidebar</span>}
-          </button>
-        </div>
-      )}
+      <div className="flex items-center gap-1 px-0.5 pt-1">
+        <Link
+          to="/settings"
+          aria-label="Settings"
+          aria-current={section === 'settings' ? 'page' : undefined}
+          className="grid size-8 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <GearSix size={16} aria-hidden />
+        </Link>
+        <ThemeToggle />
+        <span className="ml-auto">
+          <AccountMenu platform={platform} />
+        </span>
+      </div>
     </aside>
   )
 }
