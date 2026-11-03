@@ -420,8 +420,19 @@ export function RedactionRunsView({
               <div className="p-6">
                 <EmptyState
                   title="No redaction runs yet"
-                  body="Upload a document to start one, or open a document in a matter."
+                  body="Redact finds the personal details in a document and asks you to decide on each one before it writes a redacted copy. Upload a document here, or open one in a matter and redact it there."
                   icon={<FileText size={28} aria-hidden="true" />}
+                  action={
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={upload.isPending}
+                      disabled={busy}
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      Choose a document
+                    </Button>
+                  }
                 />
               </div>
             ) : (

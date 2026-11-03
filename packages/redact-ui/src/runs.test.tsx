@@ -104,6 +104,21 @@ describe('RedactionRunsView', () => {
     expect(screen.getByLabelText('Document text')).toBeTruthy()
   })
 
+  it('explains the module and opens the file picker when there are no runs yet', () => {
+    render(<RedactionRunsView onOpenRun={vi.fn()} />)
+
+    expect(screen.getByText('No redaction runs yet')).toBeTruthy()
+    expect(
+      screen.getByText(/Redact finds the personal details in a document/u),
+    ).toBeTruthy()
+    const picker = screen.getByLabelText('Upload a document to redact')
+    const openPicker = vi.spyOn(picker, 'click')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose a document' }))
+
+    expect(openPicker).toHaveBeenCalled()
+  })
+
   it('keeps delete behind a menu and a confirmation, away from Continue', () => {
     const mutateAsync = vi.fn()
     hooks.useDeleteRedactionRun.mockReturnValue({ mutateAsync })

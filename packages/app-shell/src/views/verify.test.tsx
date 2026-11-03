@@ -541,6 +541,7 @@ describe('VerifyRouteView', () => {
     runs = []
     await renderVerify()
     expect(await screen.findByText('No verification runs yet')).toBeTruthy()
+    expect(screen.getByText(/Verify checks a document/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Open matters' })).toBeTruthy()
   })
 })

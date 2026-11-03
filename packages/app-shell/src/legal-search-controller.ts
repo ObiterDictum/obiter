@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiUrl } from './lib/api-url'
 import { caseResultLocation } from './case-navigation'
+import { rememberFirstRunSearched } from './first-run-checklist'
 import { provisionResultLocation } from './legislation-navigation'
 import {
   getCourtLabel,
@@ -191,6 +192,7 @@ export function useLegalSearch() {
       setRecentSearches(
         writeRecentLegalSearch(window.sessionStorage, trimmedQuery),
       )
+      rememberFirstRunSearched(window.localStorage)
     }
 
     const requestId = searchRequestId.current + 1

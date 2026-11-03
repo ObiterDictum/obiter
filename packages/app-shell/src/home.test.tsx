@@ -1,7 +1,14 @@
 import '@obiter/test-dom'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '@obiter/ui'
 import {
@@ -26,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   useVerificationRunDocuments: vi.fn(),
   useVerificationFindings: vi.fn(),
   useRecentlyOpenedDocument: vi.fn(),
+  useOrganisationMembers: vi.fn(),
+  useOrganisationInvites: vi.fn(),
 }))
 
 const mattersModule = { ...(await import('./matters')) }
@@ -60,6 +69,13 @@ mock.module('./verification-runs', () => ({
   useVerificationFindings: mocks.useVerificationFindings,
 }))
 
+const membershipModule = { ...(await import('./organisation-membership')) }
+mock.module('./organisation-membership', () => ({
+  ...membershipModule,
+  useOrganisationMembers: mocks.useOrganisationMembers,
+  useOrganisationInvites: mocks.useOrganisationInvites,
+}))
+
 const ME = {
   user: {
     id: 'usr_1',
@@ -72,6 +88,13 @@ const ME = {
     name: 'Obiter Legal',
     plan: 'private_beta' as const,
   },
+}
+
+const MEMBER_ME = {
+  id: 'usr_1',
+  email: 'lex@obiter.dev',
+  name: 'Lex Obiter',
+  role: 'owner' as const,
 }
 
 function matter(
@@ -280,6 +303,7 @@ function renderHome(client = new QueryClient()) {
 beforeEach(() => {
   vi.clearAllMocks()
   window.sessionStorage.clear()
+  window.localStorage.clear()
   mocks.useCurrentUser.mockReturnValue({ data: ME })
   mocks.useMattersList.mockReturnValue(
     mattersState('success', [matter('mtr_0')]),
@@ -294,6 +318,8 @@ beforeEach(() => {
     error: null,
   })
   mocks.useRecentlyOpenedDocument.mockReturnValue({ data: null })
+  mocks.useOrganisationMembers.mockReturnValue({ data: [MEMBER_ME] })
+  mocks.useOrganisationInvites.mockReturnValue({ data: [] })
 })
 
 afterEach(() => {
@@ -326,13 +352,13 @@ describe('HomeRouteView — matters states', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText('Set up your workspace')).toBeTruthy()
+      expect(screen.getByText('Getting started')).toBeTruthy()
     })
     expect(
       screen.getByRole('heading', { name: /Welcome to Obiter, Lex/ }),
     ).toBeTruthy()
-    expect(screen.getByText('Create your first matter')).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Search the law/ })).toBeTruthy()
+    expect(screen.queryByText('Set up your workspace')).toBeNull()
+    expect(screen.getByText('Create a matter')).toBeTruthy()
   })
 
   it('keeps the dashboard, not the empty workspace, when open work exists', async () => {
@@ -632,6 +658,157 @@ describe('HomeRouteView — empty workspace search', () => {
       ).toBeTruthy()
     })
     expect(screen.getByLabelText('Recent searches')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Wood v Capita/ })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /unfair dismissal time limit/ }),
+    ).toBeNull()
+  })
+
+  it('offers example searches a lawyer would type, and runs one on click', async () => {
+    mocks.useMattersList.mockReturnValue(mattersState('success', []))
+    renderHome()
+
+    const examples = await screen.findByLabelText('Example searches')
+    expect(within(examples).getAllByRole('button')).toHaveLength(3)
+
+    fireEvent.click(
+      within(examples).getByRole('button', {
+        name: /without prejudice privilege/,
+      }),
+    )
+    expect(window.sessionStorage.getItem('obiter.search.initialQuery')).toBe(
+      'without prejudice privilege',
+    )
+  })
+})
+
+describe('HomeRouteView — getting started checklist', () => {
+  it('counts only the steps the stored work proves', async () => {
+    const client = new QueryClient()
+    client.setQueryData(documentsKeys.byMatter('mtr_0'), [
+      document('mtr_0', 'advice-note'),
+    ])
+    renderHome(client)
+
+    const checklist = await screen.findByRole('region', {
+      name: 'Getting started',
+    })
+    expect(within(checklist).getByText('2 of 4 done')).toBeTruthy()
+    expect(within(checklist).getByText('Invite a colleague')).toBeTruthy()
+    expect(
+      within(checklist).getByRole('link', { name: 'Invite in Settings' }),
+    ).toBeTruthy()
+    expect(
+      within(checklist).getByRole('link', { name: 'Open Verify' }),
+    ).toBeTruthy()
+    expect(
+      within(checklist).queryByRole('button', { name: 'New matter' }),
+    ).toBeNull()
+    expect(
+      within(checklist).getByRole('link', {
+        name: 'Review your organisation settings',
+      }),
+    ).toBeTruthy()
+  })
+
+  it('hides the card once every step is done', async () => {
+    const client = new QueryClient()
+    client.setQueryData(documentsKeys.byMatter('mtr_0'), [
+      document('mtr_0', 'advice-note'),
+    ])
+    mocks.useOrganisationVerificationRuns.mockReturnValue(
+      verificationState([verificationRun({ id: 'verify_1' })]),
+    )
+    mocks.useOrganisationMembers.mockReturnValue({
+      data: [
+        MEMBER_ME,
+        {
+          ...MEMBER_ME,
+          id: 'usr_2',
+          email: 'sam@obiter.dev',
+          name: 'Sam Reed',
+        },
+      ],
+    })
+    renderHome(client)
+
+    await waitFor(() => {
+      expect(screen.getByText('Needs your attention')).toBeTruthy()
+    })
+    expect(screen.queryByRole('region', { name: 'Getting started' })).toBeNull()
+  })
+
+  it('gives ordinary members the search step and no organisation steps', async () => {
+    mocks.useCurrentUser.mockReturnValue({
+      data: {
+        user: { ...ME.user, role: 'member' as const },
+        organisation: ME.organisation,
+      },
+    })
+    renderHome()
+
+    const checklist = await screen.findByRole('region', {
+      name: 'Getting started',
+    })
+    expect(within(checklist).getByText('Create or open a matter')).toBeTruthy()
+    expect(within(checklist).getByText('Try a search')).toBeTruthy()
+    expect(
+      within(checklist).getByText('Run Verify or Redact on a document'),
+    ).toBeTruthy()
+    expect(within(checklist).queryByText('Invite a colleague')).toBeNull()
+    expect(
+      within(checklist).queryByRole('link', {
+        name: 'Review your organisation settings',
+      }),
+    ).toBeNull()
+  })
+
+  it('ticks a run step from a redaction run for members', async () => {
+    mocks.useCurrentUser.mockReturnValue({
+      data: {
+        user: { ...ME.user, role: 'member' as const },
+        organisation: ME.organisation,
+      },
+    })
+    mocks.useRedactionRunsList.mockReturnValue(
+      runsState([redactionRun({ id: 'run_1' })]),
+    )
+    renderHome()
+
+    const checklist = await screen.findByRole('region', {
+      name: 'Getting started',
+    })
+    expect(within(checklist).getByText('2 of 4 done')).toBeTruthy()
+  })
+
+  it('remembers a dismissal for that person and keeps it hidden', async () => {
+    renderHome()
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Hide checklist' }),
+    )
+
+    expect(screen.queryByRole('region', { name: 'Getting started' })).toBeNull()
+    expect(
+      window.localStorage.getItem('obiter.first-run-checklist.dismissed:usr_1'),
+    ).toBe('true')
+
+    cleanup()
+    renderHome()
+    await screen.findByRole('heading', {
+      name: /Good (morning|afternoon|evening), Lex/,
+    })
+    expect(screen.queryByRole('region', { name: 'Getting started' })).toBeNull()
+  })
+
+  it('brings the plain setup steps back in an empty workspace once hidden', async () => {
+    mocks.useMattersList.mockReturnValue(mattersState('success', []))
+    renderHome()
+
+    expect(screen.queryByText('Set up your workspace')).toBeNull()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Hide checklist' }),
+    )
+
+    expect(await screen.findByText('Set up your workspace')).toBeTruthy()
   })
 })

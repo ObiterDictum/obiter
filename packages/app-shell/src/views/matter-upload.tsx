@@ -133,13 +133,19 @@ export function MatterUploadButton({
   )
 }
 
-export function NewDocumentButton({ matterId }: { matterId: string }) {
+export function NewDocumentButton({
+  matterId,
+  variant = 'primary',
+}: {
+  matterId: string
+  variant?: 'primary' | 'secondary'
+}) {
   const { pending, send } = useMatterDocumentUpload(matterId)
   const { toast } = useToast()
   return (
     <button
       type="button"
-      className={buttonClassName({ variant: 'primary', size: 'md' })}
+      className={buttonClassName({ variant, size: 'md' })}
       disabled={pending}
       onClick={() => {
         void blankDocumentFile()
