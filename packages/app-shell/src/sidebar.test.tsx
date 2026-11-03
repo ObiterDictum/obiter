@@ -1,7 +1,7 @@
 import '@obiter/test-dom'
 import { afterEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   RouterProvider,
@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   runs: [] as Array<{ id: string; status: RedactionRunStatus }>,
   verificationRuns: [] as VerificationRun[],
 }))
+
+const toggleClicks: string[] = []
 
 const mattersModule = { ...(await import('./matters')) }
 mock.module('./matters', () => ({
@@ -107,13 +109,26 @@ function redactionRun(
   }
 }
 
-function renderSidebar(path = '/', variant: 'full' | 'rail' = 'full') {
+function renderSidebar(
+  path = '/',
+  variant: 'full' | 'rail' = 'full',
+  rightSlotOpen = false,
+) {
   const rootRoute = createRootRoute()
   const sidebar = () =>
     variant === 'full' ? (
-      <Sidebar orgName="Harrington Vale LLP" platform="web" />
+      <Sidebar
+        orgName="Harrington Vale LLP"
+        platform="web"
+        rightSlotOpen={rightSlotOpen}
+        onToggleRightSlot={() => toggleClicks.push('agent')}
+      />
     ) : (
-      <SidebarRail platform="web" />
+      <SidebarRail
+        platform="web"
+        rightSlotOpen={rightSlotOpen}
+        onToggleRightSlot={() => toggleClicks.push('agent')}
+      />
     )
   const routes = [
     createRoute({
@@ -150,6 +165,7 @@ afterEach(() => {
   mocks.matters = []
   mocks.runs = []
   mocks.verificationRuns = []
+  toggleClicks.length = 0
   window.localStorage.clear()
 })
 
@@ -272,7 +288,7 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'Redact, 1 waiting' })).toBeTruthy()
   })
 
-  it('orders the modules with Home first and no Agent entry', async () => {
+  it('orders the modules with Home first and toggles the agent panel from its own row', async () => {
     renderSidebar('/')
     const nav = await screen.findByRole('navigation', { name: 'Workspace' })
     const rows = Array.from(nav.querySelectorAll('ul:first-of-type > li')).map(
@@ -285,7 +301,24 @@ describe('Sidebar', () => {
       expect.stringMatching(/^Verify/),
       expect.stringMatching(/^Redact/),
     ])
-    expect(screen.queryByRole('button', { name: 'Agent' })).toBeNull()
+
+    const agent = screen.getByRole('button', { name: 'Agent' })
+    expect(agent.getAttribute('aria-expanded')).toBe('false')
+    expect(agent.getAttribute('aria-controls')).toBe('app-shell-right-slot')
+    fireEvent.click(agent)
+    expect(toggleClicks).toEqual(['agent'])
+  })
+
+  it('marks the agent row as expanded while the right slot is open', async () => {
+    renderSidebar('/', 'full', true)
+    const agent = await screen.findByRole('button', { name: 'Agent' })
+    expect(agent.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('drops the search field from the sidebar now that it lives in the title bar', async () => {
+    renderSidebar('/')
+    await screen.findByRole('navigation', { name: 'Workspace' })
+    expect(screen.queryByRole('textbox', { name: 'Search Obiter' })).toBeNull()
   })
 })
 
@@ -303,5 +336,14 @@ describe('SidebarRail', () => {
     expect(screen.getByRole('link', { name: 'Verify' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Redact' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Settings' })).toBeTruthy()
+  })
+
+  it('toggles the agent panel from the rail', async () => {
+    renderSidebar('/matters', 'rail', true)
+    const agent = await screen.findByRole('button', { name: 'Agent' })
+    expect(agent.getAttribute('aria-expanded')).toBe('true')
+    expect(agent.getAttribute('aria-controls')).toBe('app-shell-right-slot')
+    fireEvent.click(agent)
+    expect(toggleClicks).toEqual(['agent'])
   })
 })

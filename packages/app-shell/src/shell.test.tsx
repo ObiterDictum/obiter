@@ -281,6 +281,53 @@ describe('shell frame', () => {
     ).toBeNull()
   })
 
+  it('toggles the right slot from the sidebar and keeps no panel button in the title bar', async () => {
+    renderShell('/')
+    await screen.findByRole('button', { name: 'Collapse sidebar' })
+    expect(screen.queryByRole('button', { name: 'Show panel' })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
+    await screen.findByRole('complementary', { name: 'Agent panel' })
+    expect(
+      screen
+        .getByRole('button', { name: 'Agent' })
+        .getAttribute('aria-expanded'),
+    ).toBe('true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
+    expect(
+      screen.queryByRole('complementary', { name: 'Agent panel' }),
+    ).toBeNull()
+  })
+
+  it('keeps the search field in the title bar rather than the sidebar', async () => {
+    renderShell('/')
+    const nav = await screen.findByRole('navigation', { name: 'Workspace' })
+    expect(nav.querySelector('[aria-label="Search Obiter"]')).toBeNull()
+    expect(
+      document
+        .querySelector('header')
+        ?.querySelector('[aria-label="Search Obiter"]'),
+    ).not.toBeNull()
+  })
+
+  it('runs the sidebar to the top so the title bar starts at the content pane', async () => {
+    renderShell('/matters/mtr_1')
+    const nav = await screen.findByRole('navigation', { name: 'Workspace' })
+    const column = nav.parentElement?.children[1]
+    const pane = document.querySelector('#app-shell-pane')
+    const titleBar = document.querySelector('header')
+    expect(column?.contains(titleBar as Node)).toBe(true)
+    expect(column?.contains(pane as Node)).toBe(true)
+    expect(column?.contains(nav)).toBe(false)
+  })
+
+  it('makes the main pane the container the page layouts measure', async () => {
+    renderShell('/matters/mtr_1')
+    await screen.findByRole('button', { name: 'Hide contents' })
+    expect(document.querySelector('main')?.className).toContain('@container')
+  })
+
   it('does not treat the go sequence as a shortcut while typing', async () => {
     renderShell('/matters/mtr_1')
     const input = await screen.findByLabelText('Note')

@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { matterInitials, type MatterRecord } from './matters'
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
+import { Robot } from '@obiter/ui/icons/shell'
 import type { ReactElement, ReactNode, Ref } from 'react'
 import { ShortcutHint, type ShellCommand } from './shell-shortcuts'
 
@@ -87,6 +88,7 @@ export function RailItem({
   shortcut,
   onClick,
   expanded,
+  controls,
   actionRef,
 }: {
   label: string
@@ -98,6 +100,7 @@ export function RailItem({
   shortcut: ShellCommand
   onClick?: () => void
   expanded?: boolean
+  controls?: string
   actionRef?: Ref<HTMLButtonElement>
 }) {
   const note = countNote(label, count)
@@ -135,6 +138,7 @@ export function RailItem({
         ref={actionRef}
         aria-label={accessibleName}
         aria-expanded={expanded}
+        aria-controls={controls}
         onClick={onClick}
         className={className}
       >
@@ -155,6 +159,44 @@ export function RailItem({
     </Link>
   )
   return <RailTooltip content={tooltip}>{link}</RailTooltip>
+}
+
+export function AgentRow({
+  expanded,
+  onClick,
+}: {
+  expanded: boolean
+  onClick: () => void
+}) {
+  return (
+    <RailTooltip
+      content={
+        <span className="flex items-center gap-2">
+          Agent
+          <ShortcutHint command="toggle-right-slot" />
+        </span>
+      }
+    >
+      <button
+        type="button"
+        aria-label="Agent"
+        aria-expanded={expanded}
+        aria-controls="app-shell-right-slot"
+        onClick={onClick}
+        className={cn(
+          'flex h-[30px] items-center gap-2.5 rounded-lg px-2 text-meta',
+          'transition-colors duration-150',
+          expanded
+            ? 'bg-fill font-medium text-ink'
+            : 'text-muted hover:bg-hover hover:text-ink',
+        )}
+      >
+        <Robot size={16} weight={expanded ? 'fill' : 'regular'} aria-hidden />
+        <span className="min-w-0 flex-1 truncate text-left">Agent</span>
+        <ShortcutHint command="toggle-right-slot" />
+      </button>
+    </RailTooltip>
+  )
 }
 
 function RailTooltip({

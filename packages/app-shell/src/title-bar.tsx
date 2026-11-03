@@ -9,11 +9,11 @@ import {
 } from '@obiter/ui/icons/shell'
 import { Fragment, type ReactNode, type Ref } from 'react'
 import type { AppPlatform } from '@obiter/contracts'
+import { AppSearchField } from './app-search-field'
 import { currentUserQueryOptions } from './current-user'
 import { useMattersList } from './matters'
 import { breadcrumbTrail, matterIdFromPath } from './navigation'
 import { useSourceTitle } from './source-title'
-import { readDesktopBridge } from './lib/desktop-bridge'
 import { ShortcutHint, type ShellCommand } from './shell-shortcuts'
 
 const iconButtonClass =
@@ -69,8 +69,6 @@ export function TitleBar({
   navControls,
   onToggleNav,
   navRef,
-  rightSlotOpen,
-  onToggleRightSlot,
 }: {
   platform: AppPlatform
   navLabel: string
@@ -78,8 +76,6 @@ export function TitleBar({
   navControls: string
   onToggleNav: () => void
   navRef?: Ref<HTMLButtonElement>
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
 }) {
   const router = useRouter()
   const { data: me } = useQuery(currentUserQueryOptions())
@@ -92,14 +88,11 @@ export function TitleBar({
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
   const sourceTitle = useSourceTitle(pathname)
   const trail = breadcrumbTrail(pathname, matterName, sourceTitle)
-  const windowControls =
-    platform === 'desktop' && readDesktopBridge()?.osPlatform === 'darwin'
 
   return (
     <header
       className={cn(
-        'flex h-10 shrink-0 items-center gap-1 pr-2',
-        windowControls ? 'pl-20' : 'pl-2',
+        'flex h-10 shrink-0 items-center gap-1 pr-2 max-md:pl-2',
         platform === 'desktop' && 'app-drag',
       )}
     >
@@ -156,15 +149,7 @@ export function TitleBar({
         ))}
       </nav>
 
-      <TitleButton
-        label={rightSlotOpen ? 'Hide panel' : 'Show panel'}
-        shortcut="toggle-right-slot"
-        expanded={rightSlotOpen}
-        controls="app-shell-right-slot"
-        onClick={onToggleRightSlot}
-      >
-        <SidebarSimple size={16} mirrored aria-hidden />
-      </TitleButton>
+      <AppSearchField className="ml-auto" />
     </header>
   )
 }

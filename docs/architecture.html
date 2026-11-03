@@ -2205,7 +2205,13 @@
             redirects unauthenticated callers to <code>/sign-in</code>; auth
             routes render bare, with no workspace chrome. Light is the default
             product theme and dark is a saved choice, applied from each document
-            root before first paint; auth routes follow the theme.
+            root before first paint; auth routes follow the theme. The sidebar
+            or rail spans the window's full height and the title bar is the top
+            row of the right-hand column, so the title bar starts at the pane
+            edge without an offset. The main content pane is a CSS container and
+            pages lay themselves out with container queries, so a page responds
+            to the space the sidebar, contents panel and right slot actually
+            leave it rather than to the window width.
           </p>
           <div class="scroll">
             <table>
@@ -2222,31 +2228,37 @@
                   <td>Home</td>
                   <td>
                     On Home only, one labelled column drawn straight on the
-                    canvas: the Obiter monogram with the organisation name, the
-                    app search field, Home, Matters, Search, Verify and Redact
-                    with their counts and alert dots, recent matters, and
-                    settings, theme and account at the foot. Counts come from
-                    queries the frame already runs — active matters, findings
-                    waiting on a person across completed Verify runs, redaction
-                    runs awaiting a decision. It collapses to an icon rail
-                    (persisted in local storage), and every other section always
-                    shows that rail instead.
+                    canvas: the Obiter monogram with the organisation name level
+                    with the title bar, Home, Matters, Search, Verify and Redact
+                    with their counts and alert dots, an Agent row that toggles
+                    the right slot, recent matters, and settings, theme and
+                    account at the foot. Counts come from queries the frame
+                    already runs — active matters, findings waiting on a person
+                    across completed Verify runs, redaction runs awaiting a
+                    decision. It spans the window's full height and collapses to
+                    an icon rail (persisted in local storage), and every other
+                    section always shows that rail instead.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">Title bar</td>
                   <td>Global</td>
                   <td>
-                    One 40px row on the canvas: the sidebar toggle, back and
-                    forward, the breadcrumb (organisation, module, current page)
-                    and, at the far right, the right-slot toggle. The toggle
-                    collapses the full sidebar on Home and hides or shows the
-                    contents panel elsewhere (persisted per person); each side
-                    has exactly one toggle. The account menu is a disclosure
-                    with the full keyboard contract: arrows, Home/End, Escape
-                    returning focus to the avatar. On desktop the row is the
-                    window drag region and leaves the macOS traffic lights
-                    clear.
+                    One 40px row, the top row of the right-hand column: the
+                    sidebar toggle, back and forward, the breadcrumb
+                    (organisation, module, current page) and the app search
+                    field at the far right. Because the sidebar runs the full
+                    height, these controls start exactly at the pane's left edge
+                    and follow it when the sidebar collapses or expands, without
+                    hard-coded offsets. The toggle collapses the full sidebar on
+                    Home and hides or shows the contents panel elsewhere
+                    (persisted per person); the right slot has no title-bar
+                    toggle. The account menu is a disclosure with the full
+                    keyboard contract: arrows, Home/End, Escape returning focus
+                    to the avatar. On desktop the row is the window drag region
+                    with the controls no-drag, and on darwin the sidebar's
+                    top-left is padded so the monogram clears the traffic
+                    lights.
                   </td>
                 </tr>
                 <tr>
@@ -2271,16 +2283,17 @@
                     History) and one open tab at a time, remembered per person.
                     A tab appears only where the shell registry gives it
                     content; today only Agent has any. ⌘J / Ctrl+J toggles it,
-                    and at 767px and under it opens as a bottom sheet above the
-                    bottom bar.
+                    as does the Agent row in the sidebar or rail, and at 767px
+                    and under it opens as a bottom sheet above the bottom bar.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">App search field</td>
-                  <td>Sidebar</td>
+                  <td>Title bar</td>
                   <td>
-                    Shell-level search in the full sidebar, distinct from the
-                    case-law search view; icon-only at 1024 and under.
+                    Shell-level search at the right of the title bar, distinct
+                    from the case-law search view; icon-only at 1024 and under,
+                    opened with ⌘K / Ctrl+K.
                   </td>
                 </tr>
                 <tr>
@@ -2318,14 +2331,14 @@
                     activity) filtered by status from the contents panel
                     (Active, Archived, All) and by search and legal domain over
                     the fields the API returns, and the selected matter beside
-                    it. Below 1181px the preview is a modal drawer instead of a
-                    column. “Open work” is the same attention items Home ranks,
-                    grouped by matter (<code>views/matters-rows.ts</code>), so
-                    the queue, the list and the sidebar count cannot disagree.
-                    The matter page shows the document table with each
-                    document’s Verify state, the details rail, upload and new
-                    document, and a share dialog listing named people with
-                    access from
+                    it. The matter preview keeps its own column while the pane
+                    is at least 1088px wide. “Open work” is the same attention
+                    items Home ranks, grouped by matter
+                    (<code>views/matters-rows.ts</code>), so the queue, the list
+                    and the sidebar count cannot disagree. The matter page shows
+                    the document table with each document’s Verify state, the
+                    details rail, upload and new document, and a share dialog
+                    listing named people with access from
                     <code>GET /api/matters/:matterId/shares</code> (owner only,
                     as the API requires). There is no matter-level activity,
                     artefact, archive or export endpoint, so none of those is

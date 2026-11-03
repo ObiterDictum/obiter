@@ -1,3 +1,5 @@
+import type { AppPlatform } from '@obiter/contracts'
+
 export interface DesktopBridge {
   platform: 'desktop'
   osPlatform: string
@@ -21,4 +23,9 @@ export function readDesktopBridge(): DesktopBridge | undefined {
       }
   ).obiterDesktop
   return bridge
+}
+
+export function hasDarwinWindowControls(platform: AppPlatform): boolean {
+  if (platform !== 'desktop') return false
+  return readDesktopBridge()?.osPlatform === 'darwin'
 }

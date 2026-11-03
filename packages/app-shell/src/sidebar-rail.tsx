@@ -1,15 +1,31 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
-import { ObiterMark, Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
+import {
+  ObiterMark,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+} from '@obiter/ui'
 import { GearSix } from '@obiter/ui/icons'
+import { Robot } from '@obiter/ui/icons/shell'
 import { AccountMenu } from './account-menu'
+import { hasDarwinWindowControls } from './lib/desktop-bridge'
 import { MODULES, resolveSection } from './navigation'
 import { moduleTone, useSidebarData } from './sidebar-counts'
 import { RailItem } from './sidebar-rows'
 import { moduleShortcut } from './shell-shortcuts'
 import { ThemeToggle } from './theme-toggle'
 
-export function SidebarRail({ platform }: { platform: AppPlatform }) {
+export function SidebarRail({
+  platform,
+  rightSlotOpen,
+  onToggleRightSlot,
+}: {
+  platform: AppPlatform
+  rightSlotOpen: boolean
+  onToggleRightSlot: () => void
+}) {
   const currentPath = useRouterState({
     select: (state) => state.location.pathname,
   })
@@ -20,7 +36,11 @@ export function SidebarRail({ platform }: { platform: AppPlatform }) {
     <nav
       id="app-shell-sidebar"
       aria-label="Workspace"
-      className="flex w-[46px] shrink-0 flex-col items-center gap-1 py-1 max-md:h-12 max-md:w-full max-md:flex-row max-md:justify-between max-md:px-1 max-md:py-0"
+      className={cn(
+        'flex w-[46px] shrink-0 flex-col items-center gap-1 pr-2 pb-1',
+        hasDarwinWindowControls(platform) && 'pt-10',
+        'max-md:h-12 max-md:w-full max-md:flex-row max-md:justify-between max-md:px-1 max-md:py-0',
+      )}
     >
       <Link
         to="/"
@@ -42,6 +62,14 @@ export function SidebarRail({ platform }: { platform: AppPlatform }) {
         />
       ))}
       <span className="flex-1" />
+      <RailItem
+        label="Agent"
+        icon={Robot}
+        onClick={onToggleRightSlot}
+        expanded={rightSlotOpen}
+        controls="app-shell-right-slot"
+        shortcut="toggle-right-slot"
+      />
       <RailSettingsLink current={section === 'settings'} />
       <ThemeToggle />
       <AccountMenu platform={platform} />
