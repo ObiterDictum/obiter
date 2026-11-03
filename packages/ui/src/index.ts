@@ -43,6 +43,7 @@ export {
 } from './menu'
 export {
   Popover,
+  PopoverTrigger,
   PopoverPortal,
   PopoverPositioner,
   PopoverPopup,

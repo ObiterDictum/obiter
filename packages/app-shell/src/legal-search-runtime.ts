@@ -1,4 +1,4 @@
-export { readInitialSearchQuery, readSearchErrorMessage, isTextEntryTarget }
+export { readSearchErrorMessage, isTextEntryTarget }
 
 async function readSearchErrorMessage(response: Response): Promise<string> {
   if (response.status === 429) {
@@ -36,15 +36,4 @@ function isTextEntryTarget(target: EventTarget | null) {
     target instanceof HTMLSelectElement ||
     target.isContentEditable
   )
-}
-
-function readInitialSearchQuery() {
-  if (typeof window === 'undefined') {
-    return ''
-  }
-
-  const query =
-    window.sessionStorage.getItem('obiter.search.initialQuery') ?? ''
-  window.sessionStorage.removeItem('obiter.search.initialQuery')
-  return query
 }

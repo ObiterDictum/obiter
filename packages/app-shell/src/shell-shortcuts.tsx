@@ -8,6 +8,7 @@ import {
 import type { ModuleId } from './navigation'
 
 export type ShellCommand =
+  | 'open-palette'
   | 'toggle-nav'
   | 'toggle-right-slot'
   | 'focus-mode'
@@ -18,6 +19,7 @@ export type ShellCommand =
   | 'go-search'
 
 const COMMAND_KEYS = {
+  'open-palette': ['primary', 'K'],
   'toggle-nav': ['primary', '\\'],
   'toggle-right-slot': ['primary', 'J'],
   'focus-mode': ['primary', '.'],
@@ -29,6 +31,7 @@ const COMMAND_KEYS = {
 } satisfies Record<ShellCommand, readonly string[]>
 
 const PRIMARY_KEYS = new Map<string, ShellCommand>([
+  ['k', 'open-palette'],
   ['\\', 'toggle-nav'],
   ['j', 'toggle-right-slot'],
   ['.', 'focus-mode'],

@@ -25,10 +25,13 @@ function verificationAttentionToneFor(summary: VerificationRunSummary) {
   return 'success' as const
 }
 
-export function recentMatters(matters: MatterRecord[]): MatterRecord[] {
+export function recentMatters(
+  matters: MatterRecord[],
+  limit = RECENT_MATTERS_LIMIT,
+): MatterRecord[] {
   return [...matters]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, RECENT_MATTERS_LIMIT)
+    .slice(0, limit)
 }
 
 export function useSidebarData() {

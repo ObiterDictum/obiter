@@ -1,11 +1,4 @@
-import {
-  Button,
-  StatusDot,
-  Switch,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@obiter/ui'
+import { Button, StatusDot, Switch } from '@obiter/ui'
 import { FloppyDisk } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
 import type { DocumentPresence } from '@obiter/contracts'
@@ -17,6 +10,7 @@ import {
 } from './document-verify-chip'
 import { useOffline } from '../../shell-states'
 import { RedactedMark } from '../../redacted-mark'
+import { PresenceAvatars } from './presence-avatars'
 import type { DocumentSave, SaveState } from './use-document-save'
 
 export type HeaderSaveInput = {
@@ -70,6 +64,7 @@ function DocumentEditorHeader({
   versionLabel,
   save,
   presence,
+  presenceNames,
   currentUserId,
   trackChanges,
   onToggleTrackChanges,
@@ -86,6 +81,7 @@ function DocumentEditorHeader({
   versionLabel: string
   save?: HeaderSaveInput
   presence?: DocumentPresence[]
+  presenceNames?: ReadonlyMap<string, string>
   currentUserId?: string
   trackChanges?: boolean
   onToggleTrackChanges?: () => void
@@ -99,9 +95,6 @@ function DocumentEditorHeader({
   actions?: ReactNode
 }) {
   const headline = save ? headerSaveState(save) : null
-  const others = (presence ?? []).filter(
-    (item) => item.userId !== currentUserId,
-  )
   return (
     <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b border-line px-12 py-2 max-compact:px-8">
       {back}
@@ -130,6 +123,11 @@ function DocumentEditorHeader({
               </StatusDot>
             )}
           </span>
+          <PresenceAvatars
+            presence={presence ?? []}
+            currentUserId={currentUserId}
+            names={presenceNames}
+          />
 
           {matterLink ? (
             <span className="flex min-w-0 items-center gap-2 max-compact:hidden">
@@ -140,28 +138,6 @@ function DocumentEditorHeader({
         </div>
       </div>
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-        {others.length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <span
-                  className="inline-flex"
-                  aria-label={`${String(others.length)} other ${others.length === 1 ? 'person is' : 'people are'} viewing this document`}
-                />
-              }
-            >
-              <StatusDot tone="info" className="text-caption">
-                {others.length === 1
-                  ? '1 other viewer'
-                  : `${String(others.length)} other viewers`}
-              </StatusDot>
-            </TooltipTrigger>
-            <TooltipContent>
-              Someone else has this document open. Saving merges disjoint edits;
-              overlapping edits ask you to reload first.
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
         {trackChanges === undefined || !onToggleTrackChanges ? null : (
           <Switch
             label="Track changes"
@@ -198,6 +174,7 @@ export function DocxEditorHeader({
   save,
   remoteChange,
   presence,
+  presenceNames,
   currentUserId,
   trackChanges,
   onToggleTrackChanges,
@@ -214,6 +191,7 @@ export function DocxEditorHeader({
   save: DocumentSave
   remoteChange: boolean
   presence: DocumentPresence[]
+  presenceNames?: ReadonlyMap<string, string>
   currentUserId?: string
   trackChanges: boolean
   onToggleTrackChanges: () => void
@@ -249,6 +227,7 @@ export function DocxEditorHeader({
         remoteChange,
       }}
       presence={presence}
+      presenceNames={presenceNames}
       currentUserId={currentUserId}
       trackChanges={trackChanges}
       onToggleTrackChanges={onToggleTrackChanges}

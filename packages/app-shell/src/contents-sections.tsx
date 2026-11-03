@@ -373,18 +373,20 @@ export function SearchContents() {
   const recent =
     typeof window === 'undefined'
       ? []
-      : getRecentLegalSearches(window.localStorage)
+      : getRecentLegalSearches(window.sessionStorage)
   if (recent.length === 0) return <Note>No recent searches.</Note>
   return (
     <div className="flex flex-col">
       <Group title="Recent searches">
         {recent.map((search) => (
-          <p
+          <Link
             key={search}
-            className="flex min-h-8 items-center gap-2 rounded-lg px-2 py-1.5 text-meta text-muted"
+            to="/search"
+            search={{ q: search }}
+            className={rowClass(false)}
           >
-            {search}
-          </p>
+            <span className="min-w-0 flex-1 truncate">{search}</span>
+          </Link>
         ))}
       </Group>
     </div>

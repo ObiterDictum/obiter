@@ -8,6 +8,12 @@ export function Popover(
   return <BasePopover.Root {...props} />
 }
 
+export function PopoverTrigger(
+  props: ComponentPropsWithoutRef<typeof BasePopover.Trigger>,
+) {
+  return <BasePopover.Trigger {...props} />
+}
+
 export function PopoverPortal({ children }: { children: ReactNode }) {
   return <BasePopover.Portal>{children}</BasePopover.Portal>
 }

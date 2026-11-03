@@ -1,16 +1,29 @@
 import { Link, useRouter, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
+import {
+  KeyboardHint,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+} from '@obiter/ui'
 import {
   ArrowLeft,
   ArrowRight,
   CaretRight,
+  MagnifyingGlass,
   SidebarSimple,
 } from '@obiter/ui/icons/shell'
-import { Fragment, type ReactNode, type Ref } from 'react'
+import { Fragment, Suspense, lazy, type ReactNode, type Ref } from 'react'
 import type { AppPlatform } from '@obiter/contracts'
-import { AppSearchField } from './app-search-field'
+import { useCommandPalette } from './command-palette'
 import { currentUserQueryOptions } from './current-user'
+import { formatShortcut, useIsMacPlatform } from './keyboard-platform'
+const MatterSwitcherLazy = lazy(() =>
+  import('./matter-switcher').then((module) => ({
+    default: module.MatterSwitcher,
+  })),
+)
 import { useMattersList } from './matters'
 import { breadcrumbTrail, matterIdFromPath } from './navigation'
 import { useSourceTitle } from './source-title'
@@ -133,7 +146,20 @@ export function TitleBar({
         {trail.map((crumb, index) => (
           <Fragment key={`${crumb.label}-${index}`}>
             {index > 0 ? <CrumbSeparator /> : null}
-            {crumb.to ? (
+            {currentMatterId && index === trail.length - 1 && !crumb.to ? (
+              <Suspense
+                fallback={
+                  <span className="max-w-[24rem] truncate px-1 text-ink">
+                    {crumb.label}
+                  </span>
+                }
+              >
+                <MatterSwitcherLazy
+                  matterId={currentMatterId}
+                  matterName={crumb.label}
+                />
+              </Suspense>
+            ) : crumb.to ? (
               <Link
                 to={crumb.to}
                 className="max-w-[18rem] shrink-0 truncate text-muted hover:text-ink"
@@ -149,8 +175,34 @@ export function TitleBar({
         ))}
       </nav>
 
-      <AppSearchField className="ml-auto" />
+      <PaletteTrigger />
     </header>
+  )
+}
+
+function PaletteTrigger() {
+  const openPalette = useCommandPalette()
+  const isMac = useIsMacPlatform()
+  return (
+    <button
+      type="button"
+      aria-label="Search Obiter"
+      onClick={(event) => openPalette(event.currentTarget)}
+      className={cn(
+        'app-no-drag ml-auto flex h-[30px] w-[min(300px,32vw)] shrink-0 items-center gap-2 rounded-md border border-line bg-surface pr-1 pl-3 text-left',
+        'transition-colors duration-150 hover:border-line-strong',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        'max-compact:w-8 max-compact:justify-center max-compact:border-0 max-compact:bg-transparent max-compact:p-0',
+      )}
+    >
+      <MagnifyingGlass size={16} className="shrink-0 text-subtle" aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-meta text-subtle max-compact:hidden">
+        Search Obiter
+      </span>
+      <KeyboardHint className="max-compact:hidden">
+        {formatShortcut(['primary', 'K'], isMac)}
+      </KeyboardHint>
+    </button>
   )
 }
 

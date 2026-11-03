@@ -6,6 +6,7 @@ import { vi } from '../../../../scripts/test/vitest-compat'
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
+  search: {} as { q?: string },
 }))
 
 const tanstackReactRouterModuleKeys = Object.fromEntries(
@@ -19,6 +20,7 @@ mock.module('@tanstack/react-router', () =>
     { ...tanstackReactRouterModuleKeys },
     (() => ({
       useNavigate: () => routerMocks.navigate,
+      useSearch: () => routerMocks.search,
       Link: ({
         children,
         className,
@@ -1438,5 +1440,62 @@ describe('LegalSearchView interactive targets and query resync', () => {
     expect(JSON.parse(String(resubmit?.body))).toMatchObject({
       query: correctedQuery,
     })
+  })
+})
+
+describe('LegalSearchView search parameter', () => {
+  let root: Root | null
+  let container: HTMLElement | null
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    vi.useFakeTimers()
+    routerMocks.navigate.mockReset()
+    routerMocks.search = {}
+    window.sessionStorage.clear()
+    root = null
+    container = null
+  })
+
+  afterEach(() => {
+    if (root) {
+      act(() => root?.unmount())
+    }
+    container?.remove()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('runs the search named by the q parameter on load', async () => {
+    routerMocks.search = { q: 'unfair dismissal' }
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createSearchResponse(createTwoResultHits()))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    await flushMicrotasks()
+
+    expect(getSearchInput(rendered.container).value).toBe('unfair dismissal')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      query: 'unfair dismissal',
+    })
+  })
+
+  it('leaves the search idle without a q parameter', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    await flushMicrotasks()
+
+    expect(getSearchInput(rendered.container).value).toBe('')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
