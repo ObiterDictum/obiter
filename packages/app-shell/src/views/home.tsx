@@ -11,6 +11,7 @@ import {
   firstRunComplete,
   firstRunSteps,
   readFirstRunDismissed,
+  readFirstRunSearched,
   rememberFirstRunDismissed,
 } from '../first-run-checklist'
 import { getRecentLegalSearches } from '../legal-search-recents'
@@ -152,7 +153,8 @@ function HomeDashboard({ me }: { me: MeResponse }) {
     hasRedactionRun: (redactionRuns.data?.runs.length ?? 0) > 0,
     hasRecentSearch:
       typeof window !== 'undefined' &&
-      getRecentLegalSearches(window.sessionStorage).length > 0,
+      (readFirstRunSearched(window.localStorage) ||
+        getRecentLegalSearches(window.sessionStorage).length > 0),
   })
   const showChecklist =
     matters.isSuccess &&

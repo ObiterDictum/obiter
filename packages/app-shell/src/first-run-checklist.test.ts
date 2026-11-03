@@ -5,7 +5,9 @@ import {
   firstRunProgress,
   firstRunSteps,
   readFirstRunDismissed,
+  readFirstRunSearched,
   rememberFirstRunDismissed,
+  rememberFirstRunSearched,
   type FirstRunSignals,
 } from './first-run-checklist'
 
@@ -140,5 +142,18 @@ describe('first-run checklist dismissal', () => {
     expect(readFirstRunDismissed(undefined, 'usr_1')).toBe(false)
     expect(readFirstRunDismissed(broken, 'usr_1')).toBe(false)
     expect(() => rememberFirstRunDismissed(broken, 'usr_1')).not.toThrow()
+  })
+})
+
+describe('first-run search step', () => {
+  it('stays done across sessions once a search has run', () => {
+    const storage = new Map<string, string>()
+    const local = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => void storage.set(key, value),
+    }
+    expect(readFirstRunSearched(local)).toBe(false)
+    rememberFirstRunSearched(local)
+    expect(readFirstRunSearched(local)).toBe(true)
   })
 })

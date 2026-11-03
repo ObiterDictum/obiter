@@ -1,6 +1,7 @@
 import type { UserRole } from '@obiter/contracts'
 
 const firstRunDismissedPrefix = 'obiter.first-run-checklist.dismissed'
+const firstRunSearchedKey = 'obiter.first-run-checklist.searched'
 
 export type FirstRunAudience = 'admin' | 'member'
 
@@ -131,6 +132,28 @@ export function rememberFirstRunDismissed(
   if (!storage) return
   try {
     storage.setItem(firstRunDismissedKey(userId), 'true')
+  } catch {
+    return
+  }
+}
+
+export function readFirstRunSearched(
+  storage: Pick<Storage, 'getItem'> | undefined,
+) {
+  if (!storage) return false
+  try {
+    return storage.getItem(firstRunSearchedKey) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export function rememberFirstRunSearched(
+  storage: Pick<Storage, 'setItem'> | undefined,
+) {
+  if (!storage) return
+  try {
+    storage.setItem(firstRunSearchedKey, 'true')
   } catch {
     return
   }

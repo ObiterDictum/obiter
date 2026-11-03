@@ -18,6 +18,8 @@ export function FirstRunChecklist({
   onDismiss: () => void
 }) {
   const { done, total } = firstRunProgress(steps)
+  const remaining = steps.filter((step) => !step.done)
+  const completed = steps.filter((step) => step.done)
 
   return (
     <section aria-labelledby="first-run">
@@ -32,42 +34,38 @@ export function FirstRunChecklist({
 
       <div className="rounded-lg bg-surface">
         <ol role="list" className="list-none">
-          {steps.map((step) => (
+          {remaining.map((step) => (
             <li
-              key={`${step.id}:${step.title}`}
+              key={step.id}
               className="flex flex-wrap items-center gap-4 px-6 py-4 [&+li]:border-t [&+li]:border-line"
             >
               <span
                 aria-hidden="true"
-                className={
-                  step.done
-                    ? 'grid size-5 shrink-0 place-items-center text-success'
-                    : 'size-5 shrink-0 rounded-pill border border-line-strong'
-                }
-              >
-                {step.done ? <CheckCircle size={20} /> : null}
-              </span>
+                className="size-5 shrink-0 rounded-pill border border-line-strong"
+              />
               <div className="min-w-0 flex-1">
-                <h3
-                  className={
-                    step.done ? 'text-item text-muted' : 'text-item text-ink'
-                  }
-                >
-                  {step.title}
-                </h3>
+                <h3 className="text-item text-ink">{step.title}</h3>
                 <p className="mt-1 max-w-[60ch] text-meta text-muted">
                   {step.description}
                 </p>
               </div>
-              <span className="sr-only">
-                {step.done ? 'Done' : 'Not done yet'}
-              </span>
-              {step.done ? null : (
-                <div className="shrink-0">{stepAction(step.id)}</div>
-              )}
+              <div className="shrink-0">{stepAction(step.id)}</div>
             </li>
           ))}
         </ol>
+        {completed.length > 0 ? (
+          <p className="flex items-center gap-3 border-t border-line px-6 py-3 text-meta text-muted">
+            <CheckCircle
+              size={18}
+              aria-hidden="true"
+              className="shrink-0 text-success"
+            />
+            <span>
+              <span className="sr-only">Done: </span>
+              {completed.map((step) => step.title).join(' · ')}
+            </span>
+          </p>
+        ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line px-6 py-3">
           {showOrganisationSettings ? (
