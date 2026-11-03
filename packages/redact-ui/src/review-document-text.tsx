@@ -129,7 +129,7 @@ export function HighlightedText({
 
 export function Paper({ children }: { children: ReactNode }) {
   return (
-    <div className="flex justify-center px-12 py-8 max-compact:px-8">
+    <div className="flex justify-center px-12 py-8 @max-pane:px-8">
       <div
         data-theme="light"
         className="w-full max-w-[860px] rounded-lg bg-paper px-10 py-10 text-body text-paper-ink shadow-md"

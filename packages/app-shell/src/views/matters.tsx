@@ -211,8 +211,8 @@ export function MattersRouteView({
             ) : null}
           </div>
 
-          <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
-            <Card className="overflow-hidden">
+          <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
+            <Card className="min-w-0 overflow-hidden">
               {visible.length === 0 ? (
                 <div className="px-6 py-8">
                   <p className="text-body text-muted">
@@ -232,12 +232,14 @@ export function MattersRouteView({
                   </Button>
                 </div>
               ) : (
-                <MattersTable
-                  rows={visible}
-                  selectedId={selected?.matter.id ?? null}
-                  onSelect={select}
-                  openWorkUnavailable={attentionFailed}
-                />
+                <div className="overflow-x-auto">
+                  <MattersTable
+                    rows={visible}
+                    selectedId={selected?.matter.id ?? null}
+                    onSelect={select}
+                    openWorkUnavailable={attentionFailed}
+                  />
+                </div>
               )}
               <CardFoot>
                 <span>

@@ -21,12 +21,12 @@ export function PageScaffold({
 }: PageScaffoldProps) {
   return (
     <ContentFrame className={cn('py-14', className)}>
-      <header className="mb-10 flex items-center justify-between gap-6 max-compact:flex-col max-compact:items-stretch max-compact:gap-4">
-        <div className="min-w-0">
+      <header className="mb-10 flex flex-wrap items-start justify-between gap-x-6 gap-y-4 @max-pane-wide:flex-col @max-pane-wide:flex-nowrap @max-pane-wide:items-stretch @max-pane-wide:gap-4">
+        <div className="min-w-0 flex-1">
           {eyebrow ? (
             <p className="mb-1 text-meta text-subtle">{eyebrow}</p>
           ) : null}
-          <h1 className="text-page text-ink">{title}</h1>
+          <h1 className="text-page text-ink [text-wrap:balance]">{title}</h1>
           {description ? (
             <div className="mt-2 max-w-[68ch] text-body text-muted">
               {description}
@@ -34,7 +34,7 @@ export function PageScaffold({
           ) : null}
         </div>
         {actions ? (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 max-compact:justify-start">
+          <div className="flex flex-wrap items-center justify-end gap-2 @max-pane-wide:justify-start">
             {actions}
           </div>
         ) : null}

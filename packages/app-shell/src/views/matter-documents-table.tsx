@@ -174,113 +174,115 @@ export function MatterDocumentsTable({
   }
 
   return (
-    <Card className="overflow-hidden">
-      <Table>
-        <THead>
-          <TR className="hover:bg-transparent">
-            <TH className="pl-4">Document</TH>
-            <TH className="px-3">Verify</TH>
-            <TH className="px-3">Redact</TH>
-            <TH className="px-3 text-right">Updated</TH>
-            <TH className="pr-4">
-              <span className="sr-only">Open</span>
-            </TH>
-          </TR>
-        </THead>
-        <TBody>
-          {loading ? (
-            [0, 1, 2].map((index) => (
-              <TR key={index} className="hover:bg-transparent">
-                <TD className="pl-4">
-                  <Skeleton className="h-4 w-56" />
-                </TD>
-                <TD className="px-3">
-                  <Skeleton className="h-3 w-24" />
-                </TD>
-                <TD className="px-3">
-                  <Skeleton className="h-3 w-16" />
-                </TD>
-                <TD className="px-3 text-right">
-                  <Skeleton className="ml-auto h-3 w-20" />
-                </TD>
-                <TD />
-              </TR>
-            ))
-          ) : error ? (
+    <Card className="min-w-0 overflow-hidden">
+      <div className="overflow-x-auto">
+        <Table className="min-w-[38rem]">
+          <THead>
             <TR className="hover:bg-transparent">
-              <TD colSpan={5} className="pl-4 text-meta text-muted">
-                {error}
-              </TD>
+              <TH className="pl-4">Document</TH>
+              <TH className="px-3">Verify</TH>
+              <TH className="px-3">Redact</TH>
+              <TH className="px-3 text-right">Updated</TH>
+              <TH className="pr-4">
+                <span className="sr-only">Open</span>
+              </TH>
             </TR>
-          ) : (
-            files.map((file) => {
-              const version = file.currentVersion
-              const filename = version?.filename ?? file.logicalKey
-              const redactRun = redaction.get(file.id)
-              return (
-                <TR key={file.id}>
+          </THead>
+          <TBody>
+            {loading ? (
+              [0, 1, 2].map((index) => (
+                <TR key={index} className="hover:bg-transparent">
                   <TD className="pl-4">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <DocumentIcon />
-                      <div className="min-w-0">
-                        <Link
-                          to="/matters/$matterId/documents/$documentId"
-                          params={{ matterId, documentId: file.id }}
-                          className="block text-item text-ink hover:text-brand"
-                        >
-                          {filename}
-                        </Link>
-                        <span className="mt-1 flex items-center gap-2 text-meta text-subtle">
-                          <span>
-                            {version
-                              ? `Version ${version.versionNumber} · ${version.fileType.toUpperCase()}`
-                              : 'No version'}
-                          </span>
-                          {version ? (
-                            <RedactedMark
-                              redaction={version.redaction}
-                              producedAt={version.createdAt}
-                            />
-                          ) : null}
-                        </span>
-                      </div>
-                    </div>
+                    <Skeleton className="h-4 w-56" />
                   </TD>
-                  <TD className="px-3 whitespace-nowrap">
-                    <VerifyWords
-                      parts={documentVerifyParts(
-                        verify.get(file.id) ?? { status: 'pending' },
-                      )}
-                    />
+                  <TD className="px-3">
+                    <Skeleton className="h-3 w-24" />
                   </TD>
-                  <TD className="px-3 whitespace-nowrap">
-                    <VerifyWords
-                      parts={
-                        redactRun
-                          ? [documentRedactPart(redactRun)]
-                          : [{ label: 'Not run', tone: 'neutral' }]
-                      }
-                    />
+                  <TD className="px-3">
+                    <Skeleton className="h-3 w-16" />
                   </TD>
-                  <TD className="px-3 text-right text-meta whitespace-nowrap text-subtle tabular-nums">
-                    {formatDate(version?.updatedAt ?? file.updatedAt)}
+                  <TD className="px-3 text-right">
+                    <Skeleton className="ml-auto h-3 w-20" />
                   </TD>
-                  <TD className="pr-4 text-right">
-                    <Link
-                      to="/matters/$matterId/documents/$documentId"
-                      params={{ matterId, documentId: file.id }}
-                      aria-label={`Open ${filename}`}
-                      className="inline-flex size-7 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-ink"
-                    >
-                      <CaretRight size={16} aria-hidden />
-                    </Link>
-                  </TD>
+                  <TD />
                 </TR>
-              )
-            })
-          )}
-        </TBody>
-      </Table>
+              ))
+            ) : error ? (
+              <TR className="hover:bg-transparent">
+                <TD colSpan={5} className="pl-4 text-meta text-muted">
+                  {error}
+                </TD>
+              </TR>
+            ) : (
+              files.map((file) => {
+                const version = file.currentVersion
+                const filename = version?.filename ?? file.logicalKey
+                const redactRun = redaction.get(file.id)
+                return (
+                  <TR key={file.id}>
+                    <TD className="pl-4">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <DocumentIcon />
+                        <div className="min-w-0">
+                          <Link
+                            to="/matters/$matterId/documents/$documentId"
+                            params={{ matterId, documentId: file.id }}
+                            className="block text-item text-ink hover:text-brand"
+                          >
+                            {filename}
+                          </Link>
+                          <span className="mt-1 flex items-center gap-2 text-meta text-subtle">
+                            <span>
+                              {version
+                                ? `Version ${version.versionNumber} · ${version.fileType.toUpperCase()}`
+                                : 'No version'}
+                            </span>
+                            {version ? (
+                              <RedactedMark
+                                redaction={version.redaction}
+                                producedAt={version.createdAt}
+                              />
+                            ) : null}
+                          </span>
+                        </div>
+                      </div>
+                    </TD>
+                    <TD className="px-3 whitespace-nowrap">
+                      <VerifyWords
+                        parts={documentVerifyParts(
+                          verify.get(file.id) ?? { status: 'pending' },
+                        )}
+                      />
+                    </TD>
+                    <TD className="px-3 whitespace-nowrap">
+                      <VerifyWords
+                        parts={
+                          redactRun
+                            ? [documentRedactPart(redactRun)]
+                            : [{ label: 'Not run', tone: 'neutral' }]
+                        }
+                      />
+                    </TD>
+                    <TD className="px-3 text-right text-meta whitespace-nowrap text-subtle tabular-nums">
+                      {formatDate(version?.updatedAt ?? file.updatedAt)}
+                    </TD>
+                    <TD className="pr-4 text-right">
+                      <Link
+                        to="/matters/$matterId/documents/$documentId"
+                        params={{ matterId, documentId: file.id }}
+                        aria-label={`Open ${filename}`}
+                        className="inline-flex size-7 items-center justify-center rounded-md text-subtle hover:bg-hover hover:text-ink"
+                      >
+                        <CaretRight size={16} aria-hidden />
+                      </Link>
+                    </TD>
+                  </TR>
+                )
+              })
+            )}
+          </TBody>
+        </Table>
+      </div>
     </Card>
   )
 }

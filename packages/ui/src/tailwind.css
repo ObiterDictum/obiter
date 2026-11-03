@@ -146,6 +146,12 @@
   --shadow-lg: var(--obiter-shadow-lg);
 }
 
+@theme {
+  --container-pane: 56rem;
+  --container-pane-wide: 68rem;
+  --container-pane-full: 78rem;
+}
+
 @layer base {
   html {
     background-color: var(--obiter-canvas);

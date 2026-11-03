@@ -110,7 +110,7 @@ export function LegislationProvisionView({
         </>
       }
     >
-      <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
         <section className="flex min-w-0 flex-col gap-4">
           {withheld ? (
             <div

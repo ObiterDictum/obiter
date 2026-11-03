@@ -128,8 +128,8 @@ export function LegalSearchView() {
             onRemoveDateTo={() => removeFilter('dateTo')}
             onRemoveType={clearTypeFilter}
           />
-          <div className="grid grid-cols-[196px_minmax(0,1fr)] items-start gap-6 max-md:grid-cols-1 wide:grid-cols-[216px_minmax(0,1fr)_340px]">
-            <div className="hidden md:block">
+          <div className="grid items-start gap-6 @pane-wide:grid-cols-[196px_minmax(0,1fr)] @pane-full:grid-cols-[216px_minmax(0,1fr)_340px]">
+            <div className="hidden @pane-wide:block">
               <SearchFacets
                 response={state.response}
                 filters={filters}
@@ -169,7 +169,7 @@ export function LegalSearchView() {
                 />
               )}
             </div>
-            <aside className="hidden wide:block">
+            <aside className="hidden @pane-full:block">
               <SearchPreview row={selectedRow} />
             </aside>
           </div>

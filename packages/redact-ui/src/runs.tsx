@@ -242,7 +242,7 @@ export function RedactionRunsView({
       title="Start a redaction"
       description="Choose a document, review every detected span, then finalise a redacted copy."
     >
-      <div className="grid items-start gap-6 wide:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
           <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line px-6 py-4">
             <div>

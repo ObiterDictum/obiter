@@ -98,7 +98,7 @@ export function RedactionReviewView({
     (runQuery.data !== undefined && textQuery.isPending && !failedWithoutText)
   ) {
     return (
-      <div className="mx-auto w-full max-w-[1216px] px-12 py-14 max-compact:px-8">
+      <div className="mx-auto w-full max-w-[1216px] px-12 py-14 @max-pane:px-8">
         <div className="flex flex-col gap-4" aria-busy="true">
           <Skeleton className="h-10 w-64" />
           <Skeleton className="h-96 w-full rounded-lg" />
@@ -288,7 +288,7 @@ export function RedactionReviewView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-line bg-surface px-12 py-4 max-compact:px-8">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-line bg-surface px-12 py-4 @max-pane:px-8">
         <div className="flex min-w-0 items-start gap-3">
           {onBack ? (
             <Button
@@ -332,7 +332,7 @@ export function RedactionReviewView({
         </div>
       </header>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-12 py-3 max-compact:px-8">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-12 py-3 @max-pane:px-8">
         <p className="text-meta text-muted">
           <span className="text-ink">
             {`${String(decidedCount)} of ${String(run.summary.totalSpans)} detected spans decided`}
@@ -373,7 +373,7 @@ export function RedactionReviewView({
       ) : null}
 
       {run.spans.length === 0 ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-12 py-8 max-compact:px-8">
+        <div className="min-h-0 flex-1 overflow-y-auto px-12 py-8 @max-pane:px-8">
           <EmptyState
             title="No sensitive data was detected in this document"
             body={zeroSpanBody(run)}
@@ -406,7 +406,7 @@ export function RedactionReviewView({
               )}
             </div>
             {run.replacementRunId ? (
-              <p className="border-t border-line bg-surface px-12 py-3 text-meta text-muted max-compact:px-8">
+              <p className="border-t border-line bg-surface px-12 py-3 text-meta text-muted @max-pane:px-8">
                 A newer model-detected run is available, so this run can no
                 longer take decisions or be finalised. Open the replacement run
                 above to continue.

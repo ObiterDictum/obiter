@@ -11,7 +11,7 @@ export function ContentFrame({
   return (
     <div
       className={cn(
-        'mx-auto w-full max-w-[1216px] px-12 max-compact:px-8',
+        'mx-auto w-full max-w-[1216px] overflow-x-clip px-12 @max-pane:px-8',
         className,
       )}
     >

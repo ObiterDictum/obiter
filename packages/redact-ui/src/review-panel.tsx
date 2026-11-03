@@ -82,7 +82,7 @@ export function ReviewPanel({
     counts.accepted + counts.rejected + counts.pseudonymised + counts.pending
   return (
     <aside
-      className="flex min-h-0 w-panel max-w-full shrink-0 flex-col border-l border-line bg-surface max-compact:w-[320px]"
+      className="flex min-h-0 w-panel max-w-full shrink-0 flex-col border-l border-line bg-surface @max-pane:w-[320px]"
       aria-label="Detected spans"
     >
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-6 py-3">

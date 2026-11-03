@@ -88,7 +88,7 @@ function JudgmentResult({
         <Button
           variant="secondary"
           size="sm"
-          className="compact:hidden"
+          className="@pane-full:hidden"
           onClick={onPreview}
         >
           Preview
@@ -161,7 +161,7 @@ function LegislationResult({
         <Button
           variant="secondary"
           size="sm"
-          className="compact:hidden"
+          className="@pane-full:hidden"
           onClick={onPreview}
         >
           Preview
