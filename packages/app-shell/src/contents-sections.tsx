@@ -4,7 +4,7 @@ import { CaretRight, FileText, ShieldCheck } from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 import { useShellContents } from './shell-contents'
 import type { MatterStatusFilter } from './views/matters-rows'
-import { useMatter, useMattersList } from './matters'
+import { useMattersList } from './matters'
 import { useMatterDocuments } from './documents'
 import { attentionRunLabel, useRedactionRunsList } from './redaction-runs'
 import { latestRunsPerDocument, openWorkForRun } from './open-work'
@@ -158,7 +158,6 @@ export function MatterContents({
   matterId: string
   pathname: string
 }) {
-  const matter = useMatter(matterId)
   const documents = useMatterDocuments(matterId)
   const verificationRuns = useOrganisationVerificationRuns(true).runs
   const redactionRuns = useRedactionRunsList().data?.runs ?? []
@@ -173,19 +172,6 @@ export function MatterContents({
 
   return (
     <div className="flex flex-col">
-      {matter.data ? (
-        <div className="px-2 pt-1 pb-2">
-          <p className="truncate text-meta text-ink">{matter.data.name}</p>
-          {matter.data.clientReference ? (
-            <p className="mt-0.5 truncate font-mono text-caption text-subtle">
-              {matter.data.clientReference}
-            </p>
-          ) : null}
-        </div>
-      ) : matter.isPending ? (
-        <Skeleton className="mx-2 my-2 h-8" />
-      ) : null}
-
       <Group title="Documents" count={documents.data?.length}>
         {documents.isPending ? (
           <Skeleton className="mx-2 my-1 h-6" />
