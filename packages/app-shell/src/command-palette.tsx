@@ -2,13 +2,14 @@ import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@obiter/ui'
 import {
+  Suspense,
   createContext,
+  lazy,
   useContext,
   useRef,
   useState,
   type ReactNode,
 } from 'react'
-import { blankDocumentFile } from './document-blank'
 import {
   documentsKeys,
   uploadMatterDocumentRequest,
@@ -16,7 +17,6 @@ import {
 } from './documents'
 import { useMattersList } from './matters'
 import { matterIdFromPath } from './navigation'
-import { CreateMatterDialog } from './views/create-matter-dialog'
 import { useShellContents } from './shell-contents'
 import { useShellShortcuts } from './shell-shortcuts'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings-sections'
@@ -26,7 +26,18 @@ import type {
   PaletteCreateId,
   PaletteRow,
 } from './command-palette-rows'
-import { CommandPaletteDialog } from './command-palette-dialog'
+
+const CommandPaletteDialogLazy = lazy(() =>
+  import('./command-palette-dialog').then((module) => ({
+    default: module.CommandPaletteDialog,
+  })),
+)
+
+const CreateMatterDialogLazy = lazy(() =>
+  import('./views/create-matter-dialog').then((module) => ({
+    default: module.CreateMatterDialog,
+  })),
+)
 
 interface CommandPaletteState {
   open: (trigger?: HTMLElement | null) => void
@@ -203,26 +214,26 @@ export function CommandPaletteProvider({
     })
   }
 
-  function startBlankDocument(matterId: string) {
-    void blankDocumentFile().then(
-      (file) =>
-        upload.mutateAsync({ matterId, file }).then((result) => {
-          toast({
-            title: 'Document created',
-            description: result.version.filename || result.document.logicalKey,
-          })
-          void navigate({
-            to: '/matters/$matterId/documents/$documentId',
-            params: { matterId, documentId: result.document.id },
-          })
-        }),
-      () =>
-        toast({
-          title: 'Could not create the document',
-          description: 'The blank document could not be prepared.',
-          tone: 'danger',
-        }),
-    )
+  async function startBlankDocument(matterId: string) {
+    try {
+      const { blankDocumentFile } = await import('./document-blank')
+      const file = await blankDocumentFile()
+      const result = await upload.mutateAsync({ matterId, file })
+      toast({
+        title: 'Document created',
+        description: result.version.filename || result.document.logicalKey,
+      })
+      void navigate({
+        to: '/matters/$matterId/documents/$documentId',
+        params: { matterId, documentId: result.document.id },
+      })
+    } catch {
+      toast({
+        title: 'Could not create the document',
+        description: 'The blank document could not be prepared.',
+        tone: 'danger',
+      })
+    }
   }
 
   function runCreate(id: PaletteCreateId, matterId?: string) {
@@ -236,7 +247,7 @@ export function CommandPaletteProvider({
     }
     if (!matterId) return
     if (id === 'blank-document') {
-      startBlankDocument(matterId)
+      void startBlankDocument(matterId)
       return
     }
     uploadTargetRef.current = matterId
@@ -247,20 +258,26 @@ export function CommandPaletteProvider({
     <CommandPaletteContext.Provider value={{ open: openPalette }}>
       {children}
       {open ? (
-        <CommandPaletteDialog
-          currentMatterId={currentMatterId}
-          currentMatterName={currentMatterName}
-          actions={actionRows}
-          onClose={closePalette}
-          onAction={runAction}
-          onCreate={runCreate}
-        />
+        <Suspense fallback={null}>
+          <CommandPaletteDialogLazy
+            currentMatterId={currentMatterId}
+            currentMatterName={currentMatterName}
+            actions={actionRows}
+            onClose={closePalette}
+            onAction={runAction}
+            onCreate={runCreate}
+          />
+        </Suspense>
       ) : null}
-      <CreateMatterDialog
-        trigger={null}
-        open={createMatterOpen}
-        onOpenChange={setCreateMatterOpen}
-      />
+      {createMatterOpen ? (
+        <Suspense fallback={null}>
+          <CreateMatterDialogLazy
+            trigger={null}
+            open
+            onOpenChange={setCreateMatterOpen}
+          />
+        </Suspense>
+      ) : null}
       <input
         ref={fileInputRef}
         type="file"
