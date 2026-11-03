@@ -200,18 +200,20 @@ export function useDocument(
   })
 }
 
+export function uploadMatterDocumentRequest(matterId: string, file: File) {
+  const form = new FormData()
+  form.set('file', file)
+  form.set('fileType', declaredFileType(file))
+  return apiFetch<DocumentUploadResponse>(
+    `/api/matters/${matterId}/documents`,
+    { method: 'POST', body: form },
+  )
+}
+
 export function useUploadMatterDocument(matterId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (file: File) => {
-      const form = new FormData()
-      form.set('file', file)
-      form.set('fileType', declaredFileType(file))
-      return apiFetch<DocumentUploadResponse>(
-        `/api/matters/${matterId}/documents`,
-        { method: 'POST', body: form },
-      )
-    },
+    mutationFn: (file: File) => uploadMatterDocumentRequest(matterId, file),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: documentsKeys.byMatter(matterId),

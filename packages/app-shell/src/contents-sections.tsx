@@ -17,7 +17,7 @@ import {
   verifyTab,
   type MatterTab,
 } from './matter-tabs'
-import { useMatterTabsOptional } from './matter-tabs-state'
+import { useMatterPreviewRef } from './matter-preview'
 import { SETTINGS_SECTIONS } from './settings-sections'
 import { getRecentLegalSearches } from './legal-search-recents'
 import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
@@ -79,14 +79,14 @@ function RowLink({
   tone?: 'danger' | 'warning' | 'info'
   preview?: MatterTab
 }) {
-  const tabs = useMatterTabsOptional()
+  const previewRef = useMatterPreviewRef()
   return (
     <Link
       to={to}
       params={params}
       className={rowClass(current)}
       onClick={(event) => {
-        if (!preview || !tabs) return
+        if (!preview || !previewRef) return
         if (
           event.button !== 0 ||
           event.metaKey ||
@@ -95,7 +95,7 @@ function RowLink({
           event.altKey
         )
           return
-        tabs.openPreview(preview)
+        previewRef.current?.(preview)
       }}
     >
       {icon}
@@ -403,18 +403,20 @@ export function SearchContents() {
   const recent =
     typeof window === 'undefined'
       ? []
-      : getRecentLegalSearches(window.localStorage)
+      : getRecentLegalSearches(window.sessionStorage)
   if (recent.length === 0) return <Note>No recent searches.</Note>
   return (
     <div className="flex flex-col">
       <Group title="Recent searches">
         {recent.map((search) => (
-          <p
+          <Link
             key={search}
-            className="flex min-h-8 items-center gap-2 rounded-lg px-2 py-1.5 text-meta text-muted"
+            to="/search"
+            search={{ q: search }}
+            className={rowClass(false)}
           >
-            {search}
-          </p>
+            <span className="min-w-0 flex-1 truncate">{search}</span>
+          </Link>
         ))}
       </Group>
     </div>

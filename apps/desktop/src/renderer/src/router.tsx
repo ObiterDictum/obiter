@@ -309,6 +309,11 @@ function DesktopMatterRedactionReviewRoute() {
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'search',
+  validateSearch: (search: Record<string, unknown>) => {
+    const query = search.q
+    if (typeof query !== 'string' || !query.trim()) return {}
+    return { q: query }
+  },
   component: DesktopSearchRoute,
 })
 

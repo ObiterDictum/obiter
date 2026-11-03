@@ -50,6 +50,7 @@ export {
 } from './context-menu'
 export {
   Popover,
+  PopoverTrigger,
   PopoverPortal,
   PopoverPositioner,
   PopoverPopup,

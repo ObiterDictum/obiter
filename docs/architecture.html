@@ -2246,19 +2246,20 @@
                   <td>
                     One 40px row, the top row of the right-hand column: the
                     sidebar toggle, back and forward, the breadcrumb
-                    (organisation, module, current page) and the app search
-                    field at the far right. Because the sidebar runs the full
-                    height, these controls start exactly at the pane's left edge
-                    and follow it when the sidebar collapses or expands, without
-                    hard-coded offsets. The toggle collapses the full sidebar on
-                    Home and hides or shows the contents panel elsewhere
-                    (persisted per person); the right slot has no title-bar
-                    toggle. The account menu is a disclosure with the full
-                    keyboard contract: arrows, Home/End, Escape returning focus
-                    to the avatar. On desktop the row is the window drag region
-                    with the controls no-drag, and on darwin the sidebar's
-                    top-left is padded so the monogram clears the traffic
-                    lights.
+                    (organisation, module, current page) and the search trigger
+                    at the far right. Inside a matter the matter's crumb is a
+                    switcher button, not a link. Because the sidebar runs the
+                    full height, these controls start exactly at the pane's left
+                    edge and follow it when the sidebar collapses or expands,
+                    without hard-coded offsets. The toggle collapses the full
+                    sidebar on Home and hides or shows the contents panel
+                    elsewhere (persisted per person); the right slot has no
+                    title-bar toggle. The account menu is a disclosure with the
+                    full keyboard contract: arrows, Home/End, Escape returning
+                    focus to the avatar. On desktop the row is the window drag
+                    region with the controls no-drag, and on darwin the
+                    sidebar's top-left is padded so the monogram clears the
+                    traffic lights.
                   </td>
                 </tr>
                 <tr>
@@ -2288,27 +2289,65 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">App search field</td>
+                  <td class="id">Command palette</td>
                   <td>Title bar</td>
                   <td>
-                    Shell-level search at the right of the title bar, distinct
-                    from the case-law search view; icon-only at 1024 and under,
-                    opened with ⌘K / Ctrl+K.
+                    One Base UI dialog over the whole shell, opened from the
+                    search trigger at the right of the title bar or with ⌘K /
+                    Ctrl+K and closed with Escape, which returns focus to
+                    whatever opened it. The trigger is icon-only at 1024 and
+                    under. One input filters grouped rows: recent items (the
+                    recently opened document, then matters by last update) when
+                    the input is empty, then Go to (matters, documents, Verify
+                    runs, redaction runs), Create (new matter, upload, new blank
+                    document, start redaction), Actions (sidebar, agent panel,
+                    focus mode, theme, each Settings section) and, last, "Search
+                    case law and legislation for '…'", which opens
+                    <code>/search?q=</code>. Rows are links where they navigate,
+                    carry their shortcut from <code>shell-shortcuts.tsx</code>,
+                    and are scored by a local subsequence match (no dependency).
+                    Upload and new blank document go into the open matter, or
+                    ask which matter when none is open. The palette replaces the
+                    old app search dropdown.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">Matter switcher</td>
+                  <td>Matter routes</td>
+                  <td>
+                    The matter crumb opens a Base UI menu with a filter input,
+                    up to eight recent matters with their references, the
+                    current matter marked with a brand dot, and All matters;
+                    choosing a matter opens that matter's page. The same
+                    component is not used on the matters list, where there is no
+                    current matter.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">Presence avatars</td>
+                  <td>Document header</td>
+                  <td>
+                    Up to three initials avatars of the other people in an open
+                    document, next to the save state, with a tooltip naming the
+                    person and whether they are viewing or editing, and
+                    <code>+N</code> beyond three. Names come from the
+                    organisation member list; presence comes from the existing
+                    collaboration sync. Nothing renders when you are alone.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">Shell shortcuts</td>
                   <td>Global</td>
                   <td>
-                    One module (<code>shell-shortcuts.tsx</code>): ⌘\ / Ctrl+\
-                    sidebar toggle, ⌘J / Ctrl+J right slot, ⌘. / Ctrl+. focus
-                    mode, and a <code>g</code> then <code>h</code>,
-                    <code>m</code>, <code>v</code>, <code>r</code> or
-                    <code>s</code> sequence for Home, Matters, Verify, Redact
-                    and Search. Bare letters are ignored while typing and any
-                    key the editor or a dialog has already claimed is left
-                    alone. Focus mode hides the rail, contents panel and slot,
-                    and Escape leaves it.
+                    One module (<code>shell-shortcuts.tsx</code>): ⌘K / Ctrl+K
+                    command palette, ⌘\ / Ctrl+\ sidebar toggle, ⌘J / Ctrl+J
+                    right slot, ⌘. / Ctrl+. focus mode, and a
+                    <code>g</code> then <code>h</code>, <code>m</code>,
+                    <code>v</code>, <code>r</code> or <code>s</code> sequence
+                    for Home, Matters, Verify, Redact and Search. Bare letters
+                    are ignored while typing and any key the editor or a dialog
+                    has already claimed is left alone. Focus mode hides the
+                    rail, contents panel and slot, and Escape leaves it.
                   </td>
                 </tr>
                 <tr>
@@ -2415,7 +2454,9 @@
             to one matter, and <code>/matters/:matterId/redact/:runId</code>, a
             redaction run reviewed inside the matter pane. Web and desktop
             routers are kept at parity and <code>routeTree.gen.ts</code> carries
-            both.
+            both. Both routers validate a <code>q</code> search parameter on
+            <code>/search</code>, so a palette row and a stored recent search
+            can open the view with the search already running.
           </p>
         </section>
 
@@ -2754,10 +2795,10 @@
                 </dd>
                 <dt>Shell</dt>
                 <dd>
-                  frame · title-bar · sidebar · sidebar-rail · sidebar-rows ·
+                  frame · title-bar · command-palette · command-palette-rows ·
+                  matter-switcher · sidebar · sidebar-rail · sidebar-rows ·
                   contents-panel · right-slot · shell-shortcuts ·
-                  shell-preferences · shell-states · page-scaffold ·
-                  app-search-field · navigation
+                  shell-preferences · shell-states · page-scaffold · navigation
                 </dd>
                 <dt>Contract</dt>
                 <dd>

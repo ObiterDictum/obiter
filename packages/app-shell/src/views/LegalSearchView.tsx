@@ -1,4 +1,5 @@
 import { SidePanel } from '@obiter/ui'
+import { useSearch } from '@tanstack/react-router'
 import { ContentFrame } from '../content-frame'
 import {
   SearchCommandBar,
@@ -49,6 +50,9 @@ const courtShortcuts = [
 ]
 
 export function LegalSearchView() {
+  // SAFETY: useSearch with strict:false is untyped; q is typeof-narrowed into a string before use.
+  const search = useSearch({ strict: false }) as { q?: string }
+  const initialQuery = typeof search.q === 'string' ? search.q : ''
   const {
     query,
     state,
@@ -83,7 +87,7 @@ export function LegalSearchView() {
     setPreviewOpen,
     setShortcutsOpen,
     setTypeFilter,
-  } = useLegalSearch()
+  } = useLegalSearch(initialQuery)
   const activeFilterCount = countActiveLegalSearchFilters(filters)
 
   return (

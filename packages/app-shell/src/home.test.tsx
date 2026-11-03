@@ -17,6 +17,7 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
+  useSearch,
 } from '@tanstack/react-router'
 import type { VerificationRun } from '@obiter/contracts'
 import { documentsKeys } from './documents'
@@ -235,6 +236,11 @@ function verificationState(runs: VerificationRun[] = [], loading = false) {
   }
 }
 
+function SearchQueryProbe() {
+  const search = useSearch({ strict: false }) as { q?: string }
+  return <p data-testid="search-query">{search.q ?? ''}</p>
+}
+
 function buildRouter() {
   const rootRoute = createRootRoute()
   const routes = [
@@ -276,7 +282,7 @@ function buildRouter() {
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/search',
-      component: () => null,
+      component: SearchQueryProbe,
     }),
     createRoute({
       getParentRoute: () => rootRoute,
@@ -675,8 +681,10 @@ describe('HomeRouteView — empty workspace search', () => {
         name: /without prejudice privilege/,
       }),
     )
-    expect(window.sessionStorage.getItem('obiter.search.initialQuery')).toBe(
-      'without prejudice privilege',
+    await waitFor(() =>
+      expect(screen.getByTestId('search-query').textContent).toBe(
+        'without prejudice privilege',
+      ),
     )
   })
 })

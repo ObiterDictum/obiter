@@ -1,7 +1,11 @@
-import { ArrowsOutSimple } from '@obiter/ui/icons'
 import type { AppPlatform } from '@obiter/contracts'
-import { Suspense, lazy, useState, type ReactNode } from 'react'
-import { useMatterTabs } from './matter-tabs-state'
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
+import { useMatterPreviewRef } from './matter-preview'
+import {
+  MatterTabsProvider,
+  useHydrateMatterTabs,
+  useMatterTabs,
+} from './matter-tabs-state'
 
 const MatterTabStrip = lazy(() =>
   import('./matter-tab-strip').then((module) => ({
@@ -19,6 +23,28 @@ const MIN_SPLIT = 30
 const MAX_SPLIT = 72
 
 export function MatterTabsPane({
+  matterId,
+  userId,
+  platform,
+  compact,
+  children,
+}: {
+  matterId: string
+  userId: string
+  platform: AppPlatform
+  compact: boolean
+  children: ReactNode
+}) {
+  return (
+    <MatterTabsProvider key={matterId} userId={userId} matterId={matterId}>
+      <MatterTabsPaneBody platform={platform} compact={compact}>
+        {children}
+      </MatterTabsPaneBody>
+    </MatterTabsProvider>
+  )
+}
+
+function MatterTabsPaneBody({
   platform,
   compact,
   children,
@@ -27,7 +53,16 @@ export function MatterTabsPane({
   compact: boolean
   children: ReactNode
 }) {
-  const { sideId, openToSide, closeSide } = useMatterTabs()
+  useHydrateMatterTabs()
+  const { sideId, openToSide, closeSide, openPreview } = useMatterTabs()
+  const previewRef = useMatterPreviewRef()
+  useEffect(() => {
+    if (!previewRef) return
+    previewRef.current = openPreview
+    return () => {
+      previewRef.current = null
+    }
+  })
   const [split, setSplit] = useState(56)
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
@@ -66,8 +101,7 @@ export function MatterTabsPane({
             }}
             className="absolute inset-y-0 right-0 z-20 flex w-44 items-center justify-center border-l-2 border-dashed border-brand bg-brand-soft text-meta text-brand"
           >
-            <span className="flex items-center gap-2 rounded-md bg-surface px-3 py-1.5 shadow-sm">
-              <ArrowsOutSimple size={14} aria-hidden />
+            <span className="rounded-md bg-surface px-3 py-1.5 shadow-sm">
               Open to the side
             </span>
           </button>

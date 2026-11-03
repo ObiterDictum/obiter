@@ -21,8 +21,7 @@ export function HomeEmpty({
   function search(term: string) {
     const trimmed = term.trim()
     if (!trimmed) return
-    window.sessionStorage.setItem('obiter.search.initialQuery', trimmed)
-    void navigate({ to: '/search' })
+    void navigate({ to: '/search', search: { q: trimmed } })
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

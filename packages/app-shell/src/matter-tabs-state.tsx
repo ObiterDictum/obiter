@@ -8,6 +8,7 @@ import {
 } from 'react'
 import {
   closeTab,
+  emptyMatterTabState,
   includeRouteTab,
   matterTabFromPath,
   matterTabPath,
@@ -16,14 +17,16 @@ import {
   openTab,
   overviewTab,
   promoteTab,
-  readMatterTabs,
   writeMatterTabs,
   type MatterTab,
   type MatterTabState,
 } from './matter-tabs'
+import { readStoredMatterTabs } from './matter-tab-storage'
 
 export interface MatterTabsValue {
   matterId: string
+  storageKey: string
+  hydrate: (state: MatterTabState) => void
   tabs: MatterTab[]
   activeId: string | null
   sideId: string | null
@@ -58,6 +61,13 @@ function readStorage(): Storage | null {
   }
 }
 
+export function useHydrateMatterTabs(): void {
+  const { hydrate, storageKey } = useMatterTabs()
+  useEffect(() => {
+    hydrate(readStoredMatterTabs(storageKey))
+  }, [])
+}
+
 export function sideFromSearch(search: string): string | null {
   return new URLSearchParams(search).get('side')
 }
@@ -85,14 +95,18 @@ export function MatterTabsProvider({
   const search = useRouterState({ select: (state) => state.location.searchStr })
   const navigate = useNavigate()
   const key = matterTabStorageKey(userId, matterId)
-  const [state, setState] = useState<MatterTabState>(() =>
-    readMatterTabs(readStorage(), key),
-  )
+  const [state, setState] = useState<MatterTabState>(emptyMatterTabState)
+  const [hydrated, setHydrated] = useState(false)
 
   const routeTab = matterTabFromPath(pathname)
   const activeId = routeTab?.id ?? null
   const sideId = sideFromSearch(search)
   const tabs = includeRouteTab(state.tabs, routeTab)
+
+  function hydrate(next: MatterTabState) {
+    setState((current) => (current.tabs.length > 0 ? current : next))
+    setHydrated(true)
+  }
 
   function commit(next: MatterTabState) {
     setState(next)
@@ -156,6 +170,7 @@ export function MatterTabsProvider({
   }
 
   useEffect(() => {
+    if (!hydrated) return
     if (
       tabs.length === state.tabs.length &&
       tabs.every((tab, index) => tab.id === state.tabs[index]?.id)
@@ -164,10 +179,12 @@ export function MatterTabsProvider({
     const next = { tabs, lastClosed: state.lastClosed }
     setState(next)
     writeMatterTabs(readStorage(), key, next)
-  }, [pathname])
+  }, [pathname, hydrated])
 
   const value: MatterTabsValue = {
     matterId,
+    storageKey: key,
+    hydrate,
     tabs,
     activeId,
     sideId,

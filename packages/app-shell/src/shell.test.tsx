@@ -118,6 +118,8 @@ const documentsModule = { ...(await import('./documents')) }
 mock.module('./documents', () => ({
   ...documentsModule,
   useMatterDocuments: () => ({ data: mocks.documents, isPending: false }),
+  useCitationTargets: () => ({ data: [] }),
+  useRecentlyOpenedDocument: () => ({ data: null }),
 }))
 
 const redactionModule = { ...(await import('./redaction-runs')) }
@@ -301,6 +303,40 @@ describe('shell frame', () => {
     expect(
       screen.queryByRole('complementary', { name: 'Agent panel' }),
     ).toBeNull()
+  })
+
+  it('opens the command palette from the title bar field and returns focus to it on Escape', async () => {
+    renderShell('/')
+    const trigger = await screen.findByRole('button', { name: 'Search Obiter' })
+    expect(trigger.textContent).toContain('Ctrl+K')
+    fireEvent.click(trigger)
+
+    const input = await screen.findByRole('combobox', { name: 'Search Obiter' })
+    fireEvent.keyDown(input, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('combobox')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+  })
+
+  it('opens the command palette with the primary-modifier shortcut', async () => {
+    renderShell('/')
+    await screen.findByRole('button', { name: 'Search Obiter' })
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+    expect(
+      await screen.findByRole('combobox', { name: 'Search Obiter' }),
+    ).toBeTruthy()
+  })
+
+  it('opens a matter from the command palette', async () => {
+    renderShell('/')
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Search Obiter' }),
+    )
+    const input = await screen.findByRole('combobox', { name: 'Search Obiter' })
+    fireEvent.change(input, { target: { value: 'smith' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() =>
+      expect(screen.getByTestId('pathname').textContent).toBe('/matters/mtr_1'),
+    )
   })
 
   it('keeps the search field in the title bar rather than the sidebar', async () => {

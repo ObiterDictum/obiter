@@ -121,7 +121,7 @@ mock.module('./verification-runs', () => ({
 
 const { ContentsPanel } = await import('./contents-panel')
 const { MatterTabsPane } = await import('./matter-split')
-const { MatterTabsProvider } = await import('./matter-tabs-state')
+const { MatterPreviewProvider } = await import('./matter-preview')
 const { matterTabStorageKey } = await import('./matter-tabs')
 
 function Pane({ platform }: { platform: 'web' | 'desktop' }) {
@@ -129,15 +129,20 @@ function Pane({ platform }: { platform: 'web' | 'desktop' }) {
     select: (state) => state.location.pathname,
   })
   return (
-    <MatterTabsProvider userId="usr_1" matterId="mtr_1">
+    <MatterPreviewProvider>
       <div className="flex">
         <ContentsPanel section="matters" pathname={pathname} overlay={false} />
-        <MatterTabsPane platform={platform} compact={false}>
+        <MatterTabsPane
+          matterId="mtr_1"
+          userId="usr_1"
+          platform={platform}
+          compact={false}
+        >
           <p data-testid="page">{pathname}</p>
           <input aria-label="Note" />
         </MatterTabsPane>
       </div>
-    </MatterTabsProvider>
+    </MatterPreviewProvider>
   )
 }
 

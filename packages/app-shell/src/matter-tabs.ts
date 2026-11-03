@@ -99,17 +99,6 @@ export function emptyMatterTabState(): MatterTabState {
   return { tabs: [], lastClosed: null }
 }
 
-export function readMatterTabs(
-  storage: Storage | null,
-  key: string,
-): MatterTabState {
-  try {
-    return parseMatterTabState(storage?.getItem(key) ?? null)
-  } catch {
-    return emptyMatterTabState()
-  }
-}
-
 export function writeMatterTabs(
   storage: Storage | null,
   key: string,
@@ -119,20 +108,6 @@ export function writeMatterTabs(
     storage?.setItem(key, JSON.stringify(state))
   } catch {
     return
-  }
-}
-
-export function parseMatterTabState(raw: string | null): MatterTabState {
-  if (!raw) return emptyMatterTabState()
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (!isRecord(parsed)) return emptyMatterTabState()
-    return {
-      tabs: Array.isArray(parsed.tabs) ? parsed.tabs.filter(isTab) : [],
-      lastClosed: isTab(parsed.lastClosed) ? parsed.lastClosed : null,
-    }
-  } catch {
-    return emptyMatterTabState()
   }
 }
 
@@ -202,30 +177,6 @@ function capped(tabs: MatterTab[]): MatterTab[] {
     next.splice(index, 1)
   }
   return next
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isTab(value: unknown): value is MatterTab {
-  if (!isRecord(value)) return false
-  return (
-    typeof value.id === 'string' &&
-    isTabKind(value.kind) &&
-    (typeof value.target === 'string' || value.target === null) &&
-    typeof value.title === 'string' &&
-    typeof value.preview === 'boolean'
-  )
-}
-
-function isTabKind(value: unknown): value is MatterTabKind {
-  return (
-    value === 'overview' ||
-    value === 'document' ||
-    value === 'verify' ||
-    value === 'redact'
-  )
 }
 
 export type MatterTabCommand =

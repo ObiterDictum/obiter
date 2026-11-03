@@ -23,7 +23,7 @@ import {
   SidebarSimple,
   X,
 } from '@obiter/ui/icons'
-import { Suspense, lazy, useCallback, useEffect, type ReactNode } from 'react'
+import { useCallback, useEffect, type ReactNode } from 'react'
 import { formatShortcut, useIsMacPlatform } from './keyboard-platform'
 import type { AppPlatform as Platform } from '@obiter/contracts'
 import { useMatterDocuments } from './documents'
@@ -35,11 +35,7 @@ import {
 import { useMatterTabs } from './matter-tabs-state'
 import { useMatter } from './matters'
 import { useRedactionRunsList } from './redaction-runs'
-const MatterNewItemMenu = lazy(() =>
-  import('./matter-tab-new-menu').then((module) => ({
-    default: module.MatterNewItemMenu,
-  })),
-)
+import { MatterNewItemMenu } from './matter-tab-new-menu'
 
 interface TabIconProps {
   size?: number
@@ -89,16 +85,10 @@ export function MatterTabStrip({
               onTabDrag={onTabDrag}
             />
           ))}
-          <Suspense fallback={null}>
-            <MatterNewItemMenu />
-          </Suspense>
+          <MatterNewItemMenu />
         </div>
       )}
-      {compact ? (
-        <Suspense fallback={null}>
-          <MatterNewItemMenu />
-        </Suspense>
-      ) : null}
+      {compact ? <MatterNewItemMenu /> : null}
       {compact ? null : <OverflowMenu tabs={named} activeId={activeId} />}
       <SplitControls />
     </div>
@@ -376,43 +366,27 @@ function SplitControls() {
     .find((tab) => tab.kind === 'document' && tab.id !== activeId)
   if (sideId) {
     return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              aria-label="Close split view"
-              onClick={closeSide}
-              className={stripButtonClass}
-            >
-              <X size={16} aria-hidden />
-            </button>
-          }
-        />
-        <TooltipContent side="bottom">Close split view</TooltipContent>
-      </Tooltip>
+      <button
+        type="button"
+        aria-label="Close split view"
+        onClick={closeSide}
+        className={stripButtonClass}
+      >
+        <X size={16} aria-hidden />
+      </button>
     )
   }
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            aria-label="Open a document to the side"
-            disabled={!beside}
-            onClick={() => {
-              if (beside) openToSide(beside.id)
-            }}
-            className={stripButtonClass}
-          >
-            <SidebarSimple size={16} aria-hidden className="rotate-180" />
-          </button>
-        }
-      />
-      <TooltipContent side="bottom">
-        Show a document beside this one
-      </TooltipContent>
-    </Tooltip>
+    <button
+      type="button"
+      aria-label="Open a document to the side"
+      disabled={!beside}
+      onClick={() => {
+        if (beside) openToSide(beside.id)
+      }}
+      className={stripButtonClass}
+    >
+      <SidebarSimple size={16} aria-hidden className="rotate-180" />
+    </button>
   )
 }

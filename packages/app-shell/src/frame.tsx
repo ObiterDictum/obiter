@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useAuth } from './auth'
+import { CommandPaletteProvider } from './command-palette'
 import { currentUserQueryOptions } from './current-user'
 import { ShellBootLoading, ShellOfflineBanner } from './shell-states'
 import type { ShellSection } from './navigation'
@@ -19,13 +20,12 @@ import { SidebarRail } from './sidebar-rail'
 import { TitleBar } from './title-bar'
 import type { RightSlotTabId } from './right-slot'
 import { ShellContentsProvider } from './shell-contents'
+import { MatterPreviewProvider } from './matter-preview'
 import {
   documentIdFromPath,
   matterIdFromPath,
   resolveSection,
 } from './navigation'
-import { MatterTabsProvider } from './matter-tabs-state'
-import { MatterTabsPane } from './matter-split'
 import {
   SHELL_STORAGE_KEY,
   useStoredFlag,
@@ -42,6 +42,12 @@ const ContentsPanelLazy = lazy(() =>
 
 const RightSlotLazy = lazy(() =>
   import('./right-slot').then((module) => ({ default: module.RightSlot })),
+)
+
+const MatterTabsPaneLazy = lazy(() =>
+  import('./matter-split').then((module) => ({
+    default: module.MatterTabsPane,
+  })),
 )
 
 const NARROW_QUERY = '(max-width: 1023px)'
@@ -195,82 +201,72 @@ export function ShellFrame({
   const navControls = home ? 'app-shell-sidebar' : 'app-shell-contents'
 
   return (
-    <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
-      {focusMode ? null : rail ? (
-        <SidebarRail
-          platform={platform}
-          rightSlotOpen={rightSlotOpen}
-          onToggleRightSlot={toggleRightSlot}
-        />
-      ) : (
-        <Sidebar
-          orgName={me?.organisation?.name}
-          platform={platform}
-          rightSlotOpen={rightSlotOpen}
-          onToggleRightSlot={toggleRightSlot}
-        />
-      )}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <TitleBar
-          platform={platform}
-          navLabel={navLabel}
-          navExpanded={home ? !sidebarCollapsed : contentsVisible}
-          navControls={navControls}
-          onToggleNav={toggleNav}
-          navRef={navToggleRef}
-        />
-        <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
-          <div
-            id="app-shell-pane"
-            className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
-          >
-            {matterId && me ? (
-              <MatterTabsProvider
-                key={matterId}
-                userId={me.user.id}
-                matterId={matterId}
-              >
+    <CommandPaletteProvider
+      onToggleNav={toggleNav}
+      onToggleRightSlot={toggleRightSlot}
+      onToggleFocusMode={() => setFocusMode(!focusMode)}
+    >
+      <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
+        {focusMode ? null : rail ? (
+          <SidebarRail
+            platform={platform}
+            rightSlotOpen={rightSlotOpen}
+            onToggleRightSlot={toggleRightSlot}
+          />
+        ) : (
+          <Sidebar
+            orgName={me?.organisation?.name}
+            platform={platform}
+            rightSlotOpen={rightSlotOpen}
+            onToggleRightSlot={toggleRightSlot}
+          />
+        )}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <TitleBar
+            platform={platform}
+            navLabel={navLabel}
+            navExpanded={home ? !sidebarCollapsed : contentsVisible}
+            navControls={navControls}
+            onToggleNav={toggleNav}
+            navRef={navToggleRef}
+          />
+          <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
+            <div
+              id="app-shell-pane"
+              className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
+            >
+              <MatterPreviewProvider>
                 <ShellPane
                   section={section}
                   pathname={pathname}
                   narrow={narrow}
                   contentsVisible={contentsVisible}
-                  matterTabs
+                  matterTabs={matterId !== null && me !== undefined}
+                  matterId={matterId}
+                  userId={me?.user.id ?? ''}
                   platform={platform}
                   compact={bottomBar}
                   onCloseContents={closeContentsOverlay}
                 >
                   {children}
                 </ShellPane>
-              </MatterTabsProvider>
-            ) : (
-              <ShellPane
-                section={section}
-                pathname={pathname}
-                narrow={narrow}
-                contentsVisible={contentsVisible}
-                platform={platform}
-                compact={bottomBar}
-                onCloseContents={closeContentsOverlay}
-              >
-                {children}
-              </ShellPane>
-            )}
-          </div>
-          {rightSlotOpen && !focusMode ? (
-            <div id="app-shell-right-slot" className="contents">
-              <Suspense fallback={null}>
-                <RightSlotLazy
-                  section={section}
-                  tab={normaliseTab(rightSlotTab)}
-                  onTabChange={setRightSlotTab}
-                />
-              </Suspense>
+              </MatterPreviewProvider>
             </div>
-          ) : null}
+            {rightSlotOpen && !focusMode ? (
+              <div id="app-shell-right-slot" className="contents">
+                <Suspense fallback={null}>
+                  <RightSlotLazy
+                    section={section}
+                    tab={normaliseTab(rightSlotTab)}
+                    onTabChange={setRightSlotTab}
+                  />
+                </Suspense>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
-    </div>
+    </CommandPaletteProvider>
   )
 }
 
@@ -280,6 +276,8 @@ function ShellPane({
   narrow,
   contentsVisible,
   matterTabs,
+  matterId,
+  userId,
   platform,
   compact,
   onCloseContents,
@@ -290,6 +288,8 @@ function ShellPane({
   narrow: boolean
   contentsVisible: boolean
   matterTabs?: boolean
+  matterId: string | null
+  userId: string
   platform: AppPlatform
   compact: boolean
   onCloseContents: () => void
@@ -315,10 +315,17 @@ function ShellPane({
         )}
       >
         <ShellOfflineBanner />
-        {matterTabs ? (
-          <MatterTabsPane platform={platform} compact={compact}>
-            {children}
-          </MatterTabsPane>
+        {matterTabs && matterId ? (
+          <Suspense fallback={null}>
+            <MatterTabsPaneLazy
+              matterId={matterId}
+              userId={userId}
+              platform={platform}
+              compact={compact}
+            >
+              {children}
+            </MatterTabsPaneLazy>
+          </Suspense>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         )}

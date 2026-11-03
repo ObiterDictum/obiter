@@ -13,12 +13,12 @@ import {
   neighbourTabId,
   openTab,
   overviewTab,
-  parseMatterTabState,
   promoteTab,
   redactTab,
   reopenLastClosed,
   verifyTab,
 } from './matter-tabs'
+import { parseMatterTabState } from './matter-tab-storage'
 
 function documentIds(tabs: ReturnType<typeof includeRouteTab>) {
   return tabs.map((tab) => tab.id)
