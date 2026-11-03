@@ -1,11 +1,10 @@
 import {
-  MatterRouteView,
   currentUserQueryOptions,
   guardAuth,
   matterDocumentsQueryOptions,
   matterQueryOptions,
 } from '@obiter/app-shell'
-import { Outlet, createFileRoute, useRouterState } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/matters/$matterId')({
   loader: async ({ context, params }) => {
@@ -19,19 +18,4 @@ export const Route = createFileRoute('/matters/$matterId')({
       matterDocumentsQueryOptions(params.matterId),
     )
   },
-  component: MatterDetailRouteComponent,
 })
-
-function MatterDetailRouteComponent() {
-  const { matterId } = Route.useParams()
-  const onDocumentRoute = useRouterState({
-    select: (state) =>
-      state.matches.some(
-        (match) => match.routeId === '/matters/$matterId/documents/$documentId',
-      ),
-  })
-
-  if (onDocumentRoute) return <Outlet />
-
-  return <MatterRouteView matterId={matterId} platform="web" />
-}

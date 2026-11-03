@@ -87,10 +87,12 @@ export function ContentsPanel({
   section,
   pathname,
   overlay,
+  onDismiss,
 }: {
   section: ShellSection
   pathname: string
   overlay: boolean
+  onDismiss?: () => void
 }): ReactNode {
   const matterId = matterIdFromPath(pathname)
   const label = contentsLabel(section, pathname)
@@ -108,7 +110,14 @@ export function ContentsPanel({
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3 text-item text-ink">
         <ContentsTitle section={section} matterId={matterId} />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2"
+        onClick={(event) => {
+          if (!overlay || !onDismiss) return
+          const target = event.target
+          if (target instanceof Element && target.closest('a')) onDismiss()
+        }}
+      >
         <ContentsBody section={section} pathname={pathname} />
       </div>
     </aside>

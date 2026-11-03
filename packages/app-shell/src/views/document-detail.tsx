@@ -30,10 +30,12 @@ export function DocumentDetailLayoutView({
   matterId,
   documentId,
   redactionRunsRegion,
+  onDocumentEdited,
 }: {
   matterId: string
   documentId: string
   redactionRunsRegion?: ReactNode
+  onDocumentEdited?: () => void
 }) {
   const navigate = useNavigate()
   const document = useDocument(documentId)
@@ -111,7 +113,7 @@ export function DocumentDetailLayoutView({
 
   return (
     <div className="flex flex-col">
-      <div className="h-[calc(100dvh-3rem)] min-h-[34rem] shrink-0">
+      <div className="h-[calc(100dvh-5.5rem)] min-h-[34rem] shrink-0">
         {viewingHistorical && selectedVersion ? (
           <ContentFrame className="flex h-full flex-col py-8">
             <DocumentVersionView
@@ -127,6 +129,7 @@ export function DocumentDetailLayoutView({
             document={loaded.document}
             versions={loaded.versions}
             onViewVersion={setSelectedVersionId}
+            onDocumentEdited={onDocumentEdited}
             headerLinks={{ matter: matterLink }}
             headerActions={
               <DocumentActionsMenu

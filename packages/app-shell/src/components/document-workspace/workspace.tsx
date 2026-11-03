@@ -45,12 +45,16 @@ type DocumentWorkspaceProps = {
   headerLinks?: { matter?: ReactNode }
   headerActions?: ReactNode
   onViewVersion?: (versionId: string) => void
+  onDocumentEdited?: () => void
 }
 
 export function DocumentWorkspace(props: DocumentWorkspaceProps) {
   const kind = workspaceKind(props.version?.fileType)
   return (
-    <DocumentDraftStatusProvider key={props.documentId}>
+    <DocumentDraftStatusProvider
+      key={props.documentId}
+      onDirtyChange={props.onDocumentEdited}
+    >
       <VerificationWorkspaceProvider
         documentId={props.documentId}
         mappable={kind === 'docx'}

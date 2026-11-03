@@ -58,6 +58,23 @@ export {
 export { setAppTheme, useAppTheme, THEME_STORAGE_KEY } from './use-app-theme'
 
 export { AppShellLayout } from './frame'
+export {
+  MatterTabsProvider,
+  useMatterTabs,
+  useMatterTabsOptional,
+  type MatterTabsValue,
+} from './matter-tabs-state'
+export {
+  MATTER_TAB_LIMIT,
+  matterTabFromPath,
+  matterTabPath,
+  matterTabStorageKey,
+  type MatterTab,
+  type MatterTabKind,
+  type MatterTabState,
+} from './matter-tabs'
+export { MatterTabStrip } from './matter-tab-strip'
+export { MatterTabsPane } from './matter-split'
 export { PageScaffold, type PageScaffoldProps } from './page-scaffold'
 export {
   classifyShellFailure,
