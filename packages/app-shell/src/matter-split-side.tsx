@@ -45,7 +45,7 @@ export function MatterSplitSide({
       ? 100
       : Math.min(
           100,
-          Math.max(50, Math.floor(((width - 32) / PAPER_WIDTH) * 100)),
+          Math.max(35, Math.floor(((width - 32) / PAPER_WIDTH) * 100)),
         )
 
   return (
