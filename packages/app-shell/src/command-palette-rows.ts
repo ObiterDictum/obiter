@@ -1,3 +1,4 @@
+import { formatDateTime } from './format'
 import type { ShellCommand } from './shell-shortcuts'
 
 export type PaletteActionId =
@@ -193,7 +194,7 @@ function goToRows(input: PaletteInput): PaletteRow[] {
   ).map<PaletteRow>((run) => ({
     id: `redaction-${run.id}`,
     label: run.sourceFilename,
-    hint: run.matterName ?? 'Redaction run',
+    hint: `${run.matterName ?? 'Redaction run'} · ${formatDateTime(run.updatedAt)}`,
     target: { kind: 'redaction', runId: run.id },
   }))
 
