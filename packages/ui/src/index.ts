@@ -42,6 +42,13 @@ export {
   MenuCheckboxItem,
 } from './menu'
 export {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from './context-menu'
+export {
   Popover,
   PopoverPortal,
   PopoverPositioner,

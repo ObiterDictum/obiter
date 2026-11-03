@@ -2312,6 +2312,39 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">Matter tabs</td>
+                  <td>
+                    Routes <code>/matters/:matterId</code>,
+                    <code>/matters/:matterId/documents/:documentId</code>,
+                    <code>/matters/:matterId/verify</code> and
+                    <code>/matters/:matterId/redact/:runId</code>
+                  </td>
+                  <td>
+                    The strip at the top of a matter's content area
+                    (<code>matter-tab-strip.tsx</code>) lists the matter
+                    overview, open documents, the matter's Verify view and its
+                    redaction runs. The route is the source of truth: the
+                    current tab follows the URL, so deep links, back/forward and
+                    reload all work, and the tab set is kept per person per
+                    matter under
+                    <code
+                      >obiter.matterTabs.&lt;userId&gt;.&lt;matterId&gt;</code
+                    >
+                    (capped at 12, overview pinned, oldest unpinned closes). A
+                    single click in the contents panel previews a tab that the
+                    next single click replaces; it becomes permanent on a double
+                    click, on an edit, or when opened from the + menu. Closing
+                    the current tab moves to its neighbour and the last tab
+                    falls back to the overview. ⌘/Ctrl+1–9, ⌘/Ctrl+W and
+                    ⌘/Ctrl+Shift+T work on desktop only, because browsers keep
+                    those combinations for their own tabs. At 767px and under
+                    the strip collapses to one “N open” switcher. A document can
+                    be opened to the side (<code>?side=&lt;tab&gt;</code>),
+                    which renders it read-only beside the editable one because
+                    the editor runs once per page.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">Shell states</td>
                   <td>Global</td>
                   <td>
@@ -2324,7 +2357,10 @@
                   <td class="id">Matters</td>
                   <td>
                     Routes <code>/matters</code>,
-                    <code>/matters/:matterId</code>
+                    <code>/matters/:matterId</code>, and the matter-scoped
+                    <code>/matters/:matterId/verify</code> and
+                    <code>/matters/:matterId/redact/:runId</code> the tab strip
+                    opens
                   </td>
                   <td>
                     The list is a table of matters (documents, open work, last
@@ -2373,9 +2409,13 @@
             change and the organisation (name, members, invites), in three
             sections that keep an unsaved draft while the user moves between
             them; and <code>/verify</code>, which lists organisation
-            verification runs and opens the document they were bound to. Web and
-            desktop routers are kept at parity and
-            <code>routeTree.gen.ts</code> carries both.
+            verification runs and opens the document they were bound to. The
+            matter tab strip adds two more, registered in both routers:
+            <code>/matters/:matterId/verify</code>, the same Verify view scoped
+            to one matter, and <code>/matters/:matterId/redact/:runId</code>, a
+            redaction run reviewed inside the matter pane. Web and desktop
+            routers are kept at parity and <code>routeTree.gen.ts</code> carries
+            both.
           </p>
         </section>
 

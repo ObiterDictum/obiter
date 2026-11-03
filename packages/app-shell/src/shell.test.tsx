@@ -17,6 +17,7 @@ import {
   createRouter,
   useRouterState,
 } from '@tanstack/react-router'
+import { ToastProvider } from '@obiter/ui'
 import type { MeResponse } from '@obiter/contracts'
 import type { MatterRecord } from './matters'
 import type { MatterDocumentRecord } from './documents'
@@ -182,7 +183,9 @@ function renderShell(path: string) {
   })
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <RouterProvider router={router} />
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </QueryClientProvider>,
   )
 }

@@ -19,7 +19,9 @@ import {
   currentUserQueryOptions,
   prefetchHomeData,
   prefetchInviteAcceptData,
+  prefetchVerifyData,
   resolveCaseDocumentIdFromSlug,
+  useMatterTabsOptional,
 } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -105,6 +107,9 @@ const DesktopSearchPage = lazy(async () => ({
 const DesktopVerifyPage = lazy(async () => ({
   default: (await import('../../pages/verify')).DesktopVerifyRoute,
 }))
+const MatterVerifyView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/verify')).VerifyRouteView,
+}))
 
 function RouteLoading() {
   return (
@@ -123,6 +128,8 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/matters',
   '/matters/$matterId',
   '/matters/$matterId/documents/$documentId',
+  '/matters/$matterId/verify',
+  '/matters/$matterId/redact/$runId',
   '/redact',
   '/redact/$runId',
   '/search',
@@ -247,6 +254,57 @@ const redactReviewRoute = createRoute({
   path: 'redact/$runId',
   component: DesktopRedactionReviewRoute,
 })
+
+const matterVerifyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'matters/$matterId/verify',
+  loader: async ({ context }) => {
+    await prefetchVerifyData(context.queryClient)
+  },
+  component: DesktopMatterVerifyRoute,
+})
+
+function DesktopMatterVerifyRoute() {
+  const { matterId } = matterVerifyRoute.useParams()
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <MatterVerifyView matterId={matterId} />
+    </Suspense>
+  )
+}
+
+const matterRedactReviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'matters/$matterId/redact/$runId',
+  component: DesktopMatterRedactionReviewRoute,
+})
+
+function DesktopMatterRedactionReviewRoute() {
+  const { matterId, runId } = matterRedactReviewRoute.useParams()
+  const navigate = useNavigate()
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <RedactionReviewView
+        runId={runId}
+        onOpenRun={(replacementRunId) =>
+          navigate({
+            to: '/matters/$matterId/redact/$runId',
+            params: { matterId, runId: replacementRunId },
+          })
+        }
+        onBack={() =>
+          navigate({ to: '/matters/$matterId', params: { matterId } })
+        }
+        onOpenDocument={({ documentId }) => {
+          void navigate({
+            to: '/matters/$matterId/documents/$documentId',
+            params: { matterId, documentId },
+          })
+        }}
+      />
+    </Suspense>
+  )
+}
 
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -374,6 +432,7 @@ function DesktopDocumentDetail({
   documentId: string
 }) {
   const navigate = useNavigate()
+  const tabs = useMatterTabsOptional()
   const { DocumentDetailLayoutView } = use(documentDetailModule())
   const { RedactionRunsRegion } = use(redactionRunsRegionModule())
 
@@ -381,6 +440,7 @@ function DesktopDocumentDetail({
     <DocumentDetailLayoutView
       matterId={matterId}
       documentId={documentId}
+      onDocumentEdited={tabs?.promoteActive}
       redactionRunsRegion={
         <RedactionRunsRegion
           documentId={documentId}
@@ -518,6 +578,8 @@ const routeTree = rootRoute.addChildren([
   mattersRoute,
   matterDetailRoute,
   documentDetailRoute,
+  matterVerifyRoute,
+  matterRedactReviewRoute,
   redactRoute,
   redactReviewRoute,
   searchRoute,

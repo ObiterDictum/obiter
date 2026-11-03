@@ -123,29 +123,53 @@ export function DocumentVersionView({
   return (
     <WorkspaceShell layout="page">
       {ribbon}
-      {kind === 'docx' ? (
-        <HistoricalDocxPages
-          documentId={documentId}
-          versionId={version.id}
-          zoom={zoom}
-        />
-      ) : kind === 'pdf' ? (
-        <HistoricalPdfPages
-          documentId={documentId}
-          versionId={version.id}
-          zoom={zoom}
-        />
-      ) : kind === 'txt' ? (
-        <HistoricalText documentId={documentId} versionId={version.id} />
-      ) : (
-        <div className="flex flex-1 items-center justify-center p-6">
-          <EmptyState
-            title="No in-product viewer for this file type"
-            body="This version can be downloaded, but this file type has no page or text view."
-          />
-        </div>
-      )}
+      <DocumentPaperView
+        documentId={documentId}
+        version={version}
+        zoom={zoom}
+      />
     </WorkspaceShell>
+  )
+}
+
+export function DocumentPaperView({
+  documentId,
+  version,
+  zoom = 100,
+}: {
+  documentId: string
+  version: DocumentVersionRecord
+  zoom?: number
+}) {
+  const kind = workspaceKind(version.fileType)
+  if (kind === 'docx') {
+    return (
+      <HistoricalDocxPages
+        documentId={documentId}
+        versionId={version.id}
+        zoom={zoom}
+      />
+    )
+  }
+  if (kind === 'pdf') {
+    return (
+      <HistoricalPdfPages
+        documentId={documentId}
+        versionId={version.id}
+        zoom={zoom}
+      />
+    )
+  }
+  if (kind === 'txt') {
+    return <HistoricalText documentId={documentId} versionId={version.id} />
+  }
+  return (
+    <div className="flex flex-1 items-center justify-center p-6">
+      <EmptyState
+        title="No in-product viewer for this file type"
+        body="This version can be downloaded, but this file type has no page or text view."
+      />
+    </div>
   )
 }
 

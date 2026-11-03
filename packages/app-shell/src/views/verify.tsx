@@ -43,7 +43,7 @@ const filterLabels = {
   match: 'Matches',
 } satisfies Record<VerifyFilter, string>
 
-export function VerifyRouteView() {
+export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
   const { data: me } = useCurrentUser()
   const hasOrganisation = me?.organisation != null
   const runs = useOrganisationVerificationRuns(hasOrganisation)
@@ -55,7 +55,7 @@ export function VerifyRouteView() {
     runs: runs.runs,
     matters: matters.data ?? [],
     documents,
-  })
+  }).filter((group) => !matterId || group.matterId === matterId)
   const counts = verifyFilterCounts(groups)
   const shownGroups = groups
     .map((matter) => ({
@@ -105,14 +105,23 @@ export function VerifyRouteView() {
       ) : groups.length === 0 ? (
         <EmptyState
           icon={<ShieldCheck size={28} className="text-muted" />}
-          title="No verification runs yet"
-          body="Verify checks a document’s citations, quotations and authorities against stored UK sources. Open a document in a matter and run it there."
+          title={
+            matterId
+              ? 'Nothing verified in this matter'
+              : 'No verification runs yet'
+          }
+          body={
+            matterId
+              ? 'Verify checks a document’s citations, quotations and authorities against stored UK sources. Start a run from this matter’s + menu or a document.'
+              : 'Verify checks a document’s citations, quotations and authorities against stored UK sources. Open a document in a matter and run it there.'
+          }
           action={
             <Link
-              to="/matters"
+              to={matterId ? '/matters/$matterId' : '/matters'}
+              params={matterId ? { matterId } : undefined}
               className="font-semibold text-brand hover:text-brand-pressed"
             >
-              Open matters
+              {matterId ? 'Back to the matter' : 'Open matters'}
             </Link>
           }
         />
