@@ -113,6 +113,7 @@ export function LegalSearchView() {
           onClearRecents={clearRecents}
           onCourtShortcut={handleCourtShortcut}
           onRecentSearch={handleRecentSearch}
+          onRunQuery={handleRecentSearch}
         />
       ) : state.status === 'results' ? (
         <>

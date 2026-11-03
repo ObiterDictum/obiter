@@ -1,11 +1,6 @@
 import { Button, Card, CardBody, CardFoot, CardHead } from '@obiter/ui'
+import { SEARCH_EXAMPLE_QUERIES } from '../../legal-search-examples'
 import type { SearchCourtShortcut } from './searchTypes'
-
-const searchTips = [
-  { label: 'Case name', example: 'Wood v Capita' },
-  { label: 'Neutral citation', example: '[2017] UKSC 24' },
-  { label: 'Keyword', example: 'no oral modification' },
-]
 
 export function SearchLanding({
   courtLabel,
@@ -13,6 +8,7 @@ export function SearchLanding({
   recentSearches,
   onCourtShortcut,
   onRecentSearch,
+  onRunQuery,
   onClearRecents,
 }: {
   courtLabel: string
@@ -20,6 +16,7 @@ export function SearchLanding({
   recentSearches: string[]
   onCourtShortcut: (court: string) => void
   onRecentSearch: (query: string) => void
+  onRunQuery: (query: string) => void
   onClearRecents: () => void
 }) {
   return (
@@ -100,18 +97,30 @@ export function SearchLanding({
         <section aria-labelledby="search-tips">
           <div className="mb-4">
             <h2 id="search-tips" className="text-section text-ink">
-              Try searching
+              Example searches
             </h2>
           </div>
           <Card>
-            <CardBody className="flex flex-col gap-3 pt-6">
-              {searchTips.map((tip) => (
-                <div key={tip.label} className="flex flex-col gap-0.5">
-                  <span className="text-caption text-subtle">{tip.label}</span>
-                  <span className="text-item text-ink">{tip.example}</span>
-                </div>
+            <CardBody className="flex flex-col gap-1 pt-6">
+              {SEARCH_EXAMPLE_QUERIES.map((example) => (
+                <button
+                  key={example.query}
+                  type="button"
+                  onClick={() => onRunQuery(example.query)}
+                  className="flex w-full items-baseline justify-between gap-3 rounded-sm px-2 py-2 text-left hover:bg-hover"
+                >
+                  <span className="text-item text-ink">{example.query}</span>
+                  <span className="text-caption text-subtle">
+                    {example.detail}
+                  </span>
+                </button>
               ))}
             </CardBody>
+            <CardFoot>
+              <span>
+                A case name, a citation or a phrase from a judgment all work.
+              </span>
+            </CardFoot>
           </Card>
         </section>
         <Card>

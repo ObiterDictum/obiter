@@ -344,10 +344,26 @@ describe('matters list', () => {
       isSuccess: true,
     })
     render(<RouterProvider router={buildRouter()} />)
-    expect(await screen.findByText('No matters yet')).toBeTruthy()
+    expect(await screen.findByText('Create your first matter')).toBeTruthy()
     expect(
-      screen.getByRole('button', { name: 'Create the first matter' }),
+      screen.getByText(/A matter holds one client instruction/),
     ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create a matter' })).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
+  })
+
+  it('opens the new-matter dialog from the empty state', async () => {
+    mocks.useMattersList.mockReturnValue({
+      data: [],
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+    })
+    render(<RouterProvider router={buildRouter()} />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create a matter' }),
+    )
+    expect(await screen.findByRole('dialog')).toBeTruthy()
   })
 })

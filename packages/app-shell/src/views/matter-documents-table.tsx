@@ -161,12 +161,16 @@ export function MatterDocumentsTable({
     return (
       <EmptyState
         icon={<FileText size={18} aria-hidden />}
-        title="No documents yet"
-        body="Upload a DOCX, text-layer PDF or TXT file — or drop one anywhere on this page — and it will be checked for citations here."
+        title="Upload documents, or start a blank document"
+        body="A matter keeps every version of each document you add, and the Verify and Redact runs on them."
         action={
           <>
-            <MatterUploadButton matterId={matterId} variant="primary" />
-            <NewDocumentButton matterId={matterId} />
+            <MatterUploadButton
+              matterId={matterId}
+              variant="primary"
+              label="Upload documents"
+            />
+            <NewDocumentButton matterId={matterId} variant="secondary" />
           </>
         }
       />
