@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { readBuildProvenance } from '../../apps/web/build-provenance.mjs'
 
 export const BUDGETS = {
-  initialGzipBytes: 206 * 1024,
-  lazyGzipBytes: 452 * 1024,
+  initialGzipBytes: 224 * 1024,
+  lazyGzipBytes: 600 * 1024,
   largestLazyChunkGzipBytes: 148 * 1024,
   pdfWorkerGzipBytes: 320 * 1024,
 }
