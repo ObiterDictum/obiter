@@ -4,6 +4,7 @@ import {
   documentQueryOptions,
   guardAuth,
   matterQueryOptions,
+  useMatterTabsOptional,
   useRecordDocumentOpen,
 } from '@obiter/app-shell'
 import { RedactionRunsRegion } from '@obiter/redact-ui'
@@ -31,11 +32,13 @@ export const Route = createFileRoute(
 function DocumentDetailRouteComponent() {
   const { matterId, documentId } = Route.useParams()
   const navigate = useNavigate()
+  const tabs = useMatterTabsOptional()
   useRecordDocumentOpen(documentId)
   return (
     <DocumentDetailLayoutView
       matterId={matterId}
       documentId={documentId}
+      onDocumentEdited={tabs?.promoteActive}
       redactionRunsRegion={
         <RedactionRunsRegion
           documentId={documentId}

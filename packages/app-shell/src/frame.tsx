@@ -14,12 +14,18 @@ import { useAuth } from './auth'
 import { CommandPaletteProvider } from './command-palette'
 import { currentUserQueryOptions } from './current-user'
 import { ShellBootLoading, ShellOfflineBanner } from './shell-states'
+import type { ShellSection } from './navigation'
 import { Sidebar } from './sidebar'
 import { SidebarRail } from './sidebar-rail'
 import { TitleBar } from './title-bar'
 import type { RightSlotTabId } from './right-slot'
 import { ShellContentsProvider } from './shell-contents'
-import { documentIdFromPath, resolveSection } from './navigation'
+import { MatterPreviewProvider } from './matter-preview'
+import {
+  documentIdFromPath,
+  matterIdFromPath,
+  resolveSection,
+} from './navigation'
 import {
   SHELL_STORAGE_KEY,
   useStoredFlag,
@@ -36,6 +42,12 @@ const ContentsPanelLazy = lazy(() =>
 
 const RightSlotLazy = lazy(() =>
   import('./right-slot').then((module) => ({ default: module.RightSlot })),
+)
+
+const MatterTabsPaneLazy = lazy(() =>
+  import('./matter-split').then((module) => ({
+    default: module.MatterTabsPane,
+  })),
 )
 
 const NARROW_QUERY = '(max-width: 1023px)'
@@ -95,6 +107,7 @@ export function ShellFrame({
     select: (state) => state.location.pathname,
   })
   const section = resolveSection(pathname)
+  const matterId = matterIdFromPath(pathname)
   const home = section === 'home'
   const narrow = useMediaQuery(NARROW_QUERY)
   const bottomBar = useMediaQuery(BOTTOM_BAR_QUERY)
@@ -222,27 +235,22 @@ export function ShellFrame({
               id="app-shell-pane"
               className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
             >
-              {contentsVisible ? (
-                <Suspense fallback={null}>
-                  {narrow ? (
-                    <ContentsScrim onClose={closeContentsOverlay} />
-                  ) : null}
-                  <ContentsPanelLazy
-                    section={section}
-                    pathname={pathname}
-                    overlay={narrow}
-                  />
-                </Suspense>
-              ) : null}
-              <main
-                className={cn(
-                  'min-h-0 min-w-0 flex-1 overflow-y-auto',
-                  documentIdFromPath(pathname) ? null : '@container',
-                )}
-              >
-                <ShellOfflineBanner />
-                {children}
-              </main>
+              <MatterPreviewProvider>
+                <ShellPane
+                  section={section}
+                  pathname={pathname}
+                  narrow={narrow}
+                  contentsVisible={contentsVisible}
+                  matterTabs={matterId !== null && me !== undefined}
+                  matterId={matterId}
+                  userId={me?.user.id ?? ''}
+                  platform={platform}
+                  compact={bottomBar}
+                  onCloseContents={closeContentsOverlay}
+                >
+                  {children}
+                </ShellPane>
+              </MatterPreviewProvider>
             </div>
             {rightSlotOpen && !focusMode ? (
               <div id="app-shell-right-slot" className="contents">
@@ -259,6 +267,70 @@ export function ShellFrame({
         </div>
       </div>
     </CommandPaletteProvider>
+  )
+}
+
+function ShellPane({
+  section,
+  pathname,
+  narrow,
+  contentsVisible,
+  matterTabs,
+  matterId,
+  userId,
+  platform,
+  compact,
+  onCloseContents,
+  children,
+}: {
+  section: ShellSection
+  pathname: string
+  narrow: boolean
+  contentsVisible: boolean
+  matterTabs?: boolean
+  matterId: string | null
+  userId: string
+  platform: AppPlatform
+  compact: boolean
+  onCloseContents: () => void
+  children: ReactNode
+}) {
+  return (
+    <>
+      {contentsVisible ? (
+        <Suspense fallback={null}>
+          {narrow ? <ContentsScrim onClose={onCloseContents} /> : null}
+          <ContentsPanelLazy
+            section={section}
+            pathname={pathname}
+            overlay={narrow}
+            onDismiss={onCloseContents}
+          />
+        </Suspense>
+      ) : null}
+      <main
+        className={cn(
+          'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
+          documentIdFromPath(pathname) ? null : '@container',
+        )}
+      >
+        <ShellOfflineBanner />
+        {matterTabs && matterId ? (
+          <Suspense fallback={null}>
+            <MatterTabsPaneLazy
+              matterId={matterId}
+              userId={userId}
+              platform={platform}
+              compact={compact}
+            >
+              {children}
+            </MatterTabsPaneLazy>
+          </Suspense>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        )}
+      </main>
+    </>
   )
 }
 

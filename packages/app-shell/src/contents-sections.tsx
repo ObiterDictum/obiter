@@ -11,6 +11,13 @@ import { latestRunsPerDocument, openWorkForRun } from './open-work'
 import { useOrganisationVerificationRuns } from './verification-runs'
 import { recentMatters } from './sidebar-counts'
 import { documentIdFromPath } from './navigation'
+import {
+  documentTab,
+  redactTab,
+  verifyTab,
+  type MatterTab,
+} from './matter-tabs'
+import { useMatterPreviewRef } from './matter-preview'
 import { SETTINGS_SECTIONS } from './settings-sections'
 import { getRecentLegalSearches } from './legal-search-recents'
 import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
@@ -61,6 +68,7 @@ function RowLink({
   label,
   meta,
   tone,
+  preview,
 }: {
   to: string
   params?: Record<string, string>
@@ -69,9 +77,27 @@ function RowLink({
   label: string
   meta?: string
   tone?: 'danger' | 'warning' | 'info'
+  preview?: MatterTab
 }) {
+  const previewRef = useMatterPreviewRef()
   return (
-    <Link to={to} params={params} className={rowClass(current)}>
+    <Link
+      to={to}
+      params={params}
+      className={rowClass(current)}
+      onClick={(event) => {
+        if (!preview || !previewRef) return
+        if (
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        )
+          return
+        previewRef.current?.(preview)
+      }}
+    >
       {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {meta ? (
@@ -187,6 +213,7 @@ export function MatterContents({
                 to="/matters/$matterId/documents/$documentId"
                 params={{ matterId, documentId: document.id }}
                 current={document.id === currentDocumentId}
+                preview={documentTab(document.id, filename)}
                 icon={
                   <FileText
                     size={14}
@@ -206,7 +233,9 @@ export function MatterContents({
           {checks.slice(0, ROWS_PER_GROUP).map((run) => (
             <RowLink
               key={run.id}
-              to="/verify"
+              to="/matters/$matterId/verify"
+              params={{ matterId }}
+              preview={verifyTab()}
               icon={
                 <ShieldCheck
                   size={14}
@@ -222,8 +251,9 @@ export function MatterContents({
           {redactions.slice(0, ROWS_PER_GROUP).map((run) => (
             <RowLink
               key={run.id}
-              to="/redact/$runId"
-              params={{ runId: run.id }}
+              to="/matters/$matterId/redact/$runId"
+              params={{ matterId, runId: run.id }}
+              preview={redactTab(run.id, run.sourceFilename)}
               icon={
                 <FileText
                   size={14}

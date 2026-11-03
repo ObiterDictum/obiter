@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { RedactionRunStatus } from '@obiter/contracts'
 import { apiFetch } from './api'
 
@@ -38,6 +38,19 @@ export function useRedactionRunsList(options?: { enabled?: boolean }) {
       apiFetch<{ runs: RedactionRunListItem[] }>('/api/redaction-runs'),
     staleTime: 30_000,
     enabled: options?.enabled ?? true,
+  })
+}
+
+export function useCreateMatterRedactionRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      apiFetch<{ run: { id: string } }>(
+        `/api/documents/${documentId}/redaction-runs`,
+        { method: 'POST', body: JSON.stringify({}) },
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: redactionRunsQueryKey }),
   })
 }
 

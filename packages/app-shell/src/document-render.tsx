@@ -21,10 +21,12 @@ export function StaticDocumentPages({
   model,
   pages,
   imageUrls = {},
+  zoom = 100,
 }: {
   model: DocumentModelWire
   pages: LaidOutPage[]
   imageUrls?: Record<string, string>
+  zoom?: number
 }) {
   const fontFamily = documentDefaultFace(model.styles).fontFamily
   return (
@@ -37,6 +39,7 @@ export function StaticDocumentPages({
           {pages.map((laid, index) => (
             <DocumentPage
               key={`page-${index + 1}`}
+              zoom={zoom}
               width={laid.box.widthPx}
               height={laid.box.heightPx}
               fontFamily={fontFamily}

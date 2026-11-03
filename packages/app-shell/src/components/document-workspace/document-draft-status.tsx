@@ -18,11 +18,22 @@ const DocumentDraftStatusContext = createContext<DocumentDraftStatus | null>(
 
 export function DocumentDraftStatusProvider({
   children,
+  onDirtyChange,
 }: {
   children: ReactNode
+  onDirtyChange?: () => void
 }) {
-  const [dirty, setDirty] = useState(false)
-  const value = useMemo(() => ({ dirty, setDirty }), [dirty])
+  const [dirty, setDirtyState] = useState(false)
+  const value = useMemo(
+    () => ({
+      dirty,
+      setDirty: (next: boolean) => {
+        setDirtyState(next)
+        if (next) onDirtyChange?.()
+      },
+    }),
+    [dirty, onDirtyChange],
+  )
   return (
     <DocumentDraftStatusContext.Provider value={value}>
       {children}
