@@ -7,7 +7,7 @@ Status: in progress (July 2026). This spec covers the packaged (production) Elec
 1. **Configured API origin for the packaged app.** The main process owns the value and exposes it to the renderer through the preload bridge; `apiUrl()` and the better-auth client use it to build absolute URLs.
 2. **A stable packaged Origin.** The renderer is served over a registered custom scheme (`obiter://desktop-auth`), so the `Origin` header is a stable exact-match value the API already trusts.
 3. **Self-hosted typefaces.** Satoshi and JetBrains Mono woff2 files are vendored and served from the app bundle; no Fontshare CDN dependency.
-4. **Installers and a release CI workflow.** electron-builder produces a Windows NSIS installer; CI builds it on push to `main`.
+4. **Installers and a release CI workflow.** electron-builder produces a Windows NSIS installer; CI builds it on push to `main` and publishes a GitHub Release for each new version.
 
 ## API origin for packaged builds
 
@@ -19,7 +19,7 @@ packagedApiOrigin = app.isPackaged
   : null
 ```
 
-- **Operator config:** set `OBITER_API_ORIGIN` on the launched process (no rebuild). Absent that, the build-time default applies (`https://api.obiter.dev`, injected by `electron.vite.config.ts` `define`; override at build time with `OBITER_API_ORIGIN_DEFAULT`).
+- **Operator config:** set `OBITER_API_ORIGIN` on the launched process (no rebuild). Absent that, the build-time default applies (`https://app.obiter.si`, the production API, injected by `electron.vite.config.ts` `define`; override at build time with `OBITER_API_ORIGIN_DEFAULT`).
 - **Renderer read:** the preload resolves the value once via `ipcRenderer.sendSync` and exposes it as `window.obiterDesktop.apiOrigin` — a sync property, because `apiUrl()` and the better-auth client `baseURL` are synchronous.
 - **Dev-desktop is unaffected:** `app.isPackaged` is false, so the bridge exposes `null` and `apiUrl()` keeps using relative `/api` paths through the Vite proxy. Web and SSR have no bridge at all.
 
@@ -35,36 +35,16 @@ OBITER_DESKTOP_ORIGIN=obiter://desktop-auth
 
 (If a future build registers a different scheme host, update `OBITER_DESKTOP_ORIGIN` to match — it must be exact-match.)
 
-## Cross-site cookies: the blocking finding (STOP)
+## Cross-site cookies and bearer sign-in
 
-better-auth uses cookie sessions (`sameSite: 'lax'`, `httpOnly`, `secure` in production). This works for the web app (same-domain routing) and for dev-desktop (`localhost:5173 → localhost:8787` is same-site — ports do not count for SameSite). The packaged app is different:
+better-auth uses cookie sessions (`sameSite: 'lax'`, `httpOnly`, `secure` in production). The packaged renderer at `obiter://desktop-auth` calling the API at another origin is cross-site, so Chromium does not attach those cookies to its requests: sign-in succeeded on the server but the next session check carried no cookie, and the packaged app never left the sign-in screen.
 
-**Empirically confirmed:** the packaged renderer at `obiter://desktop-auth` calling the API at a different origin is **cross-site**. Chromium does not attach a `lax` cookie to cross-site `fetch` calls, so:
-
-- `POST /api/auth/sign-in/email` succeeds server-side and `Set-Cookie` is returned.
-- The immediate `GET /api/auth/get-session` carries **no cookie** → returns no session → the client treats sign-in as failed → retries in a loop. The renderer never leaves the sign-in screen.
-
-This is not a trust-list problem (the Origin is trusted) — it is a fundamental browser cookie policy. No origin configuration fixes it. Two options were analyzed for the follow-up decision; **neither is implemented here** (both exceed the "configured desktop origin only" scope of this change and need a deliberate decision):
-
-### Option A — better-auth bearer plugin (recommended)
-
-The desktop client holds the session token and sends `Authorization: Bearer <token>` on every request. No cookies cross-site, no `SameSite=None` weakening, CSRF-irrelevant for the token channel. The web app keeps its same-site cookie flow unchanged.
-
-- Requires the `bearer` plugin on the API's better-auth config and a desktop-side token store (where to persist the token — `safeStorage` / a config file — needs its own decision).
-- This is an API behaviour change beyond a configured desktop origin, so it is out of scope here and deferred to a follow-up PR.
-
-### Option B — `SameSite=None; Secure` for the desktop path
-
-Loosen the cookie so cross-site fetch carries it. Requires an HTTPS API (Secure cookies need HTTPS), and leans on the exact-match `trustedOrigins`/CORS gate as the CSRF defence. This is the loosening the task constraint flags as a STOP — it weakens the cookie posture for all clients unless scoped carefully (e.g. per-origin cookie attributes, which better-auth does not natively branch on), so it is the trade-off alternative, not the default.
-
-### What does work in the packaged app today
-
-Everything except authenticated API calls: the renderer loads over `obiter://`, styled UI renders, self-hosted fonts load (no network fetch), and the better-auth client reaches the API with the correct absolute URL and Origin. The session cookie is the sole blocker.
+The packaged app now uses bearer sessions instead. The API enables better-auth's `bearer` plugin and returns the session token at sign-in; the desktop main process keeps it encrypted with Electron `safeStorage` (`apps/desktop/src/main/auth-token-store.ts`) and `apiFetch` sends `Authorization: Bearer <token>` on every request. No cookie crosses sites and the web app keeps its same-site cookie flow. Loosening the cookie to `SameSite=None` was rejected because it would weaken the cookie for every client.
 
 ## Magic-link and password-reset handoff
 
 - **Password reset** links are derived server-side and always target the configured web origin (`OBITER_WEB_ORIGIN`) — unchanged (confirmed in PR #28). They open in the user's browser.
-- **Magic-link** sign-in uses the renderer origin as `callbackURL`. Under `obiter://desktop-auth` the emailed link opens in the default browser (the existing `setWindowOpenHandler → shell.openExternal`), which cannot complete a desktop session. **Magic-link sign-in is web-only for packaged desktop** until the session problem above is resolved; password sign-in is the desktop path (modulo the cookie finding).
+- **Magic-link** sign-in uses the renderer origin as `callbackURL`. Under `obiter://desktop-auth` the emailed link opens in the default browser (the existing `setWindowOpenHandler → shell.openExternal`), which cannot complete a desktop session. **Magic-link sign-in is web-only for packaged desktop**; password sign-in is the desktop path.
 
 ## Self-hosted fonts
 
@@ -97,7 +77,7 @@ electron-builder uses the default Electron icon (the config points at `build/ico
 
 ## CI release workflow
 
-`.github/workflows/desktop-release.yml` builds the Windows installer on push to `main` (consistent with the docker-image policy in `ci.yml`: `main` is the release branch, `dev` is integration). The installer is uploaded as a workflow artifact via `actions/upload-artifact`. **No release publishing** — artifacts only. The workflow first executes on the next `dev → main` promotion.
+`.github/workflows/desktop-release.yml` builds the Windows installer on push to `main` (consistent with the docker-image policy in `ci.yml`: `main` is the release branch, `dev` is integration) and uploads it as a workflow artifact. When the version in `apps/desktop/package.json` has no `desktop-v<version>` release yet, the workflow also publishes a GitHub Release with that tag and the installer attached, marked as the latest release. A push to `main` without a version bump rebuilds the artifact but publishes nothing, so bump the version in the same change that should ship to testers.
 
 ## Deferred
 

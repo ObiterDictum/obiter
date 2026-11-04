@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 const PACKAGED_API_ORIGIN_DEFAULT = JSON.stringify(
-  process.env.OBITER_API_ORIGIN_DEFAULT ?? 'https://api.obiter.dev',
+  process.env.OBITER_API_ORIGIN_DEFAULT ?? 'https://app.obiter.si',
 )
 
 export default defineConfig({
