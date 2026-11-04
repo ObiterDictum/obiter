@@ -5,24 +5,16 @@ import {
   type APIRequestContext,
   type Page,
 } from '@playwright/test'
-import { resolveJourneyTargets } from '../journey-target.mjs'
-import { fixturePath, verifyEmailInDb } from './support'
+import { fixturePath, openMatter, seedAccount } from './support'
 import { openMenu, runMenuCommand } from './editor-chrome'
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
-
-async function seedDocument(page: Page, request: APIRequestContext) {
+async function seedDocument(page: Page, _request: APIRequestContext) {
   const runId = randomUUID().slice(0, 8)
   const email = `e2e-demo-${runId}@obiter.test`
   const password = `E2e-${runId}-Aa1!`
   const matterName = `E2E Demo Matter ${runId}`
 
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E2E Demo User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(databaseName, email)
+  seedAccount(email, password, 'E2E Demo User')
 
   await page.goto('/sign-in', { waitUntil: 'networkidle' })
   await page.getByLabel('Email').click()
@@ -35,30 +27,9 @@ async function seedDocument(page: Page, request: APIRequestContext) {
   })
   await page.waitForLoadState('networkidle')
 
-  await page.goto('/matters', { waitUntil: 'networkidle' })
-  await page
-    .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-    .first()
-    .click()
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
-  await page.getByLabel('Matter name').click()
-  await page.getByLabel('Matter name').pressSequentially(matterName, {
-    delay: 10,
-  })
-  await page.getByLabel('Primary jurisdiction').click()
-  await page
-    .getByLabel('Primary jurisdiction')
-    .pressSequentially('England & Wales', { delay: 10 })
-  await page
-    .getByRole('button', { name: 'Create matter', exact: true })
-    .last()
-    .click()
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5_000 })
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\/mtr_/, { timeout: 10_000 })
+  await openMatter(page, matterName)
 
-  const fileInput = page.locator('input[aria-label="Upload document"]')
+  const fileInput = page.getByLabel('Upload document', { exact: true }).first()
   await expect(fileInput).toBeAttached({ timeout: 10_000 })
   await fileInput.setInputFiles(fixturePath())
   await expect(page.getByText('demo-fixture.docx').first()).toBeVisible({
@@ -78,7 +49,7 @@ test('the ribbon entries reveal the one real document action', async ({
 
   await openMenu(page, 'Review')
   const verifyCitations = page.getByRole('menuitem', {
-    name: 'Verify citations',
+    name: 'Check citations',
     exact: true,
   })
   await expect(verifyCitations).toBeEnabled({ timeout: 15_000 })
@@ -156,7 +127,7 @@ test('a modified chord cannot record a redaction decision', async ({
     )
   })
   await expect(
-    page.getByRole('textbox', { name: 'Search Obiter' }),
+    page.getByRole('combobox', { name: 'Search Obiter' }),
   ).toBeFocused()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
 

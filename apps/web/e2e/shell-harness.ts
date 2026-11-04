@@ -59,7 +59,7 @@ export function workspaceNav(page: Page) {
 }
 
 export function sidebar(page: Page) {
-  return page.locator('#app-sidebar')
+  return page.locator('#app-shell-sidebar')
 }
 
 export function documentWidths(page: Page) {
@@ -74,7 +74,7 @@ export async function asideWidth(aside: Locator) {
 }
 
 export async function sidebarToggle(page: Page) {
-  return sidebar(page).getByRole('button', {
+  return page.getByRole('button', {
     name: /(Collapse|Expand) sidebar/,
   })
 }

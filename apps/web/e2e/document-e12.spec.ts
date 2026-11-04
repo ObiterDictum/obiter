@@ -17,10 +17,8 @@ import {
   type APIRequestContext,
   type Page,
 } from '@playwright/test'
-import { resolveJourneyTargets } from '../journey-target.mjs'
-import { fixturePath, verifyEmailInDb } from './support'
+import { fixturePath, openMatter, seedAccount } from './support'
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..')
 const RICH_FIXTURE = path.join('/tmp', 'e12-rich.docx')
@@ -76,16 +74,11 @@ function inspectDocx(filePath: string) {
   return JSON.parse(stdout) as Record<string, string>
 }
 
-async function createAccount(request: APIRequestContext, prefix: string) {
+async function createAccount(_request: APIRequestContext, prefix: string) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `${prefix}-${runId}@obiter.test`
   const password = `E12-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: 'E12 User', email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(databaseName, email)
+  seedAccount(email, password, 'E12 User')
   return { email, password }
 }
 
@@ -97,28 +90,9 @@ async function openUploadedDocument(
 ) {
   await signIn(page, email, password)
   const matterName = `E12 matter ${Date.now()}`
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-  await page
-    .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-    .first()
-    .click()
-  await page.getByLabel('Matter name').fill(matterName)
-  await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-  await page
-    .getByRole('button', { name: 'Create matter', exact: true })
-    .last()
-    .click()
-  await page
-    .getByRole('button', { name: 'Cancel' })
-    .click({ timeout: 5_000 })
-    .catch(() => undefined)
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await openMatter(page, matterName)
 
-  const fileInput = page.locator('input[aria-label="Upload document"]')
+  const fileInput = page.getByLabel('Upload document', { exact: true }).first()
   await expect(fileInput).toBeAttached({ timeout: 20_000 })
   await fileInput.setInputFiles({
     name: upload.name,

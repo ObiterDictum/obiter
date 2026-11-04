@@ -132,7 +132,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   await reviewCommand(page, 'List of authorities')
   await expect(authoritiesPanel(page)).toContainText(CITATION)
   await openMenu(page, 'Review')
-  const verifyButton = menuItem(page, 'Verify citations')
+  const verifyButton = menuItem(page, 'Check citations')
   await expect(verifyButton).toBeDisabled()
   await shot(page, '05-verify-dirty')
 

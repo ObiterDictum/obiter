@@ -9,7 +9,6 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveJourneyTargets } from '../journey-target.mjs'
 import {
   closeMenu,
   menuItem,
@@ -18,9 +17,8 @@ import {
   setTrackChanges,
   trackChangesIndicator,
 } from './editor-chrome'
-import { verifyEmailInDb } from './support'
+import { openMatter, seedAccount } from './support'
 
-const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../..',
@@ -50,16 +48,11 @@ function buildFixture() {
   )
 }
 
-async function createAccount(request: APIRequestContext) {
+async function createAccount(_request: APIRequestContext) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `e9-${runId}@obiter.test`
   const password = `E9-${runId}-Aa1!`
-  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: USER_NAME, email, password },
-    headers: { Origin: webOrigin },
-  })
-  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
-  verifyEmailInDb(databaseName, email)
+  seedAccount(email, password, USER_NAME)
   return { email, password }
 }
 
@@ -86,33 +79,12 @@ async function openFixtureDocument(
   const fixtureName = path.basename(fixturePath)
   await signIn(page, email, password)
 
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page
-      .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-      .first()
-      .click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await openMatter(page, matterName)
 
   if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
+    const fileInput = page
+      .getByLabel('Upload document', { exact: true })
+      .first()
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     await fileInput.setInputFiles(fixturePath)
   }

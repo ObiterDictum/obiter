@@ -1,4 +1,5 @@
 import { createAccount } from './document-journey'
+import { openMatter } from './support'
 import { signIn } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -18,35 +19,14 @@ async function openSyntheticDocument(
 ) {
   await signIn(page, email, password)
 
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page
-      .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-      .first()
-      .click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await openMatter(page, matterName)
 
   const documentRow = page.getByRole('link', { name: FILENAME }).first()
   if (mode === 'upload') {
     const bytes = await createSyntheticDocx([FIRST])
-    const fileInput = page.locator('input[aria-label="Upload document"]')
+    const fileInput = page
+      .getByLabel('Upload document', { exact: true })
+      .first()
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     await fileInput.setInputFiles({
       name: FILENAME,
