@@ -39,6 +39,7 @@ export interface MatterTabsValue {
   promote: (id: string) => void
   openToSide: (id: string) => void
   closeSide: () => void
+  swapSides: () => void
 }
 
 const MatterTabsContext = createContext<MatterTabsValue | null>(null)
@@ -154,6 +155,13 @@ export function MatterTabsProvider({
     go(matterTabPath(matterId, target ?? overviewTab()), null)
   }
 
+  function swapSides() {
+    if (!sideId || !activeId) return
+    const side = tabs.find((tab) => tab.id === sideId)
+    if (!side) return
+    go(matterTabPath(matterId, side), activeId)
+  }
+
   function reopen() {
     const reopened = state.lastClosed
     if (!reopened) return
@@ -197,6 +205,7 @@ export function MatterTabsProvider({
     promote,
     openToSide: (id) => go(pathname, id),
     closeSide: () => go(pathname, null),
+    swapSides,
   }
 
   return (

@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '@obiter/ui'
@@ -294,6 +295,54 @@ describe('matter tab strip', () => {
     expect(
       await screen.findByRole('region', { name: /Witness.docx, read only/ }),
     ).toBeDefined()
+  })
+
+  it('resets the split to even on a double click of the divider', async () => {
+    renderPane('/matters/mtr_1/documents/doc_1?side=document%3Adoc_2')
+    const divider = await screen.findByRole('separator', {
+      name: 'Resize split view',
+    })
+    expect(divider.getAttribute('aria-valuenow')).toBe('50')
+    fireEvent.keyDown(divider, { key: 'ArrowRight' })
+    await waitFor(() =>
+      expect(divider.getAttribute('aria-valuenow')).toBe('62'),
+    )
+    fireEvent.doubleClick(divider)
+    await waitFor(() =>
+      expect(divider.getAttribute('aria-valuenow')).toBe('50'),
+    )
+  })
+
+  it('swaps the editable document with the read-only side', async () => {
+    const first = renderPane('/matters/mtr_1/documents/doc_1')
+    await clickContents('Witness.docx')
+    await waitFor(() => expect(openTabs()).toHaveLength(3))
+    const witness = await screen.findByRole('button', { current: 'page' })
+    fireEvent.contextMenu(witness)
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: 'Open to the side' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Defence.docx' }))
+    await waitFor(() =>
+      expect(first.router.state.location.pathname).toBe(
+        '/matters/mtr_1/documents/doc_1',
+      ),
+    )
+
+    const side = await screen.findByRole('region', {
+      name: /Witness.docx, read only/,
+    })
+    expect(side.textContent).toContain('Read only')
+    fireEvent.click(within(side).getByRole('button', { name: 'Swap sides' }))
+
+    await waitFor(() =>
+      expect(first.router.state.location.pathname).toBe(
+        '/matters/mtr_1/documents/doc_2',
+      ),
+    )
+    expect(first.router.state.location.searchStr).toContain(
+      'side=document%3Adoc_1',
+    )
   })
 
   it('selects tabs with the platform shortcut and ignores keys while typing', async () => {
