@@ -142,7 +142,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
 
   await openMenu(page, 'Review')
   await expect(verifyButton).toBeEnabled()
-  await verifyButton.click()
+  await menuItem(page, 'Verify citations').click()
   await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
   await shot(page, '07-verify-revealed')
 

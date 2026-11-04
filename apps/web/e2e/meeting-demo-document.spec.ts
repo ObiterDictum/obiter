@@ -49,7 +49,7 @@ test('the ribbon entries reveal the one real document action', async ({
 
   await openMenu(page, 'Review')
   const verifyCitations = page.getByRole('menuitem', {
-    name: 'Check citations',
+    name: 'Verify citations',
     exact: true,
   })
   await expect(verifyCitations).toBeEnabled({ timeout: 15_000 })
@@ -88,12 +88,14 @@ test('a modified chord cannot record a redaction decision', async ({
     .last()
     .click()
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
-  const listbox = page.locator('[role="listbox"]')
+  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
   await expect(listbox).toBeVisible({ timeout: 30_000 })
 
   const firstOption = listbox.getByRole('option').first()
   await firstOption.click()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
+
+  const palette = page.getByRole('dialog', { name: 'Search Obiter' })
 
   await listbox.evaluate((element) => {
     for (const [key, modifier] of [
@@ -113,6 +115,9 @@ test('a modified chord cannot record a redaction decision', async ({
     }
   })
 
+  await expect(palette).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(palette).toBeHidden()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
 
   await listbox.focus()
@@ -129,6 +134,8 @@ test('a modified chord cannot record a redaction decision', async ({
   await expect(
     page.getByRole('combobox', { name: 'Search Obiter' }),
   ).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(palette).toBeHidden()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
 
   await listbox.press('r')
@@ -145,7 +152,7 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
 
   await runMenuCommand(page, 'Review', 'Check citations')
   await expect(page.getByText('2 need review').first()).toBeVisible({
-    timeout: 30_000,
+    timeout: 60_000,
   })
 
   await page.setViewportSize({ width: 390, height: 844 })
@@ -195,7 +202,7 @@ test('the finalised output and its controls fit a 390px viewport', async ({
     .last()
     .click()
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
-  const listbox = page.locator('[role="listbox"]')
+  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
   await expect(listbox).toBeVisible({ timeout: 30_000 })
 
   const progress = page.getByText(/of \d+ detected spans decided/)

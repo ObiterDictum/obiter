@@ -13,10 +13,17 @@ const MENU_OF_TAB: Record<string, string> = {
 
 export async function openMenu(page: Page, label: string) {
   const trigger = page.getByRole('button', { name: label, exact: true }).first()
-  if ((await trigger.getAttribute('aria-expanded')) !== 'true') {
+  const menu = page.getByRole('menu', { name: label })
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await menu.isVisible().catch(() => false)) return
     await trigger.click()
+    const shown = await expect(menu)
+      .toBeVisible({ timeout: 2_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (shown) return
   }
-  await expect(page.getByRole('menu', { name: label })).toBeVisible()
+  throw new Error(`could not open the ${label} menu`)
 }
 
 export async function closeMenu(page: Page) {
@@ -89,9 +96,14 @@ export function trackChangesIndicator(page: Page) {
 
 export async function setTrackChanges(page: Page, on: boolean) {
   const indicator = trackChangesIndicator(page)
-  if ((await indicator.count()) === on) return
+  await expect(
+    page.getByRole('button', { name: 'Bold', exact: true }).first(),
+  ).toBeEnabled()
   await openMenu(page, 'Review')
-  await menuItem(page, 'Track changes').click()
+  const item = page.getByRole('menuitemcheckbox', { name: 'Track changes' })
+  await expect(item).toBeEnabled()
+  const pressed = (await item.getAttribute('aria-checked')) === 'true'
+  if (pressed !== on) await item.click()
   await closeMenu(page)
   await expect(indicator).toHaveCount(on ? 1 : 0)
 }

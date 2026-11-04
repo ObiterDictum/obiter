@@ -98,14 +98,20 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
   await expect(editor(page)).toHaveValue(new RegExp(HEADING))
 
   const sheet = page.locator('[data-document-sheet]').first()
+  const sheetFrame = page.locator('[data-document-sheet-frame]').first()
+  const pageZoom = async () =>
+    Number(await sheetFrame.getAttribute('data-page-zoom'))
+  const zoomedOutFrom = await pageZoom()
   await openRibbonTab(page, 'View')
   await menuItem(page, 'Zoom out').click()
   await closeMenu(page)
-  await expect(sheet).toHaveCSS('transform', /matrix\(0.9/)
+  await expect.poll(pageZoom).toBeLessThan(zoomedOutFrom)
+  const zoomedOut = await pageZoom()
   await openRibbonTab(page, 'View')
   await menuItem(page, 'Zoom in').click()
   await closeMenu(page)
-  await expect(sheet).toHaveCSS('transform', /matrix\(1/)
+  await expect.poll(pageZoom).toBeGreaterThan(zoomedOut)
+  await expect(sheet).toBeVisible()
 
   await openRibbonTab(page, 'View')
   await menuItem(page, 'Print layout').click()

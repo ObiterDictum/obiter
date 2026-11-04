@@ -164,10 +164,10 @@ async function openChangesPanel(page: Page) {
 }
 
 async function reviewToggle(page: Page, on: boolean) {
+  await setTrackChanges(page, on)
   await expect(trackChangesIndicator(page)).toHaveCount(on ? 1 : 0, {
     timeout: 15_000,
   })
-  await setTrackChanges(page, on)
 }
 
 function zipPart(docxPath: string, partName: string) {

@@ -232,16 +232,14 @@ test('toggles bold from the keyboard and saves it', async ({
   await selectFirst(page, 6)
 
   await page.keyboard.press('Control+b')
-  await expect(page.getByRole('button', { name: 'Bold', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await expect(
+    page.getByRole('button', { name: 'Bold', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
   await shot(page, '09-keyboard-bold-applied')
   await page.keyboard.press('Control+b')
-  await expect(page.getByRole('button', { name: 'Bold', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'false',
-  )
+  await expect(
+    page.getByRole('button', { name: 'Bold', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false')
 
   await page.keyboard.press('Control+b')
   await saveAndWait(page)
