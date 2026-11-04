@@ -1,16 +1,25 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
-import { fixturePath, seedAccount } from './support'
+import { resolveJourneyTargets } from '../journey-target.mjs'
+import { fixturePath, verifyEmailInDb } from './support'
+
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 
 test('finalizes a DOCX into a previewable secure PDF download', async ({
   page,
+  request,
 }) => {
   const runId = randomUUID().slice(0, 8)
   const email = `e2e-redact-${runId}@obiter.test`
   const password = `E2e-${runId}-Aa1!`
 
-  seedAccount(email, password, 'E2E Redact User')
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
+    data: { name: 'E2E Redact User', email, password },
+    headers: { Origin: webOrigin },
+  })
+  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
+  verifyEmailInDb(databaseName, email)
 
   await page.goto('/sign-in', { waitUntil: 'networkidle' })
   await page.getByLabel('Email').click()

@@ -1,4 +1,4 @@
-import { seedAccount } from './support'
+import { verifyEmailInDb } from './support'
 import { openFixtureDocument } from './document-journey'
 import { focusParagraph, saveAndWait } from './e13-support'
 import {
@@ -10,8 +10,10 @@ import {
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveJourneyTargets } from '../journey-target.mjs'
 import { openMenu, runMenuCommand } from './editor-chrome'
 
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
   HERE,
@@ -26,11 +28,16 @@ function shot(page: Page, name: string) {
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
 }
 
-async function createAccount(_request: APIRequestContext) {
+async function createAccount(request: APIRequestContext) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `e11toa-${runId}@obiter.test`
   const password = `E11toa-${runId}-Aa1!`
-  seedAccount(email, password, 'E11 TOA User')
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
+    data: { name: 'E11 TOA User', email, password },
+    headers: { Origin: webOrigin },
+  })
+  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
+  verifyEmailInDb(databaseName, email)
   return { email, password }
 }
 

@@ -1,4 +1,4 @@
-import { openMatter, seedAccount } from './support'
+import { openMatter, verifyEmailInDb } from './support'
 import { signIn, focusParagraph, saveAndWait } from './e13-support'
 import {
   expect,
@@ -8,6 +8,7 @@ import {
 } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveJourneyTargets } from '../journey-target.mjs'
 import {
   closeMenu,
   menuItem,
@@ -16,16 +17,22 @@ import {
   runMenuCommand,
 } from './editor-chrome'
 
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
 const HEADING = 'E4 Heading'
 const BODY = 'Delta paragraph'
 
-async function createAccount(_request: APIRequestContext) {
+async function createAccount(request: APIRequestContext) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `e7f-${runId}@obiter.test`
   const password = `E7f-${runId}-Aa1!`
-  seedAccount(email, password, 'E7F User')
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
+    data: { name: 'E7F User', email, password },
+    headers: { Origin: webOrigin },
+  })
+  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
+  verifyEmailInDb(databaseName, email)
   return { email, password }
 }
 

@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveJourneyTargets } from '../journey-target.mjs'
 import {
   closeMenu,
   menuItem,
@@ -17,8 +18,9 @@ import {
   setTrackChanges,
   trackChangesIndicator,
 } from './editor-chrome'
-import { openMatter, seedAccount } from './support'
+import { openMatter, verifyEmailInDb } from './support'
 
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../..',
@@ -48,11 +50,16 @@ function buildFixture() {
   )
 }
 
-async function createAccount(_request: APIRequestContext) {
+async function createAccount(request: APIRequestContext) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `e9-${runId}@obiter.test`
   const password = `E9-${runId}-Aa1!`
-  seedAccount(email, password, USER_NAME)
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
+    data: { name: USER_NAME, email, password },
+    headers: { Origin: webOrigin },
+  })
+  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
+  verifyEmailInDb(databaseName, email)
   return { email, password }
 }
 

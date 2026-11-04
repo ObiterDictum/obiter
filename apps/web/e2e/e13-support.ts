@@ -1,21 +1,28 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveJourneyTargets } from '../journey-target.mjs'
 import { openRibbonTab } from './editor-chrome'
-import { openMatter, seedAccount, waitForPaneIdle } from './support'
+import { openMatter, verifyEmailInDb, waitForPaneIdle } from './support'
 
 export { openRibbonTab }
 
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
 export const HEADING = 'E4 Heading'
 export const BODY = 'Delta paragraph'
 
-export async function createAccount(_request: APIRequestContext) {
+export async function createAccount(request: APIRequestContext) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `e13-${runId}@obiter.test`
   const password = `E13-${runId}-Aa1!`
-  seedAccount(email, password, 'E13 User')
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
+    data: { name: 'E13 User', email, password },
+    headers: { Origin: webOrigin },
+  })
+  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
+  verifyEmailInDb(databaseName, email)
   return { email, password }
 }
 

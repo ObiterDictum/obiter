@@ -17,8 +17,10 @@ import {
   type APIRequestContext,
   type Page,
 } from '@playwright/test'
-import { fixturePath, openMatter, seedAccount } from './support'
+import { resolveJourneyTargets } from '../journey-target.mjs'
+import { fixturePath, openMatter, verifyEmailInDb } from './support'
 
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..')
 const RICH_FIXTURE = path.join('/tmp', 'e12-rich.docx')
@@ -74,11 +76,16 @@ function inspectDocx(filePath: string) {
   return JSON.parse(stdout) as Record<string, string>
 }
 
-async function createAccount(_request: APIRequestContext, prefix: string) {
+async function createAccount(request: APIRequestContext, prefix: string) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `${prefix}-${runId}@obiter.test`
   const password = `E12-${runId}-Aa1!`
-  seedAccount(email, password, 'E12 User')
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
+    data: { name: 'E12 User', email, password },
+    headers: { Origin: webOrigin },
+  })
+  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
+  verifyEmailInDb(databaseName, email)
   return { email, password }
 }
 

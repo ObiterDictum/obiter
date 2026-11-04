@@ -5,10 +5,12 @@ import {
   type Page,
 } from '@playwright/test'
 import path from 'node:path'
+import { resolveJourneyTargets } from '../journey-target.mjs'
 import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
-import { fixturePath, openMatter, seedAccount } from './support'
+import { fixturePath, openMatter, verifyEmailInDb } from './support'
 import { saveAndWait } from './e13-support'
 
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
 const shots = process.env.E1_E2E_SHOTS
 
@@ -17,11 +19,16 @@ function shot(page: Page, name: string) {
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
 }
 
-async function createAccount(_request: APIRequestContext) {
+async function createAccount(request: APIRequestContext) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `e1-${runId}@obiter.test`
   const password = `E1-${runId}-Aa1!`
-  seedAccount(email, password, 'E1 User')
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
+    data: { name: 'E1 User', email, password },
+    headers: { Origin: webOrigin },
+  })
+  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
+  verifyEmailInDb(databaseName, email)
   return { email, password }
 }
 

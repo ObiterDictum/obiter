@@ -5,16 +5,24 @@ import {
   type APIRequestContext,
   type Page,
 } from '@playwright/test'
-import { fixturePath, openMatter, seedAccount } from './support'
+import { resolveJourneyTargets } from '../journey-target.mjs'
+import { fixturePath, openMatter, verifyEmailInDb } from './support'
 import { openMenu, runMenuCommand } from './editor-chrome'
 
-async function seedDocument(page: Page, _request: APIRequestContext) {
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
+
+async function seedDocument(page: Page, request: APIRequestContext) {
   const runId = randomUUID().slice(0, 8)
   const email = `e2e-demo-${runId}@obiter.test`
   const password = `E2e-${runId}-Aa1!`
   const matterName = `E2E Demo Matter ${runId}`
 
-  seedAccount(email, password, 'E2E Demo User')
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
+    data: { name: 'E2E Demo User', email, password },
+    headers: { Origin: webOrigin },
+  })
+  expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
+  verifyEmailInDb(databaseName, email)
 
   await page.goto('/sign-in', { waitUntil: 'networkidle' })
   await page.getByLabel('Email').click()
