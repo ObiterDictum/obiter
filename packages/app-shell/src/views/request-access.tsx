@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Button, Input, Select, cn } from '@obiter/ui'
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import {
   ORGANISATION_NAME_MAX_LENGTH,
   USER_NAME_MAX_LENGTH,
@@ -21,8 +21,13 @@ import {
   AuthHeading,
   AuthLayout,
 } from './auth-layout'
+import { BotCheck, type BotCheckHandle, type BotCheckState } from './bot-check'
 
-export function RequestAccessRouteView() {
+export function RequestAccessRouteView({
+  botCheckSiteKey,
+}: {
+  botCheckSiteKey?: string
+} = {}) {
   const createAccessRequest = useCreateAccessRequest()
   const [form, setForm] = useState<RequestAccessForm>({
     name: '',
@@ -37,6 +42,12 @@ export function RequestAccessRouteView() {
   })
   const [errors, setErrors] = useState<FieldErrors>({})
   const [sentTo, setSentTo] = useState('')
+  const botCheck = useRef<BotCheckHandle>(null)
+  const [botCheckState, setBotCheckState] = useState<BotCheckState>({
+    status: 'pending',
+  })
+  const waitingForBotCheck =
+    Boolean(botCheckSiteKey) && botCheckState.status === 'pending'
 
   function update<Key extends keyof RequestAccessForm>(
     key: Key,
@@ -50,13 +61,18 @@ export function RequestAccessRouteView() {
     event.preventDefault()
     const result = validateRequestAccess(form)
     setErrors(result.errors)
-    if (!result.input) return
+    if (!result.input || waitingForBotCheck) return
     try {
-      await createAccessRequest.mutateAsync(result.input)
+      await createAccessRequest.mutateAsync(
+        botCheckSiteKey && botCheckState.status === 'passed'
+          ? { ...result.input, botCheckToken: botCheckState.token }
+          : result.input,
+      )
       setSentTo(result.input.email)
     } catch (cause) {
       const failure = accessRequestFailure(cause)
       setErrors({ [failure.field]: failure.message })
+      botCheck.current?.reset()
     }
   }
 
@@ -246,6 +262,15 @@ export function RequestAccessRouteView() {
           ) : null}
         </fieldset>
 
+        {botCheckSiteKey ? (
+          <BotCheck
+            ref={botCheck}
+            siteKey={botCheckSiteKey}
+            action="request-access"
+            onChange={setBotCheckState}
+          />
+        ) : null}
+
         {errors.form ? (
           <p role="alert" className="text-meta text-danger">
             {errors.form}
@@ -256,9 +281,10 @@ export function RequestAccessRouteView() {
           type="submit"
           size="lg"
           loading={createAccessRequest.isPending}
+          disabled={waitingForBotCheck}
           className="mt-1 w-full"
         >
-          Request access
+          {waitingForBotCheck ? 'Checking your browser…' : 'Request access'}
         </Button>
       </AuthForm>
 
