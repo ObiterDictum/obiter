@@ -111,25 +111,27 @@ function AuthSamplePanel() {
   return (
     <aside
       aria-label="About Obiter"
-      className="relative hidden overflow-hidden border-l border-line bg-surface compact:block"
+      className="sticky top-0 hidden h-dvh self-start p-2 pl-0 compact:block"
     >
-      <img
-        src={AUTH_ART.light}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        className="size-full object-cover dark:hidden"
-      />
-      <img
-        src={AUTH_ART.dark}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        className="hidden size-full object-cover dark:block"
-      />
-      <p className="absolute inset-x-0 top-0 p-10 text-caption text-subtle">
-        Evidence-first legal work
-      </p>
+      <div className="relative size-full overflow-hidden rounded-xl border border-line bg-raised">
+        <img
+          src={AUTH_ART.light}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 size-full object-cover dark:hidden"
+        />
+        <img
+          src={AUTH_ART.dark}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 hidden size-full object-cover dark:block"
+        />
+        <p className="absolute inset-x-0 top-0 p-8 text-caption text-subtle">
+          Evidence-first legal work
+        </p>
+      </div>
     </aside>
   )
 }
