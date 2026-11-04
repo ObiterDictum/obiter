@@ -17,6 +17,11 @@
     display: none !important;
   }
 
+  body:has([data-document-desk]) *:has([data-document-desk]) {
+    position: static !important;
+    overflow: visible !important;
+  }
+
   body:has([data-document-desk]) [data-document-desk] {
     position: absolute !important;
     inset: 0 auto auto 0 !important;
