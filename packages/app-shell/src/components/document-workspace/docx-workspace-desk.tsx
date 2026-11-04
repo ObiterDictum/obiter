@@ -40,6 +40,7 @@ export function DocxWorkspaceDesk({
   spelling,
   rulerOn,
   ruler,
+  paperWidth,
   onExitMarginEditing,
   onOpenNoteEditing,
   panel,
@@ -71,6 +72,7 @@ export function DocxWorkspaceDesk({
   spelling: boolean
   rulerOn: boolean
   ruler: RulerContext | undefined
+  paperWidth: number | null
   onExitMarginEditing: () => void
   onOpenNoteEditing: (paragraphId: string) => void
   panel: WorkspacePanel | null
@@ -119,6 +121,7 @@ export function DocxWorkspaceDesk({
       rulerOn={rulerOn}
       ruler={ruler}
       zoom={zoom}
+      paperWidth={paperWidth}
       pages={
         <DocxModelPages
           {...pages}

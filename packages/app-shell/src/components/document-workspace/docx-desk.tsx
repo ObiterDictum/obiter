@@ -22,6 +22,7 @@ export function DocxDesk({
   zoom,
   pages,
   sidePanels,
+  paperWidth,
 }: {
   model: DocumentModelWire
   navOpen: boolean
@@ -36,6 +37,7 @@ export function DocxDesk({
   zoom: number
   pages: ReactNode
   sidePanels: ReactNode
+  paperWidth: number | null
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-stretch overflow-hidden lg:flex-row">
@@ -50,7 +52,10 @@ export function DocxDesk({
         </div>
       ) : null}
 
-      <DocumentDesk overlay={<VerificationMarkerLayer model={model} />}>
+      <DocumentDesk
+        overlay={<VerificationMarkerLayer model={model} />}
+        paperWidth={paperWidth}
+      >
         <div
           ref={columnRef}
           className="flex w-full min-w-0 flex-col items-center gap-6"

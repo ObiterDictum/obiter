@@ -1,11 +1,10 @@
 import { Skeleton } from '@obiter/ui'
 import { ArrowsLeftRight, X } from '@obiter/ui/icons'
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import {
   DocumentEditorHeader,
   readOnlyHeaderState,
 } from './components/document-workspace/document-editor-header'
-import { useElementWidth } from './components/document-workspace/use-element-width'
 import { documentImagePartNames } from './document-page-media'
 import { layoutDocumentPages, StaticDocumentPages } from './document-render'
 import {
@@ -15,8 +14,6 @@ import {
 import { useDocument } from './documents'
 import { useMatterTabs } from './matter-tabs-state'
 import { useSplitScale } from './matter-split-scale'
-
-const PAPER_WIDTH = 794
 
 export function MatterSplitSide({
   sideId,
@@ -43,21 +40,12 @@ export function MatterSplitSide({
     [model],
   )
   const imageUrls = useDocumentImageUrls(documentId ?? '', parts, version?.id)
-  const paneRef = useRef<HTMLElement>(null)
-  const width = useElementWidth(paneRef)
   const split = useSplitScale()
-  const zoom =
-    split?.pageZoom ??
-    (width === null
-      ? 100
-      : Math.min(
-          100,
-          Math.max(35, Math.floor(((width - 32) / PAPER_WIDTH) * 100)),
-        ))
+  const zoom = split?.pageZoom ?? 100
+  const ribbonHeight = split?.ribbonHeight ?? 0
 
   return (
     <section
-      ref={paneRef}
       aria-label={tab ? `${tab.title}, read only` : 'Split view'}
       className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-line bg-raised"
     >
@@ -88,6 +76,14 @@ export function MatterSplitSide({
           </div>
         }
       />
+      {ribbonHeight > 0 ? (
+        <div
+          aria-hidden
+          data-split-ribbon-spacer
+          className="shrink-0"
+          style={{ height: ribbonHeight }}
+        />
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col">
         {!documentId ? (
           <p className="px-4 py-6 text-meta text-muted">

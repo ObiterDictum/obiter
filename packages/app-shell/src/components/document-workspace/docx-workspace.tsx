@@ -462,6 +462,7 @@ export function DocxWorkspace({
               spelling={spelling}
               rulerOn={rulerOn}
               ruler={ruler}
+              paperWidth={pages[0]?.box.widthPx ?? null}
               onExitMarginEditing={closeEditingStory}
               onOpenNoteEditing={(paragraphId) =>
                 openEditingStory('footnotes', paragraphId)

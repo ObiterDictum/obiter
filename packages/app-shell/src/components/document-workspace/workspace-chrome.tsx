@@ -1,6 +1,7 @@
-import type { KeyboardEventHandler, ReactNode } from 'react'
+import { useRef, type KeyboardEventHandler, type ReactNode } from 'react'
 import { Button, EmptyState, Skeleton } from '@obiter/ui'
 import { ApiError } from '../../api'
+import { useSplitRibbonHeight } from '../../matter-split-scale'
 
 export type DocumentWorkspaceLayout = 'page' | 'pane'
 
@@ -32,7 +33,13 @@ export function WorkspaceShell({
 }
 
 export function WorkspaceRibbon({ children }: { children: ReactNode }) {
-  return <div className="shrink-0 bg-surface">{children}</div>
+  const ref = useRef<HTMLDivElement>(null)
+  useSplitRibbonHeight(ref)
+  return (
+    <div ref={ref} className="shrink-0 bg-surface">
+      {children}
+    </div>
+  )
 }
 
 export function LoadingBlock({ label }: { label: string }) {

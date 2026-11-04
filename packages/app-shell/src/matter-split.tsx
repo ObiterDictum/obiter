@@ -1,15 +1,7 @@
 import type { AppPlatform } from '@obiter/contracts'
-import {
-  Suspense,
-  lazy,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react'
-import { useElementWidth } from './components/document-workspace/use-element-width'
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
 import { useMatterPreviewRef } from './matter-preview'
-import { SplitScaleProvider, splitPageZoom } from './matter-split-scale'
+import { SPLIT_DIVIDER_WIDTH, SplitScaleProvider } from './matter-split-scale'
 import {
   MatterTabsProvider,
   useHydrateMatterTabs,
@@ -76,9 +68,6 @@ function MatterTabsPaneBody({
   const [split, setSplit] = useState(EVEN_SPLIT)
   const [zoom, setZoom] = useState(100)
   const [draggingId, setDraggingId] = useState<string | null>(null)
-  const splitRef = useRef<HTMLDivElement>(null)
-  const splitWidth = useElementWidth(splitRef)
-  const pageZoom = splitPageZoom(splitWidth, split, zoom)
 
   return (
     <>
@@ -89,13 +78,19 @@ function MatterTabsPaneBody({
           onTabDrag={setDraggingId}
         />
       </Suspense>
-      <SplitScaleProvider
-        scale={sideId ? { pageZoom, zoom, onZoom: setZoom } : null}
-      >
-        <div ref={splitRef} className="relative flex min-h-0 flex-1">
+      <SplitScaleProvider active={Boolean(sideId)} zoom={zoom} onZoom={setZoom}>
+        <div className="relative flex min-h-0 flex-1">
           <div
             className="min-h-0 min-w-0 overflow-y-auto"
-            style={sideId ? { flex: `0 0 ${String(split)}%` } : { flex: 1 }}
+            style={
+              sideId
+                ? {
+                    flex: `0 0 calc(${String(split)}% - ${String(
+                      SPLIT_DIVIDER_WIDTH / 2,
+                    )}px)`,
+                  }
+                : { flex: 1 }
+            }
           >
             {children}
           </div>
@@ -167,7 +162,8 @@ function SplitDivider({
         event.preventDefault()
         onResize(event.key === 'ArrowLeft' ? MIN_SPLIT + 10 : MAX_SPLIT - 10)
       }}
-      className="w-1 shrink-0 cursor-col-resize bg-line transition-colors duration-150 hover:bg-brand focus-visible:bg-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      style={{ width: SPLIT_DIVIDER_WIDTH }}
+      className="shrink-0 cursor-col-resize bg-line transition-colors duration-150 hover:bg-brand focus-visible:bg-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     />
   )
 }
