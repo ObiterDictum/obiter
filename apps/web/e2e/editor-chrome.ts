@@ -13,17 +13,10 @@ const MENU_OF_TAB: Record<string, string> = {
 
 export async function openMenu(page: Page, label: string) {
   const trigger = page.getByRole('button', { name: label, exact: true }).first()
-  const menu = page.getByRole('menu', { name: label })
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (await menu.isVisible().catch(() => false)) return
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') {
     await trigger.click()
-    const shown = await expect(menu)
-      .toBeVisible({ timeout: 2_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (shown) return
   }
-  throw new Error(`could not open the ${label} menu`)
+  await expect(page.getByRole('menu', { name: label })).toBeVisible()
 }
 
 export async function closeMenu(page: Page) {
@@ -69,10 +62,26 @@ export async function runMenuCommand(
   menu: string,
   command: string,
 ) {
-  await openMenu(page, menu)
-  await menuItem(page, command).click()
+  const clicked = await clickMenuItem(page, menu, command)
+  if (!clicked) throw new Error(`could not run ${command} from ${menu}`)
   const popup = page.getByRole('menu', { name: menu })
-  if (await popup.isVisible().catch(() => false)) await closeMenu(page)
+  const staysOpen = await expect(popup)
+    .toBeHidden({ timeout: 1_000 })
+    .then(() => false)
+    .catch(() => true)
+  if (staysOpen) await closeMenu(page)
+}
+
+export async function clickMenuItem(page: Page, menu: string, command: string) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await openMenu(page, menu)
+    const clicked = await menuItem(page, command)
+      .click({ timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (clicked) return true
+  }
+  return false
 }
 
 export async function choose(page: Page, control: string, option: string) {

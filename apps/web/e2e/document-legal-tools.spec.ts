@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  clickMenuItem,
   closeMenu,
   menuItem,
   openFormatting,
@@ -30,12 +31,14 @@ const editor = (page: Page) =>
 const save = (page: Page) =>
   page.getByRole('button', { name: 'Save', exact: true })
 async function insertCommand(page: Page, name: string) {
-  await openMenu(page, 'Insert')
-  await menuItem(page, name).click()
+  if (!(await clickMenuItem(page, 'Insert', name))) {
+    throw new Error(`could not run the ${name} command`)
+  }
 }
 async function reviewCommand(page: Page, name: string) {
-  await openMenu(page, 'Review')
-  await menuItem(page, name).click()
+  if (!(await clickMenuItem(page, 'Review', name))) {
+    throw new Error(`could not run the ${name} command`)
+  }
 }
 const markedText = (page: Page) => page.locator('[data-defined-term]')
 const fieldMarkers = (page: Page) => page.locator('[data-field-marker]')
