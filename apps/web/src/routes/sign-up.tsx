@@ -1,4 +1,4 @@
-import { SignUpRouteView } from '@obiter/app-shell'
+import { SignUpRedirectView } from '@obiter/app-shell'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/sign-up')({
@@ -6,5 +6,5 @@ export const Route = createFileRoute('/sign-up')({
 })
 
 function SignUpRouteComponent() {
-  return <SignUpRouteView />
+  return <SignUpRedirectView />
 }

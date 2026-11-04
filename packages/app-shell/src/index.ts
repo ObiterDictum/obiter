@@ -85,7 +85,9 @@ export {
 } from './shell-states'
 
 export { SignInRouteView } from './views/sign-in'
-export { SignUpRouteView } from './views/sign-up'
+export { SignUpRedirectView } from './views/sign-up-redirect'
+export { RequestAccessRouteView } from './views/request-access'
+export { RequestAccessConfirmRouteView } from './views/request-access-confirm'
 export { AcceptInviteRouteView } from './views/accept-invite'
 export { ForgotPasswordRouteView } from './views/forgot-password'
 export { ResetPasswordRouteView } from './views/reset-password'

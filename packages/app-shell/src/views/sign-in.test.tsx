@@ -13,7 +13,6 @@ import { vi } from '../../../../scripts/test/vitest-compat'
 
 const authMocks = vi.hoisted(() => ({
   signInWithEmail: vi.fn(),
-  signUpWithEmail: vi.fn(),
   requestMagicLink: vi.fn(),
   navigate: vi.fn(),
   resendVerificationEmail: vi.fn(),
@@ -34,7 +33,6 @@ mock.module('../auth', () =>
         session: null,
         isPending: false,
         signInWithEmail: authMocks.signInWithEmail,
-        signUpWithEmail: authMocks.signUpWithEmail,
         requestMagicLink: authMocks.requestMagicLink,
         requestPasswordReset: vi.fn(),
         resetPassword: vi.fn(),
@@ -166,13 +164,13 @@ describe('SignInRouteView — password submit outcomes', () => {
     })
   })
 
-  it('points account creation at /sign-up', () => {
+  it('points a person who needs access at /request-access', () => {
     render(<SignInRouteView platform="web" />)
     expect(
       screen
-        .getByRole('link', { name: /create an account/i })
+        .getByRole('link', { name: /request access/i })
         .getAttribute('href'),
-    ).toBe('/sign-up')
+    ).toBe('/request-access')
   })
 
   it('surfaces unexpected thrown errors instead of clearing silently', async () => {

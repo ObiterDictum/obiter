@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { personAttributionSchema } from './person'
 
+export * from './access-request'
 export * from './account'
 export * from './agent-api'
 export * from './agent-run'

@@ -16,7 +16,6 @@ bunMock.module('better-auth/react', () => ({
     return {
       useSession: mock.useSession,
       signIn: { email: vi.fn() },
-      signUp: { email: vi.fn() },
       signOut: mock.signOut,
     }
   },

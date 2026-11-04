@@ -79,7 +79,7 @@ Obiter has no seed script. To get an organisation, user, matters, and documents 
 
 1. Start the API from a `backend` checkout (`bun run dev:api` there; see that repository's README for `.env` and the Docker services). It applies the migrations in `packages/database/migrations` at startup; to apply them separately, run `bun run db:migrate --database-url=<url>` in the same checkout.
 2. Start the web app here with `OBITER_API_ORIGIN` pointing at that API (`bun run dev:web`, or `bun run dev:desktop` for the desktop shell).
-3. Open the app and register an account through the sign-up screen. Registration provisions your organisation automatically.
+3. Create an account with the API's email sign-up endpoint (`POST /api/auth/sign-up/email`). The app has no self-service sign-up: `/sign-up` redirects to `/request-access`, whose enquiry posts to API routes that are planned and not served yet, so the endpoint is how a development account is made. Registration provisions your organisation automatically.
 4. Verify the email (in development the one-time verification URL is logged to the API console when no Resend key is configured).
 5. Sign in, then create matters and upload document metadata through the UI.
 

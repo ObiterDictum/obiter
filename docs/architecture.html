@@ -2803,7 +2803,8 @@
                 <dd>
                   home · LegalSearchView · matters · matter-detail ·
                   document-detail · CaseLawDocumentView · settings · verify ·
-                  sign-in · sign-up · accept-invite · forgot-password ·
+                  sign-in · sign-up (redirect) · request-access ·
+                  request-access-confirm · accept-invite · forgot-password ·
                   reset-password
                 </dd>
                 <dt>Shell</dt>
@@ -4049,6 +4050,23 @@
               </tbody>
             </table>
           </div>
+          <p class="lede">
+            Planned and not served yet: the closed-sign-up enquiry. The clients
+            ship <code>/request-access</code> and
+            <code>/request-access/confirm</code> and call
+            <code>POST /api/access-requests</code> (stores a request and sends
+            the confirmation link, answering with
+            <code>confirmation_sent</code> or one of
+            <code>webmail_address</code>, <code>non_uk_address</code>,
+            <code>rate_limited</code>, <code>invalid_request</code>) and
+            <code>POST /api/access-requests/confirm</code> (token in, one of
+            <code>verified</code> with the next step,
+            <code>pending_review</code>, <code>expired</code> or
+            <code>invalid</code>). Until both routes exist the form shows the
+            API&rsquo;s refusal, and no account is created through
+            <code>/sign-up</code>: that route now redirects, as the divergence
+            table records.
+          </p>
         </section>
 
         <section id="lifecycle">
@@ -7354,6 +7372,24 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    Open self-service sign-up is closed in the clients before
+                    the API refuses unverified registrations.
+                  </td>
+                  <td>
+                    <code>/sign-up</code> no longer renders a form: it redirects
+                    to <code>/request-access</code>, keeping an invite token by
+                    sending it to <code>/invites/accept</code>, and every
+                    &quot;Sign up&quot; link reads &quot;Request access&quot;.
+                    The enquiry posts to planned routes the API does not serve
+                    yet, so the form shows the API&rsquo;s refusal rather than
+                    creating an account. Registration through
+                    <code>/api/auth/sign-up/*</code> still succeeds until the
+                    API change lands.
+                  </td>
+                  <td class="id">S11; specs/app-shell/contract.md</td>
+                </tr>
                 <tr>
                   <td>
                     S9 stage-1 brief requests creator-visible ownership

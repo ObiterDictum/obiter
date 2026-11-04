@@ -108,16 +108,17 @@ export function AcceptInviteRouteView() {
         ) : showSignUp ? (
           <>
             <p className="text-body text-muted">
-              You need an Obiter account to accept this invite. Create one with
-              the same email the invite was sent to.
+              Obiter accounts are opened to verified people only. Request access
+              with the address this invite was sent to, then open the invite
+              link again once your access is confirmed.
             </p>
             <Button
               size="lg"
               nativeButton={false}
-              render={<Link to="/sign-up" search={{ token }} />}
+              render={<Link to="/request-access" />}
               className="w-full"
             >
-              Create an account
+              Request access
             </Button>
             <p className="text-center text-caption text-subtle">
               Already have an account?{' '}

@@ -4,7 +4,7 @@ Fixture: `data/evals/redact/demo-fixture.docx`. It is synthetic and is a workflo
 
 ## Prerequisites
 
-Run the API and web app locally. Register through the sign-up screen, create an organisation from Home, then create a matter. Do not use a seed script.
+Run the API and web app locally. Sign in with an account created through the API's `POST /api/auth/sign-up/email` endpoint — the app's `/request-access` enquiry posts to routes that are planned and not served yet — create an organisation from Home, then create a matter. Do not use a seed script.
 
 ## Walkthrough
 

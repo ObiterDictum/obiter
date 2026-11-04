@@ -4,7 +4,9 @@ import {
   HomeRouteView,
   ResetPasswordRouteView,
   SignInRouteView,
-  SignUpRouteView,
+  SignUpRedirectView,
+  RequestAccessRouteView,
+  RequestAccessConfirmRouteView,
   AcceptInviteRouteView,
   ShellError,
   ShellNotFound,
@@ -140,6 +142,8 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/ln/$',
   '/sign-in',
   '/sign-up',
+  '/request-access',
+  '/request-access/confirm',
   '/invites/accept',
   '/forgot-password',
   '/reset-password',
@@ -530,8 +534,20 @@ const signUpRoute = createRoute({
 })
 
 function DesktopSignUpRoute() {
-  return <SignUpRouteView />
+  return <SignUpRedirectView />
 }
+
+const requestAccessRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'request-access',
+  component: RequestAccessRouteView,
+})
+
+const requestAccessConfirmRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'request-access/confirm',
+  component: RequestAccessConfirmRouteView,
+})
 
 interface AcceptInviteSearch {
   token: string
@@ -595,6 +611,8 @@ const routeTree = rootRoute.addChildren([
   legislationRoute,
   signInRoute,
   signUpRoute,
+  requestAccessRoute,
+  requestAccessConfirmRoute,
   acceptInviteRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
