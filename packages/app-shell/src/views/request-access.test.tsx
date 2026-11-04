@@ -10,6 +10,7 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -25,12 +26,14 @@ mock.module('../api', () => ({ ...apiModule, apiFetch: api.apiFetch }))
 const { ApiError } = await import('../api')
 const { RequestAccessRouteView } = await import('./request-access')
 
-function renderRequestAccess() {
+function renderRequestAccess(botCheckSiteKey?: string) {
   const rootRoute = createRootRoute()
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: RequestAccessRouteView,
+    component: () => (
+      <RequestAccessRouteView botCheckSiteKey={botCheckSiteKey} />
+    ),
   })
   const signInRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -92,7 +95,29 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  delete window.turnstile
 })
+
+type FakeTurnstileOptions = {
+  sitekey: string
+  action?: string
+  callback?: (token: string) => void
+  'error-callback'?: () => void
+}
+
+function installFakeTurnstile() {
+  const widget: { options?: FakeTurnstileOptions } = {}
+  const fake = {
+    render: vi.fn((_element: HTMLElement, options: FakeTurnstileOptions) => {
+      widget.options = options
+      return 'widget-1'
+    }),
+    reset: vi.fn(),
+    remove: vi.fn(),
+  }
+  window.turnstile = fake
+  return { fake, widget }
+}
 
 describe('access request form', () => {
   it('asks for the required details before anything is sent', async () => {
@@ -249,5 +274,62 @@ describe('access request form', () => {
     submit()
 
     expect(await screen.findByText('A request is already open.')).toBeTruthy()
+  })
+
+  describe('with the bot check', () => {
+    it('waits for the check, then sends its token', async () => {
+      const { fake, widget } = installFakeTurnstile()
+      api.apiFetch.mockResolvedValueOnce({ status: 'confirmation_sent' })
+      renderRequestAccess('site-key')
+      await fillRequest()
+
+      await waitFor(() => expect(fake.render).toHaveBeenCalledTimes(1))
+      expect(widget.options).toMatchObject({
+        sitekey: 'site-key',
+        action: 'request-access',
+      })
+      const waiting = screen.getByRole('button', {
+        name: 'Checking your browser…',
+      })
+      expect(waiting.hasAttribute('disabled')).toBe(true)
+
+      act(() => widget.options?.callback?.('token-123'))
+      submit()
+
+      await waitFor(() => expect(api.apiFetch).toHaveBeenCalledTimes(1))
+      const body = JSON.parse(String(api.apiFetch.mock.calls[0]?.[1]?.body))
+      expect(body.botCheckToken).toBe('token-123')
+    })
+
+    it('still lets the request through for the server to judge when the check cannot run', async () => {
+      const { fake, widget } = installFakeTurnstile()
+      api.apiFetch.mockResolvedValueOnce({ status: 'confirmation_sent' })
+      renderRequestAccess('site-key')
+      await fillRequest()
+      await waitFor(() => expect(fake.render).toHaveBeenCalledTimes(1))
+
+      act(() => widget.options?.['error-callback']?.())
+      submit()
+
+      await waitFor(() => expect(api.apiFetch).toHaveBeenCalledTimes(1))
+      const body = JSON.parse(String(api.apiFetch.mock.calls[0]?.[1]?.body))
+      expect(body).not.toHaveProperty('botCheckToken')
+    })
+
+    it('asks for a fresh check after a refused request', async () => {
+      const { fake, widget } = installFakeTurnstile()
+      api.apiFetch.mockRejectedValueOnce(new Error('network down'))
+      renderRequestAccess('site-key')
+      await fillRequest()
+      await waitFor(() => expect(fake.render).toHaveBeenCalledTimes(1))
+
+      act(() => widget.options?.callback?.('token-123'))
+      submit()
+
+      await waitFor(() => expect(fake.reset).toHaveBeenCalledWith('widget-1'))
+      expect(
+        screen.getByRole('button', { name: 'Checking your browser…' }),
+      ).toBeTruthy()
+    })
   })
 })
