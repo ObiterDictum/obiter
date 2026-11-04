@@ -1,21 +1,26 @@
-import type { ReactNode, RefObject } from 'react'
+import { useRef, type ReactNode, type RefObject } from 'react'
 import { documentPrintPageRule } from '../../document-print'
 import { A4_HEIGHT_PX, A4_WIDTH_PX } from '../../document-page-units'
+import { useSplitDeskMetrics } from '../../matter-split-scale'
 
 export function DocumentDesk({
   children,
   overlay,
   deskRef,
+  paperWidth = null,
 }: {
   children: ReactNode
   overlay?: ReactNode
   deskRef?: RefObject<HTMLDivElement | null>
+  paperWidth?: number | null
 }) {
+  const ownRef = useRef<HTMLDivElement>(null)
+  useSplitDeskMetrics(deskRef ?? ownRef, paperWidth)
   return (
     <div
-      ref={deskRef}
+      ref={deskRef ?? ownRef}
       data-document-desk
-      className="relative min-h-0 min-w-0 flex-1 overflow-auto bg-inset"
+      className="relative min-h-0 min-w-0 flex-1 [scrollbar-gutter:stable] overflow-auto bg-inset"
     >
       <div className="mx-auto flex w-max min-w-full flex-col items-center px-8 pt-8 pb-14">
         {children}

@@ -7,7 +7,7 @@ import {
 } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { fixturePath, verifyEmailInDb } from './support'
-import { openMenu } from './editor-chrome'
+import { openMenu, runMenuCommand } from './editor-chrome'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 
@@ -172,9 +172,7 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
 }) => {
   await seedDocument(page, request)
 
-  await page
-    .getByRole('button', { name: 'Check citations', exact: true })
-    .click()
+  await runMenuCommand(page, 'Review', 'Check citations')
   await expect(page.getByText('2 need review').first()).toBeVisible({
     timeout: 30_000,
   })

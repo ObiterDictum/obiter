@@ -30,7 +30,7 @@ export function StaticDocumentPages({
 }) {
   const fontFamily = documentDefaultFace(model.styles).fontFamily
   return (
-    <DocumentDesk>
+    <DocumentDesk paperWidth={pages[0]?.box.widthPx ?? null}>
       <div className="mx-auto flex w-max max-w-full flex-col items-start gap-6">
         <div className="flex w-full flex-col gap-6">
           <DocumentPrintStyle

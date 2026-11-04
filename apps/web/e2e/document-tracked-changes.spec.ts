@@ -16,7 +16,7 @@ import {
   openMenu,
   runMenuCommand,
   setTrackChanges,
-  trackChangesSwitch,
+  trackChangesIndicator,
 } from './editor-chrome'
 import { verifyEmailInDb } from './support'
 
@@ -192,10 +192,10 @@ async function openChangesPanel(page: Page) {
 }
 
 async function reviewToggle(page: Page, on: boolean) {
-  const toggle = trackChangesSwitch(page)
-  await expect(toggle).toBeVisible({ timeout: 15_000 })
+  await expect(trackChangesIndicator(page)).toHaveCount(on ? 1 : 0, {
+    timeout: 15_000,
+  })
   await setTrackChanges(page, on)
-  return toggle
 }
 
 function zipPart(docxPath: string, partName: string) {
@@ -512,10 +512,10 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
   const reloaded = await fresh.newPage()
   try {
     await openFixtureDocument(reloaded, email, password, matter)
-    const tracking = await reviewToggle(reloaded, true)
+    await reviewToggle(reloaded, true)
 
-    await tracking.click()
-    await expect(trackChangesSwitch(reloaded)).not.toBeChecked()
+    await setTrackChanges(reloaded, false)
+    await expect(trackChangesIndicator(reloaded)).toHaveCount(0)
     const settingsSave = reloaded.waitForResponse(
       (incoming) =>
         /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
@@ -646,7 +646,7 @@ test('native clicks place the caret inside an unsaved tracked insertion', async 
     `E9 pending caret ${Date.now()}`,
   )
   await openChangesPanel(page)
-  await expect(trackChangesSwitch(page)).toBeChecked()
+  await expect(trackChangesIndicator(page)).toHaveCount(1)
   await selectFirst(page, PLAIN, SELECTED.length)
   await page.keyboard.type('45,000')
   await page.keyboard.press('Escape')

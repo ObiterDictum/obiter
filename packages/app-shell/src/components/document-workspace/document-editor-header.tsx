@@ -1,13 +1,7 @@
-import { Button, StatusDot, Switch } from '@obiter/ui'
-import { FloppyDisk } from '@obiter/ui/icons'
+import { StatusDot, Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import type { DocumentPresence } from '@obiter/contracts'
 import type { DocumentVersionRecord } from '../../documents'
-import {
-  DocumentVerifyChip,
-  VerifyRunButton,
-  VerifyRunReason,
-} from './document-verify-chip'
 import { useOffline } from '../../shell-states'
 import { RedactedMark } from '../../redacted-mark'
 import { PresenceAvatars } from './presence-avatars'
@@ -20,9 +14,11 @@ export type HeaderSaveInput = {
   remoteChange: boolean
 }
 
-type HeaderSave = {
+export type HeaderState = {
   label: string
   tone: 'success' | 'warning' | 'danger' | null
+  detail: string
+  status?: SaveState['status']
 }
 
 export function headerSaveState({
@@ -30,27 +26,60 @@ export function headerSaveState({
   versionLabel,
   offline,
   remoteChange,
-}: HeaderSaveInput): HeaderSave {
+}: HeaderSaveInput): HeaderState {
   if (offline && state.status !== 'saved') {
-    return { label: 'Offline · changes not saved', tone: 'warning' }
+    return {
+      label: 'Offline · changes not saved',
+      tone: 'warning',
+      detail: `The work on screen is held on this device until the connection returns. ${versionLabel} is the last saved version.`,
+      status: state.status,
+    }
   }
   switch (state.status) {
     case 'saved':
-      return { label: `Saved · ${versionLabel}`, tone: 'success' }
+      return {
+        label: 'Saved',
+        tone: 'success',
+        detail: `Saved as ${versionLabel}.`,
+        status: state.status,
+      }
     case 'unsaved':
       return remoteChange
-        ? { label: 'Newer version on the server', tone: 'warning' }
-        : { label: `Unsaved changes · ${versionLabel}`, tone: 'warning' }
+        ? {
+            label: 'Newer version on the server',
+            tone: 'warning',
+            detail:
+              'A colleague saved a newer version. Reload before saving, or save to merge disjoint edits.',
+            status: state.status,
+          }
+        : {
+            label: 'Unsaved changes',
+            tone: 'warning',
+            detail: `The work on screen is not in ${versionLabel} yet.`,
+            status: state.status,
+          }
     case 'saving':
-      return { label: 'Saving…', tone: null }
+      return {
+        label: 'Saving…',
+        tone: null,
+        detail: `Saving the work on screen. ${versionLabel} is the last saved version.`,
+        status: state.status,
+      }
     case 'failed':
-      return { label: 'Save failed — not on the server', tone: 'danger' }
+      return {
+        label: 'Save failed',
+        tone: 'danger',
+        detail: `The work on screen is not on the server. ${versionLabel} is the last saved version.`,
+        status: state.status,
+      }
     case 'stale':
-      return { label: '', tone: null }
+      return { label: '', tone: null, detail: '', status: state.status }
     case 'blocked':
       return {
-        label: 'Saved, but the edit history needs a reload',
+        label: 'Saved, history needs a reload',
         tone: 'warning',
+        detail: `The work is saved as ${versionLabel}, but the edit history must be reloaded before the next save.`,
+        status: state.status,
       }
     default: {
       const unhandled: never = state
@@ -59,108 +88,63 @@ export function headerSaveState({
   }
 }
 
-function DocumentEditorHeader({
+export function readOnlyHeaderState(versionLabel: string): HeaderState {
+  return {
+    label: 'Read only',
+    tone: null,
+    detail: `This view is not editable. It shows ${versionLabel}.`,
+  }
+}
+
+export function DocumentEditorHeader({
   filename,
-  versionLabel,
-  save,
+  mark,
+  state,
   presence,
   presenceNames,
   currentUserId,
-  trackChanges,
-  onToggleTrackChanges,
-  verify,
-  saveButton,
-  mark,
-  infoOpen,
-  onToggleInfo,
-  back,
-  matterLink,
   actions,
 }: {
   filename: string
-  versionLabel: string
-  save?: HeaderSaveInput
+  mark?: ReactNode
+  state?: HeaderState
   presence?: DocumentPresence[]
   presenceNames?: ReadonlyMap<string, string>
   currentUserId?: string
-  trackChanges?: boolean
-  onToggleTrackChanges?: () => void
-  verify?: ReactNode
-  saveButton?: ReactNode
-  mark?: ReactNode
-  infoOpen?: boolean
-  onToggleInfo?: () => void
-  back?: ReactNode
-  matterLink?: ReactNode
   actions?: ReactNode
 }) {
-  const headline = save ? headerSaveState(save) : null
   return (
-    <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b border-line px-12 py-2 max-compact:px-8">
-      {back}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex min-w-0 items-center gap-2">
-          <h1 className="truncate text-item text-ink" title={filename}>
-            {filename}
-          </h1>
-          {mark}
-        </div>
-        <div className="flex min-w-0 items-center gap-2 text-caption text-subtle">
-          <span
-            className="inline-flex items-center gap-1.5 whitespace-nowrap"
-            data-save-state={save?.state.status}
-          >
-            {headline === null ? (
-              <span>{versionLabel}</span>
-            ) : headline.tone === null ? (
-              <span>{headline.label}</span>
-            ) : (
-              <StatusDot
-                tone={headline.tone}
-                className="text-caption whitespace-nowrap"
-              >
-                {headline.label}
-              </StatusDot>
-            )}
-          </span>
-          <PresenceAvatars
-            presence={presence ?? []}
-            currentUserId={currentUserId}
-            names={presenceNames}
-          />
-
-          {matterLink ? (
-            <span className="flex min-w-0 items-center gap-2 max-compact:hidden">
-              <span aria-hidden>·</span>
-              {matterLink}
-            </span>
-          ) : null}
-        </div>
-      </div>
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-        {trackChanges === undefined || !onToggleTrackChanges ? null : (
-          <Switch
-            label="Track changes"
-            checked={trackChanges}
-            onCheckedChange={onToggleTrackChanges}
-          >
-            {trackChanges ? 'Track changes on' : 'Track changes off'}
-          </Switch>
-        )}
-        {verify}
-        {saveButton}
-        {onToggleInfo ? (
-          <Button
-            variant={infoOpen ? 'secondary' : 'ghost'}
-            size="sm"
-            className="size-7 px-0"
-            aria-label="Document information"
-            aria-pressed={infoOpen}
-            aria-expanded={infoOpen}
-            onClick={onToggleInfo}
-          >
-            ?
-          </Button>
+    <header className="flex h-9 min-w-0 shrink-0 items-center gap-2 border-b border-line px-3">
+      <h1 className="min-w-0 truncate text-item text-ink" title={filename}>
+        {filename}
+      </h1>
+      {mark}
+      <div className="ms-auto flex min-w-0 shrink-0 items-center gap-2">
+        <PresenceAvatars
+          presence={presence ?? []}
+          currentUserId={currentUserId}
+          names={presenceNames}
+        />
+        {state ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className="inline-flex items-center whitespace-nowrap text-caption text-subtle"
+                  data-save-state={state.status}
+                />
+              }
+            >
+              {state.tone === null ? (
+                <span>{state.label}</span>
+              ) : (
+                <StatusDot tone={state.tone} className="text-caption">
+                  {state.label}
+                </StatusDot>
+              )}
+            </TooltipTrigger>
+            <TooltipContent>{state.detail}</TooltipContent>
+          </Tooltip>
         ) : null}
         {actions}
       </div>
@@ -176,14 +160,7 @@ export function DocxEditorHeader({
   presence,
   presenceNames,
   currentUserId,
-  trackChanges,
-  onToggleTrackChanges,
   versions,
-  onOpenVerify,
-  infoOpen,
-  onToggleInfo,
-  back,
-  matterLink,
   actions,
 }: {
   filename: string
@@ -193,14 +170,7 @@ export function DocxEditorHeader({
   presence: DocumentPresence[]
   presenceNames?: ReadonlyMap<string, string>
   currentUserId?: string
-  trackChanges: boolean
-  onToggleTrackChanges: () => void
   versions: DocumentVersionRecord[]
-  onOpenVerify: () => void
-  infoOpen: boolean
-  onToggleInfo?: () => void
-  back?: ReactNode
-  matterLink?: ReactNode
   actions?: ReactNode
 }) {
   const offline = useOffline()
@@ -211,7 +181,6 @@ export function DocxEditorHeader({
   return (
     <DocumentEditorHeader
       filename={filename}
-      versionLabel={versionLabel}
       mark={
         current?.redaction ? (
           <RedactedMark
@@ -220,44 +189,15 @@ export function DocxEditorHeader({
           />
         ) : null
       }
-      save={{
+      state={headerSaveState({
         state: save.saveState,
         versionLabel,
         offline,
         remoteChange,
-      }}
+      })}
       presence={presence}
       presenceNames={presenceNames}
       currentUserId={currentUserId}
-      trackChanges={trackChanges}
-      onToggleTrackChanges={onToggleTrackChanges}
-      verify={
-        <>
-          <DocumentVerifyChip versions={versions} onOpen={onOpenVerify} />
-          <VerifyRunReason />
-          <VerifyRunButton onOpen={onOpenVerify} />
-        </>
-      }
-      saveButton={
-        <span onMouseDown={(event) => event.preventDefault()}>
-          <Button
-            size="sm"
-            aria-label="Save"
-            disabled={
-              !save.dirty || save.saving || save.saveState.status === 'blocked'
-            }
-            loading={save.saving}
-            onClick={save.save}
-            iconStart={<FloppyDisk size={16} aria-hidden />}
-          >
-            <span className="max-compact:sr-only">Save</span>
-          </Button>
-        </span>
-      }
-      infoOpen={infoOpen}
-      onToggleInfo={onToggleInfo}
-      back={back}
-      matterLink={matterLink}
       actions={actions}
     />
   )

@@ -1,7 +1,10 @@
 import { Skeleton } from '@obiter/ui'
-import { X } from '@obiter/ui/icons'
-import { useMemo, useRef } from 'react'
-import { useElementWidth } from './components/document-workspace/use-element-width'
+import { ArrowsLeftRight, X } from '@obiter/ui/icons'
+import { useMemo } from 'react'
+import {
+  DocumentEditorHeader,
+  readOnlyHeaderState,
+} from './components/document-workspace/document-editor-header'
 import { documentImagePartNames } from './document-page-media'
 import { layoutDocumentPages, StaticDocumentPages } from './document-render'
 import {
@@ -10,8 +13,7 @@ import {
 } from './document-workspace-api'
 import { useDocument } from './documents'
 import { useMatterTabs } from './matter-tabs-state'
-
-const PAPER_WIDTH = 794
+import { useSplitScale } from './matter-split-scale'
 
 export function MatterSplitSide({
   sideId,
@@ -20,7 +22,7 @@ export function MatterSplitSide({
   sideId: string
   onClose: () => void
 }) {
-  const { tabs } = useMatterTabs()
+  const { tabs, swapSides } = useMatterTabs()
   const tab = tabs.find((item) => item.id === sideId)
   const documentId = tab?.kind === 'document' ? tab.target : null
   const document = useDocument(documentId ?? '')
@@ -38,36 +40,50 @@ export function MatterSplitSide({
     [model],
   )
   const imageUrls = useDocumentImageUrls(documentId ?? '', parts, version?.id)
-  const paneRef = useRef<HTMLElement>(null)
-  const width = useElementWidth(paneRef)
-  const zoom =
-    width === null
-      ? 100
-      : Math.min(
-          100,
-          Math.max(35, Math.floor(((width - 32) / PAPER_WIDTH) * 100)),
-        )
+  const split = useSplitScale()
+  const zoom = split?.pageZoom ?? 100
+  const ribbonHeight = split?.ribbonHeight ?? 0
 
   return (
     <section
-      ref={paneRef}
       aria-label={tab ? `${tab.title}, read only` : 'Split view'}
       className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-line bg-raised"
     >
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-3 text-meta">
-        <span className="min-w-0 flex-1 truncate text-ink">
-          {tab?.title ?? 'Document'}
-        </span>
-        <span className="shrink-0 text-caption text-subtle">Read only</span>
-        <button
-          type="button"
-          aria-label="Close split view"
-          onClick={onClose}
-          className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <X size={12} aria-hidden />
-        </button>
-      </div>
+      <DocumentEditorHeader
+        filename={version?.filename ?? tab?.title ?? 'Document'}
+        state={readOnlyHeaderState(
+          `version ${String(version?.versionNumber ?? 1)}`,
+        )}
+        actions={
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Swap sides"
+              title="Make this the document you edit"
+              onClick={swapSides}
+              className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <ArrowsLeftRight size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              aria-label="Close split view"
+              onClick={onClose}
+              className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <X size={12} aria-hidden />
+            </button>
+          </div>
+        }
+      />
+      {ribbonHeight > 0 ? (
+        <div
+          aria-hidden
+          data-split-ribbon-spacer
+          className="shrink-0"
+          style={{ height: ribbonHeight }}
+        />
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col">
         {!documentId ? (
           <p className="px-4 py-6 text-meta text-muted">

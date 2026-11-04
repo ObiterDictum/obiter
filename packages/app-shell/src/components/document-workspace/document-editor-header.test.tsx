@@ -1,9 +1,14 @@
 import '@obiter/test-dom'
-import { describe, expect, it } from 'bun:test'
+import { afterEach, describe, expect, it } from 'bun:test'
+import { cleanup, render, screen } from '@testing-library/react'
 import type { VerificationRun } from '@obiter/contracts'
 import type { DocumentVersionRecord } from '../../documents'
-import { headerSaveState } from './document-editor-header'
-import { verifyChipState } from './document-verify-chip'
+import {
+  DocumentEditorHeader,
+  headerSaveState,
+  readOnlyHeaderState,
+} from './document-editor-header'
+import { verifyStatus } from './document-verify-status'
 import type { VerificationWorkspaceValue } from '../verification/verification-context'
 
 const versions = [
@@ -57,39 +62,41 @@ describe('headerSaveState', () => {
     remoteChange: false,
   }
 
-  it('names the version the work on screen is saved as', () => {
-    expect(headerSaveState({ ...base, state: { status: 'saved' } }).label).toBe(
-      'Saved · version 2',
-    )
+  it('says saved and keeps the version on the tooltip', () => {
+    const state = headerSaveState({ ...base, state: { status: 'saved' } })
+    expect(state.label).toBe('Saved')
+    expect(state.detail).toContain('version 2')
   })
 
   it('keeps every state the save machine can reach', () => {
     expect(
       headerSaveState({ ...base, state: { status: 'unsaved' } }).label,
-    ).toBe('Unsaved changes · version 2')
+    ).toBe('Unsaved changes')
     expect(
       headerSaveState({ ...base, state: { status: 'saving' } }).label,
     ).toBe('Saving…')
     expect(
       headerSaveState({ ...base, state: { status: 'failed' } }).label,
-    ).toBe('Save failed — not on the server')
+    ).toBe('Save failed')
     expect(headerSaveState({ ...base, state: { status: 'stale' } })).toEqual({
       label: '',
       tone: null,
+      detail: '',
+      status: 'stale',
     })
     expect(
       headerSaveState({ ...base, state: { status: 'blocked' } }).label,
-    ).toBe('Saved, but the edit history needs a reload')
+    ).toBe('Saved, history needs a reload')
   })
 
   it('says the changes are not saved while the browser is offline', () => {
-    expect(
-      headerSaveState({
-        ...base,
-        offline: true,
-        state: { status: 'unsaved' },
-      }).label,
-    ).toBe('Offline · changes not saved')
+    const state = headerSaveState({
+      ...base,
+      offline: true,
+      state: { status: 'unsaved' },
+    })
+    expect(state.label).toBe('Offline · changes not saved')
+    expect(state.detail).toContain('version 2')
   })
 
   it('reports a newer version on the server rather than implying a clean save', () => {
@@ -103,9 +110,9 @@ describe('headerSaveState', () => {
   })
 })
 
-describe('verifyChipState', () => {
+describe('verifyStatus', () => {
   it('says a run checked the version on screen', () => {
-    const chip = verifyChipState(
+    const chip = verifyStatus(
       verification({ run: run({}) }),
       versions as DocumentVersionRecord[],
     )
@@ -115,7 +122,7 @@ describe('verifyChipState', () => {
   })
 
   it('names the older version a stale run checked, never the current text', () => {
-    const chip = verifyChipState(
+    const chip = verifyStatus(
       verification({
         run: run({ documentVersionId: 'ver_1', stale: true }),
         stale: true,
@@ -129,13 +136,12 @@ describe('verifyChipState', () => {
 
   it('says so when nothing has been checked', () => {
     expect(
-      verifyChipState(verification({}), versions as DocumentVersionRecord[])
-        .label,
+      verifyStatus(verification({}), versions as DocumentVersionRecord[]).label,
     ).toBe('Not checked')
   })
 
   it('carries the finding counts of the run it names', () => {
-    const chip = verifyChipState(
+    const chip = verifyStatus(
       verification({
         run: run({
           summary: {
@@ -151,5 +157,29 @@ describe('verifyChipState', () => {
     )
     expect(chip.label).toBe('Checked · version 2 · 1 flagged')
     expect(chip.tone).toBe('danger')
+  })
+})
+
+describe('DocumentEditorHeader', () => {
+  afterEach(cleanup)
+
+  it('is one slim row carrying the name, the quiet state and the actions', () => {
+    render(
+      <DocumentEditorHeader
+        filename="brief.docx"
+        state={readOnlyHeaderState('version 3')}
+        actions={<button type="button">More</button>}
+      />,
+    )
+
+    const header = screen.getByRole('heading', { level: 1 }).closest('header')
+    expect(header?.className).toContain('h-9')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'brief.docx',
+    )
+    expect(screen.getByText('Read only')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'More' })).toBeTruthy()
+    expect(header?.querySelector('a')).toBeNull()
+    expect(header?.textContent).not.toContain('Track changes')
   })
 })

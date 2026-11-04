@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
-import { openRibbonTab } from './editor-test-commands'
+import { openRibbonTab, setTrackChanges } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -182,7 +182,7 @@ describe('the font formatting controls', () => {
   it('queues the font controls and clear formatting under track changes', async () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: helloModel() }, editAsync })
-    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
+    setTrackChanges(true)
     openRibbonTab('Home')
     clickParagraph('p1')
     nativeSelect(1, 4)

@@ -1,5 +1,6 @@
 import { memo, useLayoutEffect, useState } from 'react'
 import type { CitationStyle } from '../../document-preferences'
+import type { DocumentVersionRecord } from '../../documents'
 import type {
   DocumentFindToolbar,
   DocumentFormatToolbar,
@@ -30,10 +31,19 @@ import { usePendingCitation } from './use-pending-citation'
 import { WorkspaceBanners } from './workspace-banners'
 import { WorkspaceRibbon } from './workspace-chrome'
 import { useVerificationWorkspace } from '../verification/verification-context'
+import { verifyStatus } from './document-verify-status'
 import { useLatestCallback } from './use-latest-callback'
 import { workspaceDataEqual } from './workspace-data-equal'
 
 type DocumentExportHandlers = ReturnType<typeof documentExportHandlers>
+
+function sentenceCase(availability: {
+  available: boolean
+  reason?: string
+}): string {
+  const reason = availability.available ? '' : (availability.reason ?? '')
+  return reason.charAt(0).toUpperCase() + reason.slice(1)
+}
 type WorkspacePanels = ReturnType<typeof useWorkspacePanels>
 
 type DocxWorkspaceChromeProps = {
@@ -49,6 +59,7 @@ type DocxWorkspaceChromeProps = {
   onCommentSelection: () => void
   citation: ReturnType<typeof usePendingCitation>
   citationCanInsert: boolean
+  versions: DocumentVersionRecord[]
 }
 
 function DocxWorkspaceChromeInner({
@@ -64,6 +75,7 @@ function DocxWorkspaceChromeInner({
   onCommentSelection,
   citation,
   citationCanInsert,
+  versions,
 }: DocxWorkspaceChromeProps) {
   const [formattingOpen, setFormattingOpen] = useState(false)
   const [formattingAnchor, setFormattingAnchor] = useState<HTMLElement | null>(
@@ -97,14 +109,25 @@ function DocxWorkspaceChromeInner({
   }, [findOpen])
 
   const verification = useVerificationWorkspace()
+  const chip =
+    verification && !verification.runsPending && !verification.runsError
+      ? verifyStatus(verification, versions)
+      : null
   const verify = verification
     ? {
         available: verification.startAvailability.available,
-        reason:
-          'reason' in verification.startAvailability
-            ? verification.startAvailability.reason
-            : '',
+        reason: sentenceCase(verification.startAvailability),
         pending: verification.startPending,
+        label: verification.runsPending
+          ? 'Checking…'
+          : verification.runsError
+            ? 'Verification unavailable'
+            : chip?.label,
+        detail: chip?.detail,
+        onCheck: () => {
+          props.onOpenVerify?.()
+          verification.startRun()
+        },
       }
     : props.verify
   const actions = {

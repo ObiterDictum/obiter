@@ -10,6 +10,7 @@ import {
   Select,
   cn,
   useToast,
+  type ButtonSize,
 } from '@obiter/ui'
 import { Users } from '@obiter/ui/icons'
 import type { MatterAccessLevel } from '@obiter/contracts'
@@ -33,10 +34,12 @@ export function MatterShareControls({
   matter,
   organisationId,
   currentUserId,
+  size = 'md',
 }: {
   matter: MatterRecord
   organisationId: string | null
   currentUserId: string
+  size?: ButtonSize
 }) {
   const [open, setOpen] = useState(false)
   const people = useMatterPeople(matter.id, organisationId)
@@ -45,7 +48,7 @@ export function MatterShareControls({
     <div className="flex items-center gap-2">
       <Button
         variant="ghost"
-        size="md"
+        size={size}
         iconStart={<Users size={16} />}
         onClick={() => setOpen(true)}
       >

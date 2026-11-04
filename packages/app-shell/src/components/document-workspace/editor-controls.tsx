@@ -24,6 +24,7 @@ function controlReason(
 
 export type EditorControl = {
   label: string
+  status?: string
   pressed?: boolean
   disabled?: boolean
   soon?: boolean | string
@@ -150,6 +151,7 @@ export type EditorMenuItemKind = 'action' | 'toggle' | 'radio'
 
 export function EditorMenuItem({
   label,
+  status,
   icon,
   hint,
   shortcut,
@@ -199,6 +201,8 @@ export function EditorMenuItem({
         <span className="text-caption text-subtle" aria-hidden>
           {pressed ? 'On' : 'Off'}
         </span>
+      ) : status ? (
+        <span className="shrink-0 text-caption text-subtle">{status}</span>
       ) : null}
       {shortcut ? (
         <span

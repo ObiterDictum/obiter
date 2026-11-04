@@ -1,4 +1,4 @@
-import { command, commandOrNull } from './editor-test-commands'
+import { command, commandDisabled, commandReason } from './editor-test-commands'
 
 import '@obiter/test-dom'
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
@@ -60,8 +60,8 @@ function mountGate(options: {
   return mountSaveDocumentWorkspace(options)
 }
 
-function verifyButton() {
-  return command('Check citations') as HTMLButtonElement
+function checkCitations() {
+  return command('Check citations')
 }
 
 function saveButton() {
@@ -104,19 +104,21 @@ beforeEach(() => {
 describe('V5 verification gate against the E45 save owner', () => {
   it('disables verification while the document has unsaved edits', async () => {
     mountGate({ editAsync: vi.fn() })
-    await waitFor(() => expect(verifyButton().disabled).toBe(false))
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(false))
 
     edit('Hello world')
 
-    await waitFor(() => expect(verifyButton().disabled).toBe(true))
-    expect(screen.getByText(/Save before verification/)).toBeTruthy()
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(true))
+    expect(commandReason(checkCitations())).toContain(
+      'Save before verification',
+    )
   })
 
   it('keeps verification disabled while a refused save leaves work pending', async () => {
     const editAsync = vi.fn().mockRejectedValue(validationFailed)
     mountGate({ editAsync })
     edit('Hello edited')
-    await waitFor(() => expect(verifyButton().disabled).toBe(true))
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(true))
 
     fireEvent.click(saveButton())
     await waitFor(() => {
@@ -125,8 +127,10 @@ describe('V5 verification gate against the E45 save owner', () => {
 
     await waitFor(() => expect(saveState()).toBe('unsaved'))
     expect(saveButton().disabled).toBe(false)
-    expect(verifyButton().disabled).toBe(true)
-    expect(screen.getByText(/Save before verification/)).toBeTruthy()
+    expect(commandDisabled(checkCitations())).toBe(true)
+    expect(commandReason(checkCitations())).toContain(
+      'Save before verification',
+    )
   })
 
   it('keeps a partial-bold draft coherent when the save is rejected', async () => {
@@ -138,12 +142,14 @@ describe('V5 verification gate against the E45 save owner', () => {
     fireEvent.select(editor)
     fireEvent.mouseUp(editor)
     fireEvent.click(command('Bold'))
-    await waitFor(() => expect(verifyButton().disabled).toBe(true))
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(true))
 
     fireEvent.click(saveButton())
     await waitFor(() => expect(saveState()).toBe('unsaved'))
-    expect(verifyButton().disabled).toBe(true)
-    expect(screen.getByText(/Save before verification/)).toBeTruthy()
+    expect(commandDisabled(checkCitations())).toBe(true)
+    expect(commandReason(checkCitations())).toContain(
+      'Save before verification',
+    )
     expect(bodyEditor().value).toBe('Hello!')
     expect(bodyEditor().value).not.toBe('Hello!llo')
   })
@@ -156,13 +162,15 @@ describe('V5 verification gate against the E45 save owner', () => {
     })
     mountGate({ editAsync })
     edit('Hello world')
-    await waitFor(() => expect(verifyButton().disabled).toBe(true))
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(true))
 
     fireEvent.click(saveButton())
 
     await waitFor(() => expect(saveState()).toBe('saved'))
-    await waitFor(() => expect(verifyButton().disabled).toBe(false))
-    expect(screen.queryByText(/Save before verification/)).toBeNull()
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(false))
+    expect(commandReason(checkCitations())).not.toContain(
+      'Save before verification',
+    )
   })
 
   it('keeps verification disabled when a save covers only part of the work', async () => {
@@ -178,14 +186,16 @@ describe('V5 verification gate against the E45 save owner', () => {
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     fireEvent.click(command('Delete paragraph'))
-    await waitFor(() => expect(verifyButton().disabled).toBe(true))
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(true))
 
     fireEvent.click(saveButton())
     await waitFor(() => expect(editAsync.mock.calls.length).toBeGreaterThan(1))
 
     await waitFor(() => expect(saveState()).toBe('unsaved'))
-    expect(verifyButton().disabled).toBe(true)
-    expect(screen.getByText(/Save before verification/)).toBeTruthy()
+    expect(commandDisabled(checkCitations())).toBe(true)
+    expect(commandReason(checkCitations())).toContain(
+      'Save before verification',
+    )
   })
 
   it('keeps verification disabled when text was typed while a save was in flight', async () => {
@@ -205,7 +215,7 @@ describe('V5 verification gate against the E45 save owner', () => {
       })
     mountGate({ editAsync })
     edit('Hello first')
-    await waitFor(() => expect(verifyButton().disabled).toBe(true))
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(true))
     fireEvent.click(saveButton())
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
 
@@ -219,13 +229,15 @@ describe('V5 verification gate against the E45 save owner', () => {
     })
 
     await waitFor(() => expect(saveState()).toBe('unsaved'))
-    expect(verifyButton().disabled).toBe(true)
-    expect(screen.getByText(/Save before verification/)).toBeTruthy()
+    expect(commandDisabled(checkCitations())).toBe(true)
+    expect(commandReason(checkCitations())).toContain(
+      'Save before verification',
+    )
   })
 
   it('opens the dock from the menu entry without starting a second run', async () => {
     mountGate({ editAsync: vi.fn() })
-    await waitFor(() => expect(verifyButton().disabled).toBe(false))
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(false))
 
     fireEvent.click(command('Verify citations'))
     expect(
@@ -233,28 +245,30 @@ describe('V5 verification gate against the E45 save owner', () => {
     ).toBeTruthy()
   })
 
-  it('carries the unsaved gate and its reason onto the header control', async () => {
+  it('carries the unsaved gate and its reason onto the Review command', async () => {
     mountGate({ editAsync: vi.fn() })
-    await waitFor(() => expect(verifyButton().disabled).toBe(false))
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(false))
 
     edit('Hello world')
 
-    await waitFor(() => expect(verifyButton().disabled).toBe(true))
-    expect(screen.getByText(/Save before verification/)).toBeTruthy()
+    await waitFor(() => expect(commandDisabled(checkCitations())).toBe(true))
+    expect(commandReason(checkCitations())).toContain(
+      'Save before verification',
+    )
   })
 
-  it('disables the header control while verification status is still loading', () => {
+  it('disables the Review command while verification status is still loading', () => {
     runsHook.useDocumentVerificationRuns.mockReturnValue({
       isPending: true,
       isError: false,
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    expect(commandOrNull('Check citations')).toBeNull()
-    expect(screen.getAllByText(/Checking…/).length).toBeGreaterThan(0)
+    expect(commandDisabled(checkCitations())).toBe(true)
+    expect(screen.getAllByText('Checking…').length).toBeGreaterThan(0)
   })
 
-  it('disables the header control when verification runs are unavailable', () => {
+  it('disables the Review command when verification runs are unavailable', () => {
     runsHook.useDocumentVerificationRuns.mockReturnValue({
       isPending: false,
       isError: true,
@@ -262,31 +276,35 @@ describe('V5 verification gate against the E45 save owner', () => {
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    expect(verifyButton()).toHaveProperty('disabled', true)
-    expect(screen.getByText(/Verification runs are unavailable/i)).toBeTruthy()
+    expect(commandDisabled(checkCitations())).toBe(true)
+    expect(commandReason(checkCitations())).toContain(
+      'Verification runs are unavailable',
+    )
   })
 
-  it('disables the header control when the document is unavailable', () => {
+  it('disables the Review command when the document is unavailable', () => {
     documentHook.useDocument.mockReturnValue({
       isPending: false,
       isError: true,
       data: undefined,
     })
     mountGate({ editAsync: vi.fn() })
-    expect(verifyButton()).toHaveProperty('disabled', true)
-    expect(screen.getByText(/This document is unavailable/i)).toBeTruthy()
+    expect(commandDisabled(checkCitations())).toBe(true)
+    expect(commandReason(checkCitations())).toContain(
+      'This document is unavailable',
+    )
   })
 
-  it('disables the header control while a run start is already pending', () => {
+  it('disables the Review command while a run start is already pending', () => {
     runsHook.useCreateVerificationRun.mockReturnValue({
       isPending: true,
       mutate: vi.fn(),
       error: null,
     })
     mountGate({ editAsync: vi.fn() })
-    expect(verifyButton()).toHaveProperty('disabled', true)
-    expect(
-      screen.getByText(/A verification run is already starting/i),
-    ).toBeTruthy()
+    expect(commandDisabled(checkCitations())).toBe(true)
+    expect(commandReason(checkCitations())).toContain(
+      'A verification run is already starting',
+    )
   })
 })

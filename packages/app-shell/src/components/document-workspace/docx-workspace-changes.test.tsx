@@ -11,6 +11,7 @@ import {
   commandDisabled,
   commandReason,
   openRibbonTab,
+  setTrackChanges,
 } from './editor-test-commands'
 import {
   mountWorkspace,
@@ -189,8 +190,7 @@ describe('DocxWorkspace change review', () => {
   it('carries a pending toggle flip on a decision', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted], decideAsync: decide })
-    openRibbonTab('Review')
-    fireEvent.click(screen.getByRole('switch', { name: 'Track changes' }))
+    setTrackChanges(true)
     fireEvent.click(command('Accept all changes'))
 
     expect(decide).toHaveBeenCalledWith(

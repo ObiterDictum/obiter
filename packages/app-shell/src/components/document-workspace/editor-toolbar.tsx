@@ -2,6 +2,7 @@ import {
   ArrowClockwise,
   ArrowCounterClockwise,
   Command,
+  FloppyDisk,
   ListBullets,
   ListNumbers,
   TextAlignCenter,
@@ -14,6 +15,7 @@ import {
   TextAa,
 } from '@obiter/ui/icons'
 import { memo } from 'react'
+import { StatusDot } from '@obiter/ui'
 import {
   EditorIconButton,
   EditorSelect,
@@ -42,6 +44,8 @@ function editorToolbarPropsEqual(
     prev.props.canEdit === next.props.canEdit &&
     prev.props.canUndo === next.props.canUndo &&
     prev.props.canRedo === next.props.canRedo &&
+    prev.props.canSave === next.props.canSave &&
+    prev.props.trackChanges === next.props.trackChanges &&
     prev.props.commentCount === next.props.commentCount &&
     prev.props.commentsOpen === next.props.commentsOpen &&
     workspaceDataEqual(prev.props.format, next.props.format)
@@ -57,7 +61,9 @@ function EditorToolbarInner({
   const editing = props.canEdit && Boolean(format)
   const styles = format?.paragraphStyles ?? []
   const mixed = Boolean(format?.paragraphStyleMixed)
-  const paletteHint = formatShortcut(['primary', 'K'], useIsMacPlatform())
+  const isMac = useIsMacPlatform()
+  const paletteHint = formatShortcut(['primary', 'K'], isMac)
+  const saveHint = `Save (${formatShortcut(['primary', 'S'], isMac)})`
   return (
     <div
       data-editor-toolbar
@@ -65,6 +71,14 @@ function EditorToolbarInner({
       role="toolbar"
       aria-label="Document toolbar"
     >
+      <EditorIconButton
+        label="Save"
+        hint={saveHint}
+        disabled={!props.canSave}
+        onClick={props.onSave}
+        icon={<FloppyDisk size={16} aria-hidden />}
+      />
+      <ToolbarDivider />
       <EditorIconButton
         label="Undo"
         disabled={!props.canEdit || !props.canUndo}
@@ -180,6 +194,16 @@ function EditorToolbarInner({
         pressed={props.commentsOpen}
         onClick={props.onToggleComments}
       />
+      {props.trackChanges ? (
+        <span
+          data-track-changes="on"
+          className="ms-1 inline-flex shrink-0 items-center rounded-sm bg-fill px-2 py-1"
+        >
+          <StatusDot tone="info" className="text-caption">
+            Track changes on
+          </StatusDot>
+        </span>
+      ) : null}
       <div className="ms-auto flex shrink-0 items-center gap-1">
         <EditorIconButton
           label="Font, paragraph and page"

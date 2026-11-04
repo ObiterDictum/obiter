@@ -22,6 +22,10 @@ import { DocxWorkspace } from './docx-workspace'
 import { DocumentDesk } from './document-page'
 import { DocumentPdfPages } from './pdf-view'
 import { EditorIconButton } from './editor-controls'
+import {
+  DocumentEditorHeader,
+  readOnlyHeaderState,
+} from './document-editor-header'
 import { PdfWorkspaceToolbar } from './pdf-toolbar'
 import { RedactedMark } from '../../redacted-mark'
 import {
@@ -38,7 +42,7 @@ type DocumentWorkspaceProps = {
   layout?: DocumentWorkspaceLayout
   document?: MatterDocumentRecord
   versions?: DocumentVersionRecord[]
-  headerLinks?: { back?: ReactNode; matter?: ReactNode }
+  headerLinks?: { matter?: ReactNode }
   headerActions?: ReactNode
   onViewVersion?: (versionId: string) => void
   onDocumentEdited?: () => void
@@ -140,7 +144,6 @@ function DocumentWorkspaceBody({
           filename={version.filename}
           versionNumber={version.versionNumber}
           layout={layout}
-          headerLinks={headerLinks}
           mark={
             <RedactedMark
               redaction={version.redaction}
@@ -312,14 +315,12 @@ function PdfWorkspace({
   filename,
   versionNumber,
   layout,
-  headerLinks,
   mark,
 }: {
   documentId: string
   filename: string
   versionNumber: number
   layout: DocumentWorkspaceLayout
-  headerLinks?: { back?: ReactNode; matter?: ReactNode }
   mark?: ReactNode
 }) {
   const view = useDocumentPdfView(documentId)
@@ -344,19 +345,11 @@ function PdfWorkspace({
 
   return (
     <WorkspaceShell layout={layout} onKeyDown={documentWorkspaceKeyDown}>
-      <header className="flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b border-line px-12 py-2 max-compact:px-8">
-        {headerLinks?.back}
-        <div className="flex min-w-0 items-center gap-2">
-          <h1 className="truncate text-item text-ink" title={filename}>
-            {filename}
-          </h1>
-          {mark}
-        </div>
-        <span className="text-caption text-subtle">
-          Read only · version {String(versionNumber)}
-        </span>
-        {headerLinks?.matter}
-      </header>
+      <DocumentEditorHeader
+        filename={filename}
+        mark={mark}
+        state={readOnlyHeaderState(`version ${String(versionNumber)}`)}
+      />
       <WorkspaceRibbon>
         <PdfWorkspaceToolbar
           find={find.toolbar(findHits, activeFindIndex, (hit) =>

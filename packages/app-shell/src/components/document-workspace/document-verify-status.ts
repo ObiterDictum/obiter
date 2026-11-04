@@ -1,18 +1,7 @@
-import {
-  Button,
-  StatusDot,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@obiter/ui'
-import { ArrowClockwise } from '@obiter/ui/icons'
 import type { DocumentVersionRecord } from '../../documents'
-import {
-  useVerificationWorkspace,
-  type VerificationWorkspaceValue,
-} from '../verification/verification-context'
+import type { VerificationWorkspaceValue } from '../verification/verification-context'
 
-export type VerifyChip = {
+export type VerifyStatus = {
   label: string
   tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger'
   current: boolean
@@ -33,10 +22,10 @@ function checkedLabel(number: number | undefined) {
     : `version ${String(number)}`
 }
 
-export function verifyChipState(
+export function verifyStatus(
   verification: VerificationWorkspaceValue,
   versions: DocumentVersionRecord[],
-): VerifyChip {
+): VerifyStatus {
   const { run } = verification
   if (verification.startPending) {
     return {
@@ -127,80 +116,4 @@ export function verifyChipState(
         ? 'Open the findings to see what needs attention.'
         : 'The check ran and found nothing to flag. That is not a statement of legal correctness.',
   }
-}
-
-export function DocumentVerifyChip({
-  versions,
-  onOpen,
-}: {
-  versions: DocumentVersionRecord[]
-  onOpen: () => void
-}) {
-  const verification = useVerificationWorkspace()
-  if (!verification) return null
-  if (verification.runsPending) {
-    return <span className="text-caption text-subtle">Checking…</span>
-  }
-  if (verification.runsError) {
-    return (
-      <span className="text-caption text-warning">
-        Verification unavailable
-      </span>
-    )
-  }
-  const chip = verifyChipState(verification, versions)
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" />}>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2"
-          aria-label={`Verify: ${chip.label}. ${chip.detail}`}
-          onClick={onOpen}
-        >
-          <StatusDot tone={chip.tone} className="text-caption text-ink">
-            {chip.label}
-          </StatusDot>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{chip.detail}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-export function VerifyRunButton({ onOpen }: { onOpen: () => void }) {
-  const verification = useVerificationWorkspace()
-  if (!verification) return null
-  if (verification.runsPending) return null
-  const running = verification.startPending
-  return (
-    <Button
-      variant="secondary"
-      size="sm"
-      disabled={!verification.startAvailability.available && !running}
-      loading={running}
-      aria-label="Check citations"
-      onClick={() => {
-        onOpen()
-        verification.startRun()
-      }}
-      iconStart={<ArrowClockwise size={14} aria-hidden />}
-    >
-      <span className="max-compact:sr-only">Check citations</span>
-    </Button>
-  )
-}
-
-export function VerifyRunReason() {
-  const verification = useVerificationWorkspace()
-  if (!verification || verification.runsPending) return null
-  const availability = verification.startAvailability
-  if (availability.available) return null
-  return (
-    <span className="text-caption text-warning" role="note">
-      {availability.reason.charAt(0).toUpperCase() +
-        availability.reason.slice(1)}
-    </span>
-  )
 }

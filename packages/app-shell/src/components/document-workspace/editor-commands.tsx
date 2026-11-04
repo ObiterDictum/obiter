@@ -17,6 +17,7 @@ type EditorMenuId = 'file' | 'edit' | 'insert' | 'format' | 'review' | 'view'
 export type EditorCommand = {
   id: string
   label: string
+  status?: string
   icon?: ReactNode
   shortcut?: readonly string[]
   hint?: string
@@ -85,7 +86,14 @@ export type EditorChromeProps = InsertRibbonProps & {
   spelling: boolean
   onToggleSpelling: () => void
   onOpenCompare?: () => void
-  verify?: { available: boolean; reason: string; pending: boolean }
+  verify?: {
+    available: boolean
+    reason: string
+    pending: boolean
+    label?: string
+    detail?: string
+    onCheck?: () => void
+  }
   onSave: () => void
   canSave: boolean
   saveReason?: string
@@ -647,6 +655,15 @@ export function editorMenus(
           label: 'Tracking',
           commands: [
             {
+              id: 'track-changes',
+              label: 'Track changes',
+              pressed: props.trackChanges,
+              disabled: !props.canEdit,
+              disabledReason: EDITING_HINT,
+              stayOpen: true,
+              run: props.onToggleTrackChanges,
+            },
+            {
               id: 'accept-change',
               label: 'Accept change',
               shortcut: ['A'],
@@ -719,11 +736,23 @@ export function editorMenus(
               id: 'verify',
               label: 'Verify citations',
               opensSurface: true,
-              disabled: props.verify
-                ? props.verify.pending || !props.verify.available
-                : undefined,
-              disabledReason: props.verify?.reason,
+              status: props.verify?.label,
+              disabled: props.verify === undefined,
+              disabledReason:
+                'Verification is not available for this document.',
               run: () => props.onOpenVerify?.(),
+            },
+            {
+              id: 'check-citations',
+              label: 'Check citations',
+              hint: props.verify?.detail,
+              disabled: props.verify
+                ? props.verify.pending ||
+                  !props.verify.available ||
+                  props.verify.onCheck === undefined
+                : true,
+              disabledReason: props.verify?.reason,
+              run: props.verify?.onCheck,
             },
             {
               id: 'authorities',

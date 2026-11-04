@@ -52,6 +52,7 @@ import { useParagraphSelectionHandlers } from './paragraph-selection-handlers'
 import { DocumentPrintStyle } from './document-page'
 import { useDocumentPrint } from './use-document-print'
 import { useLatestCallback, useLatestHandlers } from './use-latest-callback'
+import { useSplitScale } from '../../matter-split-scale'
 import {
   LoadingBlock,
   QueryError,
@@ -80,8 +81,7 @@ export function DocxWorkspace({
   layout?: DocumentWorkspaceLayout
   document?: MatterDocumentRecord
   versions?: DocumentVersionRecord[]
-  back?: React.ReactNode
-  headerLinks?: { back?: React.ReactNode; matter?: React.ReactNode }
+  headerLinks?: { matter?: React.ReactNode }
   headerActions?: React.ReactNode
   onViewVersion?: (versionId: string) => void
 }) {
@@ -111,6 +111,7 @@ export function DocxWorkspace({
   })
   const chromeDrafts = useLatestHandlers(chromeDraftsOf(drafts))
   const [zoom, setZoom] = useState(100)
+  const splitScale = useSplitScale()
   const panels = useWorkspacePanels()
   const legalTools = useLegalToolsState(documentId)
   const trackChanges =
@@ -287,7 +288,9 @@ export function DocxWorkspace({
   })
   const transientBanner = printBanner ?? save.notice ?? banner
   const { format, outline, ruler, onView, onSelectOutline } = surface
-  const pageZoom = pageZoomFor(zoom, columnWidth, printBox?.widthPx ?? 794)
+  const pageZoom = splitScale
+    ? splitScale.pageZoom
+    : pageZoomFor(zoom, columnWidth, printBox?.widthPx ?? 794)
   const undo = withCaretRefocus(undoDocument)
   const redo = withCaretRefocus(redoDocument)
   const print = withCaretRefocus(() => void forPrint(printDocument))
@@ -313,7 +316,7 @@ export function DocxWorkspace({
       save,
       drafts,
       trackChanges,
-      zoom,
+      zoom: splitScale?.zoom ?? zoom,
       panels,
       commentCount: commentsPanel.threadCount,
       changeCount: changesQuery.data?.changes.length ?? 0,
@@ -325,7 +328,7 @@ export function DocxWorkspace({
         (model !== undefined && Boolean(documentStory(model)?.paragraphs[0])),
       citationStyle: legalTools.citationStyle,
       onCitationStyle: legalTools.onCitationStyle,
-      setZoom,
+      setZoom: splitScale?.onZoom ?? setZoom,
       exports,
       print,
       undo,
@@ -390,14 +393,7 @@ export function DocxWorkspace({
           presence={presence}
           presenceNames={presenceNames}
           currentUserId={me?.user.id}
-          trackChanges={trackChanges}
-          onToggleTrackChanges={() => drafts.setTrackChangesFlip(!trackChanges)}
           versions={versions}
-          onOpenVerify={() => panels.toggle('verify')}
-          infoOpen={panels.active === 'info'}
-          onToggleInfo={documentRecord ? () => togglePanel('info') : undefined}
-          back={headerLinks?.back}
-          matterLink={headerLinks?.matter}
           actions={headerActions}
         />
         {modelQuery.isLoading ? (
@@ -425,6 +421,7 @@ export function DocxWorkspace({
               onCommentSelection={commentSelection}
               citation={citation}
               citationCanInsert={selectedParagraphId !== null}
+              versions={versions}
             />
             <DocxWorkspaceDesk
               compareOpen={compareOpen}
@@ -465,6 +462,7 @@ export function DocxWorkspace({
               spelling={spelling}
               rulerOn={rulerOn}
               ruler={ruler}
+              paperWidth={pages[0]?.box.widthPx ?? null}
               onExitMarginEditing={closeEditingStory}
               onOpenNoteEditing={(paragraphId) =>
                 openEditingStory('footnotes', paragraphId)

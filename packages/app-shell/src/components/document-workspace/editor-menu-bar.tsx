@@ -96,6 +96,7 @@ function MenuGroupCommands({
             key={command.id}
             kind={segment.kind === 'radio' ? 'radio' : undefined}
             label={command.label}
+            status={command.status}
             icon={command.icon}
             hint={command.hint}
             shortcut={command.shortcut}

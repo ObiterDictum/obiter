@@ -83,9 +83,9 @@ export async function openMatterDocument(
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
   await documentRow.click()
   await expect(page).toHaveURL(/\/matters\/[^/?#]+\/documents\/[^/?#]+$/)
-  await expect(page.getByRole('link', { name: 'Back to matter' })).toBeVisible({
-    timeout: 30_000,
-  })
+  await expect(
+    page.locator('#document-workspace [data-save-state]'),
+  ).toBeVisible({ timeout: 30_000 })
 }
 
 export async function openDocx(
