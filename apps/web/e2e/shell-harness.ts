@@ -58,6 +58,13 @@ export function workspaceNav(page: Page) {
   return page.getByRole('navigation', { name: 'Workspace' })
 }
 
+export async function gotoHome(page: Page) {
+  await page.goto('/search')
+  await expect(workspaceNav(page)).toBeVisible()
+  await workspaceNav(page).getByRole('link', { name: /^Home/ }).click()
+  await expect(page).toHaveURL(/\/$/)
+}
+
 export function sidebar(page: Page) {
   return page.locator('#app-shell-sidebar')
 }

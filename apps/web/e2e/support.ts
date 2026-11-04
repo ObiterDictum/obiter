@@ -12,6 +12,12 @@ export function fixturePath() {
   return path.resolve(here, FIXTURE_REL)
 }
 
+export async function waitForPaneIdle(page: Page) {
+  await expect(page.locator('#app-shell-pane [aria-busy="true"]')).toHaveCount(
+    0,
+  )
+}
+
 export async function openMatter(page: Page, matterName: string) {
   await page
     .getByRole('navigation', { name: 'Workspace' })
@@ -20,12 +26,12 @@ export async function openMatter(page: Page, matterName: string) {
   await expect(
     page.getByRole('heading', { name: 'Matters', exact: true }),
   ).toBeVisible()
-  await expect(page.getByText('Loading matters…')).toBeHidden()
+  await waitForPaneIdle(page)
   const matterLink = page
     .getByRole('main')
-    .getByRole('link', { name: matterName, exact: true })
+    .getByRole('link', { name: `Open ${matterName}`, exact: true })
   if (await matterLink.count()) {
-    await matterLink.click()
+    await matterLink.first().click()
   } else {
     await page
       .getByRole('button', { name: /^(New matter|Create a matter)$/ })
@@ -42,6 +48,7 @@ export async function openMatter(page: Page, matterName: string) {
   await expect(
     page.getByRole('heading', { name: matterName, exact: true }),
   ).toBeVisible()
+  await waitForPaneIdle(page)
 }
 
 export function seedAccount(email: string, password: string, name: string) {

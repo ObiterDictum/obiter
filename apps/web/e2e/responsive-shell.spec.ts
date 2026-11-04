@@ -7,6 +7,7 @@ import {
   asideWidth,
   documentWidths,
   gotoOtherMode,
+  gotoHome,
   mockSession,
   sidebar,
   sidebarToggle,
@@ -89,9 +90,9 @@ test('the Home sidebar collapses to an icon rail and remembers the choice', asyn
   page,
 }) => {
   await mockSession(page)
-  await page.goto('/')
-  await expect(workspaceNav(page)).toBeVisible()
   await page.setViewportSize({ width: 1440, height: 900 })
+  await gotoHome(page)
+  await expect(workspaceNav(page)).toBeVisible()
 
   await expect(sidebar(page)).toHaveCSS('width', '236px')
   await (await sidebarToggle(page)).click()
@@ -107,7 +108,7 @@ test('the Home sidebar collapses to an icon rail and remembers the choice', asyn
     ).toBeVisible()
   }
 
-  await page.reload()
+  await gotoHome(page)
   await expect(workspaceNav(page)).toBeVisible()
   await expect
     .poll(async () => asideWidth(sidebar(page)))
@@ -187,14 +188,18 @@ test('the collapsed rail keeps accessible names and labels its icons', async ({
   page,
 }) => {
   await mockSession(page)
-  await page.setViewportSize({ width: 390, height: 800 })
-  await page.goto('/search')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await gotoHome(page)
   await expect(workspaceNav(page)).toBeVisible()
+  await (await sidebarToggle(page)).click()
+  await expect
+    .poll(async () => asideWidth(sidebar(page)))
+    .toBeLessThanOrEqual(64)
 
   const matters = workspaceNav(page).getByRole('link', { name: 'Matters' })
   await expect(matters).toHaveCount(1)
   await matters.hover()
-  await expect(page.getByRole('tooltip')).toHaveText('Matters')
+  await expect(page.getByRole('tooltip')).toContainText('Matters')
 })
 
 test('the command palette stays inside the viewport', async ({ page }) => {

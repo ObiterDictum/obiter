@@ -2,7 +2,7 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openRibbonTab } from './editor-chrome'
-import { openMatter, seedAccount } from './support'
+import { openMatter, seedAccount, waitForPaneIdle } from './support'
 
 export { openRibbonTab }
 
@@ -50,13 +50,18 @@ export async function openMatterDocument(
     } else {
       await fileInput.setInputFiles(FIXTURE)
     }
+    await waitForPaneIdle(page)
   }
-  const documentRow = page.getByRole('link', { name: fileName }).first()
+  const documentRow = page
+    .getByRole('link', { name: fileName, exact: true })
+    .first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
   await documentRow.click()
   await expect(page).toHaveURL(/\/matters\/[^/?#]+\/documents\/[^/?#]+$/)
   await expect(
-    page.locator('#document-workspace [data-save-state]'),
+    page
+      .locator('#document-workspace')
+      .getByRole('heading', { level: 1, name: fileName }),
   ).toBeVisible({ timeout: 30_000 })
 }
 
@@ -101,6 +106,14 @@ export async function caretAtEnd(page: Page, text: string) {
 export async function saveAndWait(page: Page) {
   await saveButton(page).click()
   await expect.poll(() => saveState(page), { timeout: 30_000 }).toBe('saved')
+  await expect(saveButton(page)).toBeDisabled()
+}
+
+export async function saveAndWaitForHistoryReload(page: Page) {
+  await saveButton(page).click()
+  await expect
+    .poll(() => saveState(page), { timeout: 30_000 })
+    .toMatch(/^(saved|blocked)$/u)
   await expect(saveButton(page)).toBeDisabled()
 }
 
