@@ -62,10 +62,26 @@ export async function runMenuCommand(
   menu: string,
   command: string,
 ) {
-  await openMenu(page, menu)
-  await menuItem(page, command).click()
+  const clicked = await clickMenuItem(page, menu, command)
+  if (!clicked) throw new Error(`could not run ${command} from ${menu}`)
   const popup = page.getByRole('menu', { name: menu })
-  if (await popup.isVisible().catch(() => false)) await closeMenu(page)
+  const staysOpen = await expect(popup)
+    .toBeHidden({ timeout: 1_000 })
+    .then(() => false)
+    .catch(() => true)
+  if (staysOpen) await closeMenu(page)
+}
+
+export async function clickMenuItem(page: Page, menu: string, command: string) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await openMenu(page, menu)
+    const clicked = await menuItem(page, command)
+      .click({ timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (clicked) return true
+  }
+  return false
 }
 
 export async function choose(page: Page, control: string, option: string) {
@@ -89,9 +105,14 @@ export function trackChangesIndicator(page: Page) {
 
 export async function setTrackChanges(page: Page, on: boolean) {
   const indicator = trackChangesIndicator(page)
-  if ((await indicator.count()) === on) return
+  await expect(
+    page.getByRole('button', { name: 'Bold', exact: true }).first(),
+  ).toBeEnabled()
   await openMenu(page, 'Review')
-  await menuItem(page, 'Track changes').click()
+  const item = page.getByRole('menuitemcheckbox', { name: 'Track changes' })
+  await expect(item).toBeEnabled()
+  const pressed = (await item.getAttribute('aria-checked')) === 'true'
+  if (pressed !== on) await item.click()
   await closeMenu(page)
   await expect(indicator).toHaveCount(on ? 1 : 0)
 }

@@ -54,7 +54,8 @@ async function settledParagraphCount(page: Page) {
 
 async function saveAndWait(page: Page) {
   await save(page).click()
-  await expect(save(page)).toBeDisabled({ timeout: 30_000 })
+  await expect.poll(() => saveState(page), { timeout: 30_000 }).toBe('saved')
+  await expect(save(page)).toBeDisabled()
 }
 
 async function saveAndWaitForDecision(page: Page) {

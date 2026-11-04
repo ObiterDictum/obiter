@@ -9,7 +9,7 @@ import {
   openDocx,
   openMatterDocument,
   openFind,
-  saveAndWait,
+  saveAndWaitForHistoryReload,
   signIn,
 } from './e13-support'
 import { runMenuCommand } from './editor-chrome'
@@ -180,7 +180,7 @@ test('DOCX find navigates, replaces across a paragraph break, saves and reloads'
     page.locator('[data-paragraph-id]', { hasText: 'Beta clause' }),
   ).toHaveCount(1)
 
-  await saveAndWait(page)
+  await saveAndWaitForHistoryReload(page)
   await page.reload({ waitUntil: 'networkidle' })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
@@ -365,7 +365,7 @@ test('DOCX find folds Unicode, refuses a protected range, and exports the result
     page.locator('[data-paragraph-id]', { hasText: 'ΠΟΛΗ means street' }),
   ).toHaveCount(1)
 
-  await saveAndWait(page)
+  await saveAndWaitForHistoryReload(page)
   await page.reload({ waitUntil: 'networkidle' })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,

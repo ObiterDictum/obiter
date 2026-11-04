@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   documents: [] as MatterDocumentRecord[],
   verified: [] as string[],
   redacted: [] as string[],
+  promotionRenders: 0,
 }))
 
 const matter = {
@@ -124,6 +125,13 @@ const { ContentsPanel } = await import('./contents-panel')
 const { MatterTabsPane } = await import('./matter-split')
 const { MatterPreviewProvider } = await import('./matter-preview')
 const { matterTabStorageKey } = await import('./matter-tabs')
+const { useMatterTabs } = await import('./matter-tabs-state')
+
+function PromotionControl() {
+  const tabs = useMatterTabs()
+  mocks.promotionRenders += 1
+  return <button onClick={tabs.promoteActive}>Mark document edited</button>
+}
 
 function Pane({ platform }: { platform: 'web' | 'desktop' }) {
   const pathname = useRouterState({
@@ -141,6 +149,7 @@ function Pane({ platform }: { platform: 'web' | 'desktop' }) {
         >
           <p data-testid="page">{pathname}</p>
           <input aria-label="Note" />
+          <PromotionControl />
         </MatterTabsPane>
       </div>
     </MatterPreviewProvider>
@@ -205,6 +214,7 @@ beforeEach(() => {
   ]
   mocks.verified = []
   mocks.redacted = []
+  mocks.promotionRenders = 0
   window.localStorage.clear()
 })
 
@@ -214,6 +224,20 @@ afterEach(() => {
 })
 
 describe('matter tab strip', () => {
+  it('promoting a permanent tab does not notify its editor again', async () => {
+    renderPane('/matters/mtr_1')
+    await clickContents('Defence.docx')
+    const promote = await screen.findByRole('button', {
+      name: 'Mark document edited',
+    })
+    fireEvent.click(promote)
+    const renders = mocks.promotionRenders
+    fireEvent.click(promote)
+    expect(mocks.promotionRenders).toBe(renders)
+    await clickContents('Witness.docx')
+    await waitFor(() => expect(openTabs()).toHaveLength(3))
+  })
+
   it('opens a tab for the route and marks it as the current one', async () => {
     renderPane('/matters/mtr_1/documents/doc_1')
     const current = await screen.findByRole('button', { current: 'page' })

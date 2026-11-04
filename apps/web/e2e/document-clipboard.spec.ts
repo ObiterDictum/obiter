@@ -7,7 +7,8 @@ import {
 import path from 'node:path'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
-import { fixturePath, verifyEmailInDb } from './support'
+import { fixturePath, openMatter, verifyEmailInDb } from './support'
+import { saveAndWait } from './e13-support'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
@@ -69,34 +70,13 @@ async function openFixtureDocument(
 ) {
   await signIn(page, email, password)
 
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page
-      .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-      .first()
-      .click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await openMatter(page, matterName)
 
   const fixtureName = path.basename(fixturePath())
   if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
+    const fileInput = page
+      .getByLabel('Upload document', { exact: true })
+      .first()
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     await fileInput.setInputFiles(fixturePath())
   }
@@ -225,10 +205,7 @@ test('pastes newlines through the native event and survives a save', async ({
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before + 1)
   await shot(page, '06-native-paste-split')
 
-  await page.getByRole('button', { name: 'Save' }).click()
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled({
-    timeout: 30_000,
-  })
+  await saveAndWait(page)
   await shot(page, '07-native-paste-saved')
 
   const fresh = await browser.newContext()
@@ -262,22 +239,17 @@ test('toggles bold from the keyboard and saves it', async ({
   await selectFirst(page, 6)
 
   await page.keyboard.press('Control+b')
-  await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
+  await expect(
+    page.getByRole('button', { name: 'Bold', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true')
   await shot(page, '09-keyboard-bold-applied')
   await page.keyboard.press('Control+b')
-  await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute(
-    'aria-pressed',
-    'false',
-  )
+  await expect(
+    page.getByRole('button', { name: 'Bold', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false')
 
   await page.keyboard.press('Control+b')
-  await page.getByRole('button', { name: 'Save' }).click()
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled({
-    timeout: 30_000,
-  })
+  await saveAndWait(page)
   await shot(page, '10-keyboard-bold-saved')
 
   const fresh = await browser.newContext()
@@ -287,7 +259,7 @@ test('toggles bold from the keyboard and saves it', async ({
     await focusParagraph(reloaded, HEADING)
     await selectFirst(reloaded, 6)
     await expect(
-      reloaded.getByRole('button', { name: 'Bold' }),
+      reloaded.getByRole('button', { name: 'Bold', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true')
     await shot(reloaded, '11-keyboard-bold-after-reload')
   } finally {

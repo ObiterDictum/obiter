@@ -58,7 +58,7 @@ test('sign in → create organisation → create matter → upload DOCX → see 
     page.getByRole('heading', { name: 'Matters', exact: true }),
   ).toBeVisible({ timeout: 10_000 })
   const createMatterTrigger = page
-    .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
+    .getByRole('button', { name: /^(New matter|Create a matter)$/ })
     .first()
   await createMatterTrigger.click()
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
@@ -92,16 +92,13 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   ).toBeTruthy()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5_000 })
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  await expect(matterLink).toBeVisible({ timeout: 10_000 })
-
-  await matterLink.click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 10_000 })
+  await expect(page).toHaveURL(/\/matters\/[^/?#]+$/, { timeout: 10_000 })
+  await expect(page.getByRole('heading', { name: matterName })).toBeVisible()
   await expect(page.getByText(matterName).first()).toBeVisible({
     timeout: 10_000,
   })
 
-  const fileInput = page.locator('input[aria-label="Upload document"]')
+  const fileInput = page.getByLabel('Upload document', { exact: true }).first()
   await expect(fileInput).toBeAttached({ timeout: 10_000 })
   await fileInput.setInputFiles(fixturePath())
 

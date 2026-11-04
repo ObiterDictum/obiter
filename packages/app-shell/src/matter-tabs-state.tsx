@@ -170,6 +170,7 @@ export function MatterTabsProvider({
   }
 
   function promote(id: string) {
+    if (!tabs.some((tab) => tab.id === id && tab.preview)) return
     commit({ tabs: promoteTab(tabs, id), lastClosed: state.lastClosed })
   }
 

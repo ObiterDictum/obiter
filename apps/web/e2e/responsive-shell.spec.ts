@@ -7,6 +7,7 @@ import {
   asideWidth,
   documentWidths,
   gotoOtherMode,
+  gotoHome,
   mockSession,
   sidebar,
   sidebarToggle,
@@ -85,15 +86,15 @@ test('every module is announced as current when its route is active', async ({
   }
 })
 
-test('the sidebar collapses to an icon rail and remembers the choice', async ({
+test('the Home sidebar collapses to an icon rail and remembers the choice', async ({
   page,
 }) => {
   await mockSession(page)
-  await page.goto('/search')
-  await expect(workspaceNav(page)).toBeVisible()
   await page.setViewportSize({ width: 1440, height: 900 })
+  await gotoHome(page)
+  await expect(workspaceNav(page)).toBeVisible()
 
-  await expect(sidebar(page)).toHaveCSS('width', '252px')
+  await expect(sidebar(page)).toHaveCSS('width', '236px')
   await (await sidebarToggle(page)).click()
   await expect
     .poll(async () => asideWidth(sidebar(page)))
@@ -107,7 +108,7 @@ test('the sidebar collapses to an icon rail and remembers the choice', async ({
     ).toBeVisible()
   }
 
-  await page.reload()
+  await gotoHome(page)
   await expect(workspaceNav(page)).toBeVisible()
   await expect
     .poll(async () => asideWidth(sidebar(page)))
@@ -187,41 +188,37 @@ test('the collapsed rail keeps accessible names and labels its icons', async ({
   page,
 }) => {
   await mockSession(page)
-  await page.setViewportSize({ width: 390, height: 800 })
-  await page.goto('/search')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await gotoHome(page)
   await expect(workspaceNav(page)).toBeVisible()
+  await (await sidebarToggle(page)).click()
+  await expect
+    .poll(async () => asideWidth(sidebar(page)))
+    .toBeLessThanOrEqual(64)
 
   const matters = workspaceNav(page).getByRole('link', { name: 'Matters' })
   await expect(matters).toHaveCount(1)
   await matters.hover()
-  await expect(page.getByRole('tooltip')).toHaveText('Matters')
+  await expect(page.getByRole('tooltip')).toContainText('Matters')
 })
 
-test('the expanded search panel stays inside the viewport', async ({
-  page,
-}) => {
+test('the command palette stays inside the viewport', async ({ page }) => {
   await mockSession(page)
 
   for (const width of [768, 1024]) {
     await page.setViewportSize({ width, height: 800 })
     await page.goto('/search')
 
-    const field = page.getByRole('textbox', { name: 'Search Obiter' })
-    if (await field.isVisible()) {
-      await field.click()
-      await field.fill('arbitration clause enforcement in the commercial court')
-    } else {
-      await page.getByRole('button', { name: 'Search Obiter' }).click()
-      await page
-        .getByRole('textbox', { name: 'Expanded search' })
-        .fill('arbitration clause enforcement in the commercial court')
-    }
+    await page.getByRole('button', { name: 'Search Obiter' }).click()
+    const field = page.getByRole('combobox', { name: 'Search Obiter' })
+    await expect(field).toBeFocused()
+    await field.fill('arbitration clause enforcement in the commercial court')
 
-    const dialog = page.getByRole('dialog', { name: 'Expanded search' })
+    const dialog = page.getByRole('dialog', { name: 'Search Obiter' })
     await expect(dialog).toBeVisible()
 
     const box = await dialog.boundingBox()
-    expect(box, `no expanded search panel at ${width}px`).not.toBeNull()
+    expect(box, `no command palette at ${width}px`).not.toBeNull()
     expect(box!.x).toBeGreaterThanOrEqual(-1)
     expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1)
 

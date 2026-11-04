@@ -18,7 +18,7 @@ import {
   setTrackChanges,
   trackChangesIndicator,
 } from './editor-chrome'
-import { verifyEmailInDb } from './support'
+import { openMatter, verifyEmailInDb } from './support'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const REPO_ROOT = path.resolve(
@@ -86,33 +86,12 @@ async function openFixtureDocument(
   const fixtureName = path.basename(fixturePath)
   await signIn(page, email, password)
 
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page
-      .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-      .first()
-      .click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await openMatter(page, matterName)
 
   if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
+    const fileInput = page
+      .getByLabel('Upload document', { exact: true })
+      .first()
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     await fileInput.setInputFiles(fixturePath)
   }
@@ -192,10 +171,10 @@ async function openChangesPanel(page: Page) {
 }
 
 async function reviewToggle(page: Page, on: boolean) {
+  await setTrackChanges(page, on)
   await expect(trackChangesIndicator(page)).toHaveCount(on ? 1 : 0, {
     timeout: 15_000,
   })
-  await setTrackChanges(page, on)
 }
 
 function zipPart(docxPath: string, partName: string) {

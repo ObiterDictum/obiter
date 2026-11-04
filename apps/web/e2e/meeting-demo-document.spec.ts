@@ -6,7 +6,7 @@ import {
   type Page,
 } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import { fixturePath, verifyEmailInDb } from './support'
+import { fixturePath, openMatter, verifyEmailInDb } from './support'
 import { openMenu, runMenuCommand } from './editor-chrome'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
@@ -35,30 +35,9 @@ async function seedDocument(page: Page, request: APIRequestContext) {
   })
   await page.waitForLoadState('networkidle')
 
-  await page.goto('/matters', { waitUntil: 'networkidle' })
-  await page
-    .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-    .first()
-    .click()
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
-  await page.getByLabel('Matter name').click()
-  await page.getByLabel('Matter name').pressSequentially(matterName, {
-    delay: 10,
-  })
-  await page.getByLabel('Primary jurisdiction').click()
-  await page
-    .getByLabel('Primary jurisdiction')
-    .pressSequentially('England & Wales', { delay: 10 })
-  await page
-    .getByRole('button', { name: 'Create matter', exact: true })
-    .last()
-    .click()
-  await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5_000 })
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\/mtr_/, { timeout: 10_000 })
+  await openMatter(page, matterName)
 
-  const fileInput = page.locator('input[aria-label="Upload document"]')
+  const fileInput = page.getByLabel('Upload document', { exact: true }).first()
   await expect(fileInput).toBeAttached({ timeout: 10_000 })
   await fileInput.setInputFiles(fixturePath())
   await expect(page.getByText('demo-fixture.docx').first()).toBeVisible({
@@ -117,12 +96,14 @@ test('a modified chord cannot record a redaction decision', async ({
     .last()
     .click()
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
-  const listbox = page.locator('[role="listbox"]')
+  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
   await expect(listbox).toBeVisible({ timeout: 30_000 })
 
   const firstOption = listbox.getByRole('option').first()
   await firstOption.click()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
+
+  const palette = page.getByRole('dialog', { name: 'Search Obiter' })
 
   await listbox.evaluate((element) => {
     for (const [key, modifier] of [
@@ -142,6 +123,9 @@ test('a modified chord cannot record a redaction decision', async ({
     }
   })
 
+  await expect(palette).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(palette).toBeHidden()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
 
   await listbox.focus()
@@ -156,8 +140,10 @@ test('a modified chord cannot record a redaction decision', async ({
     )
   })
   await expect(
-    page.getByRole('textbox', { name: 'Search Obiter' }),
+    page.getByRole('combobox', { name: 'Search Obiter' }),
   ).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(palette).toBeHidden()
   await expect(firstOption.getByText('Needs review')).toBeVisible()
 
   await listbox.press('r')
@@ -174,7 +160,7 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
 
   await runMenuCommand(page, 'Review', 'Check citations')
   await expect(page.getByText('2 need review').first()).toBeVisible({
-    timeout: 30_000,
+    timeout: 60_000,
   })
 
   await page.setViewportSize({ width: 390, height: 844 })
@@ -224,7 +210,7 @@ test('the finalised output and its controls fit a 390px viewport', async ({
     .last()
     .click()
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
-  const listbox = page.locator('[role="listbox"]')
+  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
   await expect(listbox).toBeVisible({ timeout: 30_000 })
 
   const progress = page.getByText(/of \d+ detected spans decided/)

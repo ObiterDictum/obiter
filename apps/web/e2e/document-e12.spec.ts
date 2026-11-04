@@ -18,7 +18,7 @@ import {
   type Page,
 } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import { fixturePath, verifyEmailInDb } from './support'
+import { fixturePath, openMatter, verifyEmailInDb } from './support'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -97,28 +97,9 @@ async function openUploadedDocument(
 ) {
   await signIn(page, email, password)
   const matterName = `E12 matter ${Date.now()}`
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-  await page
-    .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-    .first()
-    .click()
-  await page.getByLabel('Matter name').fill(matterName)
-  await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-  await page
-    .getByRole('button', { name: 'Create matter', exact: true })
-    .last()
-    .click()
-  await page
-    .getByRole('button', { name: 'Cancel' })
-    .click({ timeout: 5_000 })
-    .catch(() => undefined)
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await openMatter(page, matterName)
 
-  const fileInput = page.locator('input[aria-label="Upload document"]')
+  const fileInput = page.getByLabel('Upload document', { exact: true }).first()
   await expect(fileInput).toBeAttached({ timeout: 20_000 })
   await fileInput.setInputFiles({
     name: upload.name,

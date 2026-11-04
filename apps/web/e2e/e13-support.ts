@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { openRibbonTab } from './editor-chrome'
-import { verifyEmailInDb } from './support'
+import { openMatter, verifyEmailInDb, waitForPaneIdle } from './support'
 
 export { openRibbonTab }
 
@@ -44,47 +44,31 @@ export async function openMatterDocument(
   matterName: string,
   upload?: { name: string; mimeType: string; buffer: Buffer },
 ) {
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matterName }).first()
-  if ((await matterLink.count()) === 0) {
-    await page
-      .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-      .first()
-      .click()
-    await page.getByLabel('Matter name').fill(matterName)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page
-      .getByRole('button', { name: 'Cancel' })
-      .click({ timeout: 5_000 })
-      .catch(() => undefined)
-  }
-  await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await openMatter(page, matterName)
 
   const fileName = upload?.name ?? path.basename(FIXTURE)
   if ((await page.getByText(fileName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
+    const fileInput = page
+      .getByLabel('Upload document', { exact: true })
+      .first()
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     if (upload) {
       await fileInput.setInputFiles(upload)
     } else {
       await fileInput.setInputFiles(FIXTURE)
     }
+    await waitForPaneIdle(page)
   }
-  const documentRow = page.getByRole('link', { name: fileName }).first()
+  const documentRow = page
+    .getByRole('link', { name: fileName, exact: true })
+    .first()
   await expect(documentRow).toBeVisible({ timeout: 30_000 })
   await documentRow.click()
   await expect(page).toHaveURL(/\/matters\/[^/?#]+\/documents\/[^/?#]+$/)
   await expect(
-    page.locator('#document-workspace [data-save-state]'),
+    page
+      .locator('#document-workspace')
+      .getByRole('heading', { level: 1, name: fileName }),
   ).toBeVisible({ timeout: 30_000 })
 }
 
@@ -128,7 +112,16 @@ export async function caretAtEnd(page: Page, text: string) {
 
 export async function saveAndWait(page: Page) {
   await saveButton(page).click()
-  await expect(saveButton(page)).toBeDisabled({ timeout: 30_000 })
+  await expect.poll(() => saveState(page), { timeout: 30_000 }).toBe('saved')
+  await expect(saveButton(page)).toBeDisabled()
+}
+
+export async function saveAndWaitForHistoryReload(page: Page) {
+  await saveButton(page).click()
+  await expect
+    .poll(() => saveState(page), { timeout: 30_000 })
+    .toMatch(/^(saved|blocked)$/u)
+  await expect(saveButton(page)).toBeDisabled()
 }
 
 export async function openFind(page: Page) {

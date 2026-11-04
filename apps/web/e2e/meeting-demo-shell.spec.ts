@@ -239,20 +239,19 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
   ).toBeVisible()
 })
 
-test('both search fields show a keyboard focus ring', async ({ page }) => {
+test('the search trigger and legal source field show a keyboard focus ring', async ({
+  page,
+}) => {
   await mockSession(page)
   await mockVerifyData(page)
   await page.goto('/search')
   await expect(workspaceNav(page)).toBeVisible()
 
-  const topField = page.locator('input[aria-label="Search Obiter"]')
+  const topField = page.getByRole('button', { name: 'Search Obiter' })
   await topField.focus()
-  const top = await topField.evaluate((input) => {
-    const pill = input.closest('form')
-    const style = pill ? getComputedStyle(pill) : null
-    return style
-      ? { style: style.outlineStyle, width: style.outlineWidth }
-      : null
+  const top = await topField.evaluate((button) => {
+    const style = getComputedStyle(button)
+    return { style: style.outlineStyle, width: style.outlineWidth }
   })
   expect(top).not.toBeNull()
   expect(top!.style).toBe('solid')

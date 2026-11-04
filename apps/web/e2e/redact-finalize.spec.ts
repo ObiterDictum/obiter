@@ -98,6 +98,7 @@ test('finalizes a DOCX into a previewable secure PDF download', async ({
   ).toBeHidden()
 
   const downloadButton = page.getByRole('button', { name: 'Download PDF' })
+  await page.getByLabel('Finalized PDF preview').scrollIntoViewIfNeeded()
   await expect(page.getByText(/^Preview ready · /u)).toBeVisible({
     timeout: 30_000,
   })

@@ -4,6 +4,7 @@ import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  clickMenuItem,
   closeMenu,
   menuItem,
   openFormatting,
@@ -30,12 +31,14 @@ const editor = (page: Page) =>
 const save = (page: Page) =>
   page.getByRole('button', { name: 'Save', exact: true })
 async function insertCommand(page: Page, name: string) {
-  await openMenu(page, 'Insert')
-  await menuItem(page, name).click()
+  if (!(await clickMenuItem(page, 'Insert', name))) {
+    throw new Error(`could not run the ${name} command`)
+  }
 }
 async function reviewCommand(page: Page, name: string) {
-  await openMenu(page, 'Review')
-  await menuItem(page, name).click()
+  if (!(await clickMenuItem(page, 'Review', name))) {
+    throw new Error(`could not run the ${name} command`)
+  }
 }
 const markedText = (page: Page) => page.locator('[data-defined-term]')
 const fieldMarkers = (page: Page) => page.locator('[data-field-marker]')
@@ -132,7 +135,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   await reviewCommand(page, 'List of authorities')
   await expect(authoritiesPanel(page)).toContainText(CITATION)
   await openMenu(page, 'Review')
-  const verifyButton = menuItem(page, 'Verify citations')
+  const verifyButton = menuItem(page, 'Check citations')
   await expect(verifyButton).toBeDisabled()
   await shot(page, '05-verify-dirty')
 
@@ -142,7 +145,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
 
   await openMenu(page, 'Review')
   await expect(verifyButton).toBeEnabled()
-  await verifyButton.click()
+  await menuItem(page, 'Verify citations').click()
   await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
   await shot(page, '07-verify-revealed')
 

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { runMenuCommand } from './editor-chrome'
+import { openMatter } from './support'
 
 /*
  * Browser-only coverage for redo. jsdom can drive the mounted editor and does,
@@ -78,32 +79,13 @@ async function signIn(page: Page) {
 async function openFixtureDocument(page: Page, matter = matterName) {
   await signIn(page)
 
-  await page.getByRole('link', { name: 'Matters' }).first().click()
-  await expect(
-    page.getByRole('heading', { name: 'Matters', exact: true }),
-  ).toBeVisible({ timeout: 20_000 })
-
-  const matterLink = page.getByRole('link', { name: matter }).first()
-  if ((await matterLink.count()) === 0) {
-    await page
-      .getByRole('button', { name: /^(New matter|Create the first matter)$/ })
-      .first()
-      .click()
-    await check(page.getByRole('dialog')).toBeVisible({ timeout: 20_000 })
-    await page.getByLabel('Matter name').fill(matter)
-    await page.getByLabel('Primary jurisdiction').fill('England & Wales')
-    await page
-      .getByRole('button', { name: 'Create matter', exact: true })
-      .last()
-      .click()
-    await page.keyboard.press('Escape')
-  }
-  await page.getByRole('link', { name: matter }).first().click()
-  await check(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await openMatter(page, matter)
 
   const fixtureName = path.basename(fixture ?? '')
   if ((await page.getByText(fixtureName).count()) === 0) {
-    const fileInput = page.locator('input[aria-label="Upload document"]')
+    const fileInput = page
+      .getByLabel('Upload document', { exact: true })
+      .first()
     await expect(fileInput).toBeAttached({ timeout: 20_000 })
     await fileInput.setInputFiles(fixture ?? '')
   }

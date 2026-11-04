@@ -178,7 +178,7 @@ export function MatterDocumentsTable({
   }
 
   return (
-    <Card className="min-w-0 overflow-hidden">
+    <Card aria-busy={loading || undefined} className="min-w-0 overflow-hidden">
       <div className="overflow-x-auto">
         <Table className="min-w-[38rem]">
           <THead>
