@@ -8,6 +8,7 @@ import {
   editTextSchema,
 } from './document-edit-shared'
 import {
+  deleteFootnoteOperationSchema,
   insertCrossReferenceOperationSchema,
   insertFootnoteOperationSchema,
   insertImageOperationSchema,
@@ -449,6 +450,7 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
   insertCrossReferenceOperationSchema,
   insertPageNumberOperationSchema,
   insertFootnoteOperationSchema,
+  deleteFootnoteOperationSchema,
   insertTableOfContentsOperationSchema,
   insertTableOfAuthoritiesOperationSchema,
   updateTableOfAuthoritiesOperationSchema,

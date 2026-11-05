@@ -1,3 +1,5 @@
+import type { DocumentStyleWire } from '@obiter/contracts'
+
 import { escapeXmlAttribute } from './parts/overlay'
 import { WORD_NAMESPACE } from './parts/xml-elements'
 import { wordRunInnerTextXml } from './text-run-edit'
@@ -124,9 +126,41 @@ export function buildInlineDrawingXml({
 const FOOTNOTE_REFERENCE_STYLE = 'FootnoteReference'
 const FOOTNOTE_TEXT_STYLE = 'FootnoteText'
 
+export function missingFootnoteStyles(
+  styles: readonly DocumentStyleWire[],
+): DocumentStyleWire[] {
+  const present = new Set(styles.map((style) => style.styleId))
+  const basedOn = (styleId: string) =>
+    present.has(styleId) ? `<w:basedOn w:val="${styleId}"/>` : ''
+  const wires: DocumentStyleWire[] = [
+    {
+      styleId: FOOTNOTE_TEXT_STYLE,
+      ...(present.has('Normal') ? { basedOnStyleId: 'Normal' } : {}),
+      sourceFragment:
+        `<w:style w:type="paragraph" w:styleId="${FOOTNOTE_TEXT_STYLE}">` +
+        `<w:name w:val="footnote text"/>${basedOn('Normal')}` +
+        '<w:uiPriority w:val="99"/><w:unhideWhenUsed/>' +
+        '<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>' +
+        '<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>',
+    },
+    {
+      styleId: FOOTNOTE_REFERENCE_STYLE,
+      ...(present.has('DefaultParagraphFont')
+        ? { basedOnStyleId: 'DefaultParagraphFont' }
+        : {}),
+      sourceFragment:
+        `<w:style w:type="character" w:styleId="${FOOTNOTE_REFERENCE_STYLE}">` +
+        `<w:name w:val="footnote reference"/>${basedOn('DefaultParagraphFont')}` +
+        '<w:uiPriority w:val="99"/><w:unhideWhenUsed/>' +
+        '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style>',
+    },
+  ]
+  return wires.filter((wire) => !present.has(wire.styleId))
+}
+
 export function buildFootnoteReferenceRunXml(footnoteId: number) {
   return (
-    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr>` +
+    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/><w:vertAlign w:val="superscript"/></w:rPr>` +
     `<w:footnoteReference w:id="${String(footnoteId)}"/></w:r>`
   )
 }
@@ -140,7 +174,7 @@ export function buildFootnoteXml(
   return (
     `<w:footnote w:id="${String(footnoteId)}">` +
     `<w:p${identity}><w:pPr><w:pStyle w:val="${FOOTNOTE_TEXT_STYLE}"/></w:pPr>` +
-    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr><w:footnoteRef/></w:r>` +
+    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteRef/></w:r>` +
     `<w:r>${wordRunInnerTextXml('w', text)}</w:r>` +
     `</w:p></w:footnote>`
   )

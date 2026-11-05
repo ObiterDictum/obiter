@@ -206,6 +206,16 @@ export type DocumentEditInsertFootnoteOperation = z.infer<
   typeof insertFootnoteOperationSchema
 >
 
+export const deleteFootnoteOperationSchema = z
+  .object({
+    type: z.literal('delete_footnote'),
+    runId: editIdSchema,
+  })
+  .strict()
+export type DocumentEditDeleteFootnoteOperation = z.infer<
+  typeof deleteFootnoteOperationSchema
+>
+
 export const DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES = 500
 
 export const insertTableOfContentsOperationSchema = z

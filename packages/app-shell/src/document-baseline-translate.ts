@@ -38,6 +38,7 @@ const STRUCTURE_KIND_REMOVABLE = {
   'cross-reference': false,
   'page-number': false,
   footnote: false,
+  'footnote-removal': false,
   'table-of-contents': false,
   'table-of-authorities': false,
   'table-of-authorities-refresh': false,

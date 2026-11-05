@@ -376,7 +376,7 @@ export function ModelParagraphInner({
           </span>
         ) : noteMark && !continuation ? (
           <span
-            className="shrink-0 pr-1 align-super text-[0.75em]"
+            className="shrink-0 pr-1 text-[0.75em] leading-none"
             aria-label={
               noteKind === 'endnote'
                 ? `Endnote ${noteMark}`

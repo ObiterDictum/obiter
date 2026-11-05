@@ -7618,7 +7618,20 @@
                     resolve. The note story takes run edits alone: marks, fields
                     and tables anchor in the document body, so a footnote's text
                     cannot carry a defined-term mark, a cross-reference or a
-                    generated table.
+                    generated table. Notes are numbered by where their
+                    references sit in the body, never by stored id, and the body
+                    mark and the note always show the same number.
+                    <code>delete_footnote</code> removes a reference run that
+                    holds nothing else, and its entry once no reference remains;
+                    the editor queues it when a deletion spans the reference, or
+                    a selected range through the end of the paragraph is
+                    deleted. A pending note follows the text typed before it.
+                    Cut deletes the note: the clipboard carries plain text, so a
+                    paste does not bring the note back. Inserting a note adds
+                    the <code>FootnoteText</code> and
+                    <code>FootnoteReference</code> styles the package lacks, and
+                    every reference run is also superscript directly, so a
+                    package with no styles part still shows raised marks.
                   </td>
                   <td class="id">
                     ooxml/footnote-edits.ts ·
@@ -7932,19 +7945,20 @@
                     <code>insert_table</code>, <code>insert_image</code>,
                     <code>insert_cross_reference</code>,
                     <code>insert_page_number</code>,
-                    <code>insert_footnote</code>,
                     <code>insert_table_of_contents</code>,
                     <code>insert_table_of_authorities</code>,
                     <code>update_table_of_authorities</code>,
                     <code>insert_break</code> and
-                    <code>insert_section_break</code> have no inverse — so once
-                    one is saved it is baseline content: a history snapshot that
-                    predates it survives translation, but undo cannot offer its
-                    removal. A structure spliced strictly inside a run splits
-                    that run into two continuations in the saved lineage, and a
-                    pre-save run text is re-expressed across every continuing
-                    run; a covered run the lineage cannot name still blocks
-                    rather than persisting a partial reversal. Only
+                    <code>insert_section_break</code> have no inverse (a
+                    footnote alone can be removed, through
+                    <code>delete_footnote</code>) — so once one is saved it is
+                    baseline content: a history snapshot that predates it
+                    survives translation, but undo cannot offer its removal. A
+                    structure spliced strictly inside a run splits that run into
+                    two continuations in the saved lineage, and a pre-save run
+                    text is re-expressed across every continuing run; a covered
+                    run the lineage cannot name still blocks rather than
+                    persisting a partial reversal. Only
                     <code>set_hyperlink</code> can remove a stored structure (a
                     null target unwraps the link), so a snapshot predating a
                     saved link still blocks history reconciliation rather than

@@ -12,7 +12,7 @@ import {
 } from './document-edits'
 import { documentStory, editableParagraph } from './document-model-text'
 import { emptyFormatDrafts } from './document-format-types'
-import { runNoteRefs } from './document-page-notes'
+import { documentNotes, runNoteRefs } from './document-page-notes'
 import { partitionDraftState } from './document-save-partition'
 import { emptyDraftState, planDocumentSave } from './document-save-plan'
 import {
@@ -23,6 +23,7 @@ import {
   type StructuralFootnoteDraft,
 } from './document-structural-drafts'
 import { withStructuralDrafts } from './document-structure-fold'
+import { followFootnoteEdits } from './document-footnote-fold'
 import {
   documentStructureToolbar,
   storyTableCellIds,
@@ -150,6 +151,41 @@ describe('folded footnote drafts', () => {
         fragment.includes('<w:footnoteRef'),
       ),
     ).toBe(true)
+  })
+
+  it('renders a pending note with the Word footnote styles the document lacks', () => {
+    const base = model([bodyStory([paragraph('p1', 'Hello world')])])
+    const folded = withStructuralDrafts(base, [footnoteDraft('s1', 'p1', 6)])
+    expect(folded.styles.map((style) => style.styleId)).toEqual([
+      'FootnoteText',
+      'FootnoteReference',
+    ])
+    const own = { styleId: 'FootnoteText', sourceFragment: '<w:style/>' }
+    const kept = withStructuralDrafts({ ...base, styles: [own] }, [
+      footnoteDraft('s1', 'p1', 6),
+    ])
+    expect(kept.styles[0]).toBe(own)
+    expect(kept.styles.map((style) => style.styleId)).toEqual([
+      'FootnoteText',
+      'FootnoteReference',
+    ])
+  })
+
+  it('numbers pending notes by where they sit, not the order they were inserted', () => {
+    const base = model([
+      bodyStory([paragraph('p1', 'Alpha'), paragraph('p2', 'Beta')]),
+    ])
+    const folded = withStructuralDrafts(base, [
+      footnoteDraft('late', 'p2', 4),
+      footnoteDraft('early', 'p1', 2),
+      footnoteDraft('middle', 'p1', 5),
+    ])
+    const notes = documentNotes(folded)
+    expect(notes.map((note) => [note.paragraphs[0]?.id, note.mark])).toEqual([
+      [footnoteNoteParagraphId({ id: 'early' }), '1'],
+      [footnoteNoteParagraphId({ id: 'middle' }), '2'],
+      [footnoteNoteParagraphId({ id: 'late' }), '3'],
+    ])
   })
 
   it('appends the pending entry to a footnotes story the model carries', () => {
@@ -569,5 +605,194 @@ describe('the footnote insert control', () => {
     expect(
       structuralDraftSchema.safeParse(footnoteDraft('s1', 'p1', -1)).success,
     ).toBe(false)
+  })
+})
+
+describe('footnotes following text edits', () => {
+  const stored = (): DocumentModelWire =>
+    model([
+      bodyStory([
+        {
+          id: 'p1',
+          runs: [
+            { id: 'a', text: 'agreed terms', preservedXmlFragments: [] },
+            {
+              id: 'ref',
+              text: '',
+              preservedXmlFragments: [
+                '<w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr>',
+                '<w:footnoteReference w:id="1"/>',
+              ],
+            },
+            { id: 'b', text: ' on the date', preservedXmlFragments: [] },
+          ],
+          preservedXmlFragments: [],
+        },
+      ]),
+    ])
+  const edit = (
+    base: DocumentModelWire,
+    state: EditorState,
+    from: number,
+    to: number,
+    insert = '',
+  ) => {
+    const result = applyWordEdit(
+      base,
+      state,
+      { type: 'replace', paragraphId: 'p1', offset: from, from, to, insert },
+      'new',
+    )
+    if (!result) throw new Error('edit refused')
+    return result
+  }
+  const ids = () => {
+    let next = 0
+    return () => `removal-${String((next += 1))}`
+  }
+
+  it('moves a pending footnote with text typed before it', () => {
+    const base = model([bodyStory([paragraph('p1', 'Hello world')])])
+    const pending = [footnoteDraft('s1', 'p1', 5)]
+    const before = emptyEditorState()
+    const after = edit(base, before, 0, 0, 'Oh, ')
+    const next = followFootnoteEdits(base, before, after, pending, ids())
+    expect(next.structures).toEqual([footnoteDraft('s1', 'p1', 9)])
+  })
+
+  it('keeps a pending footnote in place when text is typed right after it', () => {
+    const base = model([bodyStory([paragraph('p1', 'Hello world')])])
+    const pending = [footnoteDraft('s1', 'p1', 5)]
+    const before = emptyEditorState()
+    const after = edit(base, before, 5, 5, '!')
+    expect(
+      followFootnoteEdits(base, before, after, pending, ids()).structures,
+    ).toEqual(pending)
+  })
+
+  it('follows the caret, not the first repeated letter, when a letter goes', () => {
+    const base = model([bodyStory([paragraph('p1', 'aaa')])])
+    const pending = [footnoteDraft('s1', 'p1', 2)]
+    const before = emptyEditorState()
+    const after = edit(base, before, 0, 1)
+    expect(
+      followFootnoteEdits(base, before, after, pending, ids()).structures,
+    ).toEqual([footnoteDraft('s1', 'p1', 1)])
+  })
+
+  it('drops a pending footnote and its note text when a deletion spans it', () => {
+    const base = model([bodyStory([paragraph('p1', 'Hello world')])])
+    const pending = [
+      footnoteDraft('s1', 'p1', 5),
+      footnoteDraft('s2', 'p1', 11),
+    ]
+    const before: EditorState = {
+      ...emptyEditorState(),
+      extraRuns: {
+        [footnoteNoteParagraphId({ id: 's1' })]: [
+          { id: 'n1', text: 'Gone', preservedXmlFragments: [] },
+        ],
+      },
+    }
+    const after = edit(base, before, 3, 8)
+    const next = followFootnoteEdits(base, before, after, pending, ids())
+    expect(next.structures).toEqual([footnoteDraft('s2', 'p1', 6)])
+    expect(next.extraRuns).toEqual({})
+  })
+
+  it('marks a stored footnote for deletion when the deleted range spans its reference', () => {
+    const base = stored()
+    const before = emptyEditorState()
+    const after = edit(base, before, 7, 15)
+    const next = followFootnoteEdits(base, before, after, [], ids())
+    expect(next.structures).toEqual([
+      {
+        id: 'removal-1',
+        kind: 'footnote-removal',
+        paragraphId: 'p1',
+        runId: 'ref',
+      },
+    ])
+    expect(documentNotes(withStructuralDrafts(base, next.structures))).toEqual(
+      [],
+    )
+  })
+
+  it('keeps a stored footnote when only the word before its reference is deleted', () => {
+    const base = stored()
+    const before = emptyEditorState()
+    const after = edit(base, before, 7, 12)
+    expect(
+      followFootnoteEdits(base, before, after, [], ids()).structures,
+    ).toEqual([])
+  })
+
+  it('removes a footnote ending its paragraph when a selected range through the end is deleted', () => {
+    const base = model([bodyStory([paragraph('p1', 'Hello world')])])
+    const pending = [footnoteDraft('s1', 'p1', 11)]
+    const before = emptyEditorState()
+    const after = edit(base, before, 6, 11)
+    expect(
+      followFootnoteEdits(base, before, after, pending, ids(), true).structures,
+    ).toEqual([])
+  })
+
+  it('keeps a footnote ending its paragraph when the last word is typed over or backspaced', () => {
+    const base = model([bodyStory([paragraph('p1', 'Hello world')])])
+    const pending = [footnoteDraft('s1', 'p1', 11)]
+    const before = emptyEditorState()
+    const retyped = edit(base, before, 6, 11, 'there')
+    expect(
+      followFootnoteEdits(base, before, retyped, pending, ids(), false)
+        .structures,
+    ).toEqual(pending)
+    const backspaced = edit(base, before, 10, 11)
+    expect(
+      followFootnoteEdits(base, before, backspaced, pending, ids(), false)
+        .structures,
+    ).toEqual([footnoteDraft('s1', 'p1', 10)])
+  })
+
+  it('numbers the remaining notes from one after a middle note goes', () => {
+    const base = model([
+      bodyStory([
+        {
+          id: 'p1',
+          runs: ['1', '2', '3'].flatMap((n) => [
+            { id: `t${n}`, text: `Cite ${n}.`, preservedXmlFragments: [] },
+            {
+              id: `r${n}`,
+              text: '',
+              preservedXmlFragments: [`<w:footnoteReference w:id="${n}"/>`],
+            },
+          ]),
+          preservedXmlFragments: [],
+        },
+      ]),
+      {
+        partName: 'word/footnotes.xml',
+        kind: 'footnotes',
+        paragraphs: ['1', '2', '3'].map((n) => paragraph(`n${n}`, `Note ${n}`)),
+        preservedXmlFragments: ['1', '2', '3'].map(
+          (n) => `<w:footnote w:id="${n}"><w:p/></w:footnote>`,
+        ),
+        fields: [],
+        unanchoredFieldParagraphIds: [],
+      },
+    ])
+    const before = emptyEditorState()
+    const after = edit(base, before, 8, 15)
+    const next = followFootnoteEdits(base, before, after, [], ids())
+    const painted = withStructuralDrafts(
+      base,
+      next.structures,
+      after.state.drafts,
+    )
+    expect(
+      documentNotes(painted).map((note) => [note.paragraphs[0]?.id, note.mark]),
+    ).toEqual([
+      ['n1', '1'],
+      ['n3', '2'],
+    ])
   })
 })

@@ -4,7 +4,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'bun:test'
 import type { DocumentParagraphWire } from '@obiter/contracts'
 import { paragraphFace } from '../../document-page-style'
-import { ParagraphRunPaint } from './model-run'
+import { NoteNumbersContext, ParagraphRunPaint } from './model-run'
 
 function trailingPageField(paragraphId: string): DocumentParagraphWire {
   return {
@@ -207,4 +207,95 @@ it('keeps pending text formatting, selection and source run decorations', () => 
   )
   expect(container.querySelectorAll('[data-note-mark]')).toHaveLength(1)
   expect(formatted?.className).toContain('decoration-dotted')
+})
+
+function referencedParagraph(): DocumentParagraphWire {
+  return {
+    id: 'p-notes',
+    runs: [
+      { id: 'before', text: '01234', preservedXmlFragments: [] },
+      {
+        id: 'ref-a',
+        text: '',
+        preservedXmlFragments: ['<w:footnoteReference w:id="9"/>'],
+      },
+      { id: 'after', text: '56789', preservedXmlFragments: [] },
+      {
+        id: 'ref-b',
+        text: '',
+        preservedXmlFragments: ['<w:footnoteReference w:id="4"/>'],
+      },
+    ],
+    preservedXmlFragments: [],
+  }
+}
+
+describe('footnote reference marks in the body', () => {
+  it('paints a reference that ends the paragraph', () => {
+    const paragraph = referencedParagraph()
+    const { container } = render(
+      <ParagraphRunPaint
+        paragraph={paragraph}
+        changes={[]}
+        styles={[]}
+        face={paragraphFace(paragraph, [])}
+        start={0}
+        end={10}
+        lines={[]}
+        linePx={16}
+      />,
+    )
+    expect(
+      [...container.querySelectorAll('[data-note-mark]')].map(
+        (mark) => mark.textContent,
+      ),
+    ).toEqual(['9', '4'])
+  })
+
+  it('paints a reference at a wrap point on the line it follows, once', () => {
+    const paragraph = referencedParagraph()
+    const { container } = render(
+      <ParagraphRunPaint
+        paragraph={paragraph}
+        changes={[]}
+        styles={[]}
+        face={paragraphFace(paragraph, [])}
+        start={0}
+        end={10}
+        lines={[
+          { text: '01234', from: 0, to: 5 },
+          { text: '56789', from: 5, to: 10 },
+        ]}
+        linePx={16}
+        wrapWidthPx={100}
+      />,
+    )
+    expect(paintedLines(container)).toEqual(['012349', '567894'])
+  })
+
+  it('shows the document-order number rather than the stored note id', () => {
+    const paragraph = referencedParagraph()
+    const { container } = render(
+      <NoteNumbersContext
+        value={
+          new Map([
+            ['footnote:9', '1'],
+            ['footnote:4', '2'],
+          ])
+        }
+      >
+        <ParagraphRunPaint
+          paragraph={paragraph}
+          changes={[]}
+          styles={[]}
+          face={paragraphFace(paragraph, [])}
+          start={0}
+          end={10}
+          lines={[]}
+          linePx={16}
+        />
+      </NoteNumbersContext>,
+    )
+    expect(container.textContent).toBe('012341567892')
+  })
 })

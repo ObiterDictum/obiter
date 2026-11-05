@@ -26,11 +26,11 @@ import type { PageFloat, PageTextBox } from '../../document-page-floats'
 import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 import { documentListMarkers } from '../../document-page-lists'
 import { paragraphStoryResolver } from '../../document-model-text'
-import { documentNotes } from '../../document-page-notes'
+import { documentNoteNumbers, documentNotes } from '../../document-page-notes'
 import { pageClickHandlers } from './model-page-clicks'
 import { useLatestCallback } from './use-latest-callback'
 import type { ParagraphWordEdit } from './model-paragraph'
-import type { ParagraphSelectionRange } from './model-run'
+import { NoteNumbersContext, type ParagraphSelectionRange } from './model-run'
 import { PageOverlays, renderBlock } from './model-page-blocks'
 import {
   paragraphNeighborResolver,
@@ -40,11 +40,29 @@ import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { PageMarginBand, type EditableMargin } from './page-margin-band'
 import { useMarginEdit } from './use-margin-edit'
 
+const FOOTNOTE_SEPARATOR_PX = 192
+
+function footnoteContinues(blocks: readonly LaidOutBlock[]): boolean {
+  const first = blocks[0]
+  return (
+    first?.type === 'paragraph' &&
+    Boolean(first.continuation || (first.from ?? 0) > 0)
+  )
+}
+
 const NO_INSERTS: LocalInsert[] = []
 const NO_DELETED_PARAGRAPH_IDS: string[] = []
 const NO_EXTRA_RUNS: ExtraRuns = {}
 
-export function DocumentModelPage({
+export function DocumentModelPage(props: Parameters<typeof ModelPage>[0]) {
+  return (
+    <NoteNumbersContext value={documentNoteNumbers(props.model)}>
+      <ModelPage {...props} />
+    </NoteNumbersContext>
+  )
+}
+
+function ModelPage({
   model,
   pendingRedlines,
   selectedParagraphId,
@@ -389,6 +407,20 @@ export function DocumentModelPage({
             paddingTop: 12,
           }}
         >
+          <div
+            aria-hidden="true"
+            data-footnote-separator={
+              footnoteContinues(pageLayout.footnotes.blocks)
+                ? 'continuation'
+                : 'separator'
+            }
+            className="mb-1 h-px shrink-0 bg-current"
+            style={{
+              width: footnoteContinues(pageLayout.footnotes.blocks)
+                ? '100%'
+                : Math.min(FOOTNOTE_SEPARATOR_PX, frame.widthPx),
+            }}
+          />
           {pageLayout.footnotes.blocks.flatMap((block, index) =>
             renderBlock(block, index, {
               ...sharedCtx,

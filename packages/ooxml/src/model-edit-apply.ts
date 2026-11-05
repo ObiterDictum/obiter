@@ -11,7 +11,7 @@ import {
 } from './document-lineage'
 import { insertCrossReference } from './cross-reference-edits'
 import { markDefinedTerm } from './defined-term-edits'
-import { insertFootnote } from './footnote-edits'
+import { deleteFootnote, insertFootnote } from './footnote-edits'
 import { setHyperlink } from './hyperlink-edits'
 import { insertImage } from './image-edits'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
@@ -361,6 +361,10 @@ export function applyPlannedOperation(
       )
       state.structureCounts.set(key, occurrence + 1)
     }
+  } else if (operation.type === 'delete_footnote') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    if (!deletedLater)
+      deleteFootnote(document, operation.run, operation.paragraph)
   } else if (operation.type === 'insert_page_number') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {

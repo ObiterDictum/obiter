@@ -42,6 +42,7 @@ export {
   buildFootnoteReferenceRunXml,
   buildFootnoteSeparatorXml,
   buildFootnoteXml,
+  missingFootnoteStyles,
   buildInlineDrawingXml,
   FOOTNOTES_PART_NAME,
   buildTableParagraphXml,

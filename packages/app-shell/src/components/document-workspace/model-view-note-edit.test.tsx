@@ -184,3 +184,53 @@ describe('a painted footnote body', () => {
     expect(opened).toEqual([])
   })
 })
+
+describe('the page footnote band', () => {
+  const box = {
+    widthPx: 794,
+    heightPx: 1123,
+    margin: { top: 96, right: 96, bottom: 96, left: 96 },
+    headerPx: 48,
+    footerPx: 48,
+  }
+  const frame = {
+    top: 96,
+    right: 96,
+    bottom: 96,
+    left: 96,
+    widthPx: 602,
+    heightPx: 931,
+  }
+  const page = (note: (typeof blocks)[number] & { from?: number }) => (
+    <DocumentModelPage
+      model={model}
+      pageBlocks={[blocks[0]!]}
+      pageLayout={{
+        box,
+        frame,
+        columns: [{ left: 0, widthPx: 602 }],
+        footnotes: { blocks: [note], heightPx: 60 },
+      }}
+      selectedParagraphId={null}
+      onSelectParagraph={() => undefined}
+    />
+  )
+
+  it('opens with a short separator rule above the first note on the page', () => {
+    const { container } = render(page(blocks[1]!))
+    const band = screen.getByLabelText('Page footnotes')
+    const rule = band.firstElementChild as HTMLElement
+    expect(rule.dataset.footnoteSeparator).toBe('separator')
+    expect(rule.style.width).toBe('192px')
+    expect(container.querySelector('[data-note-mark]')?.textContent).toBe('1')
+    expect(band.textContent).toContain('1')
+  })
+
+  it('runs the rule the full width when a note continues from the previous page', () => {
+    render(page({ ...blocks[1]!, from: 3 }))
+    const rule = screen.getByLabelText('Page footnotes')
+      .firstElementChild as HTMLElement
+    expect(rule.dataset.footnoteSeparator).toBe('continuation')
+    expect(rule.style.width).toBe('100%')
+  })
+})

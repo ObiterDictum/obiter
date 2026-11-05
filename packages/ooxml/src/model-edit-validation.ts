@@ -13,7 +13,7 @@ import { parseXmlElements } from './parts/overlay'
 export type PlannedOperation =
   | (Extract<
       DocumentEditOperation,
-      { type: 'replace_run_text' | 'set_run_style' }
+      { type: 'replace_run_text' | 'set_run_style' | 'delete_footnote' }
     > & { run: TextRunAnchor; paragraph: ParagraphAnchor })
   | (Extract<DocumentEditOperation, { type: 'set_run_emphasis' }> & {
       run?: TextRunAnchor
@@ -177,6 +177,7 @@ export function validateTrackedOperations(
       operation.type === 'set_hyperlink' ||
       operation.type === 'insert_cross_reference' ||
       operation.type === 'insert_footnote' ||
+      operation.type === 'delete_footnote' ||
       operation.type === 'insert_page_number' ||
       operation.type === 'insert_table_of_contents' ||
       operation.type === 'insert_table_of_authorities' ||
