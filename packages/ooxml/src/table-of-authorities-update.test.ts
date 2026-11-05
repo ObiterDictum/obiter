@@ -56,7 +56,7 @@ describe('table-of-authorities update', () => {
       entries.map((paragraph) =>
         paragraph.runs.map((run) => run.text).join(''),
       ),
-    ).toEqual(['[2019] EWCA Civ 12', '[2020] UKSC 1'])
+    ).toEqual(['[2019] EWCA Civ 12\t', '[2020] UKSC 1\t'])
     const tail = mainParagraphs(reparsedTwice).find(
       (paragraph) =>
         paragraph.runs.map((run) => run.text).join('') ===

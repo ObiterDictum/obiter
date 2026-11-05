@@ -414,7 +414,7 @@ describe('composing run text replacement with range emphasis', () => {
 
   it('preserves structural children on a replaced run', async () => {
     const document = await load(
-      '<w:p><w:r><w:tab/><w:drawing/><w:t>hi</w:t></w:r></w:p>',
+      '<w:p><w:r><w:noBreakHyphen/><w:drawing/><w:t>hi</w:t></w:r></w:p>',
     )
     const paragraph = paragraphs(document)[0]
     const run = paragraph?.runs[0]
@@ -432,7 +432,7 @@ describe('composing run text replacement with range emphasis', () => {
     ])
 
     const xml = await documentXml(document)
-    expect(xml.match(/<w:tab\/>/gu)).toHaveLength(1)
+    expect(xml.match(/<w:noBreakHyphen\/>/gu)).toHaveLength(1)
     expect(xml.match(/<w:drawing\/>/gu)).toHaveLength(1)
     const reparsed = await save(document)
     const runs = paragraphs(reparsed)[0]?.runs ?? []

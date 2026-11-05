@@ -29,6 +29,10 @@ import { revealTypingLine } from './paragraph-reveal'
 export { revealTypingLine } from './paragraph-reveal'
 
 export type { ParagraphSelectionBinding, ParagraphSelectionHandlers }
+function insideTableCell(node: HTMLElement) {
+  return node.closest('[data-table-cell]') !== null
+}
+
 export function ParagraphEditor({
   paragraphId,
   text,
@@ -52,6 +56,7 @@ export function ParagraphEditor({
   onDelete,
   onEnter,
   onLineBreak,
+  onInsertTab,
 }: {
   paragraphId: string
   text: string
@@ -79,6 +84,7 @@ export function ParagraphEditor({
   onDelete: (offset: number) => void
   onEnter: (offset: number) => void
   onLineBreak: (offset: number) => void
+  onInsertTab: (from: number, to: number) => void
 }) {
   const editable = (at: number) => projection?.toEditable(at) ?? at
   const display = (at: number) => projection?.toDisplay(at) ?? at
@@ -222,6 +228,13 @@ export function ParagraphEditor({
           })
         )
           return
+        if (event.key === 'Tab' && !insideTableCell(node)) {
+          event.preventDefault()
+          if (event.shiftKey) return
+          if (selection?.active) selection.onReplaceRange('\t')
+          else onInsertTab(start, end)
+          return
+        }
         if (event.key === 'Escape') {
           if (selection?.active) {
             event.preventDefault()

@@ -114,6 +114,29 @@ function onOff(element: XmlElement) {
     : !['false', '0', 'off'].includes(value.toLowerCase())
 }
 
+export function readDefaultTabStop(source: {
+  model: Pick<OoxmlDocument['model'], 'relationships'>
+  sourceParts: ReadonlyMap<string, SourcePart>
+}) {
+  const part = settingsPart(source.model.relationships, source.sourceParts)
+  if (!part) return undefined
+  try {
+    const elements = parseXmlElements(decoder.decode(part.originalPayload))
+    const stop = elements.find(
+      (element) =>
+        element.namespaceUri === WORD_NAMESPACE &&
+        element.localName === 'defaultTabStop',
+    )
+    if (!stop) return undefined
+    const value = attributeValue(stop, WORD_NAMESPACE, 'val')
+    if (value === undefined || !/^\d+$/u.test(value)) return undefined
+    const twips = Number(value)
+    return twips > 0 ? twips : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function readTrackRevisions(source: {
   model: Pick<OoxmlDocument['model'], 'relationships'>
   sourceParts: ReadonlyMap<string, SourcePart>
