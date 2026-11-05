@@ -34,7 +34,10 @@ export function accessRequestFailure(cause: unknown): AccessRequestFailure {
       case 'rate_limited':
         return { field: 'form', message: RATE_LIMITED_MESSAGE }
       case 'invalid_request':
-        return { field: 'form', message: INVALID_REQUEST_MESSAGE }
+        return {
+          field: 'form',
+          message: cause.message || INVALID_REQUEST_MESSAGE,
+        }
       default:
         return { field: 'form', message: cause.message }
     }
