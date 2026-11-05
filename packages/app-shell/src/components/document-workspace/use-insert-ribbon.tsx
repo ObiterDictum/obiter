@@ -56,8 +56,15 @@ export function useInsertRibbon(
 ): InsertRibbonProps {
   const pictureInput = useRef<HTMLInputElement>(null)
   const cellParagraphIds = useMemo(
-    () => storyTableCellIds(model ? documentStory(model) : undefined),
-    [model],
+    () =>
+      storyTableCellIds(
+        painted
+          ? documentStory(painted)
+          : model
+            ? documentStory(model)
+            : undefined,
+      ),
+    [painted, model],
   )
   const paragraphId = (caret.kind === 'caret' && caret.paragraphId) || null
   const selectionActive = caret.kind === 'selection'

@@ -161,3 +161,144 @@ for (const type of [
     unmount()
   })
 }
+import { planDocumentSave } from './document-save-plan'
+
+function required<T>(value: T | undefined | null): T {
+  if (value === undefined || value === null)
+    throw new Error('Missing fixture value')
+  return value
+}
+
+it('saves a composed row insertion column insertion and second table deletion through validation and apply', async () => {
+  const doc = await fixture()
+  const tables = storyTables(required(doc.model.stories[0]))
+  const first = required(required(tables[0]).paragraphIds[0])
+  const second = required(required(tables[1]).paragraphIds[0])
+  const operations: TableStructureOperation[] = [
+    { type: 'insert_table_row', paragraphId: first, position: 'after' },
+    { type: 'insert_table_column', paragraphId: first, position: 'after' },
+    { type: 'delete_table', paragraphId: second },
+  ]
+  const state = emptyDraftState()
+  state.structures = operations.map((operation, i) => ({
+    id: String(i),
+    kind: 'table-structure',
+    paragraphId: operation.paragraphId,
+    operation,
+  }))
+  const plan = planDocumentSave(doc.model, state)
+  expect(plan.blocked).toEqual([])
+  expect(plan.operations).toHaveLength(3)
+  applyDocumentEdits(doc, plan.operations)
+  const saved = await parseDocx(await serialiseDocx(doc))
+  expect(storyTables(required(saved.model.stories[0]))).toHaveLength(1)
+  expect(
+    required(storyTables(required(saved.model.stories[0]))[0]).rows,
+  ).toHaveLength(3)
+})
+
+import { useInsertRibbon } from './components/document-workspace/use-insert-ribbon'
+import { fireEvent, render, cleanup } from '@testing-library/react'
+import { TableStructureSurface } from './components/document-workspace/table-structure-surface'
+
+it('deletes a pending row through the insert ribbon command', async () => {
+  const doc = await fixture()
+  const paragraphId = required(
+    required(storyTables(required(doc.model.stories[0])).at(0)).paragraphIds[0],
+  )
+  let structures: DraftState['structures'] = [
+    {
+      id: 'insert',
+      kind: 'table-structure',
+      paragraphId,
+      operation: { type: 'insert_table_row', paragraphId, position: 'after' },
+    },
+  ]
+  const painted = withStructuralDrafts(doc.model, structures)
+  const target = required(
+    required(painted.stories[0]).paragraphs.find(
+      (p) =>
+        !required(doc.model.stories[0]).paragraphs.some(
+          (old) => old.id === p.id,
+        ),
+    ),
+  )
+  const state = emptyDraftState()
+  const { result, unmount } = renderHook(() =>
+    useInsertRibbon(
+      doc.model,
+      painted,
+      { kind: 'caret', paragraphId: target.id },
+      0,
+      false,
+      { editingKind: 'document', onOpen: () => {}, onClose: () => {} },
+      {
+        ...state,
+        deletedParagraphIds: new Set<string>(),
+        structures,
+        setBreaks: () => {},
+        setStructures: (update) => {
+          structures = update(structures)
+        },
+      },
+      { occurrences: [], entries: [], citingWires: [], fields: new Map() },
+      (message) => {
+        throw new Error(message)
+      },
+    ),
+  )
+  act(() =>
+    result.current.structure.onTableStructure?.({
+      type: 'delete_table_row',
+      paragraphId: target.id,
+    }),
+  )
+  expect(structures).toHaveLength(2)
+  expect(
+    required(
+      storyTables(
+        required(withStructuralDrafts(doc.model, structures).stories[0]),
+      )[0],
+    ).rows,
+  ).toHaveLength(2)
+  unmount()
+})
+
+it('Tab activates the first paragraph of the appended row', async () => {
+  const view = render(
+    createElement(TableStructureSurface, {
+      onChange: () => {
+        const row = document.createElement('tr')
+        row.innerHTML =
+          '<td><div data-paragraph-id="new" tabindex="0"></div></td>'
+        row.querySelector('div')?.addEventListener('click', (event) => {
+          ;(event.currentTarget as HTMLElement).focus()
+        })
+        view.container.querySelector('tbody')?.append(row)
+      },
+      children: createElement(
+        'table',
+        null,
+        createElement(
+          'tbody',
+          null,
+          createElement(
+            'tr',
+            null,
+            createElement(
+              'td',
+              null,
+              createElement('textarea', { 'data-paragraph-id': 'old' }),
+            ),
+          ),
+        ),
+      ),
+    }),
+  )
+  const old = required(view.container.querySelector('textarea'))
+  old.focus()
+  fireEvent.keyDown(old, { key: 'Tab' })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(document.activeElement?.getAttribute('data-paragraph-id')).toBe('new')
+  cleanup()
+})

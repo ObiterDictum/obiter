@@ -66,9 +66,9 @@ export function TableStructureSurface({
         requestAnimationFrame(() => {
           const rows = table.querySelectorAll('tr')
           const first = rows[rows.length - 1]?.querySelector<HTMLElement>(
-            '[contenteditable="true"],textarea,input',
+            '[data-paragraph-id]',
           )
-          first?.focus()
+          first?.click()
         })
       }}
     >

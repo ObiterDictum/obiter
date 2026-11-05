@@ -81,7 +81,7 @@ function structuralDraftConflict(
   later: StructuralPlacement,
 ): boolean {
   if (earlier.kind === 'table-structure' || later.kind === 'table-structure')
-    return true
+    return earlier.kind !== later.kind
   if (
     earlier.kind === 'table-of-authorities-refresh' ||
     later.kind === 'table-of-authorities-refresh'
@@ -153,6 +153,8 @@ export function conflictingStructure(
 
 export function structuralKindNoun(kind: StructuralPlacement['kind']) {
   switch (kind) {
+    case 'table-structure':
+      return 'table change'
     case 'table':
       return 'table'
     case 'image':
