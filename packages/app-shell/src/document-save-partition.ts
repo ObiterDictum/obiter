@@ -37,6 +37,7 @@ export type SavePartition = {
 export function partitionDraftState(
   model: DocumentModelWire,
   state: DraftState,
+  trackChanges = false,
 ): SavePartition {
   const editable = editableStories(model)
   const paragraphs = new Map(
@@ -240,6 +241,7 @@ export function partitionDraftState(
     covered,
     blocked,
     blockedStructureReasons,
+    trackChanges,
   })
 
   for (const deferred of deferredNoteRuns) {

@@ -34,6 +34,7 @@ import {
 const STRUCTURE_KIND_REMOVABLE = {
   table: false,
   image: false,
+  'image-size': true,
   link: true,
   'cross-reference': false,
   'page-number': false,

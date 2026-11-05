@@ -33,10 +33,12 @@ export type SavePlan = {
 export function planDocumentSave(
   model: DocumentModelWire,
   state: DraftState,
+  trackChanges?: boolean,
 ): SavePlan {
   const { keep, covered, blocked, pending, rejections } = partitionDraftState(
     model,
     state,
+    trackChanges,
   )
   return {
     operations: collectEditOperations(

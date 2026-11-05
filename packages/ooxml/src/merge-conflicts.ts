@@ -110,6 +110,12 @@ export function operationConflicts(
       changes.paragraphOpaque.has(operation.paragraphId)
     )
   }
+  if (operation.type === 'set_image_size') {
+    return (
+      !changes.runIds.has(operation.runId) ||
+      changes.runOpaque.has(operation.runId)
+    )
+  }
   if (operation.type === 'set_section_properties') return false
   if (operation.type === 'set_run_emphasis') {
     if (operation.runId !== undefined) {

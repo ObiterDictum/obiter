@@ -83,6 +83,7 @@ function modelParagraphPropsEqual(
     prev.noteKind === next.noteKind &&
     prev.story === next.story &&
     prev.linkOverlay === next.linkOverlay &&
+    prev.picture === next.picture &&
     prev.onSelectParagraph === next.onSelectParagraph &&
     prev.onRunTextChange === next.onRunTextChange &&
     prev.onInsertParagraph === next.onInsertParagraph &&

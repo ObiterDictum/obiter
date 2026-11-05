@@ -29,7 +29,7 @@ import {
   paragraphPlainText,
   sliceContainsOffset,
 } from '../../document-model-text'
-import { paragraphInlineXml } from '../../document-page-floats'
+import { paragraphInlinePictures } from '../../document-page-floats'
 import { firstLineIndentPx, wrapLines } from '../../document-page-flow'
 import type { ListMarker } from '../../document-page-lists'
 import { imagePartNameForDrawing } from '../../document-page-media'
@@ -41,6 +41,7 @@ import {
 } from '../../document-page-style'
 import { toModelEndpoint } from '../../document-selection'
 import { PageDrawing } from './page-drawing'
+import { PictureFrame, type PictureInteraction } from './picture-frame'
 import type {
   ParagraphNeighborResolver,
   VerticalCaretColumn,
@@ -99,6 +100,7 @@ export function ModelParagraphInner({
   noteKind,
   story,
   linkOverlay,
+  picture,
 }: {
   paragraph: DocumentParagraphWire
   pendingChanges?: PendingInlineChange[]
@@ -147,6 +149,7 @@ export function ModelParagraphInner({
   noteKind?: NoteKind
   story?: { kind: string; partName: string }
   linkOverlay?: ParagraphLinkOverlay
+  picture?: PictureInteraction
 }) {
   const carets = (presence ?? []).filter(
     (item) =>
@@ -202,7 +205,7 @@ export function ModelParagraphInner({
     ? inlineSlice(projection, displayStart, displayEnd)
     : undefined
   const linePx = paragraphLineHeightPx(face)
-  const images = continuation ? [] : paragraphInlineXml(paragraph)
+  const pictures = continuation ? [] : paragraphInlinePictures(paragraph)
   const ownsBreak = end < fullText.length && fullText[end] === '\n'
   const restore =
     restoreCaret?.paragraphId === paragraph.id &&
@@ -349,17 +352,29 @@ export function ModelParagraphInner({
         paddingRight: (face.indentRightPx ?? 0) + padRightPx,
       }}
     >
-      {images.map((xml, index) => {
+      {pictures.map(({ xml, runId }, index) => {
         const partName = imagePartNameForDrawing(
           xml,
           storyPartName,
           relationships,
         )
-        return (
+        const imageUrl = partName ? imageUrls[partName] : undefined
+        return runId && picture ? (
+          <PictureFrame
+            key={`${paragraph.id}-img-${index}`}
+            xml={xml}
+            imageUrl={imageUrl}
+            fallbackLabel="Document image"
+            paragraphId={paragraph.id}
+            runId={runId}
+            columnWidthPx={wrapWidthPx ?? 0}
+            interaction={picture}
+          />
+        ) : (
           <PageDrawing
             key={`${paragraph.id}-img-${index}`}
             xml={xml}
-            imageUrl={partName ? imageUrls[partName] : undefined}
+            imageUrl={imageUrl}
             fallbackLabel="Document image"
           />
         )

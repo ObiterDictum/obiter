@@ -1,6 +1,13 @@
-import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
+import {
+  OoxmlError,
+  type OoxmlDocument,
+  type ParagraphAnchor,
+  type TextRunAnchor,
+} from './model'
 import type { LineageRecorder } from './document-lineage'
 import { requireEditablePart } from './model-edit-overlay'
+import { effectiveRunView } from './run-effective'
+import { setOverlayReplacement } from './parts/overlay'
 import { allocateModelId } from './model-paragraph-edits'
 import {
   addMediaPart,
@@ -9,7 +16,11 @@ import {
   relationshipsPartName,
 } from './structure-package'
 import { spliceInlineXml, spliceRunWires } from './structure-splice'
-import { buildInlineDrawingXml, IMAGE_RELATIONSHIP_TYPE } from './structure-xml'
+import {
+  buildInlineDrawingXml,
+  IMAGE_RELATIONSHIP_TYPE,
+  setDrawingExtent,
+} from './structure-xml'
 
 export function insertImage(
   document: OoxmlDocument,
@@ -77,6 +88,50 @@ export function insertImage(
       { fromRunId: null, fromOffset: 0, toOffset: 0 },
     ])
   }
+}
+
+export function setImageSize(
+  document: OoxmlDocument,
+  paragraph: ParagraphAnchor,
+  run: TextRunAnchor,
+  size: { widthPx: number; heightPx: number },
+  occurrence: number,
+) {
+  const part = requireEditablePart(document, paragraph.partName)
+  if (paragraph.hasTrackedChanges) {
+    throw new OoxmlError('model-node-not-editable')
+  }
+  const index = run.wire.preservedXmlFragments.findIndex((fragment) =>
+    /<w:drawing\b/i.test(fragment),
+  )
+  const drawing = run.wire.preservedXmlFragments[index]
+  if (index < 0 || drawing === undefined) {
+    throw new OoxmlError('invalid-document-edit')
+  }
+  const resized = setDrawingExtent(drawing, size)
+  if (!resized) throw new OoxmlError('model-node-not-editable')
+  const view = effectiveRunView(part.overlay, run, paragraph)
+  const at = view.source.indexOf(drawing)
+  if (at < 0 || view.source.indexOf(drawing, at + drawing.length) !== -1) {
+    throw new OoxmlError('invalid-document-edit')
+  }
+  for (const key of view.consumedKeys) part.overlay.replacements.delete(key)
+  setOverlayReplacement(
+    part.overlay,
+    `${run.wire.id}:image-size:${String(occurrence)}`,
+    {
+      start: run.runRange.start,
+      end: run.runRange.end,
+      value:
+        view.source.slice(0, at) +
+        resized +
+        view.source.slice(at + drawing.length),
+    },
+  )
+  const fragments = [...run.wire.preservedXmlFragments]
+  fragments[index] = resized
+  run.wire.preservedXmlFragments = fragments
+  part.dirty = true
 }
 
 function decodeBase64(value: string) {
