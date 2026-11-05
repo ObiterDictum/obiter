@@ -6,6 +6,11 @@ import {
   DOCUMENT_EDIT_TABLE_MAX_COLUMNS,
   DOCUMENT_EDIT_TABLE_MAX_ROWS,
   documentEditHyperlinkTargetSchema,
+  insertTableRowOperationSchema,
+  insertTableColumnOperationSchema,
+  deleteTableRowOperationSchema,
+  deleteTableColumnOperationSchema,
+  deleteTableOperationSchema,
   documentEditImageContentTypeSchema,
   type DocumentEditImageContentType,
   type DocumentEditOperation,
@@ -96,7 +101,15 @@ export function footnoteNoteParagraphId(draft: { id: string }) {
   return `${draft.id}:note`
 }
 
+type TableStructureDraft = {
+  id: string
+  kind: 'table-structure'
+  paragraphId: string
+  operation: import('@obiter/ooxml').TableStructureOperation
+}
+
 export type StructuralDraft =
+  | TableStructureDraft
   | StructuralTableDraft
   | StructuralImageDraft
   | StructuralLinkDraft
@@ -109,6 +122,20 @@ export type StructuralDraft =
   | StructuralDefinedTermDraft
 
 export const structuralDraftSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('table-structure'),
+      paragraphId: z.string().min(1),
+      operation: z.union([
+        insertTableRowOperationSchema,
+        insertTableColumnOperationSchema,
+        deleteTableRowOperationSchema,
+        deleteTableColumnOperationSchema,
+        deleteTableOperationSchema,
+      ]),
+    })
+    .strict(),
   z
     .object({
       id: z.string().min(1),
@@ -227,6 +254,10 @@ export function structuralEditOperations(
   const operations: DocumentEditOperation[] = []
   for (const structure of structures) {
     if (deletedIds.has(structure.paragraphId)) continue
+    if (structure.kind === 'table-structure') {
+      operations.push(structure.operation)
+      continue
+    }
     if (structure.kind === 'table') {
       operations.push({
         type: 'insert_table',

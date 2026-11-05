@@ -16,6 +16,11 @@ import {
   insertTableOfContentsOperationSchema,
   updateTableOfAuthoritiesOperationSchema,
   insertTableOperationSchema,
+  insertTableRowOperationSchema,
+  insertTableColumnOperationSchema,
+  deleteTableRowOperationSchema,
+  deleteTableColumnOperationSchema,
+  deleteTableOperationSchema,
   markDefinedTermOperationSchema,
   setHyperlinkOperationSchema,
 } from './document-edit-structural'
@@ -444,6 +449,12 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
     })
     .strict(),
   insertTableOperationSchema,
+  insertTableRowOperationSchema,
+  insertTableColumnOperationSchema,
+  deleteTableRowOperationSchema,
+  deleteTableColumnOperationSchema,
+  deleteTableOperationSchema,
+
   insertImageOperationSchema,
   setHyperlinkOperationSchema,
   insertCrossReferenceOperationSchema,

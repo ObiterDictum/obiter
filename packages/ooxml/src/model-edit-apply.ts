@@ -1,3 +1,4 @@
+import { editTableStructure } from './table-structure-edits'
 import {
   insertParagraphRuns,
   type DocumentParagraphWire,
@@ -262,6 +263,15 @@ export function applyPlannedOperation(
   } else if (operation.type === 'insert_section_break') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) insertSectionBreak(document, operation.paragraph)
+  } else if (
+    operation.type === 'insert_table_row' ||
+    operation.type === 'insert_table_column' ||
+    operation.type === 'delete_table_row' ||
+    operation.type === 'delete_table_column' ||
+    operation.type === 'delete_table'
+  ) {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    editTableStructure(document, operation.paragraph, operation)
   } else if (operation.type === 'insert_table') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {

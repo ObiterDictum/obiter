@@ -7,6 +7,7 @@ import type { StructuralDraft } from './document-structural-drafts'
 type ParagraphRunSpan = { start: number; end: number }
 
 export type StructuralPlacement =
+  | { kind: 'table-structure'; paragraphId: string }
   | { kind: 'table'; paragraphId: string }
   | { kind: 'image'; paragraphId: string; offset: number }
   | {
@@ -79,6 +80,8 @@ function structuralDraftConflict(
   earlier: StructuralPlacement,
   later: StructuralPlacement,
 ): boolean {
+  if (earlier.kind === 'table-structure' || later.kind === 'table-structure')
+    return true
   if (
     earlier.kind === 'table-of-authorities-refresh' ||
     later.kind === 'table-of-authorities-refresh'

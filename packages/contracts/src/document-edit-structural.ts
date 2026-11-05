@@ -242,3 +242,27 @@ export const updateTableOfAuthoritiesOperationSchema = z
 export type DocumentEditUpdateTableOfAuthoritiesOperation = z.infer<
   typeof updateTableOfAuthoritiesOperationSchema
 >
+
+export const insertTableRowOperationSchema = z
+  .object({
+    type: z.literal('insert_table_row'),
+    paragraphId: editIdSchema,
+    position: z.enum(['before', 'after']),
+  })
+  .strict()
+export const insertTableColumnOperationSchema = z
+  .object({
+    type: z.literal('insert_table_column'),
+    paragraphId: editIdSchema,
+    position: z.enum(['before', 'after']),
+  })
+  .strict()
+export const deleteTableRowOperationSchema = z
+  .object({ type: z.literal('delete_table_row'), paragraphId: editIdSchema })
+  .strict()
+export const deleteTableColumnOperationSchema = z
+  .object({ type: z.literal('delete_table_column'), paragraphId: editIdSchema })
+  .strict()
+export const deleteTableOperationSchema = z
+  .object({ type: z.literal('delete_table'), paragraphId: editIdSchema })
+  .strict()

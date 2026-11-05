@@ -92,6 +92,10 @@ export type DocumentClipboardToolbar = {
 }
 
 export type DocumentStructureToolbar = {
+  tableStructureUnavailable?: string
+  onTableStructure?: (
+    operation: import('@obiter/ooxml').TableStructureOperation,
+  ) => void
   tableUnavailable?: string
   pictureUnavailable?: string
   linkUnavailable?: string
