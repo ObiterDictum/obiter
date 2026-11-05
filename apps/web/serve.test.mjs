@@ -374,3 +374,50 @@ test('serves the build marker only when the handler is given one', async () => {
     await new Promise((resolve) => server.close(resolve))
   }
 })
+
+test('the running build id is public, uncached and only the commit', async (t) => {
+  const handler = createRequestHandler(
+    () =>
+      new Response('<!doctype html>', {
+        status: 404,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      }),
+    { buildVersion: 'abc1234' },
+  )
+  const server = createServer(handler)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const origin = `http://127.0.0.1:${server.address().port}`
+
+  try {
+    await t.test('answers with the build id and no-store', async () => {
+      const res = await fetch(`${origin}/.well-known/obiter-version`)
+      assert.equal(res.status, 200)
+      assert.equal(res.headers.get('content-type'), 'application/json')
+      assert.equal(res.headers.get('cache-control'), 'no-store')
+      assert.deepEqual(await res.json(), { build: 'abc1234' })
+    })
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('a server without a build id leaves the version path to the app', async () => {
+  const handler = createRequestHandler(
+    () =>
+      new Response('not found', {
+        status: 404,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    {},
+  )
+  const server = createServer(handler)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const origin = `http://127.0.0.1:${server.address().port}`
+
+  try {
+    const res = await fetch(`${origin}/.well-known/obiter-version`)
+    assert.equal(res.status, 404)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})

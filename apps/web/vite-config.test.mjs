@@ -102,3 +102,30 @@ test('keeps the shared dev default on the shared web port', async () => {
   assert.equal(resolved.server.proxy['/api'].target, 'http://localhost:8787')
   assert.equal(definedOrigin(resolved), 'http://localhost:8787')
 })
+
+test('a production build carries the commit its build marker records', async () => {
+  const saved = {
+    commit: process.env.OBITER_BUILD_COMMIT,
+    nodeEnv: process.env.NODE_ENV,
+  }
+  process.env.OBITER_BUILD_COMMIT = 'abc1234'
+  process.env.NODE_ENV = 'production'
+  try {
+    const resolved = await resolveConfig(
+      { configFile: CONFIG_FILE, logLevel: 'silent' },
+      'build',
+      'production',
+    )
+    assert.equal(resolved.define.__OBITER_BUILD_COMMIT__, '"abc1234"')
+  } finally {
+    if (saved.commit === undefined) delete process.env.OBITER_BUILD_COMMIT
+    else process.env.OBITER_BUILD_COMMIT = saved.commit
+    if (saved.nodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = saved.nodeEnv
+  }
+})
+
+test('the dev server carries no build id, so open tabs never poll for one', async () => {
+  const resolved = await resolveDevConfig({ port: 3000 })
+  assert.equal(resolved.define.__OBITER_BUILD_COMMIT__, 'null')
+})

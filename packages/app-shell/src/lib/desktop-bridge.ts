@@ -8,6 +8,8 @@ export interface DesktopBridge {
   getAuthToken(): Promise<string | null>
   setAuthToken(token: string): Promise<void>
   clearAuthToken(): Promise<void>
+  onUpdateReady(listener: () => void): () => void
+  restartToUpdate(): Promise<void>
 }
 
 export function readDesktopBridge(): DesktopBridge | undefined {

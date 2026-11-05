@@ -12,6 +12,7 @@ export default defineConfig({
     define: {
       __PACKAGED_API_ORIGIN_DEFAULT__: PACKAGED_API_ORIGIN_DEFAULT,
     },
+    build: { minify: true },
     plugins: [externalizeDepsPlugin()],
   },
   preload: {

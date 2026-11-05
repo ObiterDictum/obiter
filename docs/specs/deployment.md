@@ -105,6 +105,8 @@ Artifacts shipped:
   - `BETTER_AUTH_URL` — consumed by the auth client (same-domain ⇒ site origin).
   - `OBITER_BUILD_PROVENANCE` — set to `1` to expose the build marker at `GET /.well-known/obiter-build`; unset (the production default) that path falls through to SSR.
 
+  `GET /.well-known/obiter-version` is always routed when the marker names a commit and answers `{"build":"<commit>"}` with `Cache-Control: no-store`. It is the new-version prompt's feed, described below.
+
   The gzip cache is keyed by path plus file size and mtime and bounded to 128 entries, so a changed file never serves stale compressed bytes. Importing `serve.mjs` never starts a server; only running it directly does, using a `pathToFileURL` comparison that is also correct on Windows.
 
 - `apps/web/serve.test.mjs` — focused unit tests (Node's built-in `node:test` runner, no new dependency) for the pure helpers: `parsePort` (range/format), `resolveBaseUrl` (trusted-origin vs Host), and `applyResponseHeaders` (multiple Set-Cookie preservation, status line).
@@ -297,3 +299,12 @@ The server database does **not** replace the local loop:
 - Agents develop against local Postgres (`infra/docker/compose.yaml`, shell track M1 task) — never against the server DB. An agent running migrations or seeds against the live database is the failure mode this rule exists to prevent.
 - Verification ladder: local run → typecheck/tests → **staging deploy on Dokploy** → milestone review. The Dokploy deploy is the integration proof (real domain, real cookies, real DB), not the development environment.
 - If a local environment cannot run Docker, the fallback is what the shell agent proposed: build, run typecheck/tests, and hand over exact `docker compose up` / `bun run dev:api` / `bun run dev:web` steps labelled unverified.
+
+## New-version prompt (web)
+
+After a deploy, open tabs keep running the bundle they loaded. The production build bakes the same commit its marker records into the client as `__OBITER_BUILD_COMMIT__` (`apps/web/vite.config.ts`, from `buildIdentity` in `build-provenance.mjs`), and `serve.mjs` serves the running commit at `/.well-known/obiter-version`. The shell (`packages/app-shell/src/build-version.ts`) asks that route every 5 minutes while the tab is visible and whenever the window regains focus. When the served commit differs from the one the page loaded, it stops polling and shows "A new version of Obiter is available." with Reload and Later. It never reloads by itself, because a person may be editing.
+
+- A failed request, an error status or an unreadable body is silent: the next poll tries again.
+- The dev server defines the commit as `null`, so a dev tab never polls.
+- An image built without `OBITER_BUILD_COMMIT` has no commit, so it serves no version route and its tabs never prompt. Dokploy must pass the build arg for the prompt to work.
+- The polling hook uses `useEffect` because it syncs with timers and the window focus event, which RULES.md allows.

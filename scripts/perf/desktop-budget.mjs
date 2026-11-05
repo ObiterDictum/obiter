@@ -11,7 +11,7 @@ export const BUDGETS = {
   largestLazyChunkBytes: 560_000,
   workerPayloadBytes: 1_150_000,
   productAssetsBytes: 790_000,
-  mainBundleBytes: 12_000,
+  mainBundleBytes: 380_000,
   preloadBundleBytes: 2_000,
   applicationPayloadBytes: 4_249_000,
 }

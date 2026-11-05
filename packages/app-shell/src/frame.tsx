@@ -33,6 +33,7 @@ import {
   useStoredText,
 } from './shell-preferences'
 import { useShellShortcuts } from './shell-shortcuts'
+import { AppUpdateNotice } from './update-notice'
 import { useMediaQuery } from './use-media-query'
 
 const ContentsPanelLazy = lazy(() =>
@@ -57,9 +58,11 @@ const BOTTOM_BAR_QUERY = '(max-width: 767px)'
 export function AppShellLayout({
   children,
   platform,
+  loadedBuild = null,
 }: {
   children: ReactNode
   platform: AppPlatform
+  loadedBuild?: string | null
 }) {
   const { session, isPending } = useAuth()
   const currentPath = useRouterState({
@@ -92,6 +95,7 @@ export function AppShellLayout({
   return (
     <ToastProvider>
       {body}
+      <AppUpdateNotice platform={platform} loadedBuild={loadedBuild} />
       <Toaster />
     </ToastProvider>
   )

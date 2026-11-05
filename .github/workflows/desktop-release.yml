@@ -38,7 +38,10 @@ jobs:
         with:
           name: obiter-windows-installer
           # electron-builder output (electron-builder.yml directories.output).
-          path: apps/desktop/release/Obiter Setup *.exe
+          path: |
+            apps/desktop/release/Obiter-Setup-*.exe
+            apps/desktop/release/Obiter-Setup-*.exe.blockmap
+            apps/desktop/release/latest.yml
           if-no-files-found: error
           retention-days: 30
 
@@ -53,7 +56,10 @@ jobs:
             echo "$tag is already published; bump apps/desktop/package.json to publish a new release."
             exit 0
           fi
-          gh release create "$tag" "apps/desktop/release/Obiter Setup $version.exe" \
+          gh release create "$tag" \
+            "apps/desktop/release/Obiter-Setup-$version.exe" \
+            "apps/desktop/release/Obiter-Setup-$version.exe.blockmap" \
+            apps/desktop/release/latest.yml \
             --target "$GITHUB_SHA" \
             --title "Obiter desktop $version" \
             --latest \
