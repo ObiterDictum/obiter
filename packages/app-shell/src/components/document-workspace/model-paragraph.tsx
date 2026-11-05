@@ -152,8 +152,21 @@ export function ModelParagraphInner({
       item.cursor?.paragraphId === paragraph.id,
   )
   const face = useMemo(
-    () => paragraphFace(paragraph, styles),
-    [paragraph.preservedXmlFragments, paragraph.styleId, styles],
+    () =>
+      paragraphFace(
+        paragraph,
+        styles,
+        noteKind !== undefined ||
+          story?.kind === 'footnotes' ||
+          story?.kind === 'endnotes',
+      ),
+    [
+      paragraph.preservedXmlFragments,
+      paragraph.styleId,
+      styles,
+      noteKind,
+      story?.kind,
+    ],
   )
   const bucket = useMemo(
     () =>
@@ -376,7 +389,7 @@ export function ModelParagraphInner({
           </span>
         ) : noteMark && !continuation ? (
           <span
-            className="shrink-0 pr-1 text-[0.75em] leading-none"
+            className="relative -top-[0.5em] shrink-0 pr-1 align-baseline text-[0.65em] leading-none"
             aria-label={
               noteKind === 'endnote'
                 ? `Endnote ${noteMark}`

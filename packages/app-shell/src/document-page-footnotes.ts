@@ -186,7 +186,7 @@ export function layoutFootnotes(
     )
     const frame = {
       ...base,
-      heightPx: Math.max(1, base.heightPx - 2 * bodyLinePx - 12),
+      heightPx: Math.max(1, base.heightPx - 2 * bodyLinePx - 17),
     }
     frames.set(index, frame)
     return frame
@@ -222,7 +222,7 @@ export function layoutFootnotes(
   }
   const save = () => {
     if (!session || session.page.blocks.length === 0) return
-    result[notePage] = { blocks: session.page.blocks, heightPx: session.y + 12 }
+    result[notePage] = { blocks: session.page.blocks, heightPx: session.y + 17 }
   }
   const advance = () => {
     save()

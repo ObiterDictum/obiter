@@ -88,6 +88,7 @@ export function documentDefaultFace(styles: DocumentStyleWire[]): RunFace {
 export function paragraphFace(
   paragraph: DocumentParagraphWire,
   styles: DocumentStyleWire[],
+  note = false,
 ): ParagraphFace {
   const chain = styleChain(styles, paragraph.styleId)
   const merged = mergeParagraph(
@@ -96,6 +97,7 @@ export function paragraphFace(
   )
   return {
     ...merged,
+    lineHeight: merged.lineHeight ?? (note ? '1' : undefined),
     marginTopPx: merged.marginTopPx ?? 0,
     marginBottomPx: merged.marginBottomPx ?? 0,
     keepNext: merged.keepNext ?? false,
@@ -103,7 +105,8 @@ export function paragraphFace(
     widowControl: merged.widowControl ?? true,
     run: {
       fontFamily: merged.run.fontFamily ?? DEFAULT_FONT,
-      fontSizePx: merged.run.fontSizePx ?? DEFAULT_SIZE_PX,
+      fontSizePx:
+        merged.run.fontSizePx ?? (note ? halfPointToPx(20) : DEFAULT_SIZE_PX),
       ...omitUndefined(merged.run),
     },
   }

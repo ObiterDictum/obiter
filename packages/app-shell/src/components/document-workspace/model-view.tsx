@@ -414,8 +414,10 @@ function ModelPage({
                 ? 'continuation'
                 : 'separator'
             }
-            className="mb-1 h-px shrink-0 bg-current"
+            className="shrink-0 bg-current"
             style={{
+              height: 1,
+              marginBottom: 4,
               width: footnoteContinues(pageLayout.footnotes.blocks)
                 ? '100%'
                 : Math.min(FOOTNOTE_SEPARATOR_PX, frame.widthPx),

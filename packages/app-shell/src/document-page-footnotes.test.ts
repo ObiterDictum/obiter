@@ -195,3 +195,10 @@ it('keeps web-flow footnotes in the continuous document rather than a page-botto
     ),
   ).toBe(true)
 })
+
+it('reserves twelve pixels above the separator plus its pixel and a four pixel note gap', async () => {
+  const model = await noteModel()
+  const band = layoutDocument(model).find((page) => page.footnotes)?.footnotes
+  expect(band).toBeDefined()
+  expect(band?.heightPx).toBeCloseTo(40 / 3 + 17)
+})

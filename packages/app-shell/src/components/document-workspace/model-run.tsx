@@ -263,7 +263,11 @@ function ModelRun({
         kinds.has('property') &&
           'underline decoration-dotted decoration-[#8a6a2a]',
       )}
-      style={runCss({ ...face, color })}
+      style={runCss({
+        ...face,
+        color,
+        ...(notes.length ? { vertAlign: 'baseline' as const } : {}),
+      })}
     >
       {caret ? <PresenceCaret userId={caret.userId} /> : null}
       {rangedParts(
@@ -278,7 +282,7 @@ function ModelRun({
         <sup
           key={`${note.kind}-${note.noteId}-${note.runId}`}
           data-note-mark
-          className="relative -top-[0.5em] align-baseline text-[0.75em] leading-none"
+          className="relative -top-[0.5em] align-baseline text-[0.65em] leading-none"
         >
           {numbers.get(noteNumberKey(note.kind, note.noteId)) ?? note.mark}
         </sup>

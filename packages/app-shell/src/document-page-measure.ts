@@ -117,7 +117,11 @@ export function paragraphMeasure(
     partName,
     pendingParagraphChanges(pendingRedlines, paragraph.id, partName),
   )
-  const face = paragraphFace(paragraph, model.styles)
+  const face = paragraphFace(
+    paragraph,
+    model.styles,
+    partName === 'word/footnotes.xml' || partName === 'word/endnotes.xml',
+  )
   const linePx = paragraphLineHeightPx(face)
   const list = paragraphListIndent(paragraph, model)
   const measure: ParagraphMeasure = {

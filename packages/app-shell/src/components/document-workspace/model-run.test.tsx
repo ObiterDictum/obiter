@@ -206,6 +206,12 @@ it('keeps pending text formatting, selection and source run decorations', () => 
     '45,000',
   )
   expect(container.querySelectorAll('[data-note-mark]')).toHaveLength(1)
+  expect(container.querySelector('[data-note-mark]')?.className).toContain(
+    'text-[0.65em]',
+  )
+  expect(container.querySelector('[data-note-mark]')?.className).toContain(
+    '-top-[0.5em]',
+  )
   expect(formatted?.className).toContain('decoration-dotted')
 })
 
