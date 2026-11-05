@@ -12,6 +12,10 @@ import {
 import { cleanup, render, screen } from '@testing-library/react'
 import { SignUpRedirectView } from './sign-up-redirect'
 
+function SignInPage() {
+  return <p>Sign in page</p>
+}
+
 function RequestAccessPage() {
   return <p>Request access page</p>
 }
@@ -22,17 +26,22 @@ function AcceptInvitePage() {
   return <p>Invite token {search.token ?? 'none'}</p>
 }
 
-function renderSignUp(entry: string) {
+function renderSignUp(entry: string, platform: 'web' | 'desktop' = 'web') {
   const rootRoute = createRootRoute()
   const signUpRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/sign-up',
-    component: SignUpRedirectView,
+    component: () => <SignUpRedirectView platform={platform} />,
   })
   const requestAccessRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/request-access',
     component: RequestAccessPage,
+  })
+  const signInRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/sign-in',
+    component: SignInPage,
   })
   const acceptInviteRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -43,6 +52,7 @@ function renderSignUp(entry: string) {
     routeTree: rootRoute.addChildren([
       signUpRoute,
       requestAccessRoute,
+      signInRoute,
       acceptInviteRoute,
     ]),
     history: createMemoryHistory({ initialEntries: [entry] }),
@@ -65,6 +75,13 @@ describe('closed sign-up route', () => {
 
     await screen.findByText('Request access page')
     expect(router.state.location.pathname).toBe('/request-access')
+  })
+
+  it('sends a plain sign-up link to sign in on desktop, which has no access request page', async () => {
+    const router = renderSignUp('/sign-up', 'desktop')
+
+    await screen.findByText('Sign in page')
+    expect(router.state.location.pathname).toBe('/sign-in')
   })
 
   it('replaces the sign-up entry so Back does not bounce off the redirect', async () => {

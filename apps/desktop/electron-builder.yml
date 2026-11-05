@@ -43,7 +43,7 @@ directories:
   output: release
   buildResources: build
 
-icon: ../../packages/ui/src/brand/obiter-app-icon-1024.png
+icon: ../../packages/ui/src/brand/logo/mark-1024-ink-on-sand.png
 
 # Windows installer (primary target).
 win:

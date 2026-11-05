@@ -111,7 +111,7 @@ function mockApi(options?: {
   })
 }
 
-function renderAccept() {
+function renderAccept(platform: 'web' | 'desktop' = 'web') {
   return render(
     <QueryClientProvider
       client={
@@ -120,7 +120,7 @@ function renderAccept() {
         })
       }
     >
-      <AcceptInviteRouteView />
+      <AcceptInviteRouteView platform={platform} />
     </QueryClientProvider>,
   )
 }
@@ -151,6 +151,15 @@ describe('AcceptInviteRouteView', () => {
         .getByRole('link', { name: /request access/i })
         .getAttribute('href'),
     ).toBe('/request-access')
+  })
+
+  it('sends a desktop invitee to request access on the web', async () => {
+    renderAccept('desktop')
+    const link = await screen.findByRole('link', {
+      name: 'Request access on the web',
+    })
+    expect(link.getAttribute('href')).toBe('/request-access')
+    expect(link.getAttribute('target')).toBe('_blank')
   })
 
   it('offers a sign-in link carrying the token to signed-out invitees', async () => {

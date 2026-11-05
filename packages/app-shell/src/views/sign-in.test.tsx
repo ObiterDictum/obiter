@@ -173,6 +173,11 @@ describe('SignInRouteView — password submit outcomes', () => {
     ).toBe('/request-access')
   })
 
+  it('does not offer request access in the desktop app', () => {
+    render(<SignInRouteView platform="desktop" />)
+    expect(screen.queryByRole('link', { name: /request access/i })).toBeNull()
+  })
+
   it('surfaces unexpected thrown errors instead of clearing silently', async () => {
     authMocks.signInWithEmail.mockRejectedValueOnce(new Error('Network down'))
 

@@ -6,5 +6,5 @@ export const Route = createFileRoute('/sign-up')({
 })
 
 function SignUpRouteComponent() {
-  return <SignUpRedirectView />
+  return <SignUpRedirectView platform="web" />
 }
