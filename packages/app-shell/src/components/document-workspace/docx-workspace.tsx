@@ -52,6 +52,7 @@ import { useParagraphSelectionHandlers } from './paragraph-selection-handlers'
 import { DocumentPrintStyle } from './document-page'
 import { useDocumentPrint } from './use-document-print'
 import { useLatestCallback, useLatestHandlers } from './use-latest-callback'
+import { checksLoad, DocxRightSlotTabs } from './document-right-slot'
 import { useSplitScale } from '../../matter-split-scale'
 import {
   LoadingBlock,
@@ -280,7 +281,7 @@ export function DocxWorkspace({
   const selectionHandlers = useParagraphSelectionHandlers(caret)
   const commentsPanel = useWorkspaceComments({
     documentId,
-    listed: commentsQuery.data,
+    query: commentsQuery,
     commentTarget,
     currentUserId: me?.user.id,
     canModerate: me?.user.role === 'owner' || me?.user.role === 'admin',
@@ -396,6 +397,12 @@ export function DocxWorkspace({
           versions={versions}
           actions={headerActions}
         />
+        <DocxRightSlotTabs
+          checks={checksLoad(modelQuery, legalChecks)}
+          authorities={authorities}
+          onSelect={caret.revealFinding}
+          comments={commentsPanel}
+        />
         {modelQuery.isLoading ? (
           <LoadingBlock label="Loading document model" />
         ) : modelQuery.isError && !model ? (
@@ -482,10 +489,7 @@ export function DocxWorkspace({
               }
               authorities={authorities}
               legalChecks={legalChecks}
-              onSelectAuthority={(paragraphId) => {
-                closeEditingStory()
-                selectParagraph(paragraphId)
-              }}
+              onSelectAuthority={caret.revealFinding}
             />
           </>
         ) : null}

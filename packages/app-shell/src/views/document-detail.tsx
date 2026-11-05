@@ -24,6 +24,12 @@ import { ContentFrame } from '../content-frame'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
 import { DocumentVersionView } from '../components/document-workspace/document-version-view'
 import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
+import { DocumentHistoryPortal } from '../components/document-workspace/document-history-tab'
+import {
+  DocumentTabsNotices,
+  type DocumentTabsNoticeKind,
+} from '../components/document-workspace/document-right-slot'
+import { workspaceKind } from '../document-kind'
 import { ErrorNotice } from './settings-fields'
 
 export function DocumentDetailLayoutView({
@@ -55,6 +61,40 @@ export function DocumentDetailLayoutView({
     !document.isError &&
     loaded !== undefined &&
     loaded.document.matterId !== matterId
+  const current = loaded?.document.currentVersion
+  const notice: DocumentTabsNoticeKind | null = document.isLoading
+    ? { kind: 'loading' }
+    : document.isError || matterMismatch || !current
+      ? { kind: 'unavailable' }
+      : viewingHistorical
+        ? {
+            kind: 'historical',
+            versionNumber: selectedVersion.versionNumber,
+            onReturn: () => setSelectedVersionId(undefined),
+          }
+        : current.documentStatus === 'failed'
+          ? { kind: 'unavailable' }
+          : current.documentStatus !== 'ready'
+            ? { kind: 'not-ready' }
+            : workspaceKind(current.fileType) !== 'docx'
+              ? { kind: 'not-word' }
+              : null
+  const rightSlotPanels = (
+    <>
+      {notice ? <DocumentTabsNotices notice={notice} /> : null}
+      <DocumentHistoryPortal
+        state={
+          document.isError
+            ? { status: 'error', error: document.error }
+            : loaded
+              ? { status: 'ready', ...loaded }
+              : { status: 'loading' }
+        }
+        viewingVersionId={viewingHistorical ? selectedVersionId : undefined}
+        onSelect={setSelectedVersionId}
+      />
+    </>
+  )
   const matterLink = (
     <Link
       to="/matters/$matterId"
@@ -69,6 +109,7 @@ export function DocumentDetailLayoutView({
   if (matterMismatch && loaded) {
     return (
       <ContentFrame className="py-14">
+        {rightSlotPanels}
         <EmptyState
           title="This document belongs to a different matter"
           body="The document exists, but it is not part of the matter in this URL. Open it from its own matter to see it in the right context."
@@ -88,6 +129,7 @@ export function DocumentDetailLayoutView({
   if (document.isError) {
     return (
       <ContentFrame className="py-14">
+        {rightSlotPanels}
         <EmptyState
           title="Document not found"
           body="This document does not exist in your organisation, or your session may have expired."
@@ -98,6 +140,7 @@ export function DocumentDetailLayoutView({
   if (document.isLoading || !loaded) {
     return (
       <ContentFrame className="py-14">
+        {rightSlotPanels}
         <div
           className="flex flex-col gap-3"
           aria-busy="true"
@@ -113,6 +156,7 @@ export function DocumentDetailLayoutView({
 
   return (
     <div className="flex flex-col">
+      {rightSlotPanels}
       <div className="h-[calc(100dvh-5.5rem)] min-h-[34rem] shrink-0">
         {viewingHistorical && selectedVersion ? (
           <ContentFrame className="flex h-full flex-col py-8">

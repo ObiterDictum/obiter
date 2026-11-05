@@ -13,12 +13,13 @@ export function LegalChecksPanel({
     references: CrossReferenceCheck
     terms: DefinedTermCheck
   } | null
-  focus: 'terms' | 'references'
+  focus?: 'terms' | 'references'
   onSelect: (paragraphId: string) => void
 }) {
   const termsRef = useRef<HTMLElement>(null)
   const referencesRef = useRef<HTMLElement>(null)
   useEffect(() => {
+    if (!focus) return
     const target = focus === 'terms' ? termsRef : referencesRef
     target.current?.scrollIntoView({ block: 'nearest' })
   }, [focus])

@@ -100,31 +100,10 @@ export function DocumentInfoPanel({
                 <span className="w-6 shrink-0 text-caption tabular-nums text-subtle">
                   v{version.versionNumber}
                 </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="flex flex-wrap items-baseline gap-2">
-                    <span className="truncate text-item text-ink">
-                      Version {String(version.versionNumber)}
-                    </span>
-                    <span className="shrink-0 text-caption text-subtle">
-                      {version.id === document.currentVersionId
-                        ? 'Current version'
-                        : version.versionNumber === 1
-                          ? 'Original upload'
-                          : null}
-                    </span>
-                    <RedactedMark
-                      redaction={version.redaction}
-                      producedAt={version.createdAt}
-                    />
-                  </span>
-                  <span className="truncate text-caption text-subtle">
-                    {version.author
-                      ? `${formerMemberName(version.author.name, version.author.formerMember)} · `
-                      : null}
-                    {formatDateTime(version.createdAt)} ·{' '}
-                    {formatBytes(Number(version.sizeBytes))}
-                  </span>
-                </span>
+                <VersionSummary
+                  version={version}
+                  currentVersionId={document.currentVersionId}
+                />
                 {version.documentStatus !== 'ready' ? (
                   <Badge
                     tone={
@@ -149,5 +128,41 @@ export function DocumentInfoPanel({
         </section>
       </div>
     </DockedPanel>
+  )
+}
+
+export function VersionSummary({
+  version,
+  currentVersionId,
+}: {
+  version: DocumentVersionRecord
+  currentVersionId: string | null
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col">
+      <span className="flex flex-wrap items-baseline gap-2">
+        <span className="truncate text-item text-ink">
+          Version {String(version.versionNumber)}
+        </span>
+        <span className="shrink-0 text-caption text-subtle">
+          {version.id === currentVersionId
+            ? 'Current version'
+            : version.versionNumber === 1
+              ? 'Original upload'
+              : null}
+        </span>
+        <RedactedMark
+          redaction={version.redaction}
+          producedAt={version.createdAt}
+        />
+      </span>
+      <span className="truncate text-caption text-subtle">
+        {version.author
+          ? `${formerMemberName(version.author.name, version.author.formerMember)} · `
+          : null}
+        {formatDateTime(version.createdAt)} ·{' '}
+        {formatBytes(Number(version.sizeBytes))}
+      </span>
+    </span>
   )
 }

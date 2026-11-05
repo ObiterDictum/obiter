@@ -1,3 +1,8 @@
+import {
+  RightSlotOutlet,
+  RightSlotPortalProvider,
+  type DocumentPanelTab,
+} from '../../right-slot-portal'
 import '@obiter/test-dom'
 import { createElement, type PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -273,6 +278,7 @@ export function mountWorkspace(
     reopenComment?: ReturnType<typeof vi.fn>
     user?: { id?: string; role?: 'owner' | 'admin' | 'member' }
     pendingCitation?: string
+    rightSlot?: DocumentPanelTab
   } = {},
 ) {
   hooks.useCurrentUser.mockReturnValue({
@@ -353,13 +359,22 @@ export function mountWorkspace(
   if (options.pendingCitation !== undefined) {
     requestCitation(options.documentId ?? 'doc_1', options.pendingCitation)
   }
-  return render(
+  const workspace = (
     <DocxWorkspace
       documentId={options.documentId ?? 'doc_1'}
       versionId="ver_1"
       matterId="mtr_1"
       filename="brief.docx"
-    />,
+    />
+  )
+  if (!options.rightSlot) return render(workspace, { wrapper })
+  return render(
+    <RightSlotPortalProvider>
+      {workspace}
+      <aside aria-label="Right slot">
+        <RightSlotOutlet tab={options.rightSlot} />
+      </aside>
+    </RightSlotPortalProvider>,
     { wrapper },
   )
 }

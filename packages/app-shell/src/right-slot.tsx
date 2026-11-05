@@ -1,7 +1,8 @@
 import { Tabs, TabsList, TabsTrigger, cn } from '@obiter/ui'
 import { ChatText, Clock, Robot, ShieldCheck } from '@obiter/ui/icons'
 import { Suspense, lazy, type ComponentType, type ReactNode } from 'react'
-import type { ShellSection } from './navigation'
+import { documentIdFromPath } from './navigation'
+import { RightSlotOutlet } from './right-slot-portal'
 
 export type RightSlotTabId = 'agent' | 'comments' | 'checks' | 'history'
 
@@ -16,73 +17,65 @@ export interface RightSlotTab {
   id: RightSlotTabId
   label: string
   icon: IconComponent
-  sections: readonly ShellSection[]
-  content: ComponentType | null
+  appliesTo: (pathname: string) => boolean
+  content: ComponentType
 }
 
 const AgentTab = lazy(() =>
   import('./agent-panel').then((module) => ({ default: module.AgentTab })),
 )
 
-const EVERY_SECTION: readonly ShellSection[] = [
-  'home',
-  'matters',
-  'search',
-  'verify',
-  'redact',
-  'settings',
-  'other',
-]
+function onDocument(pathname: string) {
+  return documentIdFromPath(pathname) !== null
+}
 
 const RIGHT_SLOT_TABS: readonly RightSlotTab[] = [
   {
     id: 'agent',
     label: 'Agent',
     icon: Robot,
-    sections: EVERY_SECTION,
+    appliesTo: () => true,
     content: AgentTab,
   },
   {
     id: 'comments',
     label: 'Comments',
     icon: ChatText,
-    sections: [],
-    content: null,
+    appliesTo: onDocument,
+    content: () => <RightSlotOutlet tab="comments" />,
   },
   {
     id: 'checks',
     label: 'Checks',
     icon: ShieldCheck,
-    sections: [],
-    content: null,
+    appliesTo: onDocument,
+    content: () => <RightSlotOutlet tab="checks" />,
   },
   {
     id: 'history',
     label: 'History',
     icon: Clock,
-    sections: [],
-    content: null,
+    appliesTo: onDocument,
+    content: () => <RightSlotOutlet tab="history" />,
   },
 ]
 
-function availableRightSlotTabs(section: ShellSection): RightSlotTab[] {
-  return RIGHT_SLOT_TABS.filter(
-    (tab) => tab.content !== null && tab.sections.includes(section),
-  )
+export function availableRightSlotTabs(pathname: string): RightSlotTab[] {
+  return RIGHT_SLOT_TABS.filter((tab) => tab.appliesTo(pathname))
 }
 
 export function RightSlot({
-  section,
+  pathname,
   tab,
   onTabChange,
 }: {
-  section: ShellSection
+  pathname: string
   tab: RightSlotTabId
   onTabChange: (tab: RightSlotTabId) => void
 }) {
-  const tabs = availableRightSlotTabs(section)
+  const tabs = availableRightSlotTabs(pathname)
   const active = tabs.find((item) => item.id === tab) ?? tabs[0]
-  if (!active || !active.content) return null
+  if (!active) return null
   const Content = active.content
 
   return (
@@ -102,14 +95,17 @@ export function RightSlot({
         className="flex min-h-0 flex-1 flex-col"
       >
         <div className="flex h-10 shrink-0 items-center border-b border-line px-2">
-          <TabsList aria-label="Panel tabs" className="bg-transparent p-0">
+          <TabsList
+            aria-label="Panel tabs"
+            className="w-full gap-0.5 bg-transparent p-0"
+          >
             {tabs.map((item) => (
               <TabsTrigger
                 key={item.id}
                 value={item.id}
-                className="flex items-center gap-1.5"
+                className="flex min-w-0 flex-1 items-center justify-center gap-1 px-1.5"
               >
-                <item.icon size={14} aria-hidden />
+                <item.icon size={14} className="shrink-0" aria-hidden />
                 {item.label}
               </TabsTrigger>
             ))}
