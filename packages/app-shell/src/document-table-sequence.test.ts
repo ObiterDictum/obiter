@@ -6,6 +6,7 @@ import { PageTable } from './components/document-workspace/page-table'
 import { act, renderHook } from '@testing-library/react'
 import { expect, it } from 'bun:test'
 import {
+  canonicaliseParagraphIdentities,
   applyDocumentEdits,
   createSyntheticDocx,
   parseDocx,
@@ -190,6 +191,7 @@ it('saves a composed row insertion column insertion and second table deletion th
   expect(plan.blocked).toEqual([])
   expect(plan.operations).toHaveLength(3)
   applyDocumentEdits(doc, plan.operations)
+  canonicaliseParagraphIdentities(doc)
   const saved = await parseDocx(await serialiseDocx(doc))
   expect(storyTables(required(saved.model.stories[0]))).toHaveLength(1)
   expect(
@@ -257,6 +259,7 @@ it('deletes a pending row through the insert ribbon command', async () => {
   const plan = planDocumentSave(doc.model, { ...state, structures })
   expect(plan.blocked).toEqual([])
   applyDocumentEdits(doc, plan.operations)
+  canonicaliseParagraphIdentities(doc)
   const saved = await parseDocx(await serialiseDocx(doc))
   expect(
     required(storyTables(required(saved.model.stories[0]))[0]).rows,
@@ -333,6 +336,7 @@ it('saves text typed into the first cell of a pending appended row', async () =>
   const plan = planDocumentSave(doc.model, state)
   expect(plan.blocked).toEqual([])
   applyDocumentEdits(doc, plan.operations)
+  canonicaliseParagraphIdentities(doc)
   const saved = await parseDocx(await serialiseDocx(doc))
   const lastId = required(
     storyTables(required(saved.model.stories[0]))[0]?.rows.at(-1)?.cells[0]
