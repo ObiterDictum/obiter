@@ -554,6 +554,32 @@ describe('the picture size control', () => {
   })
 })
 
+describe('saving a picture resize', () => {
+  it('saves the new size and keeps undo working across the save', async () => {
+    const target = await server(['Page body'])
+    mountWorkspace({
+      editAsync: target.editAsync,
+      decideAsync: target.decideAsync,
+      modelFor: target.modelFor,
+    })
+    await selectPicture()
+    drag('se', 40, 0)
+    await waitFor(() => expect(pictureWidth()).toBe(340))
+
+    await clickSaveAndSettle(target, 1)
+    await waitFor(() => expect(saveState()).toBe('saved'))
+    const operations = target.editAsync.mock.calls[0]?.[0].operations ?? []
+    expect(sizesIn(operations)).toEqual([
+      expect.objectContaining({ widthPx: 340, heightPx: 227 }),
+    ])
+
+    openRibbonTab('Home')
+    fireEvent.click(command('Undo'))
+    await waitFor(() => expect(pictureWidth()).toBe(PICTURE_WIDTH_PX))
+    expect(saveState()).toBe('unsaved')
+  })
+})
+
 describe('undo across a picture resize', () => {
   it('restores the earlier size with undo and the new size with redo', async () => {
     const restorePicker = stubImagePicker()
