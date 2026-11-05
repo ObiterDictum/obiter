@@ -18,6 +18,7 @@ export type DisplayTableCell = {
   minHeightPx?: number
   paragraphIds: string[]
   paragraphCount?: number
+  paragraphTexts?: string[]
 }
 
 export type DisplayTable = {
@@ -149,7 +150,7 @@ function bindTableParagraphs(
   if (table.paragraphIds.some((id) => available.has(id))) return table
 
   const unused = paragraphs.filter((paragraph) => !used.has(paragraph.id))
-  let index = 0
+  let index = textMatchedStart(table, unused)
   const rows = table.rows.map((row) => ({
     ...row,
     cells: row.cells.map((cell) => {
@@ -172,6 +173,30 @@ function bindTableParagraphs(
       row.cells.flatMap((cell) => cell.paragraphIds),
     ),
   }
+}
+
+function textMatchedStart(
+  table: DisplayTable,
+  unused: DocumentParagraphWire[],
+): number {
+  const cells = table.rows.flatMap((row) => row.cells)
+  if (cells.some((cell) => cell.paragraphTexts === undefined)) return 0
+  const expected = cells.flatMap((cell) => {
+    const texts = cell.paragraphTexts ?? []
+    return texts.length > 0 ? texts : ['']
+  })
+  const texts = unused.map((paragraph) =>
+    normalisedText(paragraphPlainText(paragraph)),
+  )
+  for (let start = 0; start + expected.length <= texts.length; start += 1) {
+    if (expected.every((text, offset) => texts[start + offset] === text))
+      return start
+  }
+  return 0
+}
+
+function normalisedText(text: string): string {
+  return text.replace(/\s+/gu, ' ').trim()
 }
 
 function parseWordTable(xml: string): DisplayTable | undefined {
@@ -208,10 +233,23 @@ function parseWordTable(xml: string): DisplayTable | undefined {
           .slice(column, column + safeSpan)
           .reduce((sum, value) => sum + value, 0)
         column += safeSpan
+        const paragraphIds = paragraphIdsInCell(tc)
+        const paragraphCount = paragraphCountInCell(tc)
         return {
           span: safeSpan,
-          paragraphIds: paragraphIdsInCell(tc),
-          paragraphCount: paragraphCountInCell(tc),
+          paragraphIds,
+          paragraphCount,
+          ...(paragraphIds.length < paragraphCount
+            ? {
+                paragraphTexts: cellParagraphs(tc).map((paragraph) =>
+                  normalisedText(
+                    local(paragraph, 't')
+                      .map((text) => text.textContent ?? '')
+                      .join(''),
+                  ),
+                ),
+              }
+            : {}),
           ...(fill ? { fill } : {}),
           ...(widthPct > 0 ? { widthPct } : {}),
           ...(heightPx ? { minHeightPx: heightPx } : {}),
