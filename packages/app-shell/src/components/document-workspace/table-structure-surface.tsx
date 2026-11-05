@@ -68,7 +68,16 @@ export function TableStructureSurface({
           const first = rows[rows.length - 1]?.querySelector<HTMLElement>(
             '[data-paragraph-id]',
           )
-          first?.click()
+          if (first) {
+            const rect = first.getBoundingClientRect()
+            first.dispatchEvent(
+              new MouseEvent('click', {
+                bubbles: true,
+                clientX: rect.left + 1,
+                clientY: rect.top + 1,
+              }),
+            )
+          }
         })
       }}
     >

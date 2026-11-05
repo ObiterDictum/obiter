@@ -12,6 +12,7 @@ import {
   type XmlElement,
 } from './parts/xml-elements'
 import { nextSyntheticParaId } from './structure-package'
+import { escapeXmlText } from './parts/overlay'
 
 export type TableStructureOperation = Extract<
   DocumentEditOperation,
@@ -217,10 +218,14 @@ export function transformTableXml(
       'The table cells do not match its column grid',
     )
   }
-  const rowIndex = rows.indexOf(row)
+  const rowIndex = operation.rowIndex ?? rows.indexOf(row)
+  if (!rows[rowIndex]) throw new OoxmlError('model-node-not-editable')
+  row = rows[rowIndex]
   const own = matrix[rowIndex] ?? []
   const cellIndex = own.findIndex((c) => c.element === cell)
-  const columnIndex = own.slice(0, cellIndex).reduce((n, c) => n + c.span, 0)
+  const columnIndex =
+    operation.columnIndex ??
+    own.slice(0, cellIndex).reduce((n, c) => n + c.span, 0)
   const deleting = operation.type.startsWith('delete_')
   const rowOperation = operation.type.endsWith('_row')
   const removeTable =
@@ -358,6 +363,38 @@ export function transformTableXml(
       output.slice(0, edit.start - table.start) +
       edit.value +
       output.slice(edit.end - table.start)
+  }
+  if (operation.cellEdits?.length) {
+    const parsed = parseXmlElements(
+      source.slice(0, table.start) + output + source.slice(table.end),
+    )
+    const targetRows = parsed.filter(
+      (e) => isWord(e, 'tr') && e.parent?.start === table.start,
+    )
+    const replacements = operation.cellEdits.map((edit) => {
+      const row = targetRows[edit.row]
+      const cell = parsed.filter((e) => isWord(e, 'tc') && e.parent === row)[
+        edit.column
+      ]
+      const paragraph = parsed.find((e) => isWord(e, 'p') && e.parent === cell)
+      if (!paragraph) throw new OoxmlError('model-node-not-editable')
+      const original = output.slice(
+        paragraph.start - table.start,
+        paragraph.end - table.start,
+      )
+      if (!/\/\s*>$/u.test(original))
+        throw new OoxmlError('model-node-not-editable')
+      return {
+        start: paragraph.start - table.start,
+        end: paragraph.end - table.start,
+        value: original.replace(
+          /\/\s*>$/u,
+          `><w:r><w:t xml:space="preserve">${escapeXmlText(edit.text)}</w:t></w:r></w:p>`,
+        ),
+      }
+    })
+    for (const edit of replacements.sort((a, b) => b.start - a.start))
+      output = output.slice(0, edit.start) + edit.value + output.slice(edit.end)
   }
   return {
     xml: output,

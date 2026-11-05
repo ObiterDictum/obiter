@@ -228,7 +228,7 @@ it('deletes a pending row through the insert ribbon command', async () => {
     useInsertRibbon(
       doc.model,
       painted,
-      { kind: 'caret', paragraphId: target.id },
+      { kind: 'caret', paragraphId: target.id, from: 0, to: 0 },
       0,
       false,
       { editingKind: 'document', onOpen: () => {}, onClose: () => {} },
@@ -254,6 +254,13 @@ it('deletes a pending row through the insert ribbon command', async () => {
     }),
   )
   expect(structures).toHaveLength(2)
+  const plan = planDocumentSave(doc.model, { ...state, structures })
+  expect(plan.blocked).toEqual([])
+  applyDocumentEdits(doc, plan.operations)
+  const saved = await parseDocx(await serialiseDocx(doc))
+  expect(
+    required(storyTables(required(saved.model.stories[0]))[0]).rows,
+  ).toHaveLength(2)
   expect(
     required(
       storyTables(
@@ -301,4 +308,40 @@ it('Tab activates the first paragraph of the appended row', async () => {
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(document.activeElement?.getAttribute('data-paragraph-id')).toBe('new')
   cleanup()
+})
+it('saves text typed into the first cell of a pending appended row', async () => {
+  const doc = await fixture()
+  const table = required(storyTables(required(doc.model.stories[0]))[0])
+  const paragraphId = required(table.rows.at(-1)?.cells.at(-1)?.paragraphIds[0])
+  const state = emptyDraftState()
+  state.structures = [
+    {
+      id: 'tab',
+      kind: 'table-structure',
+      paragraphId,
+      operation: { type: 'insert_table_row', paragraphId, position: 'after' },
+    },
+  ]
+  const painted = withStructuralDrafts(doc.model, state.structures)
+  const id = required(
+    storyTables(required(painted.stories[0]))[0]?.rows.at(-1)?.cells[0]
+      ?.paragraphIds[0],
+  )
+  state.extraRuns[id] = [
+    { id: 'typed', text: 'NEW', preservedXmlFragments: [] },
+  ]
+  const plan = planDocumentSave(doc.model, state)
+  expect(plan.blocked).toEqual([])
+  applyDocumentEdits(doc, plan.operations)
+  const saved = await parseDocx(await serialiseDocx(doc))
+  const lastId = required(
+    storyTables(required(saved.model.stories[0]))[0]?.rows.at(-1)?.cells[0]
+      ?.paragraphIds[0],
+  )
+  expect(
+    saved.model.stories[0]?.paragraphs
+      .find((p) => p.id === lastId)
+      ?.runs.map((r) => r.text)
+      .join(''),
+  ).toBe('NEW')
 })

@@ -1,3 +1,4 @@
+import { storyTables } from '../../document-page-tables'
 import { foldTableStructure } from '../../document-table-structure-fold'
 import { OoxmlError } from '@obiter/ooxml'
 import { useMemo, useRef } from 'react'
@@ -135,13 +136,32 @@ export function useInsertRibbon(
           onImageError(error.message)
           return
         }
+        const table = storyTables(story).find((item) =>
+          item.paragraphIds.includes(targetId),
+        )
+        const baselineIds = new Set(
+          model?.stories.flatMap((item) => item.paragraphs.map((p) => p.id)),
+        )
+        const anchorId = table?.paragraphIds.find((id) => baselineIds.has(id))
+        if (!table || !anchorId) return
+        const rowIndex = table.rows.findIndex((row) =>
+          row.cells.some((cell) => cell.paragraphIds.includes(targetId)),
+        )
+        const columnIndex = table.rows[rowIndex]?.cells.findIndex((cell) =>
+          cell.paragraphIds.includes(targetId),
+        )
         drafts.setStructures((current) => [
           ...current,
           {
             id: crypto.randomUUID(),
             kind: 'table-structure',
-            paragraphId: targetId,
-            operation: { ...operation, paragraphId: targetId },
+            paragraphId: anchorId,
+            operation: {
+              ...operation,
+              paragraphId: anchorId,
+              rowIndex,
+              columnIndex,
+            },
           },
         ])
       },
