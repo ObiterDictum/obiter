@@ -2,8 +2,17 @@ import { ObiterMark, cn } from '@obiter/ui'
 import { CheckCircle } from '@obiter/ui/icons'
 import type { FormEvent, ReactNode } from 'react'
 import { ThemeToggle } from '../theme-toggle'
-import authArtDark from '../assets/auth/auth-art-dark.webp'
-import authArtLight from '../assets/auth/auth-art-light.webp'
+
+export const PRIVACY_POLICY_URL = 'https://obiter.si/privacy'
+export const TERMS_OF_SERVICE_URL = 'https://obiter.si/terms'
+
+const AUTH_LEGAL_LINKS = [
+  { label: 'Privacy policy', href: PRIVACY_POLICY_URL },
+  { label: 'Terms of service', href: TERMS_OF_SERVICE_URL },
+] as const
+
+export const authCardClassName =
+  'mt-6 rounded-xl border border-line bg-raised p-6 compact:p-8'
 
 export function AuthLayout({
   footnote,
@@ -15,26 +24,41 @@ export function AuthLayout({
   children: ReactNode
 }) {
   return (
-    <main className="grid min-h-dvh bg-canvas text-ink compact:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)]">
-      <div className="flex min-h-dvh flex-col px-6 pt-6 pb-8 compact:px-8">
-        <header className="flex items-center justify-between gap-4">
-          <span className="flex min-w-0 items-center gap-3">
-            <ObiterMark className="size-6" title="" />
-            <span className="text-item text-ink">Obiter</span>
-          </span>
+    <main className="flex min-h-dvh flex-col bg-canvas text-ink">
+      <header className="grid grid-cols-[1fr_auto_1fr] items-center px-6 pt-6 compact:px-8">
+        <span aria-hidden />
+        <span className="flex items-center gap-2.5">
+          <ObiterMark className="size-6" title="" />
+          <span className="text-item text-ink">Obiter</span>
+        </span>
+        <span className="justify-self-end">
           <ThemeToggle />
-        </header>
+        </span>
+      </header>
 
-        <div className="flex flex-1 justify-center pt-[clamp(2.5rem,14vh,9rem)] pb-10">
-          <div className={cn('w-full max-w-[360px]', columnClassName)}>
-            {children}
-          </div>
+      <div className="flex flex-1 justify-center px-4 pt-[clamp(2rem,10vh,6rem)] pb-10">
+        <div className={cn('w-full max-w-[420px]', columnClassName)}>
+          {children}
         </div>
-
-        <p className="text-center text-caption text-subtle">{footnote}</p>
       </div>
 
-      <AuthSamplePanel />
+      <footer className="flex flex-col items-center gap-2 px-6 pb-6 text-center text-caption text-subtle">
+        <p>{footnote}</p>
+        <nav aria-label="Legal" className="flex items-center gap-3">
+          {AUTH_LEGAL_LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-ink"
+            >
+              {link.label}
+            </a>
+          ))}
+          <span>© 2026 Obiter</span>
+        </nav>
+      </footer>
     </main>
   )
 }
@@ -76,7 +100,7 @@ export function AuthForm({
     <form
       onSubmit={onSubmit}
       noValidate
-      className={cn('mt-6 flex flex-col gap-4', className)}
+      className={cn(authCardClassName, 'flex flex-col gap-5', className)}
     >
       {children}
     </form>
@@ -91,7 +115,12 @@ export function AuthDone({
   children: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center gap-3 pt-2 text-center">
+    <div
+      className={cn(
+        authCardClassName,
+        'mt-0 flex flex-col items-center gap-3 text-center',
+      )}
+    >
       <span className="grid size-10 place-items-center rounded-lg bg-success-soft text-success">
         <CheckCircle size={20} aria-hidden />
       </span>
@@ -105,33 +134,16 @@ export function AuthFoot({ children }: { children: ReactNode }) {
   return <p className="mt-6 text-center text-caption text-subtle">{children}</p>
 }
 
-const AUTH_ART = { light: authArtLight, dark: authArtDark }
-
-function AuthSamplePanel() {
+export function AuthCard({
+  children,
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
   return (
-    <aside
-      aria-label="About Obiter"
-      className="sticky top-0 hidden h-dvh self-start p-2 pl-0 compact:block"
-    >
-      <div className="relative size-full overflow-hidden rounded-xl border border-line bg-raised">
-        <img
-          src={AUTH_ART.light}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 size-full object-cover dark:hidden"
-        />
-        <img
-          src={AUTH_ART.dark}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 hidden size-full object-cover dark:block"
-        />
-        <p className="absolute inset-x-0 top-0 p-8 text-caption text-subtle">
-          Evidence-first legal work
-        </p>
-      </div>
-    </aside>
+    <div className={cn(authCardClassName, 'flex flex-col gap-4', className)}>
+      {children}
+    </div>
   )
 }

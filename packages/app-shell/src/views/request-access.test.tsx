@@ -75,10 +75,10 @@ async function fillRequest(
   })
   if (overrides.attestations === false) return
   fireEvent.click(
-    screen.getByRole('checkbox', { name: /I accept the tester terms/i }),
+    screen.getByRole('checkbox', { name: /I accept the terms of service/i }),
   )
   fireEvent.click(
-    screen.getByRole('checkbox', { name: /I accept the privacy notice/i }),
+    screen.getByRole('checkbox', { name: /I have read the privacy policy/i }),
   )
   fireEvent.click(
     screen.getByRole('checkbox', { name: /details I have given are true/i }),
@@ -133,7 +133,9 @@ describe('access request form', () => {
     expect(screen.getByText('Choose where you are based.')).toBeTruthy()
     expect(screen.getByText('Organisation name is required.')).toBeTruthy()
     expect(
-      screen.getByText(/Accept the terms, accept the privacy notice/i),
+      screen.getByText(
+        /Accept the terms of service, confirm you have read the privacy policy/i,
+      ),
     ).toBeTruthy()
     expect(api.apiFetch).not.toHaveBeenCalled()
   })
@@ -164,14 +166,14 @@ describe('access request form', () => {
     expect(api.apiFetch).not.toHaveBeenCalled()
   })
 
-  it('will not send until the terms, the privacy notice and the details are confirmed', async () => {
+  it('will not send until the terms, the privacy policy and the details are confirmed', async () => {
     renderRequestAccess()
     await fillRequest({ attestations: false })
     submit()
 
     expect(
       await screen.findByText(
-        /Accept the terms, accept the privacy notice and confirm your details/i,
+        /Accept the terms of service, confirm you have read the privacy policy and confirm your details/i,
       ),
     ).toBeTruthy()
     expect(api.apiFetch).not.toHaveBeenCalled()
