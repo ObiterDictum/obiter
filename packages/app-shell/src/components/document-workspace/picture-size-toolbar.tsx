@@ -67,17 +67,23 @@ export function PictureSizeToolbar({
   const commit = (axis: 'width' | 'height', text: string) => {
     const centimetres = parseCentimetres(text)
     if (centimetres === undefined || disabled || !(ratio > 0)) return
-    if (axis === 'width') {
-      control.onResize({
-        widthPx: centimetres,
-        heightPx: control.lockRatio ? centimetres / ratio : size.heightPx,
-      })
+    const next =
+      axis === 'width'
+        ? {
+            widthPx: centimetres,
+            heightPx: control.lockRatio ? centimetres / ratio : size.heightPx,
+          }
+        : {
+            widthPx: control.lockRatio ? centimetres * ratio : size.widthPx,
+            heightPx: centimetres,
+          }
+    if (
+      Math.abs(next.widthPx - size.widthPx) < 1 &&
+      Math.abs(next.heightPx - size.heightPx) < 1
+    ) {
       return
     }
-    control.onResize({
-      widthPx: control.lockRatio ? centimetres * ratio : size.widthPx,
-      heightPx: centimetres,
-    })
+    control.onResize(next)
   }
   const fieldKey = `${control.runId}:${String(Math.round(size.widthPx))}:${String(Math.round(size.heightPx))}`
   const field = (axis: 'width' | 'height') => (

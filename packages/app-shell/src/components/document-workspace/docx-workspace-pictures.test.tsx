@@ -501,6 +501,33 @@ describe('the picture size control', () => {
     }
   })
 
+  it('commits a typed size once so a single undo restores the original', async () => {
+    const restorePicker = stubImagePicker()
+    try {
+      const target = await server(['Page body'])
+      mountWorkspace({
+        editAsync: target.editAsync,
+        decideAsync: target.decideAsync,
+        modelFor: target.modelFor,
+      })
+      await selectPicture()
+      const width = screen.getByLabelText('Picture width in centimetres')
+      fireEvent.change(width, { target: { value: '8' } })
+      fireEvent.keyDown(width, { key: 'Enter' })
+      await waitFor(() => expect(pictureWidth()).toBeGreaterThan(300))
+      fireEvent.blur(
+        screen.getByLabelText('Picture width in centimetres'),
+      )
+      await waitFor(() => expect(pictureWidth()).toBe(302))
+
+      openRibbonTab('Home')
+      fireEvent.click(command('Undo'))
+      await waitFor(() => expect(pictureWidth()).toBe(PICTURE_WIDTH_PX))
+    } finally {
+      restorePicker()
+    }
+  })
+
   it('resets a resized picture to the size it was saved at', async () => {
     const restorePicker = stubImagePicker()
     try {
