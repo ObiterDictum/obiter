@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openMatter } from './support'
 import path from 'node:path'
-import { setTrackChanges } from './editor-chrome'
+import { closeMenu, menuItem, openMenu, setTrackChanges } from './editor-chrome'
 
 /*
  * Browser-only coverage for the cross-paragraph selection. Real selection,
@@ -207,13 +207,14 @@ test.describe('the document selection in a browser', () => {
     await pressMany(page, 'Shift+ArrowDown', 3)
     await check(status(page)).toContainText('3 paragraphs selected')
 
-    const bold = page.getByRole('button', { name: 'Bold', exact: true })
-    await expect(bold).toHaveAttribute(
-      'title',
-      'Partial formatting is not yet recorded as a tracked change',
+    await openMenu(page, 'Insert')
+    const link = menuItem(page, 'Link')
+    await expect(link).toBeDisabled()
+    await expect(link).toContainText(
+      'A link is not recorded as a tracked change',
     )
-    await shot(page, '06-unsupported-formatting-disabled')
-    await check(bold).toBeDisabled()
+    await shot(page, '06-unsupported-action-disabled')
+    await closeMenu(page)
   })
 
   test('declines to cross an unsaved inserted paragraph', async ({ page }) => {
