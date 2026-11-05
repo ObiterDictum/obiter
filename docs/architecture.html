@@ -6931,8 +6931,8 @@
         <section id="infra">
           <h2>Deployment</h2>
           <p class="lede">
-            Largely unbuilt. Recorded honestly because the directory structure
-            implies more than exists.
+            One host behind Cloudflare. The <code>infra/</code> directories here
+            are placeholders and imply more than this repository holds.
           </p>
           <div class="scroll">
             <table>
@@ -6959,12 +6959,18 @@
             </table>
           </div>
           <p>
-            There are no deployments yet. Data residency is committed to the EU,
-            which constrains hosting choices when that changes. The Postgres and
-            Meilisearch compose services and the test database bootstrap live in
-            the private
-            <a href="https://github.com/ObiterDictum/backend">backend</a>
-            repository under <code>infra/</code>.
+            Production runs on one Hetzner host in the EU behind Cloudflare,
+            deployed with Kamal from <code>main</code>. kamal-proxy holds a
+            Cloudflare origin certificate for <code>app.obiter.si</code> and
+            routes <code>/api</code> to the API and everything else to the web
+            app on that one origin, which the auth cookies require. PostgreSQL
+            and Meilisearch run as private containers, and encrypted backups go
+            nightly to object storage in the EU. The Kamal configuration is not
+            in this repository. See
+            <a
+              href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/deployment.md"
+              >specs/deployment.md</a
+            >.
           </p>
           <div class="callout note">
             <b>The web serving boundary.</b>
@@ -6986,9 +6992,10 @@
             <code>docker-web</code> job passes both (<code>$GITHUB_SHA</code>,
             <code>0</code>) in its supported <code>docker build</code>
             invocation, and the local invocation is documented in
-            <code>docs/specs/deployment.md</code>. A Dokploy-built image is an
-            external boundary: unless its build args are set it records a null
-            commit and can be served but not measured as a named commit.
+            <code>docs/specs/deployment.md</code>. The production image is built
+            for the Kamal deploy, which must pass the same build arguments; an
+            image built without them records a null commit and can be served but
+            not measured as a named commit.
           </div>
         </section>
 
@@ -7491,16 +7498,11 @@
                       >requestTimeout</code
                     >
                     have no <code>Bun.serve</code> equivalent, and there is no
-                    configurable header-size limit. The bounds are specified in
-                    <code>backend/infra/traefik/entrypoints.yml</code> in the
-                    private
-                    <a href="https://github.com/ObiterDictum/backend"
-                      >backend</a
-                    >
-                    repository and validated locally there by
-                    <code>scripts/api-ingress</code> against Traefik v3.6.25;
-                    applying them to the deployed Dokploy Traefik is still
-                    pending. See
+                    configurable header-size limit. The bounds belong at the
+                    proxy. Production now runs behind Cloudflare and
+                    kamal-proxy, and the earlier validation was against the
+                    previous proxy, so the bounds still need re-validating
+                    there. See
                     <a
                       href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/deployment.md"
                       >specs/deployment.md</a
