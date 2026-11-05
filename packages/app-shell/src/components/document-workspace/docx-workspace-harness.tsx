@@ -271,6 +271,14 @@ export function mountWorkspace(
       comments?: import('@obiter/contracts').DocumentComment[]
       importedComments?: import('@obiter/contracts').DocumentImportedCommentThread[]
       orphanedReplies?: import('@obiter/contracts').DocumentCommentReply[]
+      deletableCommentIds?: string[]
+      deletedComments?: {
+        id: string
+        body: string
+        authorName: string
+        deletedAt: string
+        isReply: boolean
+      }[]
     }
     createComment?: ReturnType<typeof vi.fn>
     replyComment?: ReturnType<typeof vi.fn>
@@ -309,6 +317,8 @@ export function mountWorkspace(
       comments: options.comments?.comments ?? [],
       importedComments: options.comments?.importedComments ?? [],
       orphanedReplies: options.comments?.orphanedReplies ?? [],
+      deletableCommentIds: options.comments?.deletableCommentIds ?? [],
+      deletedComments: options.comments?.deletedComments ?? [],
     },
   })
   hooks.useDocumentTrackedChanges.mockReturnValue({

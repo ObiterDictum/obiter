@@ -13,6 +13,7 @@ import { DocumentInfoPanel } from './document-info-panel'
 import { LegalChecksPanel } from './legal-checks-panel'
 import { VerificationDock } from '../verification/verification-dock'
 import type { ChangeReview } from './use-change-review'
+import type { WorkspaceCommentsPanelProps } from './use-workspace-comments'
 import type { WorkspacePanel } from './use-workspace-panels'
 import type { AuthorityHit } from '../../document-authorities'
 import type { LegalChecksFocus } from './ribbon-types'
@@ -42,6 +43,10 @@ function WorkspaceSidePanelsInner({
   onResolveComment,
   onReopenComment,
   onRevealCommentAnchor,
+  deletableCommentIds,
+  deletedComments,
+  onDeleteComment,
+  onRestoreComment,
   changeReview,
   reviewComments,
   model,
@@ -77,6 +82,10 @@ function WorkspaceSidePanelsInner({
   onResolveComment: (commentId: string) => void
   onReopenComment: (commentId: string) => void
   onRevealCommentAnchor: (anchor: DocumentCommentAnchor) => void
+  deletableCommentIds: WorkspaceCommentsPanelProps['deletableCommentIds']
+  deletedComments: WorkspaceCommentsPanelProps['deletedComments']
+  onDeleteComment: WorkspaceCommentsPanelProps['onDeleteComment']
+  onRestoreComment: WorkspaceCommentsPanelProps['onRestoreComment']
   changeReview: ChangeReview
   reviewComments: {
     comments: DocumentComment[]
@@ -136,6 +145,10 @@ function WorkspaceSidePanelsInner({
           onReply={onReplyComment}
           onResolve={onResolveComment}
           onReopen={onReopenComment}
+          deletableCommentIds={deletableCommentIds}
+          deletedComments={deletedComments}
+          onDelete={onDeleteComment}
+          onRestore={onRestoreComment}
           onRevealAnchor={onRevealCommentAnchor}
         />
       </DockedPanel>
