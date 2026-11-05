@@ -13,6 +13,7 @@ import {
 } from '../../document-workspace-api'
 import { refocusCaret, refocusCaretBeforeFlight } from './document-actions'
 import { mutationError } from './workspace-chrome'
+import { queryLoad } from './document-right-slot'
 
 type CommentIntent =
   | { documentId: string; anchor: DocumentCommentAnchor; body: string }
@@ -28,19 +29,24 @@ function commentThreadCount(listed: DocumentCommentListResponse | undefined) {
 
 export function useWorkspaceComments({
   documentId,
-  listed,
+  query,
   commentTarget,
   currentUserId,
   canModerate,
   revealCommentAnchor,
 }: {
   documentId: string
-  listed: DocumentCommentListResponse | undefined
+  query: {
+    data: DocumentCommentListResponse | undefined
+    isError: boolean
+    error: unknown
+  }
   commentTarget: DocumentCommentAnchor | null
   currentUserId: string | undefined
   canModerate: boolean
   revealCommentAnchor: (anchor: DocumentCommentAnchor) => void
 }) {
+  const listed = query.data
   const createComment = useCreateDocumentComment(documentId)
   const replyComment = useReplyDocumentComment(documentId)
   const resolveComment = useResolveDocumentComment(documentId)
@@ -74,6 +80,7 @@ export function useWorkspaceComments({
 
   return {
     threadCount: commentThreadCount(listed),
+    load: queryLoad(query),
     props: {
       comments: listed?.comments ?? [],
       importedComments: listed?.importedComments ?? [],

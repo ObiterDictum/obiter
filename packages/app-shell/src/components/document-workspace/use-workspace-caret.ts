@@ -366,7 +366,13 @@ export function useWorkspaceCaret({
     actions: { closeEditingStory, selectParagraph, extendSelection },
   })
 
+  function revealFinding(paragraphId: string) {
+    closeEditingStory()
+    selectParagraph(paragraphId)
+  }
+
   return {
+    revealFinding,
     selectedParagraphId,
     restoreCaret,
     formatRange,

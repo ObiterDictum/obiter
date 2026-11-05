@@ -1,3 +1,4 @@
+import { useRightSlotTarget } from '../../right-slot-portal'
 import type { SavePlan } from '../../document-save-plan'
 import {
   buildPendingRedlines,
@@ -285,9 +286,10 @@ export function useWorkspaceDerivations({
     () => structuralLinkOverlays(painted, drafts.structures),
     [painted, drafts.structures],
   )
+  const checksShown = useRightSlotTarget('checks') !== null
   const legalChecks = useMemo(
     () =>
-      model && legalChecksOpen
+      model && (legalChecksOpen || checksShown)
         ? {
             references: checkCrossReferences(
               model,
@@ -309,6 +311,7 @@ export function useWorkspaceDerivations({
     [
       model,
       legalChecksOpen,
+      checksShown,
       drafts.structures,
       deletions,
       drafts.drafts,
