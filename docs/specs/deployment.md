@@ -77,6 +77,19 @@ excludes `**/.env*`, so secrets never reach a layer). A `node` build stage with
 the pinned Bun runs `bun install --frozen-lockfile --filter @obiter/web` and
 the web build; the runtime stage is `oven/bun` and runs `bun serve.mjs`.
 
+- The build stage starts from `node` because third-party packages run Node
+  lifecycle scripts during install, such as esbuild's `node install.js`. Bun is
+  copied in from the `oven/bun` image.
+- `COPY --from` cannot expand a build argument, so the `oven/bun` tag in that
+  line repeats the version. Keep it, `BUN_VERSION` and `.bun-version` in step.
+- No secrets and no API origin are baked in. The web app calls the API with
+  relative URLs on the same origin, and all runtime configuration comes from
+  the environment.
+- The runtime stage keeps `bun.lock` at the image root because
+  `packages/config/src/local-env.mjs` walks up to it to find the workspace root.
+- The image builds only the web app and the workspace packages it imports. It
+  does not build the API or run migrations.
+
 ```sh
 docker build -f apps/web/Dockerfile -t obiter-web \
   --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" \
@@ -91,7 +104,9 @@ records `null`. The Kamal build must pass both, or the deployed image cannot be
 matched to a commit. This repository's CI `docker-web` job builds the image on
 every push with both arguments set, but it does not push or deploy it.
 
-`serve.mjs` reads:
+`vite build` emits `dist/server/server.js`, a Web Fetch handler that does not
+bind a port, so `serve.mjs` is the host: a dependency-free `node:http` server
+that runs under Bun. It reads:
 
 - `PORT` (default 3000; an invalid value falls back with a warning) and `HOST`
   (default `0.0.0.0`).

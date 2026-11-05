@@ -1,36 +1,3 @@
-/*
- * Production server bootstrap for @obiter/web (TanStack Start SSR).
- *
- * `vite build` produces dist/server/server.js whose default export is a
- * Web Fetch handler `{ fetch(request: Request): Promise<Response> }` — it does
- * not bind a port itself (the dev/preview path uses Vite's preview server; in
- * production there is no Nitro/.output host in this stack). This file is the
- * smallest dependency-free host: a Node http.Server that serves dist/client
- * static assets directly and forwards everything else to the SSR handler.
- *
- * Runtime configuration comes from the environment (no baked secrets):
- *   PORT              TCP port (default 3000); invalid values fall back to 3000
- *   HOST              bind address (default 0.0.0.0)
- *   OBITER_WEB_ORIGIN trusted public origin used to construct the request URL
- *                     (e.g. https://app.example.com). When set, it takes
- *                     precedence over the client-supplied Host header, which is
- *                     forgeable if the container is reachable without Traefik.
- *                     With same-domain routing this is just the site origin.
- *   BETTER_AUTH_URL   consumed by the auth client (same-domain => site origin)
- *   OBITER_BUILD_PROVENANCE=1 exposes the build marker at
- *                     GET /.well-known/obiter-build. The measurement harness
- *                     sets it to prove the running process loaded the artifact
- *                     it is about to measure. Unset (production default) the
- *                     path is not routed here at all.
- *
- * Same-domain routing: a reverse proxy (Dokploy/Traefik) sends `/*` here and
- * `/api/*` to the API app, so this server only renders the web app.
- *
- * The pure host helpers (parsePort, resolveBaseUrl, applyResponseHeaders) are
- * exported for unit testing; content-coding and cache policy live in
- * http-policy.mjs. The server bootstrap lives in the default export at the
- * bottom.
- */
 import { createServer } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { Readable } from 'node:stream'
