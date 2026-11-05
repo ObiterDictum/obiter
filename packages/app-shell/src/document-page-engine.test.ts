@@ -360,6 +360,28 @@ describe('layoutDocument', () => {
     ).toBe(true)
   })
 
+  it('places a paragraph that holds only an inline picture on its page', () => {
+    const picture =
+      '<w:drawing><wp:inline><wp:extent cx="1828800" cy="914400"/><a:ext cx="1828800" cy="914400"/><pic:pic><a:blip r:embed="rId1"/></pic:pic></wp:inline></w:drawing>'
+    const pages = layoutDocument(
+      modelOf(
+        [
+          paragraph('before', 'Before the picture'),
+          paragraph('picture', '', [picture]),
+          paragraph('after', 'After the picture'),
+        ],
+        SHORT_PAGE,
+      ),
+    )
+    expect(
+      pages.flatMap((page) =>
+        page.blocks.flatMap((block) =>
+          block.type === 'paragraph' ? [block.paragraph.id] : [],
+        ),
+      ),
+    ).toEqual(['before', 'picture', 'after'])
+  })
+
   it('moves a keep-next pair together when only one of them fits', () => {
     const filler = Array.from({ length: 9 }, (_, index) =>
       paragraph(`f${index}`, 'A short line.'),

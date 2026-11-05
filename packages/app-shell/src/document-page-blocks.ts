@@ -125,8 +125,19 @@ export function layoutParagraph(
       advance()
     }
     place()
+    if (!text.trim()) {
+      session.page.blocks.push({
+        type: 'paragraph',
+        paragraph,
+        from: 0,
+        to: text.length,
+        column: session.col,
+        wrapWidthPx: Math.max(1, column().widthPx - indent),
+      })
+      session.y += imagePx
+      return
+    }
     session.y += imagePx
-    if (!text.trim()) return
   }
 
   if (hosts.has(paragraph.id) && !text.trim()) {
