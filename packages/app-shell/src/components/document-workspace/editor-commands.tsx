@@ -361,6 +361,8 @@ export function editorMenus(
             {
               id: 'footnote',
               label: story === 'footnotes' ? 'Close footnotes' : 'Footnote',
+              shortcut:
+                story === 'footnotes' ? undefined : ['primary', 'alt', 'F'],
               pressed: story === 'footnotes',
               disabled:
                 !structure ||

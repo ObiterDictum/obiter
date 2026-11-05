@@ -22,6 +22,7 @@ import {
   command,
   commandOrNull,
 } from './docx-workspace-harness'
+import { clickParagraph } from './paragraph-selection-harness'
 
 function textEditLineage(baseVersionId: string, versionId: string) {
   return {
@@ -456,6 +457,45 @@ describe('DocxWorkspace find and undo', () => {
     expect(
       screen.getByLabelText('Pending paragraph').getAttribute('aria-current'),
     ).toBe('true')
+  })
+})
+
+describe('DocxWorkspace footnote shortcut', () => {
+  it('inserts a footnote at the caret with Ctrl+Alt+F', async () => {
+    mountWorkspace({})
+    clickParagraph('p1', 'Hello'.length)
+    const field = screen.getByLabelText('Paragraph text')
+    field.focus()
+    const claimed = fireEvent.keyDown(field, {
+      key: 'f',
+      code: 'KeyF',
+      ctrlKey: true,
+      altKey: true,
+    })
+    expect(claimed).toBe(false)
+    await waitFor(() => expect(command('Close footnotes')).toBeTruthy())
+  })
+
+  it('shows the shortcut on the Insert footnote command', () => {
+    mountWorkspace({})
+    expect(command('Footnote').textContent).toContain('Ctrl+Alt+F')
+  })
+
+  it('does not insert a footnote with Ctrl+Alt+F while tracking changes', () => {
+    mountWorkspace({})
+    clickParagraph('p1', 'Hello'.length)
+    openRibbonTab('Review')
+    setTrackChanges(true)
+    const field = screen.getByLabelText('Paragraph text')
+    field.focus()
+    const notPrevented = fireEvent.keyDown(field, {
+      key: 'f',
+      code: 'KeyF',
+      ctrlKey: true,
+      altKey: true,
+    })
+    expect(notPrevented).toBe(true)
+    expect(commandOrNull('Close footnotes')).toBeNull()
   })
 })
 

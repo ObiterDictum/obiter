@@ -157,6 +157,7 @@ export function workspaceKeyDown(
     undo,
     redo,
     print,
+    insertFootnote,
     format,
     request,
     review,
@@ -166,6 +167,7 @@ export function workspaceKeyDown(
     undo: () => void
     redo: () => void
     print: () => void
+    insertFootnote?: () => void
     format?: WorkspaceKeySources['format']
     request: (surface: 'find' | 'palette' | 'formatting') => void
     review: {
@@ -189,6 +191,7 @@ export function workspaceKeyDown(
     undo,
     redo,
     print,
+    insertFootnote,
     format,
     openFind: () => request('find'),
     openPalette: () => request('palette'),
