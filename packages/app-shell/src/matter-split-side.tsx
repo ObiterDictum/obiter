@@ -5,6 +5,11 @@ import {
   DocumentEditorHeader,
   readOnlyHeaderState,
 } from './components/document-workspace/document-editor-header'
+import {
+  HistoricalPdfPages,
+  HistoricalText,
+} from './components/document-workspace/document-version-view'
+import { workspaceKind } from './document-kind'
 import { documentImagePartNames } from './document-page-media'
 import { layoutDocumentPages, StaticDocumentPages } from './document-render'
 import {
@@ -25,10 +30,14 @@ export function MatterSplitSide({
   const { tabs, swapSides } = useMatterTabs()
   const tab = tabs.find((item) => item.id === sideId)
   const documentId = tab?.kind === 'document' ? tab.target : null
-  const document = useDocument(documentId ?? '')
+  const document = useDocument(documentId ?? '', {
+    enabled: documentId !== null,
+  })
   const version = document.data?.document.currentVersion ?? null
+  const kind = version ? workspaceKind(version.fileType) : null
   const modelQuery = useDocumentModel(documentId ?? '', {
     versionId: version?.id,
+    enabled: kind === 'docx',
   })
   const model = modelQuery.data?.model
   const pages = useMemo(
@@ -91,6 +100,14 @@ export function MatterSplitSide({
           </p>
         ) : document.isPending || modelQuery.isLoading ? (
           <Skeleton className="m-4 h-64" />
+        ) : version && kind === 'pdf' ? (
+          <HistoricalPdfPages
+            documentId={documentId}
+            versionId={version.id}
+            zoom={zoom}
+          />
+        ) : version && kind === 'txt' ? (
+          <HistoricalText documentId={documentId} versionId={version.id} />
         ) : !model ? (
           <p className="px-4 py-6 text-meta text-muted">
             This document has no readable version yet.

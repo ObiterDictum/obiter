@@ -229,7 +229,7 @@ function ReadOnlyPages({
   )
 }
 
-function HistoricalPdfPages({
+export function HistoricalPdfPages({
   documentId,
   versionId,
   zoom,
@@ -263,7 +263,7 @@ function HistoricalPdfPages({
   )
 }
 
-function HistoricalText({
+export function HistoricalText({
   documentId,
   versionId,
 }: {
