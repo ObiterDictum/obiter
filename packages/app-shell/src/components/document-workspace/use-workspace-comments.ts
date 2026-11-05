@@ -1,3 +1,6 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '../../api'
+import { workspaceKeys } from '../../document-workspace-queries'
 import { useRef } from 'react'
 import type {
   DocumentCommentAnchor,
@@ -46,6 +49,24 @@ export function useWorkspaceComments({
   canModerate: boolean
   revealCommentAnchor: (anchor: DocumentCommentAnchor) => void
 }) {
+  const client = useQueryClient()
+  const deletion = useMutation({
+    mutationFn: ({
+      commentId,
+      action,
+    }: {
+      commentId: string
+      action: 'delete' | 'restore'
+    }) =>
+      apiFetch(`/api/documents/${documentId}/comments/${commentId}/${action}`, {
+        method: 'PATCH',
+        body: '{}',
+      }),
+    onSuccess: () =>
+      client.invalidateQueries({
+        queryKey: workspaceKeys.comments(documentId),
+      }),
+  })
   const listed = query.data
   const createComment = useCreateDocumentComment(documentId)
   const replyComment = useReplyDocumentComment(documentId)
@@ -83,18 +104,26 @@ export function useWorkspaceComments({
     load: queryLoad(query),
     props: {
       comments: listed?.comments ?? [],
+      deletableCommentIds: listed?.deletableCommentIds ?? [],
+      deletedComments: listed?.deletedComments ?? [],
+      onDeleteComment: (commentId: string) =>
+        deletion.mutate({ commentId, action: 'delete' }),
+      onRestoreComment: (commentId: string) =>
+        deletion.mutate({ commentId, action: 'restore' }),
       importedComments: listed?.importedComments ?? [],
       orphanedReplies: listed?.orphanedReplies ?? [],
       commentTarget,
       currentUserId,
       canModerate,
       commentsPending:
+        deletion.isPending ||
         createComment.isPending ||
         replyComment.isPending ||
         resolveComment.isPending ||
         reopenComment.isPending,
       commentsError: mutationError(
-        createComment.error ??
+        deletion.error ??
+          createComment.error ??
           replyComment.error ??
           resolveComment.error ??
           reopenComment.error,
