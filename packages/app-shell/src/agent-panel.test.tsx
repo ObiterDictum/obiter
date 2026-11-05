@@ -142,7 +142,12 @@ beforeEach(() => {
           })
         }
         if (url.endsWith('/agent-settings')) {
-          return json({ matterTextToModel: false, model: null })
+          return json({
+            matterTextToModel: false,
+            model: null,
+            keyLastFour: null,
+            keySetAt: null,
+          })
         }
         if (url.endsWith('/api/matters/mtr_1/agent-runs')) return json({ runs })
         if (url.endsWith('/cancel')) {
@@ -246,6 +251,13 @@ describe('agent tab', () => {
     expect(
       screen.getByRole('link', { name: 'Settings' }).getAttribute('href'),
     ).toBe('/settings')
+  })
+
+  it('tells the user when the organisation has no agent model set', async () => {
+    renderTab()
+    expect(
+      await screen.findByText(/No agent model is set for this organisation/),
+    ).toBeTruthy()
   })
 
   it('links every answer pointer to the paragraph it cites', async () => {

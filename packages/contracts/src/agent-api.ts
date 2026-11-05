@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import {
   AGENT_GOAL_MAX_LENGTH,
-  agentModelIdentitySchema,
   agentRunSchema,
   agentStepSchema,
   agentToolCallSchema,
@@ -47,20 +46,3 @@ export const agentRunStreamMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('run'), run: agentRunSchema }).strict(),
 ])
 export type AgentRunStreamMessage = z.infer<typeof agentRunStreamMessageSchema>
-
-export const organisationAgentSettingsSchema = z
-  .object({
-    matterTextToModel: z.boolean(),
-    model: agentModelIdentitySchema.nullable(),
-  })
-  .strict()
-export type OrganisationAgentSettings = z.infer<
-  typeof organisationAgentSettingsSchema
->
-
-export const organisationAgentSettingsUpdateSchema = z
-  .object({ matterTextToModel: z.boolean() })
-  .strict()
-export type OrganisationAgentSettingsUpdate = z.infer<
-  typeof organisationAgentSettingsUpdateSchema
->
