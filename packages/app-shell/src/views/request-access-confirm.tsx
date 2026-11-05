@@ -5,7 +5,7 @@ import { CheckCircle, Clock, Warning } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
 import type { ConfirmAccessRequestResponse } from '@obiter/contracts'
 import { confirmAccessRequestQueryOptions } from '../access-request'
-import { AuthHeading, AuthLayout } from './auth-layout'
+import { AuthHeading, AuthLayout, authCardClassName } from './auth-layout'
 
 function tokenFromSearch(search: { token?: unknown }): string {
   return typeof search.token === 'string' && search.token.length > 0
@@ -143,7 +143,12 @@ function Outcome({
   children?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-start gap-3 pt-2">
+    <div
+      className={cn(
+        authCardClassName,
+        'mt-0 flex flex-col items-center gap-3 text-center',
+      )}
+    >
       <span
         className={cn(
           'grid size-10 place-items-center rounded-lg',

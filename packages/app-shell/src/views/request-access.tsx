@@ -20,6 +20,8 @@ import {
   AuthForm,
   AuthHeading,
   AuthLayout,
+  PRIVACY_POLICY_URL,
+  TERMS_OF_SERVICE_URL,
 } from './auth-layout'
 import { BotCheck, type BotCheckHandle, type BotCheckState } from './bot-check'
 
@@ -100,7 +102,7 @@ export function RequestAccessRouteView({
   return (
     <AuthLayout
       footnote="Need help? Contact your firm administrator."
-      columnClassName="max-w-[440px]"
+      columnClassName="max-w-[480px]"
     >
       <AuthHeading
         title="Request access"
@@ -132,7 +134,7 @@ export function RequestAccessRouteView({
         />
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-meta text-ink">I am a…</legend>
+          <legend className="mb-2 text-meta text-ink">I am a…</legend>
           {CATEGORY_OPTIONS.map((option) => (
             <label
               key={option.value}
@@ -151,7 +153,7 @@ export function RequestAccessRouteView({
                 value={option.value}
                 checked={form.category === option.value}
                 onChange={() => update('category', option.value)}
-                className="mt-1 size-4 shrink-0 accent-brand"
+                className="mt-0.5 size-4 shrink-0 accent-brand"
               />
               <span className="flex flex-col gap-1">
                 <span className="text-meta text-ink">{option.label}</span>
@@ -199,7 +201,7 @@ export function RequestAccessRouteView({
         <label className="flex items-start gap-3 rounded-lg border border-line bg-raised p-4">
           <input
             type="checkbox"
-            className="mt-1 size-4 shrink-0 accent-brand"
+            className="mt-0.5 size-4 shrink-0 accent-brand"
             checked={form.setUpOrganisation}
             onChange={(event) =>
               update('setUpOrganisation', event.target.checked)
@@ -217,33 +219,55 @@ export function RequestAccessRouteView({
         </label>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-meta text-ink">Before you send</legend>
-          <label className="flex items-start gap-3 text-meta text-ink">
+          <legend className="mb-2 text-meta text-ink">Terms and privacy</legend>
+          <label className="flex items-center gap-3 text-meta text-ink">
             <input
               type="checkbox"
-              className="mt-1 size-4 shrink-0 accent-brand"
+              className="size-4 shrink-0 accent-brand"
               checked={form.acceptedTerms}
               onChange={(event) =>
                 update('acceptedTerms', event.target.checked)
               }
             />
-            I accept the tester terms.
+            <span>
+              I accept the{' '}
+              <a
+                href={TERMS_OF_SERVICE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-brand"
+              >
+                terms of service
+              </a>
+              .
+            </span>
           </label>
-          <label className="flex items-start gap-3 text-meta text-ink">
+          <label className="flex items-center gap-3 text-meta text-ink">
             <input
               type="checkbox"
-              className="mt-1 size-4 shrink-0 accent-brand"
+              className="size-4 shrink-0 accent-brand"
               checked={form.acceptedPrivacyNotice}
               onChange={(event) =>
                 update('acceptedPrivacyNotice', event.target.checked)
               }
             />
-            I accept the privacy notice.
+            <span>
+              I have read the{' '}
+              <a
+                href={PRIVACY_POLICY_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2 hover:text-brand"
+              >
+                privacy policy
+              </a>
+              .
+            </span>
           </label>
-          <label className="flex items-start gap-3 text-meta text-ink">
+          <label className="flex items-center gap-3 text-meta text-ink">
             <input
               type="checkbox"
-              className="mt-1 size-4 shrink-0 accent-brand"
+              className="size-4 shrink-0 accent-brand"
               checked={form.detailsAreTrue}
               onChange={(event) =>
                 update('detailsAreTrue', event.target.checked)
@@ -251,10 +275,6 @@ export function RequestAccessRouteView({
             />
             The details I have given are true.
           </label>
-          <p className="text-caption text-subtle">
-            The tester terms and the privacy notice are not published yet. We
-            will link both here before launch.
-          </p>
           {errors.attestations ? (
             <p role="alert" className="text-caption text-danger">
               {errors.attestations}

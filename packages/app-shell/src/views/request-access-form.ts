@@ -100,7 +100,7 @@ export function validateRequestAccess(
     !form.detailsAreTrue
   )
     errors.attestations =
-      'Accept the terms, accept the privacy notice and confirm your details before sending.'
+      'Accept the terms of service, confirm you have read the privacy policy and confirm your details before sending.'
 
   if (Object.keys(errors).length > 0) return { errors, input: null }
 

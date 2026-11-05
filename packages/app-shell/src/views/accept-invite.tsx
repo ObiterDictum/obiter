@@ -13,7 +13,7 @@ import {
   type InvitePreviewResult,
 } from '../organisation-membership'
 import { ResendVerificationControl } from './sign-in'
-import { AuthHeading, AuthLayout } from './auth-layout'
+import { AuthCard, AuthHeading, AuthLayout } from './auth-layout'
 
 function inviteTokenFromSearch(search: { token?: unknown }): string {
   return typeof search.token === 'string' && search.token.length > 0
@@ -97,7 +97,7 @@ export function AcceptInviteRouteView({ platform }: { platform: AppPlatform }) {
         description={<InviteHeading preview={preview} />}
       />
 
-      <div className="mt-6 flex flex-col gap-4">
+      <AuthCard>
         {checking ? (
           <p className="text-meta text-muted">Checking this invite…</p>
         ) : pageFailure ? (
@@ -177,7 +177,7 @@ export function AcceptInviteRouteView({ platform }: { platform: AppPlatform }) {
             ) : null}
           </>
         )}
-      </div>
+      </AuthCard>
     </AuthLayout>
   )
 }

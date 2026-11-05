@@ -3,7 +3,13 @@ import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
 import { useAuth } from '../auth'
-import { AuthFoot, AuthForm, AuthHeading, AuthLayout } from './auth-layout'
+import {
+  AuthCard,
+  AuthFoot,
+  AuthForm,
+  AuthHeading,
+  AuthLayout,
+} from './auth-layout'
 
 export function ResetPasswordRouteView() {
   const navigate = useNavigate()
@@ -77,7 +83,7 @@ export function ResetPasswordRouteView() {
               </>
             }
           />
-          <div className="mt-6 flex flex-col gap-2">
+          <AuthCard className="gap-2">
             <Button
               size="lg"
               nativeButton={false}
@@ -95,7 +101,7 @@ export function ResetPasswordRouteView() {
             >
               Back to sign in
             </Button>
-          </div>
+          </AuthCard>
         </>
       ) : (
         <>
