@@ -1,7 +1,7 @@
 {
   "name": "@obiter/desktop",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Obiter desktop application (Electron shell for the shared app-shell).",
   "author": "Obiter",
   "type": "module",
