@@ -50,6 +50,9 @@ export const API_ERROR_CODES = [
   'redaction_return_unavailable',
   'agent_run_not_found',
   'agent_unavailable',
+  'agent_key_rejected',
+  'agent_model_unknown',
+  'agent_provider_unreachable',
 ] as const
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number]

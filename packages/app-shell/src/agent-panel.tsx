@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouterState } from '@tanstack/react-router'
-import { AGENT_GOAL_MAX_LENGTH, type AgentRun } from '@obiter/contracts'
+import {
+  AGENT_GOAL_MAX_LENGTH,
+  AGENT_PROVIDERS,
+  type AgentRun,
+} from '@obiter/contracts'
 import { Badge, Button, KeyboardHint, Skeleton } from '@obiter/ui'
 import { ArrowLeft, FileText, Folders, X } from '@obiter/ui/icons'
 import {
@@ -248,7 +252,14 @@ function MatterTextNote({ documentAttached }: { documentAttached: boolean }) {
     me.data?.organisation?.id ?? null,
   )
   if (!settings.data) return <span />
-  const provider = settings.data.model?.provider ?? 'the model provider'
+  if (!settings.data.model)
+    return (
+      <p className="text-caption text-muted">
+        No agent model is set for this organisation. An owner or admin can set
+        one in Settings.
+      </p>
+    )
+  const provider = AGENT_PROVIDERS[settings.data.model.provider].label
   const text = settings.data.matterTextToModel
     ? `Your question and the documents it reads go to ${provider}.`
     : documentAttached
