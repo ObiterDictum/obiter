@@ -9,63 +9,33 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as SearchRouteImport } from './routes/search'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SignInRouteImport } from './routes/sign-in'
-import { Route as SignUpRouteImport } from './routes/sign-up'
-import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
-import { Route as CaseCaseSlugRouteImport } from './routes/case/$caseSlug'
-import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
-import { Route as InvitesAcceptRouteImport } from './routes/invites/accept'
-import { Route as LnSplatRouteImport } from './routes/ln/$'
-import { Route as MattersIndexRouteImport } from './routes/matters/index'
-import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
-import { Route as RedactIndexRouteImport } from './routes/redact/index'
-import { Route as RedactRunIdRouteImport } from './routes/redact/$runId'
+import { Route as VerifyRouteImport } from './routes/verify'
+import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as RequestAccessIndexRouteImport } from './routes/request-access/index'
+import { Route as RedactIndexRouteImport } from './routes/redact/index'
+import { Route as MattersIndexRouteImport } from './routes/matters/index'
 import { Route as RequestAccessConfirmRouteImport } from './routes/request-access/confirm'
+import { Route as RedactRunIdRouteImport } from './routes/redact/$runId'
+import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
+import { Route as LnSplatRouteImport } from './routes/ln/$'
+import { Route as InvitesAcceptRouteImport } from './routes/invites/accept'
+import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
+import { Route as CaseCaseSlugRouteImport } from './routes/case/$caseSlug'
 import { Route as MattersMatterIdIndexRouteImport } from './routes/matters/$matterId/index'
 import { Route as MattersMatterIdVerifyRouteImport } from './routes/matters/$matterId/verify'
-import { Route as MattersMatterIdDocumentsDocumentIdRouteImport } from './routes/matters/$matterId/documents/$documentId'
 import { Route as MattersMatterIdRedactRunIdRouteImport } from './routes/matters/$matterId/redact/$runId'
+import { Route as MattersMatterIdDocumentsDocumentIdRouteImport } from './routes/matters/$matterId/documents/$documentId'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SearchRoute = SearchRouteImport.update({
-  id: '/search',
-  path: '/search',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignInRoute = SignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignUpRoute = SignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
+const WorkspaceRoute = WorkspaceRouteImport.update({
+  id: '/workspace',
+  path: '/workspace',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VerifyRoute = VerifyRouteImport.update({
@@ -73,49 +43,39 @@ const VerifyRoute = VerifyRouteImport.update({
   path: '/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WorkspaceRoute = WorkspaceRouteImport.update({
-  id: '/workspace',
-  path: '/workspace',
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CaseCaseSlugRoute = CaseCaseSlugRouteImport.update({
-  id: '/case/$caseSlug',
-  path: '/case/$caseSlug',
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CasesCaseIdRoute = CasesCaseIdRouteImport.update({
-  id: '/cases/$caseId',
-  path: '/cases/$caseId',
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
-  id: '/invites/accept',
-  path: '/invites/accept',
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LnSplatRoute = LnSplatRouteImport.update({
-  id: '/ln/$',
-  path: '/ln/$',
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MattersIndexRoute = MattersIndexRouteImport.update({
-  id: '/matters/',
-  path: '/matters/',
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MattersMatterIdRoute = MattersMatterIdRouteImport.update({
-  id: '/matters/$matterId',
-  path: '/matters/$matterId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RedactIndexRoute = RedactIndexRouteImport.update({
-  id: '/redact/',
-  path: '/redact/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RedactRunIdRoute = RedactRunIdRouteImport.update({
-  id: '/redact/$runId',
-  path: '/redact/$runId',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RequestAccessIndexRoute = RequestAccessIndexRouteImport.update({
@@ -123,9 +83,49 @@ const RequestAccessIndexRoute = RequestAccessIndexRouteImport.update({
   path: '/request-access/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RedactIndexRoute = RedactIndexRouteImport.update({
+  id: '/redact/',
+  path: '/redact/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MattersIndexRoute = MattersIndexRouteImport.update({
+  id: '/matters/',
+  path: '/matters/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RequestAccessConfirmRoute = RequestAccessConfirmRouteImport.update({
   id: '/request-access/confirm',
   path: '/request-access/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RedactRunIdRoute = RedactRunIdRouteImport.update({
+  id: '/redact/$runId',
+  path: '/redact/$runId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MattersMatterIdRoute = MattersMatterIdRouteImport.update({
+  id: '/matters/$matterId',
+  path: '/matters/$matterId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LnSplatRoute = LnSplatRouteImport.update({
+  id: '/ln/$',
+  path: '/ln/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
+  id: '/invites/accept',
+  path: '/invites/accept',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CasesCaseIdRoute = CasesCaseIdRouteImport.update({
+  id: '/cases/$caseId',
+  path: '/cases/$caseId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CaseCaseSlugRoute = CaseCaseSlugRouteImport.update({
+  id: '/case/$caseSlug',
+  path: '/case/$caseSlug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MattersMatterIdIndexRoute = MattersMatterIdIndexRouteImport.update({
@@ -138,16 +138,16 @@ const MattersMatterIdVerifyRoute = MattersMatterIdVerifyRouteImport.update({
   path: '/verify',
   getParentRoute: () => MattersMatterIdRoute,
 } as any)
-const MattersMatterIdDocumentsDocumentIdRoute =
-  MattersMatterIdDocumentsDocumentIdRouteImport.update({
-    id: '/documents/$documentId',
-    path: '/documents/$documentId',
-    getParentRoute: () => MattersMatterIdRoute,
-  } as any)
 const MattersMatterIdRedactRunIdRoute =
   MattersMatterIdRedactRunIdRouteImport.update({
     id: '/redact/$runId',
     path: '/redact/$runId',
+    getParentRoute: () => MattersMatterIdRoute,
+  } as any)
+const MattersMatterIdDocumentsDocumentIdRoute =
+  MattersMatterIdDocumentsDocumentIdRouteImport.update({
+    id: '/documents/$documentId',
+    path: '/documents/$documentId',
     getParentRoute: () => MattersMatterIdRoute,
   } as any)
 
@@ -327,53 +327,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/search': {
-      id: '/search'
-      path: '/search'
-      fullPath: '/search'
-      preLoaderRoute: typeof SearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-in': {
-      id: '/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof SignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-up': {
-      id: '/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof SignUpRouteImport
+    '/workspace': {
+      id: '/workspace'
+      path: '/workspace'
+      fullPath: '/workspace'
+      preLoaderRoute: typeof WorkspaceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/verify': {
@@ -383,67 +341,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/workspace': {
-      id: '/workspace'
-      path: '/workspace'
-      fullPath: '/workspace'
-      preLoaderRoute: typeof WorkspaceRouteImport
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/case/$caseSlug': {
-      id: '/case/$caseSlug'
-      path: '/case/$caseSlug'
-      fullPath: '/case/$caseSlug'
-      preLoaderRoute: typeof CaseCaseSlugRouteImport
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/cases/$caseId': {
-      id: '/cases/$caseId'
-      path: '/cases/$caseId'
-      fullPath: '/cases/$caseId'
-      preLoaderRoute: typeof CasesCaseIdRouteImport
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/invites/accept': {
-      id: '/invites/accept'
-      path: '/invites/accept'
-      fullPath: '/invites/accept'
-      preLoaderRoute: typeof InvitesAcceptRouteImport
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ln/$': {
-      id: '/ln/$'
-      path: '/ln/$'
-      fullPath: '/ln/$'
-      preLoaderRoute: typeof LnSplatRouteImport
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/matters/': {
-      id: '/matters/'
-      path: '/matters'
-      fullPath: '/matters/'
-      preLoaderRoute: typeof MattersIndexRouteImport
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/matters/$matterId': {
-      id: '/matters/$matterId'
-      path: '/matters/$matterId'
-      fullPath: '/matters/$matterId'
-      preLoaderRoute: typeof MattersMatterIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/redact/': {
-      id: '/redact/'
-      path: '/redact'
-      fullPath: '/redact/'
-      preLoaderRoute: typeof RedactIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/redact/$runId': {
-      id: '/redact/$runId'
-      path: '/redact/$runId'
-      fullPath: '/redact/$runId'
-      preLoaderRoute: typeof RedactRunIdRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/request-access/': {
@@ -453,11 +397,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RequestAccessIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/redact/': {
+      id: '/redact/'
+      path: '/redact'
+      fullPath: '/redact/'
+      preLoaderRoute: typeof RedactIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/matters/': {
+      id: '/matters/'
+      path: '/matters'
+      fullPath: '/matters/'
+      preLoaderRoute: typeof MattersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/request-access/confirm': {
       id: '/request-access/confirm'
       path: '/request-access/confirm'
       fullPath: '/request-access/confirm'
       preLoaderRoute: typeof RequestAccessConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/redact/$runId': {
+      id: '/redact/$runId'
+      path: '/redact/$runId'
+      fullPath: '/redact/$runId'
+      preLoaderRoute: typeof RedactRunIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/matters/$matterId': {
+      id: '/matters/$matterId'
+      path: '/matters/$matterId'
+      fullPath: '/matters/$matterId'
+      preLoaderRoute: typeof MattersMatterIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ln/$': {
+      id: '/ln/$'
+      path: '/ln/$'
+      fullPath: '/ln/$'
+      preLoaderRoute: typeof LnSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invites/accept': {
+      id: '/invites/accept'
+      path: '/invites/accept'
+      fullPath: '/invites/accept'
+      preLoaderRoute: typeof InvitesAcceptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cases/$caseId': {
+      id: '/cases/$caseId'
+      path: '/cases/$caseId'
+      fullPath: '/cases/$caseId'
+      preLoaderRoute: typeof CasesCaseIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/case/$caseSlug': {
+      id: '/case/$caseSlug'
+      path: '/case/$caseSlug'
+      fullPath: '/case/$caseSlug'
+      preLoaderRoute: typeof CaseCaseSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/matters/$matterId/': {
@@ -474,18 +474,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MattersMatterIdVerifyRouteImport
       parentRoute: typeof MattersMatterIdRoute
     }
-    '/matters/$matterId/documents/$documentId': {
-      id: '/matters/$matterId/documents/$documentId'
-      path: '/documents/$documentId'
-      fullPath: '/matters/$matterId/documents/$documentId'
-      preLoaderRoute: typeof MattersMatterIdDocumentsDocumentIdRouteImport
-      parentRoute: typeof MattersMatterIdRoute
-    }
     '/matters/$matterId/redact/$runId': {
       id: '/matters/$matterId/redact/$runId'
       path: '/redact/$runId'
       fullPath: '/matters/$matterId/redact/$runId'
       preLoaderRoute: typeof MattersMatterIdRedactRunIdRouteImport
+      parentRoute: typeof MattersMatterIdRoute
+    }
+    '/matters/$matterId/documents/$documentId': {
+      id: '/matters/$matterId/documents/$documentId'
+      path: '/documents/$documentId'
+      fullPath: '/matters/$matterId/documents/$documentId'
+      preLoaderRoute: typeof MattersMatterIdDocumentsDocumentIdRouteImport
       parentRoute: typeof MattersMatterIdRoute
     }
   }
