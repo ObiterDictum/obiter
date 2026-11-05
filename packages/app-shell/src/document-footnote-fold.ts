@@ -17,7 +17,14 @@ import {
 } from './document-structural-drafts'
 import { documentStory } from './document-model-text'
 import {
+  selectionSegmentMap,
+  type DocumentSelection,
+  type SelectionSegment,
+} from './document-selection'
+import { storyFlowOrder } from './document-story-flow'
+import {
   blockRuns,
+  blockText,
   type EditorResult,
   type EditorState,
 } from './document-word-edits'
@@ -232,24 +239,58 @@ export function followFootnoteEdits(
   after: EditorResult,
   structures: readonly StructuralDraft[],
   newId: () => string,
-  selectionDeleted = false,
+  selection?: DocumentSelection,
 ) {
   const body = documentStory(model)
+  const structureChanged =
+    before.inserts.length !== after.state.inserts.length ||
+    before.deletedParagraphIds.length !== after.state.deletedParagraphIds.length
+  const selected = selection
+    ? selectionSegmentMap(
+        {
+          order: storyFlowOrder(
+            model,
+            before.inserts,
+            before.deletedParagraphIds,
+            selection.anchor.paragraphId,
+          ),
+          textOf: (id) => blockText(model, before, id),
+        },
+        selection,
+      )
+    : new Map<string, SelectionSegment>()
+  const firstSelected = selected.keys().next().value
   const next: StructuralDraft[] = []
   const dropped = new Set<string>()
   const removals: StructuralDraft[] = []
   const regions = new Map<string, EditRegion | null>()
   const regionOf = (paragraphId: string) => {
     if (!regions.has(paragraphId)) {
+      const segment = selected.get(paragraphId)
+      const old = blockRuns(model, before, paragraphId)
+      const now = blockRuns(model, after.state, paragraphId)
+      const length = old.reduce((sum, run) => sum + run.text.length, 0)
       regions.set(
         paragraphId,
-        editRegion(
-          blockRuns(model, before, paragraphId),
-          blockRuns(model, after.state, paragraphId),
-          after.caret.paragraphId === paragraphId
-            ? after.caret.offset
-            : undefined,
-        ),
+        segment
+          ? {
+              from: paragraphId === firstSelected ? segment.from : -1,
+              to: segment.to,
+              length,
+              shift: structureChanged
+                ? 0
+                : now.reduce((sum, run) => sum + run.text.length, 0) - length,
+              selected: true,
+            }
+          : structureChanged
+            ? null
+            : editRegion(
+                old,
+                now,
+                after.caret.paragraphId === paragraphId
+                  ? after.caret.offset
+                  : undefined,
+              ),
       )
     }
     return regions.get(paragraphId) ?? null
@@ -265,7 +306,7 @@ export function followFootnoteEdits(
     } else if (
       structure.offset > region.to ||
       (structure.offset === region.to &&
-        !(selectionDeleted && region.to === region.length))
+        !(region.selected && region.to === region.length))
     ) {
       next.push({ ...structure, offset: structure.offset + region.shift })
     } else {
@@ -283,7 +324,7 @@ export function followFootnoteEdits(
         references.some((reference) => reference.id === run.id) &&
         region.from < offset &&
         (offset < region.to ||
-          (selectionDeleted &&
+          (region.selected &&
             offset === region.to &&
             region.to === region.length)) &&
         !structures.some(
@@ -300,16 +341,36 @@ export function followFootnoteEdits(
       offset += run.text.length
     }
   }
-  const extraRuns = { ...after.state.extraRuns }
+  const removedRunIds = new Set(
+    removals.flatMap((removal) =>
+      removal.kind === 'footnote-removal' ? [removal.runId] : [],
+    ),
+  )
+  const keepRun = (run: DocumentTextRunWire) => !removedRunIds.has(run.id)
+  const inserts = after.state.inserts.map((insert) =>
+    insert.runs ? { ...insert, runs: insert.runs.filter(keepRun) } : insert,
+  )
+  const extraRuns = Object.fromEntries(
+    Object.entries(after.state.extraRuns).map(([id, runs]) => [
+      id,
+      runs.filter(keepRun),
+    ]),
+  )
   for (const id of dropped) delete extraRuns[id]
   const drafts = { ...after.state.drafts }
   for (const removal of removals) {
     if (removal.kind === 'footnote-removal') delete drafts[removal.runId]
   }
-  return { structures: [...next, ...removals], extraRuns, drafts }
+  return { structures: [...next, ...removals], extraRuns, drafts, inserts }
 }
 
-type EditRegion = { from: number; to: number; shift: number; length: number }
+type EditRegion = {
+  from: number
+  to: number
+  shift: number
+  length: number
+  selected?: boolean
+}
 
 function editRegion(
   before: readonly DocumentTextRunWire[],

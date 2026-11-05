@@ -7623,12 +7623,14 @@
                     mark and the note always show the same number.
                     <code>delete_footnote</code> removes a reference run that
                     holds nothing else, and its entry once no reference remains;
-                    the editor queues it when a deletion spans the reference, or
-                    a selected range through the end of the paragraph is
-                    deleted. A pending note follows the text typed before it.
-                    Cut deletes the note: the clipboard carries plain text, so a
-                    paste does not bring the note back. Inserting a note adds
-                    the <code>FootnoteText</code> and
+                    the editor queues it when a selected range covering the
+                    reference is deleted, typed over or pasted over, including a
+                    reference at the paragraph end. Collapsed Backspace and
+                    Delete keep references, including when joining paragraphs. A
+                    pending note follows the text typed before it. Cut deletes
+                    the note: the clipboard carries plain text, so a paste does
+                    not bring the note back. Inserting a note adds the
+                    <code>FootnoteText</code> and
                     <code>FootnoteReference</code> styles the package lacks, and
                     every reference run is also superscript directly, so a
                     package with no styles part still shows raised marks.

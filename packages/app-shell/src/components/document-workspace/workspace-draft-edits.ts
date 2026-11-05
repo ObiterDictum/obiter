@@ -9,6 +9,7 @@ import { followFootnoteEdits } from '../../document-footnote-fold'
 import { mergeEmphasis } from '../../document-format-edits'
 import { planParagraphDeletion } from '../../document-paragraph-deletion'
 import type { DraftState } from '../../document-save-plan'
+import type { DocumentSelection } from '../../document-selection'
 import type { HistoryEdit } from '../../document-history-grouping'
 import { applyPasteText, type PasteTarget } from '../../document-paste'
 import {
@@ -38,12 +39,11 @@ export function createWorkspaceDraftEdits({
   function commitEditor(
     model: DocumentModelWire,
     result: EditorResult,
-    selectionDeleted = false,
+    selection?: DocumentSelection,
   ) {
     setState((current) => ({
       ...current,
-      ...followFootnotes(model, current, result, selectionDeleted),
-      inserts: result.state.inserts,
+      ...followFootnotes(model, current, result, selection),
       deletedParagraphIds: result.state.deletedParagraphIds,
     }))
   }
@@ -58,9 +58,18 @@ export function createWorkspaceDraftEdits({
       commitEditor(
         model,
         result,
-        edit.type === 'replace' &&
-          edit.from !== edit.to &&
-          (edit.insert ?? '') === '',
+        edit.type === 'replace'
+          ? {
+              anchor: {
+                paragraphId: edit.paragraphId,
+                offset: edit.from ?? edit.offset,
+              },
+              focus: {
+                paragraphId: edit.paragraphId,
+                offset: edit.to ?? edit.offset,
+              },
+            }
+          : undefined,
       )
       return { status: 'applied', caret: result.caret }
     }
@@ -77,7 +86,7 @@ export function createWorkspaceDraftEdits({
     const result = applyReplaceDocumentRange(model, getState(), from, to, text)
     if (!result) return null
     checkpoint()
-    commitEditor(model, result, text === '')
+    commitEditor(model, result, { anchor: from, focus: to })
     return result.caret
   }
 
@@ -95,7 +104,7 @@ export function createWorkspaceDraftEdits({
     )
     if (!result) return null
     checkpoint()
-    commitEditor(model, result)
+    commitEditor(model, result, { anchor: from, focus: to })
     return result.caret
   }
 
@@ -157,7 +166,6 @@ export function createWorkspaceDraftEdits({
     setState((current) => ({
       ...current,
       ...followFootnotes(model, current, result),
-      inserts: result.state.inserts,
       deletedParagraphIds: result.state.deletedParagraphIds,
       ...(pendingInsert
         ? {}
@@ -186,7 +194,13 @@ export function createWorkspaceDraftEdits({
     )
     if (outcome.status === 'applied') {
       checkpoint()
-      commitEditor(model, { state: outcome.state, caret: outcome.caret })
+      commitEditor(
+        model,
+        { state: outcome.state, caret: outcome.caret },
+        target.kind === 'range'
+          ? { anchor: target.from, focus: target.to }
+          : undefined,
+      )
       return { status: 'applied', caret: outcome.caret }
     }
     if (outcome.status === 'refused') {
@@ -232,25 +246,15 @@ function followFootnotes(
   model: DocumentModelWire,
   current: DraftState,
   result: EditorResult,
-  selectionDeleted = false,
-): Pick<DraftState, 'structures' | 'extraRuns' | 'drafts'> {
-  if (
-    current.inserts.length !== result.state.inserts.length ||
-    current.deletedParagraphIds.length !==
-      result.state.deletedParagraphIds.length
-  )
-    return {
-      structures: current.structures,
-      extraRuns: result.state.extraRuns,
-      drafts: result.state.drafts,
-    }
+  selection?: DocumentSelection,
+): Pick<DraftState, 'structures' | 'extraRuns' | 'drafts' | 'inserts'> {
   return followFootnoteEdits(
     model,
     current,
     result,
     current.structures,
     () => crypto.randomUUID(),
-    selectionDeleted,
+    selection,
   )
 }
 

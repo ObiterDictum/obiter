@@ -1,5 +1,8 @@
 import '@obiter/test-dom'
 import { describe, expect, it } from 'bun:test'
+import { act, renderHook } from '@testing-library/react'
+import { useWorkspaceDraftHistory } from './document-editor-history'
+import { createWorkspaceDraftEdits } from './components/document-workspace/workspace-draft-edits'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -14,7 +17,11 @@ import { documentStory, editableParagraph } from './document-model-text'
 import { emptyFormatDrafts } from './document-format-types'
 import { documentNotes, runNoteRefs } from './document-page-notes'
 import { partitionDraftState } from './document-save-partition'
-import { emptyDraftState, planDocumentSave } from './document-save-plan'
+import {
+  emptyDraftState,
+  planDocumentSave,
+  type DraftState,
+} from './document-save-plan'
 import {
   footnoteNoteParagraphId,
   structuralDraftSchema,
@@ -733,23 +740,247 @@ describe('footnotes following text edits', () => {
     const before = emptyEditorState()
     const after = edit(base, before, 6, 11)
     expect(
-      followFootnoteEdits(base, before, after, pending, ids(), true).structures,
+      followFootnoteEdits(base, before, after, pending, ids(), {
+        anchor: { paragraphId: 'p1', offset: 6 },
+        focus: { paragraphId: 'p1', offset: 11 },
+      }).structures,
     ).toEqual([])
   })
 
-  it('keeps a footnote ending its paragraph when the last word is typed over or backspaced', () => {
+  for (const [action, label] of [
+    ['type', 'typing'],
+    ['paste', 'pasting'],
+    ['paste-lines', 'pasting multiple lines'],
+    ['same-text', 'typing identical text'],
+    ['range', 'replacing a document range'],
+  ] as const) {
+    for (const position of ['paragraph-final', 'mid-paragraph'] as const) {
+      it(`${label} over a selection covering a ${position} reference removes its note and one Undo restores text and note`, () => {
+        const base = stored()
+        if (position === 'paragraph-final') {
+          const runs = base.stories[0]?.paragraphs[0]?.runs
+          runs?.pop()
+        }
+        base.stories.push({
+          partName: 'word/footnotes.xml',
+          kind: 'footnotes',
+          paragraphs: [
+            paragraph('n1', 'Selected note'),
+            paragraph('n2', 'Kept note'),
+          ],
+          preservedXmlFragments: [
+            '<w:footnote w:id="1"><w:p/></w:footnote>',
+            '<w:footnote w:id="2"><w:p/></w:footnote>',
+          ],
+          fields: [],
+          unanchoredFieldParagraphIds: [],
+        })
+        base.stories[0]?.paragraphs.push({
+          id: 'p2',
+          runs: [
+            { id: 'c', text: 'Later', preservedXmlFragments: [] },
+            {
+              id: 'ref2',
+              text: '',
+              preservedXmlFragments: ['<w:footnoteReference w:id="2"/>'],
+            },
+          ],
+          preservedXmlFragments: [],
+        })
+        let state = emptyDraftState()
+        const before = structuredClone(state)
+        const originalText = blockText(base, state, 'p1')
+        const { result } = renderHook(() => useWorkspaceDraftHistory())
+        const edits = createWorkspaceDraftEdits({
+          getModel: () => base,
+          getState: () => state,
+          setState: (update) => {
+            state = update(state)
+          },
+          checkpoint: (edit) => result.current.record(state, edit),
+        })
+        const to = position === 'paragraph-final' ? 12 : 15
+        const replacement =
+          action === 'same-text'
+            ? originalText.slice(7, to)
+            : action === 'paste-lines'
+              ? 'pasted\ntext'
+              : 'new'
+        act(() => {
+          if (action === 'type' || action === 'same-text') {
+            expect(
+              edits.handleWordEdit(base, {
+                type: 'replace',
+                paragraphId: 'p1',
+                offset: 7,
+                from: 7,
+                to,
+                insert: replacement,
+              })?.status,
+            ).toBe('applied')
+          } else if (action === 'range') {
+            expect(
+              edits.replaceDocumentRange(
+                base,
+                { paragraphId: 'p1', offset: 7 },
+                { paragraphId: 'p1', offset: to },
+                replacement,
+              ),
+            ).not.toBeNull()
+          } else {
+            expect(
+              edits.paste(
+                base,
+                {
+                  kind: 'range',
+                  from: { paragraphId: 'p1', offset: 7 },
+                  to: { paragraphId: 'p1', offset: to },
+                },
+                replacement,
+              )?.status,
+            ).toBe('applied')
+          }
+        })
+        expect(
+          Object.values(state.extraRuns)
+            .flat()
+            .some((run) => run.id === 'ref'),
+        ).toBe(false)
+        expect(
+          state.inserts
+            .flatMap((insert) => insert.runs ?? [])
+            .some((run) => run.id === 'ref'),
+        ).toBe(false)
+        expect(state.structures).toEqual([
+          {
+            id: expect.any(String),
+            kind: 'footnote-removal',
+            paragraphId: 'p1',
+            runId: 'ref',
+          },
+        ])
+        expect(blockText(base, state, 'p1')).toBe(
+          originalText.slice(0, 7) +
+            replacement.split('\n')[0] +
+            (action === 'paste-lines' ? '' : originalText.slice(to)),
+        )
+        expect(
+          documentNotes(withStructuralDrafts(base, state.structures)).map(
+            (note) => [note.paragraphs[0]?.runs[0]?.text, note.mark],
+          ),
+        ).toEqual([['Kept note', '1']])
+        act(() => {
+          const restored = result.current.stepBack(state)
+          if (!restored) throw new Error('Undo unavailable')
+          state = restored
+        })
+        expect(state).toEqual(before)
+        expect(blockText(base, state, 'p1')).toBe(originalText)
+        expect(
+          documentNotes(withStructuralDrafts(base, state.structures)).map(
+            (note) => [note.paragraphs[0]?.runs[0]?.text, note.mark],
+          ),
+        ).toEqual([
+          ['Selected note', '1'],
+          ['Kept note', '2'],
+        ])
+        expect(result.current.canUndo).toBe(false)
+      })
+    }
+  }
+
+  for (const action of ['type', 'paste'] as const) {
+    it(`${action} over a pending paragraph-final note drops its draft and text until one Undo restores them`, () => {
+      const base = model([bodyStory([paragraph('p1', 'Hello world')])])
+      const noteId = footnoteNoteParagraphId({ id: 's1' })
+      let state: DraftState = {
+        ...emptyDraftState(),
+        structures: [footnoteDraft('s1', 'p1', 11)],
+        extraRuns: { [noteId]: paragraph('note', 'Pending note').runs },
+      }
+      const before = structuredClone(state)
+      const { result } = renderHook(() => useWorkspaceDraftHistory())
+      const edits = createWorkspaceDraftEdits({
+        getModel: () => base,
+        getState: () => state,
+        setState: (update) => {
+          state = update(state)
+        },
+        checkpoint: (edit) => result.current.record(state, edit),
+      })
+      act(() => {
+        if (action === 'type') {
+          edits.handleWordEdit(base, {
+            type: 'replace',
+            paragraphId: 'p1',
+            offset: 6,
+            from: 6,
+            to: 11,
+            insert: 'new',
+          })
+        } else {
+          edits.paste(
+            base,
+            {
+              kind: 'range',
+              from: { paragraphId: 'p1', offset: 6 },
+              to: { paragraphId: 'p1', offset: 11 },
+            },
+            'new',
+          )
+        }
+      })
+      expect(state.structures).toEqual([])
+      expect(state.extraRuns[noteId]).toBeUndefined()
+      expect(blockText(base, state, 'p1')).toBe('Hello new')
+      act(() => {
+        const restored = result.current.stepBack(state)
+        if (!restored) throw new Error('Undo unavailable')
+        state = restored
+      })
+      expect(state).toEqual(before)
+      expect(blockText(base, state, 'p1')).toBe('Hello world')
+      expect(result.current.canUndo).toBe(false)
+    })
+  }
+
+  for (const type of ['deleteBackward', 'deleteForward'] as const) {
+    for (const join of [false, true]) {
+      it(`collapsed ${type} ${join ? 'joining paragraphs' : 'beside a reference'} keeps the footnote`, () => {
+        const base = stored()
+        if (join) {
+          base.stories[0]?.paragraphs[0]?.runs.pop()
+          base.stories[0]?.paragraphs.push(paragraph('p2', 'Next'))
+        }
+        let state = emptyDraftState()
+        const edits = createWorkspaceDraftEdits({
+          getModel: () => base,
+          getState: () => state,
+          setState: (update) => {
+            state = update(state)
+          },
+          checkpoint: () => {},
+        })
+        expect(
+          edits.handleWordEdit(base, {
+            type,
+            paragraphId: join && type === 'deleteBackward' ? 'p2' : 'p1',
+            offset: join && type === 'deleteBackward' ? 0 : 12,
+          })?.status,
+        ).toBe('applied')
+        expect(state.structures).toEqual([])
+        expect(state.deletedParagraphIds).toEqual(join ? ['p2'] : [])
+      })
+    }
+  }
+
+  it('keeps a footnote ending its paragraph when the last character is backspaced', () => {
     const base = model([bodyStory([paragraph('p1', 'Hello world')])])
     const pending = [footnoteDraft('s1', 'p1', 11)]
     const before = emptyEditorState()
-    const retyped = edit(base, before, 6, 11, 'there')
-    expect(
-      followFootnoteEdits(base, before, retyped, pending, ids(), false)
-        .structures,
-    ).toEqual(pending)
     const backspaced = edit(base, before, 10, 11)
     expect(
-      followFootnoteEdits(base, before, backspaced, pending, ids(), false)
-        .structures,
+      followFootnoteEdits(base, before, backspaced, pending, ids()).structures,
     ).toEqual([footnoteDraft('s1', 'p1', 10)])
   })
 
