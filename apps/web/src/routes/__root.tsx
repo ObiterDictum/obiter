@@ -15,7 +15,7 @@ import {
   type ErrorComponentProps,
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
-import favicon from '@obiter/ui/brand/logo/mark-32-ink-on-sand.png?url'
+import favicon from '@obiter/ui/brand/favicon.svg?url'
 import touchIcon from '@obiter/ui/brand/logo/mark-256-ink-on-sand.png?url'
 import appCss from '../styles.css?url'
 
@@ -45,8 +45,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       {
         href: favicon,
         rel: 'icon',
-        sizes: '32x32',
-        type: 'image/png',
+        type: 'image/svg+xml',
       },
       {
         href: touchIcon,

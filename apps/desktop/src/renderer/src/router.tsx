@@ -5,8 +5,6 @@ import {
   ResetPasswordRouteView,
   SignInRouteView,
   SignUpRedirectView,
-  RequestAccessRouteView,
-  RequestAccessConfirmRouteView,
   AcceptInviteRouteView,
   ShellError,
   ShellNotFound,
@@ -534,19 +532,23 @@ const signUpRoute = createRoute({
 })
 
 function DesktopSignUpRoute() {
-  return <SignUpRedirectView />
+  return <SignUpRedirectView platform="desktop" />
 }
 
 const requestAccessRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'request-access',
-  component: RequestAccessRouteView,
+  beforeLoad: () => {
+    throw redirect({ to: '/sign-in', replace: true })
+  },
 })
 
 const requestAccessConfirmRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'request-access/confirm',
-  component: RequestAccessConfirmRouteView,
+  beforeLoad: () => {
+    throw redirect({ to: '/sign-in', replace: true })
+  },
 })
 
 interface AcceptInviteSearch {
@@ -570,7 +572,7 @@ const acceptInviteRoute = createRoute({
 })
 
 function DesktopAcceptInviteRoute() {
-  return <AcceptInviteRouteView />
+  return <AcceptInviteRouteView platform="desktop" />
 }
 
 const forgotPasswordRoute = createRoute({

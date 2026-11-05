@@ -15,11 +15,7 @@ const MODES = [
   { value: 'magic-link' as const, label: 'Email link' },
 ]
 
-export function SignInRouteView({
-  platform: _platform,
-}: {
-  platform: AppPlatform
-}) {
+export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
   const { signInWithEmail, requestMagicLink, resendVerificationEmail } =
     useAuth()
@@ -192,12 +188,14 @@ export function SignInRouteView({
         </Button>
       </AuthForm>
 
-      <AuthFoot>
-        Need access?{' '}
-        <Link to="/request-access" className="text-ink hover:text-brand">
-          Request access
-        </Link>
-      </AuthFoot>
+      {platform === 'web' ? (
+        <AuthFoot>
+          Need access?{' '}
+          <Link to="/request-access" className="text-ink hover:text-brand">
+            Request access
+          </Link>
+        </AuthFoot>
+      ) : null}
     </AuthLayout>
   )
 }

@@ -13,12 +13,12 @@ import favicon from '@obiter/ui/brand/logo/mark-32-ink-transparent.png'
 
 ## What is here
 
-| Path                               | Use                                            |
-| ---------------------------------- | ---------------------------------------------- |
-| `obiter-mark.svg`                  | Flip-proof comma mark, same file as marketing. |
-| `obiter-wordmark.svg`              | Mark plus OBITER type.                         |
-| `obiter-app-icon-1024.png`         | Source for the desktop `.ico` / `.icns`.       |
-| `logo/mark-<size>-<colourway>.png` | Raster ladder, 16px to 1024px.                 |
+| Path                               | Use                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------- |
+| `obiter-mark.svg`                  | Flip-proof comma mark, same file as marketing.                         |
+| `favicon.svg`                      | Browser favicon, same file as marketing: ink mark, cream in dark mode. |
+| `obiter-wordmark.svg`              | Mark plus OBITER type.                                                 |
+| `logo/mark-<size>-<colourway>.png` | Raster ladder, 16px to 1024px.                                         |
 
 Colourways are `ink` (dark mark, light surfaces), `cream` (light mark, dark
 surfaces), each as `-transparent`, plus `-on-sand` and `-on-night` where a baked
@@ -31,9 +31,12 @@ exports `ObiterMark`, inline JSX so it inherits `currentColor` and tracks the
 theme. The shell, the auth screens and the loading state all use it; the old
 `Wordmark` lockup was deleted in redesign Stage 2 because the design sets the
 name in the interface font beside the mark, not as letter-spaced brand type.
-The web favicon is `logo/mark-32-ink-on-sand.png` (touch icon: the 256px
-size). The desktop app icon (electron-builder `icon`) is
-`obiter-app-icon-1024.png`.
+The web favicon is `favicon.svg`, the same file as the marketing site's, so both
+show the ink mark and switch to cream in dark mode (touch icon:
+`logo/mark-256-ink-on-sand.png`). The desktop app icon (electron-builder `icon`)
+is `logo/mark-1024-ink-on-sand.png`: a Windows icon cannot follow the system
+theme, and a transparent ink mark disappears on a dark taskbar, so the desktop
+uses the light-tab look of the favicon on a sand square.
 
 `docs/brand/` keeps only the README lockups. The generated presentation kit
 (guideline boards, application mockups, social renders) is gitignored: it was

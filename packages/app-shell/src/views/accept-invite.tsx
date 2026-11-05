@@ -3,9 +3,11 @@ import { Button, buttonClassName } from '@obiter/ui'
 import { Warning } from '@obiter/ui/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import type { AppPlatform } from '@obiter/contracts'
 import { ApiError, apiFetch } from '../api'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
+import { apiUrl } from '../lib/api-url'
 import {
   invitePreviewQueryOptions,
   type InvitePreviewResult,
@@ -19,7 +21,7 @@ function inviteTokenFromSearch(search: { token?: unknown }): string {
     : ''
 }
 
-export function AcceptInviteRouteView() {
+export function AcceptInviteRouteView({ platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { session, isPending, resendVerificationEmail, signOut } = useAuth()
@@ -112,14 +114,25 @@ export function AcceptInviteRouteView() {
               with the address this invite was sent to, then open the invite
               link again once your access is confirmed.
             </p>
-            <Button
-              size="lg"
-              nativeButton={false}
-              render={<Link to="/request-access" />}
-              className="w-full"
-            >
-              Request access
-            </Button>
+            {platform === 'web' ? (
+              <Button
+                size="lg"
+                nativeButton={false}
+                render={<Link to="/request-access" />}
+                className="w-full"
+              >
+                Request access
+              </Button>
+            ) : (
+              <a
+                href={apiUrl('/request-access')}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonClassName({ size: 'lg', className: 'w-full' })}
+              >
+                Request access on the web
+              </a>
+            )}
             <p className="text-center text-caption text-subtle">
               Already have an account?{' '}
               <Link

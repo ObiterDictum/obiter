@@ -16,5 +16,5 @@ export const Route = createFileRoute('/invites/accept')({
 })
 
 function AcceptInviteRouteComponent() {
-  return <AcceptInviteRouteView />
+  return <AcceptInviteRouteView platform="web" />
 }
