@@ -309,3 +309,50 @@ test('citation footnotes number in document order and renumber after one is dele
     superscript: true,
   })
 })
+
+test('band numbers share their own first line and leave space below the divider', async ({
+  page,
+  request,
+}) => {
+  const { email, password } = await createAccount(request, 'NoteLayout')
+  await signIn(page, email, password)
+  await openMatter(page, `Note layout ${Date.now()}`)
+  await page
+    .getByLabel('Upload document', { exact: true })
+    .first()
+    .setInputFiles(path.join(HERE, 'fixtures/note-typography.docx'))
+  await page
+    .getByRole('link', { name: 'note-typography.docx', exact: true })
+    .first()
+    .click()
+  const band = page.getByLabel('Page footnotes')
+  await expect(band).toBeVisible()
+  const geometry = await band.evaluate((el) => {
+    const rule = el.querySelector('[data-footnote-separator]')
+    if (!rule) throw new Error('Missing separator')
+    const scale = rule.getBoundingClientRect().height
+    return [...el.querySelectorAll('[data-paragraph-id]')].map((p) => {
+      const mark = p.querySelector('[aria-label^="Footnote"] span')
+      const line = p.querySelector('[data-line-from]')
+      if (!mark || !line) throw new Error('Missing note number or line')
+      const range = document.createRange()
+      range.selectNodeContents(mark)
+      const number = range.getBoundingClientRect()
+      const text = line.getBoundingClientRect()
+      return {
+        top: (number.top - text.top) / scale,
+        bottom: (number.bottom - text.bottom) / scale,
+        gap:
+          (Math.min(number.top, text.top) -
+            rule.getBoundingClientRect().bottom) /
+          scale,
+      }
+    })
+  })
+  expect(geometry).toHaveLength(2)
+  for (const note of geometry) {
+    expect(note.top).toBeGreaterThanOrEqual(-2)
+    expect(note.bottom).toBeLessThanOrEqual(1)
+    expect(note.gap).toBeGreaterThanOrEqual(5.3)
+  }
+})

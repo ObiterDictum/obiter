@@ -389,14 +389,19 @@ export function ModelParagraphInner({
           </span>
         ) : noteMark && !continuation ? (
           <span
-            className="relative -top-[0.5em] shrink-0 pr-1 align-baseline text-[0.65em] leading-none"
+            className="shrink-0 self-start pr-1"
             aria-label={
               noteKind === 'endnote'
                 ? `Endnote ${noteMark}`
                 : `Footnote ${noteMark}`
             }
           >
-            <span aria-hidden="true">{noteMark}</span>
+            <span
+              aria-hidden="true"
+              className="relative -top-[0.5em] text-[0.65em] leading-none"
+            >
+              {noteMark}
+            </span>
           </span>
         ) : null}
         <div

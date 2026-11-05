@@ -417,7 +417,7 @@ function ModelPage({
             className="shrink-0 bg-current"
             style={{
               height: 1,
-              marginBottom: 4,
+              marginBottom: 8,
               width: footnoteContinues(pageLayout.footnotes.blocks)
                 ? '100%'
                 : Math.min(FOOTNOTE_SEPARATOR_PX, frame.widthPx),

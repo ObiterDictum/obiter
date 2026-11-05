@@ -223,7 +223,7 @@ describe('the page footnote band', () => {
     expect(rule.dataset.footnoteSeparator).toBe('separator')
     expect(rule.style.width).toBe('192px')
     expect(rule.style.height).toBe('1px')
-    expect(rule.style.marginBottom).toBe('4px')
+    expect(rule.style.marginBottom).toBe('8px')
     expect(band.style.paddingTop).toBe('12px')
     expect(container.querySelector('[data-note-mark]')?.textContent).toBe('1')
     expect(band.textContent).toContain('1')
