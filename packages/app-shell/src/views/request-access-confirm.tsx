@@ -5,6 +5,7 @@ import { CheckCircle, Clock, Warning } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
 import type { ConfirmAccessRequestResponse } from '@obiter/contracts'
 import { confirmAccessRequestQueryOptions } from '../access-request'
+import { AccountSetupForm } from './account-setup-form'
 import { AuthHeading, AuthLayout, authCardClassName } from './auth-layout'
 
 function tokenFromSearch(search: { token?: unknown }): string {
@@ -78,14 +79,9 @@ function ConfirmationOutcome({
           icon={<CheckCircle size={20} aria-hidden />}
           tone="success"
           title="You're verified"
-          body="Your access is confirmed. The next step is to set your password and choose how you sign in; we have sent what you need to the address you gave us."
+          body="Your access is confirmed. Create your account with the address you confirmed and a password."
         >
-          <Link
-            to="/sign-in"
-            className={buttonClassName({ variant: 'secondary' })}
-          >
-            Go to sign in
-          </Link>
+          <AccountSetupForm />
         </Outcome>
       )
     case 'pending_review':

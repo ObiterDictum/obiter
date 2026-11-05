@@ -9,12 +9,24 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 
-const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
+const api = vi.hoisted(() => ({ apiFetch: vi.fn(), signUpWithEmail: vi.fn() }))
 
 const apiModule = { ...(await import('../api')) }
 mock.module('../api', () => ({ ...apiModule, apiFetch: api.apiFetch }))
+
+const authModule = { ...(await import('../auth')) }
+mock.module('../auth', () => ({
+  ...authModule,
+  useAuth: () => ({ signUpWithEmail: api.signUpWithEmail }),
+}))
 
 const { ApiError } = await import('../api')
 const { RequestAccessConfirmRouteView } =
@@ -52,6 +64,28 @@ function renderConfirm(entry: string) {
   )
 }
 
+async function fillAccountSetup(input: {
+  name: string
+  email: string
+  password: string
+  confirm: string
+}) {
+  fireEvent.change(screen.getByLabelText('Name'), {
+    target: { value: input.name },
+  })
+  fireEvent.change(screen.getByLabelText('Email you confirmed'), {
+    target: { value: input.email },
+  })
+  fireEvent.change(screen.getByLabelText('Password'), {
+    target: { value: input.password },
+  })
+  fireEvent.change(screen.getByLabelText('Confirm password'), {
+    target: { value: input.confirm },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+  await waitFor(() => undefined)
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -84,7 +118,36 @@ describe('access request confirmation', () => {
     ).toBe('/sign-in')
   })
 
-  it('tells a verified applicant who has no account yet that set-up is next', async () => {
+  it('lets a verified applicant with no account set a password, then asks them to confirm their email', async () => {
+    api.apiFetch.mockResolvedValueOnce({
+      status: 'verified',
+      next: 'account_setup',
+    })
+    api.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+    renderConfirm('/request-access/confirm?token=abc123')
+
+    await screen.findByRole('heading', { name: "You're verified" })
+    await fillAccountSetup({
+      name: 'Tess Tester',
+      email: 'tess@ox.ac.uk',
+      password: 'correct-horse-battery',
+      confirm: 'correct-horse-battery',
+    })
+
+    await screen.findByRole('heading', { name: 'Check your inbox' })
+    expect(api.signUpWithEmail).toHaveBeenCalledWith({
+      name: 'Tess Tester',
+      email: 'tess@ox.ac.uk',
+      password: 'correct-horse-battery',
+      callbackURL: `${window.location.origin}/`,
+    })
+    expect(screen.getByText(/tess@ox\.ac\.uk/)).toBeTruthy()
+  })
+
+  it('creates no account when the two passwords differ', async () => {
     api.apiFetch.mockResolvedValueOnce({
       status: 'verified',
       next: 'account_setup',
@@ -92,10 +155,42 @@ describe('access request confirmation', () => {
     renderConfirm('/request-access/confirm?token=abc123')
 
     await screen.findByRole('heading', { name: "You're verified" })
-    expect(screen.getByText(/next step is to set your password/i)).toBeTruthy()
+    await fillAccountSetup({
+      name: 'Tess Tester',
+      email: 'tess@ox.ac.uk',
+      password: 'correct-horse-battery',
+      confirm: 'correct-horse-batterz',
+    })
+
+    expect(await screen.findByText('Passwords do not match.')).toBeTruthy()
+    expect(api.signUpWithEmail).not.toHaveBeenCalled()
+  })
+
+  it('shows the refusal when the API does not admit the address', async () => {
+    api.apiFetch.mockResolvedValueOnce({
+      status: 'verified',
+      next: 'account_setup',
+    })
+    api.signUpWithEmail.mockResolvedValueOnce({
+      ok: false,
+      message: 'Use the address you confirmed.',
+    })
+    renderConfirm('/request-access/confirm?token=abc123')
+
+    await screen.findByRole('heading', { name: "You're verified" })
+    await fillAccountSetup({
+      name: 'Tess Tester',
+      email: 'someone@else.ac.uk',
+      password: 'correct-horse-battery',
+      confirm: 'correct-horse-battery',
+    })
+
     expect(
-      screen.getByRole('link', { name: 'Go to sign in' }).getAttribute('href'),
-    ).toBe('/sign-in')
+      await screen.findByText('Use the address you confirmed.'),
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('heading', { name: 'Check your inbox' }),
+    ).toBeNull()
   })
 
   it('says the organisation is being checked when the address is not yet known', async () => {
