@@ -160,6 +160,7 @@ const SHORTCUTS: ReadonlyArray<{ keys: readonly string[]; action: string }> = [
   { keys: ['primary', 'K'], action: 'All commands' },
   { keys: ['primary', 'F'], action: 'Find and replace' },
   { keys: ['primary', 'P'], action: 'Print' },
+  { keys: ['primary', 'alt', 'F'], action: 'Insert footnote' },
   { keys: ['A'], action: 'Accept the current change' },
   { keys: ['R'], action: 'Reject the current change' },
   { keys: ['J', '↓'], action: 'Next change' },

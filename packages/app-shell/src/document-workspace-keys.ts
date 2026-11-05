@@ -1,7 +1,8 @@
-import { isPrimaryModifier } from './keyboard-platform'
+import { isMacPlatform, isPrimaryModifier } from './keyboard-platform'
 
 export type WorkspaceKeyEvent = {
   key: string
+  code?: string
   metaKey: boolean
   ctrlKey: boolean
   shiftKey: boolean
@@ -40,6 +41,7 @@ export function handleDocumentWorkspaceKeys(
     undo?: () => void
     redo?: () => void
     focusFind?: () => void
+    insertFootnote?: () => void
     openPalette?: () => void
     print?: () => void
     review?: {
@@ -69,7 +71,9 @@ export function handleDocumentWorkspaceKeys(
     if (key === 'k' || key === 'arrowup') return act(handlers.review.onPrevious)
   }
   if (!isPrimaryModifier(event)) return
-  if (event.altKey) return
+  const footnote =
+    event.altKey && event.code === 'KeyF' && (isMacPlatform() || key === 'f')
+  if (event.altKey && !footnote) return
   const claim = event.preventDefault.bind(event)
   const run = (handler: (() => void) | undefined) => {
     if (!handler) return false
@@ -80,6 +84,10 @@ export function handleDocumentWorkspaceKeys(
   if (key === 's' && run(handlers.save)) return
   if (key === 'p' && !event.shiftKey && run(handlers.print)) return
   if (isForeignFormField(event.target)) return
+  if (footnote) {
+    run(handlers.insertFootnote)
+    return
+  }
   if (key === 'z' && !event.shiftKey && run(handlers.undo)) return
   if (
     ((key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey)) &&
@@ -107,6 +115,7 @@ export type WorkspaceKeySources = {
   undo?: () => void
   redo?: () => void
   print?: () => void
+  insertFootnote?: () => void
   openFind?: () => void
   openPalette?: () => void
   openFormatting?: () => void
@@ -134,6 +143,7 @@ export function documentWorkspaceKeyDown(
     undo,
     redo,
     print,
+    insertFootnote,
     openFind,
     openPalette,
     review,
@@ -147,6 +157,7 @@ export function documentWorkspaceKeyDown(
     redo,
     print,
     review,
+    insertFootnote,
     focusFind: openFind ?? focusDocumentFind,
     openPalette,
     toggleBold: emphasis?.onToggleBold,

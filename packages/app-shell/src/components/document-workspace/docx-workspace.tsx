@@ -115,11 +115,7 @@ export function DocxWorkspace({
   const splitScale = useSplitScale()
   const panels = useWorkspacePanels()
   const legalTools = useLegalToolsState(documentId)
-  const trackChanges =
-    drafts.trackChangesFlip !== undefined &&
-    drafts.trackChangesFlip !== (model?.trackRevisions ?? false)
-      ? drafts.trackChangesFlip
-      : (model?.trackRevisions ?? false)
+  const trackChanges = drafts.trackChangesFlip ?? model?.trackRevisions ?? false
   const [banner, setBanner] = useState<string | null>(null)
   const { printBanner, printDocument } = useDocumentPrint()
   const {
@@ -380,6 +376,9 @@ export function DocxWorkspace({
             undo,
             redo,
             print,
+            insertFootnote: insert.structure.footnoteUnavailable
+              ? undefined
+              : insert.structure.onInsertFootnote,
             format,
             request,
             review: changeReview,
