@@ -4,6 +4,7 @@ import {
   cellWrapWidthPx,
   storyBlocks,
   storyTables,
+  tableBordered,
   tableCellNeighbours,
   tablePaintHeight,
   tablePaintRows,
@@ -640,5 +641,58 @@ describe('vertical merges', () => {
     expect(rows[0]?.cells[0]?.vAlign).toBe('bottom')
     expect(rows[0]?.cells[1]?.vAlign).toBe('top')
     expect(rows[1]?.cells[0]?.mergeVAlign).toBe('bottom')
+  })
+})
+
+describe('table borders from the table style', () => {
+  const styled = (styleId: string) =>
+    storyTables({
+      partName: 'word/document.xml',
+      kind: 'document',
+      paragraphs: [],
+      preservedXmlFragments: [
+        `<w:tbl><w:tblPr><w:tblStyle w:val="${styleId}"/></w:tblPr><w:tr><w:tc><w:p w14:paraId="00000001"/></w:tc></w:tr></w:tbl>`,
+      ],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
+    })[0]
+  const grid = {
+    styleId: 'TableGrid',
+    basedOnStyleId: 'TableNormal',
+    sourceFragment:
+      '<w:style w:type="table" w:styleId="TableGrid"><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/></w:tblBorders></w:tblPr></w:style>',
+  }
+  const plain = {
+    styleId: 'TableNormal',
+    sourceFragment:
+      '<w:style w:type="table" w:styleId="TableNormal"><w:tblPr><w:tblCellMar><w:left w:w="108"/></w:tblCellMar></w:tblPr></w:style>',
+  }
+  const derived = {
+    styleId: 'ClientGrid',
+    basedOnStyleId: 'TableGrid',
+    sourceFragment: '<w:style w:type="table" w:styleId="ClientGrid"/>',
+  }
+  const cleared = {
+    styleId: 'NoLines',
+    sourceFragment:
+      '<w:style w:type="table" w:styleId="NoLines"><w:tblPr><w:tblBorders><w:top w:val="nil"/><w:insideH w:val="none"/></w:tblBorders></w:tblPr></w:style>',
+  }
+  const styles = [grid, plain, derived, cleared]
+
+  it('draws the grid that a table style such as Table Grid defines', () => {
+    const table = styled('TableGrid')
+    if (!table) throw new Error('Expected a table')
+    expect(table.bordered).toBe(false)
+    expect(tableBordered(table, styles)).toBe(true)
+  })
+
+  it('inherits borders through basedOn and ignores nil or none borders', () => {
+    const inherited = styled('ClientGrid')
+    const none = styled('NoLines')
+    const normal = styled('TableNormal')
+    if (!inherited || !none || !normal) throw new Error('Expected tables')
+    expect(tableBordered(inherited, styles)).toBe(true)
+    expect(tableBordered(none, styles)).toBe(false)
+    expect(tableBordered(normal, styles)).toBe(false)
   })
 })
