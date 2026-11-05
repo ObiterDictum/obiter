@@ -1,8 +1,4 @@
-import { TableStructureSurface } from './table-structure-surface'
-import {
-  InlineChangeReview,
-  useInlineReviewValue,
-} from './inline-change-review'
+import { WorkspaceTableSurface } from './workspace-table-surface'
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
@@ -362,144 +358,138 @@ export function DocxWorkspace({
     }),
   )
 
-  const inlineReview = useInlineReviewValue(changeReview, () =>
-    togglePanel('review'),
-  )
-
   return (
-    <InlineChangeReview value={inlineReview}>
-      <TableStructureSurface
-        unavailable={insert.structure.tableStructureUnavailable}
-        onChange={insert.structure.onTableStructure}
+    <WorkspaceTableSurface
+      structure={insert.structure}
+      review={changeReview}
+      onReview={() => togglePanel('review')}
+    >
+      <WorkspaceShell
+        layout={layout}
+        onKeyDown={(event) =>
+          workspaceKeyDown(event, {
+            panels,
+            save: save.save,
+            undo,
+            redo,
+            print,
+            insertFootnote: insert.structure.footnoteUnavailable
+              ? undefined
+              : insert.structure.onInsertFootnote,
+            format,
+            request,
+            review: changeReview,
+          })
+        }
       >
-        <WorkspaceShell
-          layout={layout}
-          onKeyDown={(event) =>
-            workspaceKeyDown(event, {
-              panels,
-              save: save.save,
-              undo,
-              redo,
-              print,
-              insertFootnote: insert.structure.footnoteUnavailable
-                ? undefined
-                : insert.structure.onInsertFootnote,
-              format,
-              request,
-              review: changeReview,
-            })
-          }
-        >
-          <DocxEditorHeader
-            filename={filename}
-            versionNumber={modelQuery.data?.versionNumber ?? versionNumber}
-            save={save}
-            remoteChange={remoteChange}
-            presence={presence}
-            presenceNames={presenceNames}
-            currentUserId={me?.user.id}
-            versions={versions}
-            actions={headerActions}
+        <DocxEditorHeader
+          filename={filename}
+          versionNumber={modelQuery.data?.versionNumber ?? versionNumber}
+          save={save}
+          remoteChange={remoteChange}
+          presence={presence}
+          presenceNames={presenceNames}
+          currentUserId={me?.user.id}
+          versions={versions}
+          actions={headerActions}
+        />
+        <DocxRightSlotTabs
+          checks={checksLoad(modelQuery, legalChecks)}
+          authorities={authorities}
+          onSelect={caret.revealFinding}
+          comments={commentsPanel}
+        />
+        {modelQuery.isLoading ? (
+          <LoadingBlock label="Loading document model" />
+        ) : modelQuery.isError && !model ? (
+          <QueryError
+            error={modelQuery.error}
+            fallback="The document model could not be loaded."
           />
-          <DocxRightSlotTabs
-            checks={checksLoad(modelQuery, legalChecks)}
-            authorities={authorities}
-            onSelect={caret.revealFinding}
-            comments={commentsPanel}
-          />
-          {modelQuery.isLoading ? (
-            <LoadingBlock label="Loading document model" />
-          ) : modelQuery.isError && !model ? (
-            <QueryError
-              error={modelQuery.error}
-              fallback="The document model could not be loaded."
+        ) : model ? (
+          <>
+            <DocumentPrintStyle box={printBox} />
+            <DocxWorkspaceChrome
+              props={chrome}
+              save={chromeSave}
+              drafts={chromeDrafts}
+              remoteChange={remoteChange}
+              transientNotice={transientBanner}
+              selectionNotice={
+                selectionNotice ?? selectionAnnouncement(selectionSegments.size)
+              }
+              onReload={reload}
+              requests={requests}
+              selectionActive={selectionActive}
+              onCommentSelection={commentSelection}
+              citation={citation}
+              citationCanInsert={selectedParagraphId !== null}
+              versions={versions}
             />
-          ) : model ? (
-            <>
-              <DocumentPrintStyle box={printBox} />
-              <DocxWorkspaceChrome
-                props={chrome}
-                save={chromeSave}
-                drafts={chromeDrafts}
-                remoteChange={remoteChange}
-                transientNotice={transientBanner}
-                selectionNotice={
-                  selectionNotice ??
-                  selectionAnnouncement(selectionSegments.size)
-                }
-                onReload={reload}
-                requests={requests}
-                selectionActive={selectionActive}
-                onCommentSelection={commentSelection}
-                citation={citation}
-                citationCanInsert={selectedParagraphId !== null}
-                versions={versions}
-              />
-              <DocxWorkspaceDesk
-                compareOpen={compareOpen}
-                onCloseCompare={() => setCompareOpen(false)}
-                documentId={documentId}
-                zoom={pageZoom}
-                pages={{
-                  zoom: pageZoom,
-                  view,
-                  model,
-                  painted,
-                  pendingRedlines,
-                  pages,
-                  editingKind,
-                  selectedParagraphId,
-                  restoreCaret,
-                  verticalCaret,
-                  drafts,
-                  presence,
-                  currentUserId: me?.user.id,
-                  imageUrls,
-                  selectionSegments,
-                  linkOverlays,
-                  selectionHandlers,
-                  selectParagraph,
-                  setFormatRange,
-                  mirrorSelection,
-                  focusParagraph,
-                  moveCaret,
-                  reportJoinRefusal,
-                }}
-                navOpen={navOpen}
-                outline={outline}
-                activeParagraphId={selectedParagraphId}
-                onSelectOutline={onSelectOutline}
-                onCloseNav={toggleNavigation}
-                columnRef={columnRef}
-                spelling={spelling}
-                rulerOn={rulerOn}
-                ruler={ruler}
-                paperWidth={pages[0]?.box.widthPx ?? null}
-                onExitMarginEditing={closeEditingStory}
-                onOpenNoteEditing={(paragraphId) =>
-                  openEditingStory('footnotes', paragraphId)
-                }
-                panel={panels.active}
-                onClosePanel={panels.close}
-                popout={panels.popout}
-                legalChecksFocus={panels.legalChecksFocus}
-                documentRecord={documentRecord}
-                versions={versions}
-                matterLink={headerLinks?.matter}
-                onViewVersion={onViewVersion}
-                comments={commentsPanel.props}
-                changeReview={changeReview}
-                currentVersionNumber={
-                  modelQuery.data?.versionNumber ?? versionNumber
-                }
-                authorities={authorities}
-                legalChecks={legalChecks}
-                onSelectAuthority={caret.revealFinding}
-              />
-            </>
-          ) : null}
-        </WorkspaceShell>
-      </TableStructureSurface>
-    </InlineChangeReview>
+            <DocxWorkspaceDesk
+              compareOpen={compareOpen}
+              onCloseCompare={() => setCompareOpen(false)}
+              documentId={documentId}
+              zoom={pageZoom}
+              pages={{
+                zoom: pageZoom,
+                view,
+                model,
+                painted,
+                pendingRedlines,
+                pages,
+                editingKind,
+                selectedParagraphId,
+                restoreCaret,
+                verticalCaret,
+                drafts,
+                presence,
+                currentUserId: me?.user.id,
+                imageUrls,
+                selectionSegments,
+                linkOverlays,
+                selectionHandlers,
+                selectParagraph,
+                setFormatRange,
+                mirrorSelection,
+                focusParagraph,
+                moveCaret,
+                reportJoinRefusal,
+              }}
+              navOpen={navOpen}
+              outline={outline}
+              activeParagraphId={selectedParagraphId}
+              onSelectOutline={onSelectOutline}
+              onCloseNav={toggleNavigation}
+              columnRef={columnRef}
+              spelling={spelling}
+              rulerOn={rulerOn}
+              ruler={ruler}
+              paperWidth={pages[0]?.box.widthPx ?? null}
+              onExitMarginEditing={closeEditingStory}
+              onOpenNoteEditing={(paragraphId) =>
+                openEditingStory('footnotes', paragraphId)
+              }
+              panel={panels.active}
+              onClosePanel={panels.close}
+              popout={panels.popout}
+              legalChecksFocus={panels.legalChecksFocus}
+              documentRecord={documentRecord}
+              versions={versions}
+              matterLink={headerLinks?.matter}
+              onViewVersion={onViewVersion}
+              comments={commentsPanel.props}
+              changeReview={changeReview}
+              currentVersionNumber={
+                modelQuery.data?.versionNumber ?? versionNumber
+              }
+              authorities={authorities}
+              legalChecks={legalChecks}
+              onSelectAuthority={caret.revealFinding}
+            />
+          </>
+        ) : null}
+      </WorkspaceShell>
+    </WorkspaceTableSurface>
   )
 }

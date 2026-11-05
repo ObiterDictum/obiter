@@ -53,7 +53,10 @@ export function editTableStructure(
       'Select a cell in a top-level table',
     )
   }
-  for (const replacement of part.overlay.replacements.values()) {
+  const key = `table-structure-${String(table.start)}`
+  const pending = part.overlay.replacements.get(key)
+  for (const [replacementKey, replacement] of part.overlay.replacements) {
+    if (replacementKey === key) continue
     if (replacement.start < table.end && replacement.end > table.start) {
       throw new OoxmlError(
         'model-node-not-editable',
@@ -61,12 +64,37 @@ export function editTableStructure(
       )
     }
   }
+  const currentSource = pending
+    ? `<w:body xmlns:w="${WORD_NAMESPACE}" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">${pending.value}</w:body>`
+    : source
+  const currentElements = pending ? parseXmlElements(currentSource) : elements
+  const currentParagraph = pending
+    ? currentElements.find(
+        (e) =>
+          isWord(e, 'p') &&
+          attributeValue(
+            e,
+            'http://schemas.microsoft.com/office/word/2010/wordml',
+            'paraId',
+          ) === anchor.wire.sourceParaId,
+      )
+    : undefined
+  let currentCell = pending ? currentParagraph?.parent : cell
+  while (currentCell && !isWord(currentCell, 'tc'))
+    currentCell = currentCell.parent
+  const currentRow = currentCell?.parent
+  const currentTable = currentRow?.parent
+  if (!currentCell || !currentRow || !currentTable)
+    throw new OoxmlError(
+      'model-node-not-editable',
+      'The selected cell no longer exists',
+    )
   const result = transformTableXml(
-    source,
-    elements,
-    table,
-    row,
-    cell,
+    currentSource,
+    currentElements,
+    currentTable,
+    currentRow,
+    currentCell,
     operation,
     () => nextSyntheticParaId(part.overlay),
   )
@@ -80,11 +108,20 @@ export function editTableStructure(
       p.paragraphRange.start >= table.start &&
       p.paragraphRange.end <= table.end,
   )
-  const oldIds = new Set(oldParagraphs.map((p) => p.wire.id))
-  const at = story.paragraphs.findIndex((p) => oldIds.has(p.id))
-  const byParaId = new Map(
-    oldParagraphs.map((p) => [p.wire.sourceParaId, p.wire]),
+  const currentIds = new Set(
+    [
+      ...currentSource
+        .slice(currentTable.start, currentTable.end)
+        .matchAll(/w14:paraId="([^"]+)"/gu),
+    ].map((m) => m[1]),
   )
+  const oldIds = new Set(
+    story.paragraphs
+      .filter((p) => currentIds.has(p.sourceParaId ?? ''))
+      .map((p) => p.id),
+  )
+  const at = story.paragraphs.findIndex((p) => oldIds.has(p.id))
+  const byParaId = new Map(story.paragraphs.map((p) => [p.sourceParaId, p]))
   const paragraphs: DocumentParagraphWire[] = result.paragraphIds.map(
     (id) =>
       byParaId.get(id) ?? {
@@ -100,15 +137,15 @@ export function editTableStructure(
       'Save the document to assign stable paragraph identities before changing this table',
     )
   }
-  setOverlayReplacement(
-    part.overlay,
-    `table-structure-${String(table.start)}`,
-    { start: table.start, end: table.end, value: result.xml },
-  )
+  setOverlayReplacement(part.overlay, key, {
+    start: table.start,
+    end: table.end,
+    value: result.xml,
+  })
   part.dirty = true
   story.paragraphs = story.paragraphs.filter((p) => !oldIds.has(p.id))
   story.paragraphs.splice(at, 0, ...paragraphs)
-  const oldXml = source.slice(table.start, table.end)
+  const oldXml = pending?.value ?? source.slice(table.start, table.end)
   story.preservedXmlFragments = story.preservedXmlFragments.flatMap(
     (fragment) =>
       fragment === oldXml ? (result.xml ? [result.xml] : []) : [fragment],
