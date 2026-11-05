@@ -6,6 +6,7 @@ import {
   storyTables,
   tableCellNeighbours,
   tablePaintHeight,
+  tablePaintRows,
 } from './document-page-tables'
 
 const tableXml = `<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single"/></w:tblBorders></w:tblPr><w:tr><w:tc><w:tcPr><w:shd w:fill="1F4E79"/><w:gridSpan w:val="1"/></w:tcPr><w:p w14:paraId="AABBCCDD"><w:r><w:t>Particulars</w:t></w:r></w:p></w:tc><w:tc><w:p w14:paraId="EEFF0011"><w:r><w:t>Details</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
@@ -442,5 +443,202 @@ describe('tableCellNeighbours', () => {
     expect(neighbours.get('para-w14-0000000E')).toEqual({
       previous: 'para-w14-0000000D',
     })
+  })
+})
+
+const tc = (paraId: string, text: string, props = '') =>
+  `<w:tc>${props ? `<w:tcPr>${props}</w:tcPr>` : ''}<w:p w14:paraId="${paraId}">${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p></w:tc>`
+const tr = (...cells: string[]) => `<w:tr>${cells.join('')}</w:tr>`
+const tbl = (...rows: string[]) =>
+  `<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>${rows.join('')}</w:tbl>`
+const tableStory = (xml: string) => ({
+  partName: 'word/document.xml',
+  kind: 'document' as const,
+  paragraphs: [],
+  preservedXmlFragments: [xml],
+  fields: [],
+  unanchoredFieldParagraphIds: [],
+})
+
+describe('vertical merges', () => {
+  it('reads a two-row vertical merge as one cell spanning both rows', () => {
+    const tables = storyTables(
+      tableStory(
+        tbl(
+          tr(
+            tc('M0000001', 'Merged', '<w:vMerge w:val="restart"/>'),
+            tc('B0000002', 'B1'),
+            tc('C0000003', 'C1'),
+          ),
+          tr(
+            tc('M0000004', '', '<w:vMerge/>'),
+            tc('B0000005', 'B2'),
+            tc('C0000006', 'C2'),
+          ),
+          tr(tc('A0000007', 'A3'), tc('B0000008', 'B3'), tc('C0000009', 'C3')),
+        ),
+      ),
+    )
+    const rows = tables[0]?.rows ?? []
+    expect(rows[0]?.cells[0]).toMatchObject({
+      span: 1,
+      rowSpan: 2,
+      vMerge: 'restart',
+    })
+    expect(rows[1]?.cells[0]).toMatchObject({ vMerge: 'continue' })
+    expect(rows[1]?.cells[0]?.rowSpan).toBeUndefined()
+    expect(rows[1]?.cells[0]?.paragraphIds).toEqual(['para-w14-M0000004'])
+    expect(rows[2]?.cells[0]?.vMerge).toBeUndefined()
+    expect(rows[2]?.cells[0]?.rowSpan).toBeUndefined()
+  })
+
+  it('spans a merge across three rows', () => {
+    const tables = storyTables(
+      tableStory(
+        tbl(
+          tr(
+            tc('M0000001', 'Merged', '<w:vMerge w:val="restart"/>'),
+            tc('B0000002', 'B1'),
+          ),
+          tr(tc('M0000003', '', '<w:vMerge/>'), tc('B0000004', 'B2')),
+          tr(tc('M0000005', '', '<w:vMerge/>'), tc('B0000006', 'B3')),
+          tr(tc('A0000007', 'A4'), tc('B0000008', 'B4')),
+        ),
+      ),
+    )
+    const rows = tables[0]?.rows ?? []
+    expect(rows[0]?.cells[0]?.rowSpan).toBe(3)
+    expect(rows[1]?.cells[0]?.vMerge).toBe('continue')
+    expect(rows[2]?.cells[0]?.vMerge).toBe('continue')
+    expect(rows[3]?.cells[0]?.vMerge).toBeUndefined()
+  })
+
+  it('combines a vertical merge with a horizontal grid span', () => {
+    const tables = storyTables(
+      tableStory(
+        tbl(
+          tr(
+            tc(
+              'M0000001',
+              'Merged',
+              '<w:gridSpan w:val="2"/><w:vMerge w:val="restart"/>',
+            ),
+            tc('C0000003', 'C1'),
+          ),
+          tr(
+            tc('M0000004', '', '<w:gridSpan w:val="2"/><w:vMerge/>'),
+            tc('C0000006', 'C2'),
+          ),
+        ),
+      ),
+    )
+    const rows = tables[0]?.rows ?? []
+    expect(rows[0]?.cells[0]).toMatchObject({
+      span: 2,
+      rowSpan: 2,
+      vMerge: 'restart',
+    })
+    expect(rows[1]?.cells[0]).toMatchObject({
+      span: 2,
+      vMerge: 'continue',
+    })
+  })
+
+  it('paints continuation cells nothing and skips their paragraphs', () => {
+    const table = storyTables(
+      tableStory(
+        tbl(
+          tr(
+            tc('M0000001', 'Merged', '<w:vMerge w:val="restart"/>'),
+            tc('B0000002', 'B1'),
+            tc('C0000003', 'C1'),
+          ),
+          tr(
+            tc('M0000004', '', '<w:vMerge/>'),
+            tc('B0000005', 'B2'),
+            tc('C0000006', 'C2'),
+          ),
+          tr(tc('A0000007', 'A3'), tc('B0000008', 'B3'), tc('C0000009', 'C3')),
+        ),
+      ),
+    )[0]
+    if (!table) throw new Error('expected table')
+    const painted = tablePaintRows(table)
+    expect(
+      painted.map((row) =>
+        row.cells.map(({ cell, rowSpan }) => ({
+          span: cell.span,
+          rowSpan,
+          vMerge: cell.vMerge,
+        })),
+      ),
+    ).toEqual([
+      [
+        { span: 1, rowSpan: 2, vMerge: 'restart' },
+        { span: 1, rowSpan: 1, vMerge: undefined },
+        { span: 1, rowSpan: 1, vMerge: undefined },
+      ],
+      [
+        { span: 1, rowSpan: 1, vMerge: undefined },
+        { span: 1, rowSpan: 1, vMerge: undefined },
+      ],
+      [
+        { span: 1, rowSpan: 1, vMerge: undefined },
+        { span: 1, rowSpan: 1, vMerge: undefined },
+        { span: 1, rowSpan: 1, vMerge: undefined },
+      ],
+    ])
+  })
+
+  it('paints a merge that starts on a previous page as a continuing cell', () => {
+    const table = storyTables(
+      tableStory(
+        tbl(
+          tr(
+            tc(
+              'M0000001',
+              'Merged',
+              '<w:shd w:fill="1F4E79"/><w:vMerge w:val="restart"/>',
+            ),
+            tc('B0000002', 'B1'),
+          ),
+          tr(tc('M0000003', '', '<w:vMerge/>'), tc('B0000004', 'B2')),
+          tr(tc('M0000005', '', '<w:vMerge/>'), tc('B0000006', 'B3')),
+          tr(tc('A0000007', 'A4'), tc('B0000008', 'B4')),
+        ),
+      ),
+    )[0]
+    if (!table) throw new Error('expected table')
+    const fragment = { ...table, rows: table.rows.slice(1, 3) }
+    const painted = tablePaintRows(fragment)
+    expect(painted).toHaveLength(2)
+    expect(painted[0]?.cells[0]).toMatchObject({
+      rowSpan: 2,
+      cell: { vMerge: 'continue', mergeFill: '#1F4E79' },
+    })
+    expect(painted[1]?.cells).toHaveLength(1)
+    expect(painted[1]?.cells[0]?.cell.vMerge).toBeUndefined()
+  })
+
+  it('reads the cell vertical alignment for merged and plain cells', () => {
+    const tables = storyTables(
+      tableStory(
+        tbl(
+          tr(
+            tc(
+              'M0000001',
+              'Merged',
+              '<w:vMerge w:val="restart"/><w:vAlign w:val="bottom"/>',
+            ),
+            tc('B0000002', 'B1', '<w:vAlign w:val="top"/>'),
+          ),
+          tr(tc('M0000003', '', '<w:vMerge/>'), tc('B0000004', 'B2')),
+        ),
+      ),
+    )
+    const rows = tables[0]?.rows ?? []
+    expect(rows[0]?.cells[0]?.vAlign).toBe('bottom')
+    expect(rows[0]?.cells[1]?.vAlign).toBe('top')
+    expect(rows[1]?.cells[0]?.mergeVAlign).toBe('bottom')
   })
 })

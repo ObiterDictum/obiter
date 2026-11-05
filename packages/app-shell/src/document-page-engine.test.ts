@@ -6,6 +6,7 @@ import type {
 } from '@obiter/contracts'
 import { flowParagraphIds } from './document-edits'
 import { layoutDocument } from './document-page-engine'
+import { tablePaintRows } from './document-page-tables'
 import { applySplitParagraph, emptyEditorState } from './document-word-edits'
 
 const SHORT_PAGE =
@@ -449,6 +450,98 @@ describe('layoutDocument', () => {
         ),
       ),
     ).toBe(true)
+  })
+
+  it('continues a vertically merged cell on the next page when the table splits', () => {
+    const cell = (id: string, text: string, props = '') =>
+      `<w:tc>${props ? `<w:tcPr>${props}</w:tcPr>` : ''}<w:p w14:paraId="${id}">${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p></w:tc>`
+    const row = (...cells: string[]) =>
+      `<w:tr><w:trPr><w:trHeight w:val="900"/></w:trPr>${cells.join('')}</w:tr>`
+    const tableXml = `<w:tbl>${row(
+      cell('R0C0', 'a'),
+      cell('R0C1', 'b'),
+      cell('R0C2', 'c'),
+    )}${row(
+      cell('M1C0', 'Merged', '<w:vMerge w:val="restart"/>'),
+      cell('R1C1', 'd'),
+      cell('R1C2', 'e'),
+    )}${row(
+      cell('M2C0', '', '<w:vMerge/>'),
+      cell('R2C1', 'f'),
+      cell('R2C2', 'g'),
+    )}${row(
+      cell('M3C0', '', '<w:vMerge/>'),
+      cell('R3C1', 'h'),
+      cell('R3C2', 'i'),
+    )}${row(cell('R4C0', 'j'), cell('R4C1', 'k'), cell('R4C2', 'l'))}</w:tbl>`
+    const texts = [
+      'a',
+      'b',
+      'c',
+      'Merged',
+      'd',
+      'e',
+      '',
+      'f',
+      'g',
+      '',
+      'h',
+      'i',
+      'j',
+      'k',
+      'l',
+    ]
+    const ids = [
+      'R0C0',
+      'R0C1',
+      'R0C2',
+      'M1C0',
+      'R1C1',
+      'R1C2',
+      'M2C0',
+      'R2C1',
+      'R2C2',
+      'M3C0',
+      'R3C1',
+      'R3C2',
+      'R4C0',
+      'R4C1',
+      'R4C2',
+    ]
+    const base = modelOf(
+      ids.map((id, index) => paragraph(`para-w14-${id}`, texts[index] ?? '')),
+      SHORT_PAGE,
+    )
+    const story = base.stories[0]
+    if (!story) throw new Error('expected document story')
+    const pages = layoutDocument({
+      ...base,
+      stories: [{ ...story, preservedXmlFragments: [tableXml, SHORT_PAGE] }],
+    })
+    expect(pages.length).toBeGreaterThan(1)
+    const pageTables = pages.map((page) =>
+      page.blocks.filter((block) => block.type === 'table'),
+    )
+    const first = pageTables[0]?.[0]
+    const second = pageTables[1]?.[0]
+    const third = pageTables[2]?.[0]
+    if (
+      first?.type !== 'table' ||
+      second?.type !== 'table' ||
+      third?.type !== 'table'
+    ) {
+      throw new Error('expected a table block on each of three pages')
+    }
+    expect(first.table.rows).toHaveLength(2)
+    expect(second.table.rows).toHaveLength(2)
+    expect(third.table.rows).toHaveLength(1)
+    expect(second.table.rows[0]?.cells[0]?.vMerge).toBe('continue')
+    const paintedFirst = tablePaintRows(first.table)
+    const paintedSecond = tablePaintRows(second.table)
+    expect(paintedFirst[1]?.cells[0]?.rowSpan).toBe(1)
+    expect(paintedSecond[0]?.cells[0]).toMatchObject({ rowSpan: 2 })
+    expect(paintedSecond[0]?.cells[0]?.cell.vMerge).toBe('continue')
+    expect(paintedSecond[1]?.cells).toHaveLength(2)
   })
 
   it('places a mid-paragraph split before later body paragraphs', () => {
