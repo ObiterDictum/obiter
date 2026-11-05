@@ -341,7 +341,8 @@ export function translateSnapshot(
             Math.round(original.heightPx) === sent.heightPx
           const clashes = sent
             ? next.structures.some(
-                (item) => item.kind === 'image-size' && item.runId === sent.runId,
+                (item) =>
+                  item.kind === 'image-size' && item.runId === sent.runId,
               )
             : true
           if (sent && original && !sameSize && !clashes) {

@@ -515,9 +515,7 @@ describe('the picture size control', () => {
       fireEvent.change(width, { target: { value: '8' } })
       fireEvent.keyDown(width, { key: 'Enter' })
       await waitFor(() => expect(pictureWidth()).toBeGreaterThan(300))
-      fireEvent.blur(
-        screen.getByLabelText('Picture width in centimetres'),
-      )
+      fireEvent.blur(screen.getByLabelText('Picture width in centimetres'))
       await waitFor(() => expect(pictureWidth()).toBe(302))
 
       openRibbonTab('Home')
