@@ -1,4 +1,6 @@
-import { ReplyList, ReplyBody, ReplyForm } from './comment-replies'
+import { CommentCard } from './comment-card'
+import { ImportedCommentCard } from './imported-comment-card'
+import { ReplyBody } from './comment-replies'
 import type {
   DocumentComment,
   DocumentCommentAnchor,
@@ -13,10 +15,8 @@ import {
   DialogDescription,
   EmptyState,
   Input,
-  PersonName,
 } from '@obiter/ui'
 import { useState } from 'react'
-import { formatDateTime } from '../../format'
 
 export function DocumentCommentsPanel({
   comments,
@@ -82,6 +82,12 @@ export function DocumentCommentsPanel({
       >
         {showDeleted ? 'Active comments' : 'Deleted comments'}
       </Button>
+      {error ? (
+        <p className="text-sm text-danger" role="alert">
+          {error}
+        </p>
+      ) : null}
+
       {showDeleted ? (
         <div className="flex flex-col gap-3" aria-label="Deleted comments">
           <h4 className="text-item text-ink">Deleted comments</h4>
@@ -171,12 +177,6 @@ export function DocumentCommentsPanel({
               access.
             </p>
           )}
-
-          {error ? (
-            <p className="text-sm text-danger" role="alert">
-              {error}
-            </p>
-          ) : null}
 
           {comments.length === 0 &&
           importedComments.length === 0 &&
@@ -320,6 +320,33 @@ export function DocumentCommentsPanel({
                     {importedComments.map((comment) => (
                       <ImportedCommentCard
                         key={comment.id}
+                        deletionActions={
+                          <>
+                            {comment.replies
+                              .filter(
+                                (reply) =>
+                                  !reply.imported &&
+                                  deletableCommentIds.includes(reply.id),
+                              )
+                              .map((reply) => (
+                                <Button
+                                  key={reply.id}
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={pending}
+                                  onClick={() =>
+                                    setDeleting({
+                                      id: reply.id,
+                                      body: reply.body,
+                                      thread: false,
+                                    })
+                                  }
+                                >
+                                  Delete reply by {reply.author.name}
+                                </Button>
+                              ))}
+                          </>
+                        }
                         comment={comment}
                         canEdit={canEdit}
                         pending={pending}
@@ -346,6 +373,22 @@ export function DocumentCommentsPanel({
                         className="flex flex-col gap-1 border-t border-line pt-3"
                       >
                         <ReplyBody reply={reply} />
+                        {deletableCommentIds.includes(reply.id) ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={pending}
+                            onClick={() =>
+                              setDeleting({
+                                id: reply.id,
+                                body: reply.body,
+                                thread: false,
+                              })
+                            }
+                          >
+                            Delete reply
+                          </Button>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
@@ -391,141 +434,5 @@ export function DocumentCommentsPanel({
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-function CommentCard({
-  deletionActions,
-  comment,
-  canEdit,
-  mayResolve,
-  pending,
-  onReply,
-  onResolve,
-  onReopen,
-  onRevealAnchor,
-}: {
-  deletionActions: import('react').ReactNode
-  comment: DocumentComment
-  canEdit: boolean
-  mayResolve: boolean
-  pending: boolean
-  onReply: (input: { parentId: string; body: string }) => Promise<boolean>
-  onResolve: (commentId: string) => void
-  onReopen: (commentId: string) => void
-  onRevealAnchor: (anchor: DocumentCommentAnchor) => void
-}) {
-  const resolved = comment.resolvedAt !== null
-  return (
-    <li className="flex flex-col gap-2 border-t border-line pt-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-ink">
-          <PersonName person={comment.author} />
-        </p>
-        <p className="text-caption text-subtle">
-          {formatDateTime(comment.createdAt)}
-        </p>
-      </div>
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-        {comment.body}
-      </p>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-caption text-subtle">
-          {resolved ? 'Resolved' : 'Open'}
-          {comment.anchorResolved ? '' : ' · anchor no longer resolves'}
-        </p>
-        {comment.anchorResolved ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onRevealAnchor(comment.anchor)}
-          >
-            Show in document
-          </Button>
-        ) : null}
-      </div>
-      {deletionActions}
-      <ReplyList replies={comment.replies} />
-      {mayResolve ? (
-        <div className="flex gap-2">
-          {resolved ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={pending}
-              onClick={() => onReopen(comment.id)}
-            >
-              Reopen
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={pending}
-              onClick={() => onResolve(comment.id)}
-            >
-              Resolve
-            </Button>
-          )}
-        </div>
-      ) : null}
-      {canEdit ? (
-        <ReplyForm parentId={comment.id} pending={pending} onReply={onReply} />
-      ) : null}
-    </li>
-  )
-}
-
-function ImportedCommentCard({
-  comment,
-  canEdit,
-  pending,
-  onReply,
-  onRevealAnchor,
-}: {
-  comment: DocumentImportedCommentThread
-  canEdit: boolean
-  pending: boolean
-  onReply: (input: { parentId: string; body: string }) => Promise<boolean>
-  onRevealAnchor: (anchor: DocumentCommentAnchor) => void
-}) {
-  const anchor = comment.anchor
-  return (
-    <li className="flex flex-col gap-2 border-t border-line pt-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-ink">
-          {comment.author ?? 'Unknown author'}
-        </p>
-        {comment.createdAt ? (
-          <p className="text-caption text-subtle">
-            {formatDateTime(comment.createdAt)}
-          </p>
-        ) : null}
-      </div>
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
-        {comment.body}
-        {comment.bodyTruncated ? '…' : ''}
-      </p>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-caption text-subtle">
-          Imported
-          {comment.resolved ? ' · resolved in file' : ''}
-          {comment.anchor === null ? ' · anchor no longer resolves' : ''}
-        </p>
-        {anchor !== null ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onRevealAnchor(anchor)}
-          >
-            Show in document
-          </Button>
-        ) : null}
-      </div>
-      <ReplyList replies={comment.replies} />
-      {canEdit && comment.ooxmlId !== null ? (
-        <ReplyForm parentId={comment.id} pending={pending} onReply={onReply} />
-      ) : null}
-    </li>
   )
 }

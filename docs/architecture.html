@@ -3718,6 +3718,26 @@
                   <td>Comment-author or owner/admin comment reopen</td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/delete
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>
+                    Author or matter owner soft deletion; thread deletion hides
+                    replies
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/restore
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>
+                    Author or matter owner recovery; active restores are
+                    idempotent
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">PATCH /api/documents/:id/restore</td>
                   <td class="id">documents.ts</td>
                   <td>Undo soft delete, cascading to its runs</td>
