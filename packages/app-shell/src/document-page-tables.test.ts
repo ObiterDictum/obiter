@@ -342,3 +342,63 @@ describe('cellWrapWidthPx', () => {
     ).toBe(200)
   })
 })
+
+describe('tables without Word paragraph ids', () => {
+  const cell = (text: string) =>
+    `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`
+  const plain = (id: string, text: string) => ({
+    id,
+    runs: [{ id: `${id}-r`, text, preservedXmlFragments: [] }],
+    preservedXmlFragments: [],
+  })
+
+  it('binds the cells to the paragraphs that hold their text, not to the first paragraphs of the story', () => {
+    const blocks = storyBlocks({
+      partName: 'word/document.xml',
+      kind: 'document',
+      paragraphs: [
+        plain('p1', 'Skeleton argument'),
+        plain('p2', 'Background'),
+        plain('p3', 'R1C1'),
+        plain('p4', 'R1C2'),
+        plain('p5', 'R2C1'),
+        plain('p6', 'R2C2'),
+        plain('p7', 'Submissions'),
+      ],
+      preservedXmlFragments: [
+        `<w:tbl><w:tr>${cell('R1C1')}${cell('R1C2')}</w:tr><w:tr>${cell('R2C1')}${cell('R2C2')}</w:tr></w:tbl>`,
+      ],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
+    })
+    expect(
+      blocks.map((block) =>
+        block.type === 'table' ? block.table.paragraphIds : block.paragraph.id,
+      ),
+    ).toEqual(['p1', 'p2', ['p3', 'p4', 'p5', 'p6'], 'p7'])
+  })
+
+  it('binds two tables with the same cell text in story order', () => {
+    const table = `<w:tbl><w:tr>${cell('Yes')}${cell('No')}</w:tr></w:tbl>`
+    const blocks = storyBlocks({
+      partName: 'word/document.xml',
+      kind: 'document',
+      paragraphs: [
+        plain('a', 'First question'),
+        plain('b', 'Yes'),
+        plain('c', 'No'),
+        plain('d', 'Second question'),
+        plain('e', 'Yes'),
+        plain('f', 'No'),
+      ],
+      preservedXmlFragments: [table, table],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
+    })
+    expect(
+      blocks.map((block) =>
+        block.type === 'table' ? block.table.paragraphIds : block.paragraph.id,
+      ),
+    ).toEqual(['a', ['b', 'c'], 'd', ['e', 'f']])
+  })
+})
