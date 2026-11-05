@@ -115,7 +115,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
         </p>
       ) : null}
 
-      <div className="mt-6">
+      <div className="mt-6 flex justify-center">
         <SegmentedControl
           label="Sign-in method"
           value={mode}

@@ -25,7 +25,7 @@ export function AuthLayout({
           <ThemeToggle />
         </header>
 
-        <div className="flex flex-1 items-center justify-center py-10">
+        <div className="flex flex-1 justify-center pt-[clamp(2.5rem,14vh,9rem)] pb-10">
           <div className={cn('w-full max-w-[360px]', columnClassName)}>
             {children}
           </div>
@@ -49,17 +49,17 @@ export function AuthHeading({
   descriptionClassName?: string
 }) {
   return (
-    <>
+    <div className="text-center">
       <h1 className="text-page text-ink">{title}</h1>
       <p
         className={cn(
-          'mt-2 max-w-[38ch] text-body text-muted',
+          'mx-auto mt-2 max-w-[38ch] text-body text-muted',
           descriptionClassName,
         )}
       >
         {description}
       </p>
-    </>
+    </div>
   )
 }
 
@@ -91,7 +91,7 @@ export function AuthDone({
   children: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-start gap-3 pt-2">
+    <div className="flex flex-col items-center gap-3 pt-2 text-center">
       <span className="grid size-10 place-items-center rounded-lg bg-success-soft text-success">
         <CheckCircle size={20} aria-hidden />
       </span>
