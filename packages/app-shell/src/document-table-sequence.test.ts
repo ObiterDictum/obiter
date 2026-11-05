@@ -1,3 +1,4 @@
+import { DocumentModelPage } from './components/document-workspace/model-view'
 import '@obiter/test-dom'
 import JSZip from 'jszip'
 import { createElement } from 'react'
@@ -333,6 +334,17 @@ it('saves text typed into the first cell of a pending appended row', async () =>
   state.extraRuns[id] = [
     { id: 'typed', text: 'NEW', preservedXmlFragments: [] },
   ]
+  const view = render(
+    createElement(DocumentModelPage, {
+      model: painted,
+      extraRuns: state.extraRuns,
+      selectedParagraphId: id,
+      onSelectParagraph: () => {},
+      editing: true,
+    }),
+  )
+  expect(view.container.querySelector('textarea')?.value).toBe('NEW')
+  cleanup()
   const plan = planDocumentSave(doc.model, state)
   expect(plan.blocked).toEqual([])
   applyDocumentEdits(doc, plan.operations)

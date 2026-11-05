@@ -218,6 +218,7 @@ export function DocumentModelPage({
     firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
 
   const sharedCtx = {
+    extraRuns,
     model,
     pendingRedlines,
     selectedParagraphId,
