@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Button, Skeleton, StatusDot } from '@obiter/ui'
+import { Button, Skeleton, StatusDot, cn } from '@obiter/ui'
 import { Clock, Info, ListChecks, Warning } from '@obiter/ui/icons'
 import type { VerificationFindingView } from '@obiter/contracts'
 import { ApiError } from '../../api'
@@ -153,7 +153,12 @@ export function VerificationDock({
 
   return (
     <VerificationFrame panel={panel}>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <div
+        className={cn(
+          'flex min-w-0 flex-col gap-2',
+          panel ? 'flex-1' : 'flex-[1_1_20rem]',
+        )}
+      >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <StatusDot tone={state.tone} className="text-item">
             {stateLabel}
@@ -380,7 +385,7 @@ function VerificationFrame({
       className={
         panel
           ? 'flex min-w-0 flex-col gap-4 focus:outline-none'
-          : 'flex items-center gap-x-3 overflow-x-auto border-b border-line bg-surface px-12 py-1.5 whitespace-nowrap focus:outline-2 focus:outline-offset-2 focus:outline-brand max-compact:px-8'
+          : 'flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-12 py-1.5 focus:outline-2 focus:outline-offset-2 focus:outline-brand max-compact:px-8'
       }
     >
       {children}

@@ -1,0 +1,210 @@
+{
+  "matter": {
+    "matter": {
+      "id": "mtr_dock",
+      "organisationId": "org_shell_test",
+      "name": "Dock check",
+      "description": null,
+      "primaryJurisdiction": "England and Wales",
+      "secondaryJurisdictions": [],
+      "legalDomains": [],
+      "clientReference": "",
+      "status": "active",
+      "createdBy": "usr_shell_test",
+      "createdAt": "2026-11-05T01:49:54.645Z",
+      "updatedAt": "2026-11-05T01:49:54.645Z",
+      "deletedAt": null,
+      "deletedBy": null
+    }
+  },
+  "documents": {
+    "documents": [
+      {
+        "id": "doc_dock",
+        "organisationId": "org_shell_test",
+        "matterId": "mtr_dock",
+        "currentVersionId": "ver_dock",
+        "logicalKey": "doc_dock_2",
+        "createdBy": "usr_shell_test",
+        "createdAt": "2026-11-05T01:49:57.190Z",
+        "updatedAt": "2026-11-05T01:49:57.190Z",
+        "deletedAt": null,
+        "deletedBy": null,
+        "currentVersion": {
+          "id": "ver_dock",
+          "organisationId": "org_shell_test",
+          "matterId": "mtr_dock",
+          "matterDocumentId": "doc_dock",
+          "filename": "claim-form-fused.pdf",
+          "fileType": "pdf",
+          "sizeBytes": 744,
+          "objectKey": "org/org_shell_test/matters/mtr_dock/documents/doc_dock/versions/ver_dock/source",
+          "textObjectKey": "org/org_shell_test/matters/mtr_dock/documents/doc_dock/versions/ver_dock/text",
+          "documentStatus": "ready",
+          "failureReason": null,
+          "versionNumber": 1,
+          "contentSha256": "a463eef056635c4a249c3fcf549f4983e06a68370eccb8ce428ff4f123c98d94",
+          "syncState": "synced",
+          "createdBy": "usr_shell_test",
+          "createdAt": "2026-11-05T01:49:57.190532+00:00",
+          "updatedAt": "2026-11-05T01:49:57.197751+00:00",
+          "lineage": null,
+          "redaction": null
+        }
+      }
+    ]
+  },
+  "document": {
+    "document": {
+      "id": "doc_dock",
+      "organisationId": "org_shell_test",
+      "matterId": "mtr_dock",
+      "currentVersionId": "ver_dock",
+      "logicalKey": "doc_dock_2",
+      "createdBy": "usr_shell_test",
+      "createdAt": "2026-11-05T01:49:57.190Z",
+      "updatedAt": "2026-11-05T01:49:57.190Z",
+      "deletedAt": null,
+      "deletedBy": null,
+      "currentVersion": {
+        "id": "ver_dock",
+        "organisationId": "org_shell_test",
+        "matterId": "mtr_dock",
+        "matterDocumentId": "doc_dock",
+        "filename": "claim-form-fused.pdf",
+        "fileType": "pdf",
+        "sizeBytes": "744",
+        "objectKey": "org/org_shell_test/matters/mtr_dock/documents/doc_dock/versions/ver_dock/source",
+        "textObjectKey": "org/org_shell_test/matters/mtr_dock/documents/doc_dock/versions/ver_dock/text",
+        "documentStatus": "ready",
+        "failureReason": null,
+        "versionNumber": 1,
+        "contentSha256": "a463eef056635c4a249c3fcf549f4983e06a68370eccb8ce428ff4f123c98d94",
+        "syncState": "synced",
+        "createdBy": "usr_shell_test",
+        "author": {
+          "id": "usr_shell_test",
+          "name": "Cam Tester"
+        },
+        "createdAt": "2026-11-05T01:49:57.190Z",
+        "updatedAt": "2026-11-05T01:49:57.197Z",
+        "lineage": null,
+        "redaction": null
+      }
+    },
+    "versions": [
+      {
+        "id": "ver_dock",
+        "organisationId": "org_shell_test",
+        "matterId": "mtr_dock",
+        "matterDocumentId": "doc_dock",
+        "filename": "claim-form-fused.pdf",
+        "fileType": "pdf",
+        "sizeBytes": "744",
+        "objectKey": "org/org_shell_test/matters/mtr_dock/documents/doc_dock/versions/ver_dock/source",
+        "textObjectKey": "org/org_shell_test/matters/mtr_dock/documents/doc_dock/versions/ver_dock/text",
+        "documentStatus": "ready",
+        "failureReason": null,
+        "versionNumber": 1,
+        "contentSha256": "a463eef056635c4a249c3fcf549f4983e06a68370eccb8ce428ff4f123c98d94",
+        "syncState": "synced",
+        "createdBy": "usr_shell_test",
+        "author": {
+          "id": "usr_shell_test",
+          "name": "Cam Tester"
+        },
+        "createdAt": "2026-11-05T01:49:57.190Z",
+        "updatedAt": "2026-11-05T01:49:57.197Z",
+        "lineage": null,
+        "redaction": null
+      }
+    ]
+  },
+  "pdfView": {
+    "documentId": "doc_dock",
+    "versionId": "ver_dock",
+    "versionNumber": 1,
+    "text": "INTHECOUNTYCOURTATCENTRALLONDON\nPARTICULARSOFCLAIM\nTheClaimantclaimsdamagestotallingGBP162,526.25\nNInumberQQ123456Cwasrecorded",
+    "layout": {
+      "version": 2,
+      "pages": [
+        {
+          "width": 612,
+          "height": 792
+        }
+      ],
+      "segments": [
+        {
+          "start": 0,
+          "end": 31,
+          "pageIndex": 0,
+          "x": 72,
+          "y": 720,
+          "width": 252,
+          "height": 12,
+          "ascent": 8.616,
+          "descent": 2.484,
+          "advances": [
+            3.336, 8.664, 7.332, 8.664, 8.004, 8.664, 9.336, 8.664, 8.664,
+            7.332, 8.004, 8.664, 9.336, 8.664, 8.664, 7.332, 8.004, 7.332,
+            8.664, 8.004, 8.664, 7.332, 8.664, 8.004, 6.672, 6.672, 9.336,
+            8.664, 8.664, 9.336, 8.664
+          ],
+          "glyphWidthOverrides": {}
+        },
+        {
+          "start": 32,
+          "end": 50,
+          "pageIndex": 0,
+          "x": 72,
+          "y": 702,
+          "width": 137.352,
+          "height": 12,
+          "ascent": 8.616,
+          "descent": 2.484,
+          "advances": [
+            8.004, 8.004, 8.664, 7.332, 3.336, 8.664, 8.664, 6.672, 8.004,
+            8.664, 8.004, 9.336, 7.332, 8.664, 6.672, 8.004, 3.336, 9.996
+          ],
+          "glyphWidthOverrides": {}
+        },
+        {
+          "start": 51,
+          "end": 97,
+          "pageIndex": 0,
+          "x": 72,
+          "y": 684,
+          "width": 278.112,
+          "height": 12,
+          "ascent": 8.616,
+          "descent": 2.484,
+          "advances": [
+            7.332, 6.672, 6.672, 8.664, 2.664, 6.672, 2.664, 9.996, 6.672,
+            6.672, 3.336, 6, 2.664, 6.672, 2.664, 9.996, 6, 6.672, 6.672, 9.996,
+            6.672, 6.672, 6.672, 6, 3.336, 6.672, 3.336, 6.672, 2.664, 2.664,
+            2.664, 6.672, 6.672, 9.336, 8.004, 8.004, 6.672, 6.672, 6.672,
+            3.336, 6.672, 6.672, 6.672, 3.336, 6.672, 6.672
+          ],
+          "glyphWidthOverrides": {}
+        },
+        {
+          "start": 98,
+          "end": 126,
+          "pageIndex": 0,
+          "x": 72,
+          "y": 666,
+          "width": 188.736,
+          "height": 12,
+          "ascent": 8.616,
+          "descent": 2.484,
+          "advances": [
+            8.664, 3.336, 6.672, 6.672, 9.996, 6.672, 6.672, 3.996, 9.336,
+            9.336, 6.672, 6.672, 6.672, 6.672, 6.672, 6.672, 8.664, 8.664,
+            6.672, 6, 3.996, 6.672, 6, 6.672, 3.996, 6.672, 6.672, 6.672
+          ],
+          "glyphWidthOverrides": {}
+        }
+      ]
+    }
+  }
+}
