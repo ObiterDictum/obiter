@@ -111,6 +111,23 @@ describe('a tab in run text', () => {
     expect(document.model.defaultTabStopTwips).toBe(1440)
   })
 
+  it('writes a tab in a paragraph inserted after a run as a tab element', async () => {
+    const { document, paragraph } = await parseRun('<w:t>ab</w:t>')
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: paragraph.id,
+        runs: [{ text: 'New\tline' }],
+      },
+    ])
+    const output = await serialiseDocx(document)
+    const xml = await zipText(output, 'word/document.xml')
+    expect(xml).toContain('<w:r><w:t>New</w:t><w:tab/><w:t>line</w:t></w:r>')
+    expect(mainParagraphs(await parseDocx(output))[1]?.runs[0]?.text).toBe(
+      'New\tline',
+    )
+  })
+
   it('writes a tab inserted under track changes as an inserted tab element', async () => {
     const { document, run } = await parseRun('<w:t>ab</w:t>')
     applyDocumentEdits(

@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { fireEvent } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
@@ -129,6 +129,29 @@ describe('Tab in body text', () => {
     expect(bodyField().value).toBe('Cell one')
     save()
     expect(editAsync).not.toHaveBeenCalled()
+  })
+
+  it('inserts a tab in a paragraph typed in this session', () => {
+    const { editAsync } = mount()
+    clickParagraph('p1')
+    placeCaret(5)
+    fireEvent.keyDown(bodyField(), { key: 'Enter' })
+    const pending = screen.getByLabelText('Pending paragraph text')
+    if (!(pending instanceof HTMLTextAreaElement))
+      throw new Error('expected a pending paragraph editor')
+    fireEvent.change(pending, { target: { value: 'New' } })
+    pending.setSelectionRange(3, 3)
+    expect(fireEvent.keyDown(pending, { key: 'Tab' })).toBe(false)
+    expect(pending.value).toBe('New\t')
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        intentId: expect.any(String),
+        runs: [{ text: 'New\t' }],
+      },
+    ])
   })
 
   it('undoes and redoes an inserted tab', () => {
