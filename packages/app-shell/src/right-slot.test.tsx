@@ -1,6 +1,12 @@
 import '@obiter/test-dom'
 import { afterEach, describe, expect, it, mock } from 'bun:test'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { useState, type ReactNode } from 'react'
 import type { RightSlotTabId } from './right-slot'
 
@@ -154,5 +160,22 @@ describe('right slot document tabs', () => {
     expect(
       screen.getByRole('tab', { name: 'Checks' }).getAttribute('aria-selected'),
     ).toBe('true')
+  })
+
+  it('fits four tabs in the 330px panel by showing only the open tab by name', () => {
+    render(<Harness pathname={DOCUMENT_PATH} initialTab="checks" />)
+    const open = screen.getByRole('tab', { name: 'Checks' })
+    expect(within(open).getByText('Checks').className).not.toContain('sr-only')
+    for (const name of ['Agent', 'Comments', 'History']) {
+      const closed = screen.getByRole('tab', { name })
+      expect(within(closed).getByText(name).className).toContain('sr-only')
+    }
+  })
+
+  it('names a closed tab in a tooltip when it takes focus', async () => {
+    render(<Harness pathname={DOCUMENT_PATH} initialTab="checks" />)
+    const history = screen.getByRole('tab', { name: 'History' })
+    history.focus()
+    expect((await screen.findByRole('tooltip')).textContent).toBe('History')
   })
 })

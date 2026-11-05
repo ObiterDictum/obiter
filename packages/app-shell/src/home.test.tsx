@@ -607,7 +607,7 @@ describe('HomeRouteView — organisation-less state', () => {
 })
 
 describe('HomeRouteView — default workspace naming prompt', () => {
-  it('prompts the owner of a default-named workspace to name it', async () => {
+  it('prompts the owner of a default-named workspace to name it in Organisation settings', async () => {
     mocks.useCurrentUser.mockReturnValue({
       data: {
         ...ME,
@@ -624,7 +624,7 @@ describe('HomeRouteView — default workspace naming prompt', () => {
       screen
         .getByRole('link', { name: /Name it in Settings/ })
         .getAttribute('href'),
-    ).toBe('/settings')
+    ).toBe('/settings?section=organisation')
   })
 
   it('shows no prompt for named workspaces or non-owners', async () => {

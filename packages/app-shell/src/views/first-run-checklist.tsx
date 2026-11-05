@@ -71,6 +71,7 @@ export function FirstRunChecklist({
           {showOrganisationSettings ? (
             <Link
               to="/settings"
+              search={{ section: 'organisation' }}
               className="text-meta text-muted hover:text-ink"
             >
               Review your organisation settings
@@ -95,6 +96,7 @@ function stepAction(id: FirstRunStepId) {
       return (
         <Link
           to="/settings"
+          search={{ section: 'organisation' }}
           className={buttonClassName({ variant: 'secondary', size: 'sm' })}
         >
           Invite in Settings

@@ -339,7 +339,7 @@ export function docxWorkspaceChrome({
   return {
     trackChanges,
     zoom,
-    commentsOpen: panels.active === 'comments',
+    commentsOpen: panels.tabs.shown === 'comments',
     changesOpen: panels.active === 'review',
     authoritiesOpen: panels.active === 'authorities',
     infoOpen,
@@ -349,7 +349,7 @@ export function docxWorkspaceChrome({
     ...insert,
     canUndo: drafts.canUndo,
     canRedo: drafts.canRedo,
-    onToggleComments: () => panels.toggle('comments'),
+    onToggleComments: () => panels.tabs.toggle('comments'),
     onToggleChanges: () => panels.toggle('review'),
     onToggleAuthorities: () => panels.toggle('authorities'),
     onToggleInfo,
@@ -359,10 +359,12 @@ export function docxWorkspaceChrome({
     onOpenVerify,
     citationStyle,
     onCitationStyle,
-    legalChecks: {
-      open: panels.legalChecksFocus,
-      onOpen: panels.openLegalChecks,
-    },
+    legalChecks: panels.tabs.available
+      ? {
+          open: panels.tabs.shown === 'checks' ? panels.tabs.checksFocus : null,
+          onOpen: panels.tabs.openLegalChecks,
+        }
+      : undefined,
     onToggleTrackChanges: () => drafts.setTrackChangesFlip(!trackChanges),
     onZoom: setZoom,
     onExportText: exports.onExportText,

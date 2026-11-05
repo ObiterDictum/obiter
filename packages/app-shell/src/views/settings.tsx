@@ -1,6 +1,6 @@
 import { useCurrentUser } from '../current-user'
 import { PageScaffold } from '../page-scaffold'
-import { useShellContents } from '../shell-contents'
+import { useSettingsSection } from '../settings-sections'
 import { AccountSection } from './settings-account'
 import { OrganisationSection } from './settings-organisation'
 import { PreferencesSection } from './settings-preferences'
@@ -8,7 +8,7 @@ import { SecuritySection } from './settings-security'
 
 export function SettingsRouteView() {
   const { data: me } = useCurrentUser()
-  const { settingsSection: section } = useShellContents()
+  const section = useSettingsSection()
 
   return (
     <PageScaffold

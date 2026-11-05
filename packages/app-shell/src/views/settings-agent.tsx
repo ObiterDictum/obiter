@@ -36,6 +36,7 @@ export function OrganisationAgentSettingsSection({
 
   return (
     <section
+      id="settings-agent"
       aria-labelledby="settings-agent-heading"
       className="flex max-w-[520px] flex-col gap-4"
     >

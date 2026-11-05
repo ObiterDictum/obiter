@@ -17,7 +17,6 @@ import {
 } from './documents'
 import { useMattersList } from './matters'
 import { matterIdFromPath } from './navigation'
-import { useShellContents } from './shell-contents'
 import { useShellShortcuts } from './shell-shortcuts'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings-sections'
 import { setAppTheme, useAppTheme } from './use-app-theme'
@@ -68,7 +67,6 @@ export function CommandPaletteProvider({
   const theme = useAppTheme()
   const queryClient = useQueryClient()
   const { toast } = useToast()
-  const { setSettingsSection } = useShellContents()
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
@@ -134,8 +132,7 @@ export function CommandPaletteProvider({
   }
 
   function openSettings(section: SettingsSectionId) {
-    setSettingsSection(section)
-    void navigate({ to: '/settings' })
+    void navigate({ to: '/settings', search: { section } })
   }
 
   const actionRows: PaletteRow[] = [

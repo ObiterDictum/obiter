@@ -117,7 +117,6 @@ export function useWorkspaceDerivations({
   model,
   drafts,
   insert,
-  legalChecksOpen,
   flow,
   saveOperations,
 }: {
@@ -126,7 +125,6 @@ export function useWorkspaceDerivations({
   model: DocumentModelWire | undefined
   drafts: DraftState
   flow?: DocumentLayoutFlow
-  legalChecksOpen: boolean
   insert: {
     caret: FormatTarget
     offset: number | null
@@ -289,7 +287,7 @@ export function useWorkspaceDerivations({
   const checksShown = useRightSlotTarget('checks') !== null
   const legalChecks = useMemo(
     () =>
-      model && (legalChecksOpen || checksShown)
+      model && checksShown
         ? {
             references: checkCrossReferences(
               model,
@@ -310,7 +308,6 @@ export function useWorkspaceDerivations({
         : null,
     [
       model,
-      legalChecksOpen,
       checksShown,
       drafts.structures,
       deletions,

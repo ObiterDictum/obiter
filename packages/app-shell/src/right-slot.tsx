@@ -1,4 +1,12 @@
-import { Tabs, TabsList, TabsTrigger, cn } from '@obiter/ui'
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+} from '@obiter/ui'
 import { ChatText, Clock, Robot, ShieldCheck } from '@obiter/ui/icons'
 import { Suspense, lazy, type ComponentType, type ReactNode } from 'react'
 import { documentIdFromPath } from './navigation'
@@ -97,18 +105,20 @@ export function RightSlot({
         <div className="flex h-10 shrink-0 items-center border-b border-line px-2">
           <TabsList
             aria-label="Panel tabs"
-            className="w-full gap-0.5 bg-transparent p-0"
+            className="w-full gap-1 bg-transparent p-0"
           >
-            {tabs.map((item) => (
-              <TabsTrigger
-                key={item.id}
-                value={item.id}
-                className="flex min-w-0 flex-1 items-center justify-center gap-1 px-1.5"
-              >
-                <item.icon size={14} className="shrink-0" aria-hidden />
-                {item.label}
-              </TabsTrigger>
-            ))}
+            {tabs.map((item) =>
+              item.id === active.id ? (
+                <RightSlotTabTrigger key={item.id} tab={item} open />
+              ) : (
+                <Tooltip key={item.id}>
+                  <TooltipTrigger
+                    render={<RightSlotTabTrigger tab={item} open={false} />}
+                  />
+                  <TooltipContent side="bottom">{item.label}</TooltipContent>
+                </Tooltip>
+              ),
+            )}
           </TabsList>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -118,5 +128,28 @@ export function RightSlot({
         </div>
       </Tabs>
     </aside>
+  )
+}
+
+function RightSlotTabTrigger({
+  tab,
+  open,
+  ...props
+}: {
+  tab: RightSlotTab
+  open: boolean
+}) {
+  return (
+    <TabsTrigger
+      {...props}
+      value={tab.id}
+      className={cn(
+        'flex items-center justify-center gap-1.5 px-2',
+        open ? 'min-w-0 flex-1' : 'w-8 shrink-0',
+      )}
+    >
+      <tab.icon size={14} className="shrink-0" aria-hidden />
+      <span className={open ? 'truncate' : 'sr-only'}>{tab.label}</span>
+    </TabsTrigger>
   )
 }

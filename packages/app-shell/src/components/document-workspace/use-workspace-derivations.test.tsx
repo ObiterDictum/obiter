@@ -63,7 +63,6 @@ function derivations(
       useWorkspaceDerivations({
         documentId: 'doc_1',
         model: base,
-        legalChecksOpen: false,
         drafts: {
           ...state,
           state,

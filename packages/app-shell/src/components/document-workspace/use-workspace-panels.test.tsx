@@ -13,18 +13,18 @@ function Harness() {
   const [focused, setFocused] = useState<string | null>(null)
   return (
     <div>
-      {(
-        ['info', 'comments', 'review', 'authorities', 'legal-checks'] as const
-      ).map((panel: WorkspacePanel) => (
-        <button
-          key={panel}
-          type="button"
-          data-panel={panel}
-          onClick={() => panels.toggle(panel)}
-        >
-          Open {panel}
-        </button>
-      ))}
+      {(['info', 'verify', 'review', 'authorities'] as const).map(
+        (panel: WorkspacePanel) => (
+          <button
+            key={panel}
+            type="button"
+            data-panel={panel}
+            onClick={() => panels.toggle(panel)}
+          >
+            Open {panel}
+          </button>
+        ),
+      )}
       <input aria-label="Document text" data-paragraph-id="p1" />
       {panels.active ? (
         <aside data-docked-panel aria-label={panels.active}>
@@ -42,16 +42,16 @@ function Harness() {
 describe('useWorkspacePanels', () => {
   it('keeps one docked panel open at a time', () => {
     render(<Harness />)
-    fireEvent.click(screen.getByRole('button', { name: 'Open comments' }))
-    expect(screen.getByRole('complementary', { name: 'comments' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Open info' }))
+    expect(screen.getByRole('complementary', { name: 'info' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Open review' }))
-    expect(screen.queryByRole('complementary', { name: 'comments' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'info' })).toBeNull()
     expect(screen.getByRole('complementary', { name: 'review' })).toBeTruthy()
   })
 
   it('returns focus to the control that opened the panel when it closes', () => {
     render(<Harness />)
-    const trigger = screen.getByRole('button', { name: 'Open comments' })
+    const trigger = screen.getByRole('button', { name: 'Open info' })
     trigger.focus()
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))

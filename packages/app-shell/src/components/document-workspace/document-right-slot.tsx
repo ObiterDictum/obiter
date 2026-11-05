@@ -7,6 +7,7 @@ import { RightSlotPortal, type DocumentPanelTab } from '../../right-slot-portal'
 import { DocumentAuthoritiesPanel } from './authorities-panel'
 import { DocumentCommentsPanel } from './comments-panel'
 import { LegalChecksPanel } from './legal-checks-panel'
+import type { LegalChecksFocus } from './ribbon-types'
 import type { WorkspaceCommentsPanelProps } from './use-workspace-comments'
 
 export type PanelLoad<Ready = object> =
@@ -46,10 +47,12 @@ export function PanelError({
 export function DocumentChecksTab({
   state,
   authorities,
+  focus,
   onSelect,
 }: {
   state: PanelLoad<{ checks: LegalChecks }>
   authorities: readonly AuthorityHit[]
+  focus?: LegalChecksFocus | null
   onSelect: (paragraphId: string) => void
 }) {
   if (state.status === 'loading') {
@@ -79,7 +82,11 @@ export function DocumentChecksTab({
   }
   return (
     <div className="flex flex-col gap-6">
-      <LegalChecksPanel checks={state.checks} onSelect={onSelect} />
+      <LegalChecksPanel
+        checks={state.checks}
+        focus={focus ?? undefined}
+        onSelect={onSelect}
+      />
       <section className="flex flex-col gap-1">
         <h4 className="text-item text-ink">Authorities</h4>
         <DocumentAuthoritiesPanel citations={authorities} onSelect={onSelect} />
@@ -129,11 +136,13 @@ export function DocumentCommentsTab({
 
 export function DocxRightSlotTabs({
   checks,
+  checksFocus,
   authorities,
   onSelect,
   comments,
 }: {
   checks: PanelLoad<{ checks: LegalChecks }>
+  checksFocus: LegalChecksFocus | null
   authorities: readonly AuthorityHit[]
   onSelect: (paragraphId: string) => void
   comments: { load: PanelLoad; props: WorkspaceCommentsPanelProps }
@@ -144,6 +153,7 @@ export function DocxRightSlotTabs({
         <DocumentChecksTab
           state={checks}
           authorities={authorities}
+          focus={checksFocus}
           onSelect={onSelect}
         />
       </RightSlotPortal>
