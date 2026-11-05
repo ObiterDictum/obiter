@@ -190,12 +190,6 @@ export function transformTableXml(
     operation.type === 'delete_table' ||
     (deleting && (rowOperation ? rows.length === 1 : columns.length === 1))
   if (removeTable) return { xml: '', paragraphIds: [] }
-  if (rowOperation && inside.some((e) => isWord(e, 'vMerge'))) {
-    throw new OoxmlError(
-      'model-node-not-editable',
-      'Rows crossing vertical merges cannot safely be changed',
-    )
-  }
   const edits: { start: number; end: number; value: string }[] = []
   const add = (e: XmlElement, value: string) =>
     edits.push({ start: e.start, end: e.end, value })
@@ -206,19 +200,67 @@ export function transformTableXml(
     return `<w:tc>${properties ? xml(properties).replace(/<w:vMerge\b[^>]*(?:\/>|>[\s\S]*?<\/w:vMerge>)/gu, '') : ''}<w:p xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" w14:paraId="${nextId()}"/></w:tc>`
   }
   if (rowOperation) {
-    if (deleting) add(row, '')
-    else {
+    const merge = (c: XmlElement) => {
+      const properties = children(c, 'tcPr')[0]
+      return properties && children(properties, 'vMerge')[0]
+    }
+    const aligned = (index: number, column: number, width: number) => {
+      let start = 0
+      return matrix[index]?.find((c) => {
+        const matches = start === column && c.span === width
+        start += c.span
+        return matches
+      })
+    }
+    if (deleting) {
+      add(row, '')
+      let column = 0
+      for (const c of own) {
+        const property = merge(c.element)
+        const next = aligned(rowIndex + 1, column, c.span)
+        const continuation = next && merge(next.element)
+        if (
+          property &&
+          attributeValue(property, WORD_NAMESPACE, 'val') === 'restart' &&
+          continuation &&
+          attributeValue(continuation, WORD_NAMESPACE, 'val') !== 'restart'
+        )
+          add(continuation, '<w:vMerge w:val="restart"/>')
+        column += c.span
+      }
+    } else {
       if (rows.length >= 64)
         throw new OoxmlError(
           'invalid-document-edit',
           'Tables are limited to 64 rows',
         )
       const properties = children(row, 'trPr')[0]
+      const boundary =
+        'position' in operation && operation.position === 'before'
+          ? rowIndex
+          : rowIndex + 1
+      let column = 0
+      const cells = own.map((c) => {
+        const below = aligned(boundary, column, c.span)
+        const above = aligned(boundary - 1, column, c.span)
+        const continuation = below && merge(below.element)
+        const extendsMerge =
+          above &&
+          merge(above.element) &&
+          continuation &&
+          attributeValue(continuation, WORD_NAMESPACE, 'val') !== 'restart'
+        column += c.span
+        const value = emptyCell(c.element)
+        if (!extendsMerge) return value
+        return value.includes('</w:tcPr>')
+          ? value.replace('</w:tcPr>', '<w:vMerge/></w:tcPr>')
+          : value.replace('<w:tc>', '<w:tc><w:tcPr><w:vMerge/></w:tcPr>')
+      })
       insert(
         ('position' in operation ? operation.position : undefined) === 'before'
           ? row.start
           : row.end,
-        `<w:tr>${properties ? xml(properties) : ''}${own.map((c) => emptyCell(c.element)).join('')}</w:tr>`,
+        `<w:tr>${properties ? xml(properties) : ''}${cells.join('')}</w:tr>`,
       )
     }
   } else {
