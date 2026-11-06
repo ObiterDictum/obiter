@@ -300,6 +300,7 @@ export function useWorkspaceCaret({
       text,
     )
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
+    return caret?.removedFootnotes
   }
 
   function moveCaret(paragraphId: string, offset: number) {
@@ -396,6 +397,8 @@ export function useWorkspaceCaret({
     reportJoinRefusal,
     blurParagraph,
     selectionNotice,
+    selectionNoticeVisible:
+      typeof selectionRefusal === 'object' && selectionRefusal !== null,
     selectAll,
     extendSelection,
     commentTarget,

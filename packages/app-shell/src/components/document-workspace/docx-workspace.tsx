@@ -171,6 +171,7 @@ export function DocxWorkspace({
     selectionActive,
     selectionSegments,
     selectionNotice,
+    selectionNoticeVisible,
     commentTarget,
     revealCommentAnchor,
     focusParagraph,
@@ -417,6 +418,7 @@ export function DocxWorkspace({
               drafts={chromeDrafts}
               remoteChange={remoteChange}
               transientNotice={transientBanner}
+              selectionNoticeVisible={selectionNoticeVisible}
               selectionNotice={
                 selectionNotice ?? selectionAnnouncement(selectionSegments.size)
               }

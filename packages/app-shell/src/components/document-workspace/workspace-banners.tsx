@@ -8,6 +8,7 @@ export function WorkspaceBanners({
   drafts,
   remoteChange,
   transientNotice,
+  selectionNoticeVisible,
   selectionNotice,
   onReload,
 }: {
@@ -15,6 +16,7 @@ export function WorkspaceBanners({
   drafts: ChromeDrafts
   remoteChange: boolean
   transientNotice: string | null
+  selectionNoticeVisible?: boolean
   selectionNotice: string
   onReload: () => void
 }) {
@@ -45,7 +47,13 @@ export function WorkspaceBanners({
         </p>
       ) : null}
 
-      <p className="sr-only" aria-live="polite" data-selection-status>
+      <p
+        className={
+          selectionNoticeVisible ? 'px-3 pb-2 text-sm text-ink' : 'sr-only'
+        }
+        aria-live="polite"
+        data-selection-status
+      >
         {selectionNotice}
       </p>
     </>

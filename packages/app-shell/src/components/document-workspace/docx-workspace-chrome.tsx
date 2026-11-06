@@ -53,6 +53,7 @@ type DocxWorkspaceChromeProps = {
   drafts: ChromeDrafts
   remoteChange: boolean
   transientNotice: string | null
+  selectionNoticeVisible?: boolean
   selectionNotice: string
   onReload: () => void
   requests: { find: number; palette: number; formatting: number }
@@ -69,6 +70,7 @@ function DocxWorkspaceChromeInner({
   drafts,
   remoteChange,
   transientNotice,
+  selectionNoticeVisible,
   selectionNotice,
   onReload,
   requests,
@@ -184,6 +186,7 @@ function DocxWorkspaceChromeInner({
         drafts={drafts}
         remoteChange={remoteChange}
         transientNotice={transientNotice}
+        selectionNoticeVisible={selectionNoticeVisible}
         selectionNotice={selectionNotice}
         onReload={onReload}
       />
