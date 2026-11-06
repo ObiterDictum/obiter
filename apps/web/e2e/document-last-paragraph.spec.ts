@@ -56,7 +56,8 @@ async function deleteButton(page: Page) {
   }
   return menuItem(page, 'Delete paragraph')
 }
-const saveButton = (page: Page) => page.getByRole('button', { name: 'Save' })
+const saveButton = (page: Page) =>
+  page.getByRole('button', { name: 'Save', exact: true })
 const undoButton = (page: Page) =>
   page.getByRole('button', { name: 'Undo', exact: true })
 const redoButton = (page: Page) =>

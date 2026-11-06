@@ -26,7 +26,8 @@ function shot(page: Page, name: string) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) => page.getByRole('button', { name: 'Save' })
+const save = (page: Page) =>
+  page.getByRole('button', { name: 'Save', exact: true })
 
 async function pressKey(page: Page, key: string) {
   await expect(editor(page)).toBeFocused()

@@ -29,7 +29,7 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   await focusParagraph(page, HEADING)
   await page.keyboard.press('Home')
   await page.keyboard.type(`${MARKER} `)
-  const saveButton = page.getByRole('button', { name: 'Save' })
+  const saveButton = page.getByRole('button', { name: 'Save', exact: true })
   await expect(saveButton).toBeEnabled({ timeout: 15_000 })
   await saveButton.click()
   await expect(saveButton).toBeDisabled({ timeout: 30_000 })

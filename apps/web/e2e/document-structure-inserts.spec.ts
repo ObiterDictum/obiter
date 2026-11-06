@@ -25,7 +25,8 @@ function shot(page: Page, name: string) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) => page.getByRole('button', { name: 'Save' })
+const save = (page: Page) =>
+  page.getByRole('button', { name: 'Save', exact: true })
 
 async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Layout') {
   await openRibbonTab(page, name)
