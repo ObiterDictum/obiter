@@ -124,7 +124,9 @@ export function CommentFooter({
                 </Button>
               }
             />
-            <MenuContent aria-label="Comment actions">{menu}</MenuContent>
+            <MenuContent aria-label="Comment actions" className="w-56">
+              {menu}
+            </MenuContent>
           </Menu>
         )}
       </span>

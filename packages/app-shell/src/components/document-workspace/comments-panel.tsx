@@ -150,7 +150,7 @@ export function DocumentCommentsPanel({
                   {entry.body}
                 </p>
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   className="-ml-2 self-start"
                   disabled={pending}
