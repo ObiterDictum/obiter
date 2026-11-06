@@ -55,6 +55,11 @@ it('warns after a cut removes two stored notes and Undo restores both references
   })
   expect(copied['text/plain']).toBe('Alpha Bravo')
   expect(selectionStatus()).toContain('2 footnotes were removed')
+  expect(
+    document
+      .querySelector('[data-selection-status]')
+      ?.classList.contains('sr-only'),
+  ).toBe(false)
   fireEvent.click(command('Undo'))
   expect(document.querySelectorAll('[data-note-mark]')).toHaveLength(2)
   fireEvent.click(command('Redo'))

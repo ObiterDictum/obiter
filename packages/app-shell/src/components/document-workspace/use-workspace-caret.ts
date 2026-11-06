@@ -397,6 +397,8 @@ export function useWorkspaceCaret({
     reportJoinRefusal,
     blurParagraph,
     selectionNotice,
+    selectionNoticeVisible:
+      typeof selectionRefusal === 'object' && selectionRefusal !== null,
     selectAll,
     extendSelection,
     commentTarget,
