@@ -400,7 +400,7 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
       /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
       incoming.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: 'Save' }).first().click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
   const saved = await saveResponse
   expect(saved.status(), await saved.text()).toBe(201)
 

@@ -49,6 +49,13 @@ function textEditLineage(baseVersionId: string, versionId: string) {
 }
 
 describe('DocxWorkspace chrome', () => {
+  it('leaves the document name to the matter tab and renders no editor header', () => {
+    mountWorkspace({})
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+    expect(document.body.textContent).not.toContain('Saved as version 1.')
+    expect(document.querySelector('[data-save-state]')?.textContent).toBe('')
+  })
+
   it('keeps the chrome outside the scrolling document desk', () => {
     mountWorkspace({})
     const desk = document.querySelector('[data-document-desk]')

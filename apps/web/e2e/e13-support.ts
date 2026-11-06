@@ -66,9 +66,7 @@ export async function openMatterDocument(
   await documentRow.click()
   await expect(page).toHaveURL(/\/matters\/[^/?#]+\/documents\/[^/?#]+$/)
   await expect(
-    page
-      .locator('#document-workspace')
-      .getByRole('heading', { level: 1, name: fileName }),
+    page.getByRole('button', { name: fileName, exact: true }),
   ).toBeVisible({ timeout: 30_000 })
 }
 

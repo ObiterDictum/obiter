@@ -15,6 +15,8 @@ import type {
 } from '@obiter/contracts'
 import { ApiError } from '../../api'
 import { requestCitation } from '../../pending-citation'
+import { DocumentTabStatusProvider } from '../../document-tab-status'
+import { TabSaveStateProbe } from '../../document-tab-status-harness'
 
 const hooks = vi.hoisted(() => ({
   useDocumentModel: vi.fn(),
@@ -388,29 +390,30 @@ export function mountWorkspace(
   if (options.pendingCitation !== undefined) {
     requestCitation(options.documentId ?? 'doc_1', options.pendingCitation)
   }
-  const workspace = (
-    <DocxWorkspace
-      documentId={options.documentId ?? 'doc_1'}
-      versionId="ver_1"
-      matterId="mtr_1"
-      filename="brief.docx"
-    />
+  return render(workspaceTree(options.documentId ?? 'doc_1'), {
+    wrapper: wrapperFor(options.rightSlot ?? null),
+  })
+}
+
+function workspaceTree(documentId: string) {
+  return (
+    <DocumentTabStatusProvider>
+      <DocxWorkspace
+        documentId={documentId}
+        versionId="ver_1"
+        matterId="mtr_1"
+        filename="brief.docx"
+      />
+      <TabSaveStateProbe documentId={documentId} />
+    </DocumentTabStatusProvider>
   )
-  return render(workspace, { wrapper: wrapperFor(options.rightSlot ?? null) })
 }
 
 export function rerenderWorkspace(
   view: ReturnType<typeof render>,
   documentId: string,
 ) {
-  view.rerender(
-    <DocxWorkspace
-      documentId={documentId}
-      versionId="ver_1"
-      matterId="mtr_1"
-      filename="brief.docx"
-    />,
-  )
+  view.rerender(workspaceTree(documentId))
 }
 
 afterEach(() => {

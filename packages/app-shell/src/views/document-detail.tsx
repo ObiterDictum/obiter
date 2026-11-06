@@ -1,24 +1,7 @@
 import { useState, type ReactNode } from 'react'
-import { Link, Outlet, useNavigate } from '@tanstack/react-router'
-import {
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  EmptyState,
-  Menu,
-  MenuContent,
-  MenuItem,
-  MenuTrigger,
-  Skeleton,
-  useToast,
-} from '@obiter/ui'
-import { DotsThree, Trash } from '@obiter/ui/icons'
-import { ApiError } from '../api'
-import { useCurrentUser } from '../current-user'
-import { useDeleteDocument, useDocument } from '../documents'
+import { Link, Outlet } from '@tanstack/react-router'
+import { EmptyState, Skeleton } from '@obiter/ui'
+import { useDocument } from '../documents'
 import { useMatter } from '../matters'
 import { ContentFrame } from '../content-frame'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
@@ -30,7 +13,6 @@ import {
   type DocumentTabsNoticeKind,
 } from '../components/document-workspace/document-right-slot'
 import { workspaceKind } from '../document-kind'
-import { ErrorNotice } from './settings-fields'
 
 export function DocumentDetailLayoutView({
   matterId,
@@ -43,7 +25,6 @@ export function DocumentDetailLayoutView({
   redactionRunsRegion?: ReactNode
   onDocumentEdited?: () => void
 }) {
-  const navigate = useNavigate()
   const document = useDocument(documentId)
   const matter = useMatter(matterId)
   const [selectedVersionId, setSelectedVersionId] = useState<string>()
@@ -175,18 +156,6 @@ export function DocumentDetailLayoutView({
             onViewVersion={setSelectedVersionId}
             onDocumentEdited={onDocumentEdited}
             headerLinks={{ matter: matterLink }}
-            headerActions={
-              <DocumentActionsMenu
-                documentId={documentId}
-                matterId={matterId}
-                onDeleted={() =>
-                  navigate({
-                    to: '/matters/$matterId',
-                    params: { matterId: String(matterId) },
-                  })
-                }
-              />
-            }
           />
         )}
       </div>
@@ -216,87 +185,5 @@ export function DocumentDetailLayoutView({
         <Outlet />
       </ContentFrame>
     </div>
-  )
-}
-
-function DocumentActionsMenu({
-  documentId,
-  matterId,
-  onDeleted,
-}: {
-  documentId: string
-  matterId: string
-  onDeleted: () => void
-}) {
-  const { data: me } = useCurrentUser()
-  const { toast } = useToast()
-  const deleteDocument = useDeleteDocument()
-  const [confirming, setConfirming] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
-  const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
-  if (!canManage) return null
-  return (
-    <>
-      <Menu>
-        <MenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="size-7 px-0"
-              aria-label="More document actions"
-              iconStart={<DotsThree size={16} aria-hidden />}
-            />
-          }
-        />
-        <MenuContent aria-label="Document actions">
-          <MenuItem onClick={() => setConfirming(true)}>
-            <Trash size={16} aria-hidden />
-            Delete document
-          </MenuItem>
-        </MenuContent>
-      </Menu>
-      <Dialog
-        open={confirming}
-        onOpenChange={(next) => {
-          setActionError(null)
-          setConfirming(next)
-        }}
-      >
-        <DialogContent size="md">
-          <DialogTitle>Delete document</DialogTitle>
-          <DialogDescription>
-            Deleting this document also removes its redaction runs. Removals are
-            soft — rows persist for audit and can be restored by an operator.
-          </DialogDescription>
-          {actionError ? <ErrorNotice message={actionError} /> : null}
-          <div className="flex justify-end gap-2">
-            <DialogClose render={<Button variant="ghost">Cancel</Button>} />
-            <Button
-              variant="danger"
-              loading={deleteDocument.isPending}
-              onClick={async () => {
-                setActionError(null)
-                try {
-                  await deleteDocument.mutateAsync({ documentId, matterId })
-                } catch (cause) {
-                  setActionError(
-                    cause instanceof ApiError
-                      ? cause.message
-                      : 'The document could not be deleted. Try again.',
-                  )
-                  return
-                }
-                toast({ title: 'Document deleted' })
-                setConfirming(false)
-                onDeleted()
-              }}
-            >
-              Delete document
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
   )
 }

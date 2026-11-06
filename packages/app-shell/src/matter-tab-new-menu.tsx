@@ -145,7 +145,7 @@ export function MatterNewItemMenu() {
             <button
               type="button"
               aria-label="New in this matter"
-              className="flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              className="flex h-7 shrink-0 self-center items-center gap-0.5 rounded-md px-1.5 text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <Plus size={15} aria-hidden />
               <CaretDown size={10} aria-hidden />

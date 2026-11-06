@@ -189,8 +189,10 @@ test('Enter mid-paragraph keeps the second half painted, editable and stored', a
       editBodies.push(outgoing.postDataJSON())
     }
   })
-  await page.getByRole('button', { name: 'Save' }).click()
-  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled({
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Save', exact: true }),
+  ).toBeDisabled({
     timeout: 30_000,
   })
   expect(editBodies.length).toBeGreaterThan(0)

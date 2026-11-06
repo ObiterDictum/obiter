@@ -21,7 +21,8 @@ function shot(page: Page, name: string) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) => page.getByRole('button', { name: 'Save' })
+const save = (page: Page) =>
+  page.getByRole('button', { name: 'Save', exact: true })
 const undo = (page: Page) =>
   page.getByRole('button', { name: 'Undo', exact: true })
 const linkedText = (page: Page) =>

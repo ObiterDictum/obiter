@@ -22,10 +22,6 @@ import { DocxWorkspace } from './docx-workspace'
 import { DocumentDesk } from './document-page'
 import { DocumentPdfPages } from './pdf-view'
 import { EditorIconButton } from './editor-controls'
-import {
-  DocumentEditorHeader,
-  readOnlyHeaderState,
-} from './document-editor-header'
 import { PdfWorkspaceToolbar } from './pdf-toolbar'
 import { RedactedMark } from '../../redacted-mark'
 import {
@@ -43,7 +39,6 @@ type DocumentWorkspaceProps = {
   document?: MatterDocumentRecord
   versions?: DocumentVersionRecord[]
   headerLinks?: { matter?: ReactNode }
-  headerActions?: ReactNode
   onViewVersion?: (versionId: string) => void
   onDocumentEdited?: () => void
 }
@@ -72,7 +67,6 @@ function DocumentWorkspaceBody({
   document,
   versions = [],
   headerLinks,
-  headerActions,
   onViewVersion,
 }: DocumentWorkspaceProps) {
   const kind = workspaceKind(version?.fileType)
@@ -142,7 +136,6 @@ function DocumentWorkspaceBody({
         <PdfWorkspace
           documentId={documentId}
           filename={version.filename}
-          versionNumber={version.versionNumber}
           layout={layout}
           mark={
             <RedactedMark
@@ -166,7 +159,6 @@ function DocumentWorkspaceBody({
         document={document}
         versions={versions}
         headerLinks={headerLinks}
-        headerActions={headerActions}
         onViewVersion={onViewVersion}
       />
     </VerifiedViewer>
@@ -313,13 +305,11 @@ function UnsupportedWorkspace({
 function PdfWorkspace({
   documentId,
   filename,
-  versionNumber,
   layout,
   mark,
 }: {
   documentId: string
   filename: string
-  versionNumber: number
   layout: DocumentWorkspaceLayout
   mark?: ReactNode
 }) {
@@ -345,13 +335,9 @@ function PdfWorkspace({
 
   return (
     <WorkspaceShell layout={layout} onKeyDown={documentWorkspaceKeyDown}>
-      <DocumentEditorHeader
-        filename={filename}
-        mark={mark}
-        state={readOnlyHeaderState(`version ${String(versionNumber)}`)}
-      />
       <WorkspaceRibbon>
         <PdfWorkspaceToolbar
+          mark={mark}
           find={find.toolbar(findHits, activeFindIndex, (hit) =>
             setPageIndex(hit.pageIndex),
           )}

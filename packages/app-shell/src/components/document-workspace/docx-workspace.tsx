@@ -21,7 +21,6 @@ import {
   DocxWorkspaceChrome,
   docxWorkspaceChrome,
 } from './docx-workspace-chrome'
-import { DocxEditorHeader } from './document-editor-header'
 import {
   useWorkspacePanels,
   workspaceKeyDown,
@@ -51,6 +50,8 @@ import { useDocumentPrint } from './use-document-print'
 import { useLatestCallback, useLatestHandlers } from './use-latest-callback'
 import { checksLoad, DocxRightSlotTabs } from './document-right-slot'
 import { useSplitScale } from '../../matter-split-scale'
+import { usePublishDocumentTabStatus } from '../../document-tab-status'
+import { useOffline } from '../../shell-states'
 import {
   LoadingBlock,
   QueryError,
@@ -68,7 +69,6 @@ export function DocxWorkspace({
   document: documentRecord,
   versions = [],
   headerLinks,
-  headerActions,
   onViewVersion,
 }: {
   documentId: string
@@ -80,7 +80,6 @@ export function DocxWorkspace({
   document?: MatterDocumentRecord
   versions?: DocumentVersionRecord[]
   headerLinks?: { matter?: React.ReactNode }
-  headerActions?: React.ReactNode
   onViewVersion?: (versionId: string) => void
 }) {
   const { data: me } = useCurrentUser()
@@ -155,6 +154,18 @@ export function DocxWorkspace({
   const chromeSave = useLatestHandlers(chromeSaveOf(save))
 
   usePublishDocumentDirty(save.saveState.status !== 'saved')
+
+  const offline = useOffline()
+  usePublishDocumentTabStatus({
+    documentId,
+    status: save.saveState.status,
+    versionLabel: `version ${String(modelQuery.data?.versionNumber ?? versionNumber ?? 1)}`,
+    offline,
+    remoteChange,
+    participants: presence,
+    presenceNames,
+    currentUserId: me?.user.id,
+  })
 
   const caret = useWorkspaceCaret({ documentId, model, drafts })
   const {
@@ -385,17 +396,6 @@ export function DocxWorkspace({
           })
         }
       >
-        <DocxEditorHeader
-          filename={filename}
-          versionNumber={modelQuery.data?.versionNumber ?? versionNumber}
-          save={save}
-          remoteChange={remoteChange}
-          presence={presence}
-          presenceNames={presenceNames}
-          currentUserId={me?.user.id}
-          versions={versions}
-          actions={headerActions}
-        />
         <DocxRightSlotTabs
           checks={checksLoad(modelQuery, legalChecks)}
           checksFocus={panels.tabs.checksFocus}

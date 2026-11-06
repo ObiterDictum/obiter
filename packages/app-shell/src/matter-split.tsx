@@ -1,5 +1,6 @@
 import type { AppPlatform } from '@obiter/contracts'
 import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
+import { DocumentTabStatusProvider } from './document-tab-status'
 import { useMatterPreviewRef } from './matter-preview'
 import { SPLIT_DIVIDER_WIDTH, SplitScaleProvider } from './matter-split-scale'
 import {
@@ -39,9 +40,11 @@ export function MatterTabsPane({
 }) {
   return (
     <MatterTabsProvider key={matterId} userId={userId} matterId={matterId}>
-      <MatterTabsPaneBody platform={platform} compact={compact}>
-        {children}
-      </MatterTabsPaneBody>
+      <DocumentTabStatusProvider>
+        <MatterTabsPaneBody platform={platform} compact={compact}>
+          {children}
+        </MatterTabsPaneBody>
+      </DocumentTabStatusProvider>
     </MatterTabsProvider>
   )
 }

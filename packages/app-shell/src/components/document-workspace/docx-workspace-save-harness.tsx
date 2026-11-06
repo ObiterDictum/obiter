@@ -10,6 +10,8 @@ import type {
 } from '@obiter/contracts'
 import { ApiError } from '../../api'
 import type { DocumentVersionRecord } from '../../documents'
+import { DocumentTabStatusProvider } from '../../document-tab-status'
+import { TabSaveStateProbe } from '../../document-tab-status-harness'
 import { DocumentDraftStatusProvider } from './document-draft-status'
 
 const hooks = vi.hoisted(() => ({
@@ -335,15 +337,18 @@ function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
 export function mountSaveWorkspace(options: SaveWorkspaceOptions) {
   configureSaveWorkspaceHooks(options)
   return render(
-    <DocumentDraftStatusProvider>
-      <DocxWorkspace
-        documentId="doc_1"
-        versionId={options.versionId ?? 'ver_1'}
-        matterId="mtr_1"
-        filename="brief.docx"
-      />
-      {options.beside}
-    </DocumentDraftStatusProvider>,
+    <DocumentTabStatusProvider>
+      <DocumentDraftStatusProvider>
+        <DocxWorkspace
+          documentId="doc_1"
+          versionId={options.versionId ?? 'ver_1'}
+          matterId="mtr_1"
+          filename="brief.docx"
+        />
+        {options.beside}
+        <TabSaveStateProbe documentId="doc_1" />
+      </DocumentDraftStatusProvider>
+    </DocumentTabStatusProvider>,
     { wrapper },
   )
 }
@@ -351,10 +356,13 @@ export function mountSaveWorkspace(options: SaveWorkspaceOptions) {
 export function mountSaveDocumentWorkspace(options: SaveWorkspaceOptions) {
   configureSaveWorkspaceHooks(options)
   return render(
-    <DocumentWorkspace
-      documentId="doc_1"
-      version={versionRecord(options.versionId ?? 'ver_1')}
-    />,
+    <DocumentTabStatusProvider>
+      <DocumentWorkspace
+        documentId="doc_1"
+        version={versionRecord(options.versionId ?? 'ver_1')}
+      />
+      <TabSaveStateProbe documentId="doc_1" />
+    </DocumentTabStatusProvider>,
     { wrapper },
   )
 }

@@ -1,4 +1,5 @@
 import { DownloadSimple, FileArrowDown } from '@obiter/ui/icons'
+import type { ReactNode } from 'react'
 import { EditorIconButton, EditorTextButton } from './editor-controls'
 import type { DocumentFindToolbar } from './ribbon-types'
 
@@ -8,12 +9,14 @@ export function PdfWorkspaceToolbar({
   find,
   onExportText,
   onDownload,
+  mark,
 }: {
   zoom: number
   onZoom: (next: number) => void
   find?: DocumentFindToolbar
   onExportText: () => void
   onDownload?: () => void
+  mark?: ReactNode
 }) {
   return (
     <div
@@ -93,6 +96,7 @@ export function PdfWorkspaceToolbar({
       <span className="pl-2 text-caption text-muted">
         View only, not editable
       </span>
+      {mark ? <span className="flex items-center pl-2">{mark}</span> : null}
     </div>
   )
 }
