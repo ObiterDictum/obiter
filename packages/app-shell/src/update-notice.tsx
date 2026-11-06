@@ -55,7 +55,7 @@ export function AppUpdateNotice({
             }
           >
             <ArrowClockwise size={16} aria-hidden />
-            <span className="absolute top-0 right-0 size-1.5 rounded-full bg-accent" />
+            <span className="absolute top-0 right-0 size-1.5 rounded-full bg-brand" />
           </button>
         }
       />
