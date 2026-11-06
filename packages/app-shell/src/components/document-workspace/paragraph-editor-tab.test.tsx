@@ -26,6 +26,7 @@ function editor(cells: {
       onDelete={() => undefined}
       onEnter={() => undefined}
       onLineBreak={() => undefined}
+      onInsertTab={() => undefined}
     />,
   )
   return { moves, field: screen.getByLabelText('Paragraph text') }
@@ -45,9 +46,9 @@ describe('Tab in a table cell', () => {
     ])
   })
 
-  it('leaves Tab to the browser outside a table and past the last cell', () => {
+  it('does not move between cells outside a table', () => {
     const { moves, field } = editor({})
-    expect(fireEvent.keyDown(field, { key: 'Tab' })).toBe(true)
+    fireEvent.keyDown(field, { key: 'Tab' })
     expect(moves).toEqual([])
   })
 })
