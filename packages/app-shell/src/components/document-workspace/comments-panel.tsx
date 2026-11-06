@@ -15,8 +15,9 @@ import {
   DialogDescription,
   EmptyState,
   Input,
+  MenuItem,
 } from '@obiter/ui'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 export function DocumentCommentsPanel({
   comments,
@@ -73,15 +74,57 @@ export function DocumentCommentsPanel({
   const open = comments.filter((comment) => comment.resolvedAt === null)
   const resolved = comments.filter((comment) => comment.resolvedAt !== null)
 
-  return (
-    <div className="flex flex-col gap-5">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setShowDeleted(!showDeleted)}
+  const deleteThreadItem = (comment: { id: string; body: string }) =>
+    deletableCommentIds.includes(comment.id) ? (
+      <MenuItem
+        key="thread"
+        className="text-danger data-[highlighted]:text-danger"
+        disabled={pending}
+        onClick={() =>
+          setDeleting({ id: comment.id, body: comment.body, thread: true })
+        }
       >
-        {showDeleted ? 'Active comments' : 'Deleted comments'}
-      </Button>
+        Delete thread
+      </MenuItem>
+    ) : null
+
+  const deleteReplyItem = (reply: DocumentCommentReply) =>
+    !reply.imported && deletableCommentIds.includes(reply.id) ? (
+      <MenuItem
+        key={reply.id}
+        className="text-danger data-[highlighted]:text-danger"
+        disabled={pending}
+        onClick={() =>
+          setDeleting({ id: reply.id, body: reply.body, thread: false })
+        }
+      >
+        Delete reply by {reply.author.name}
+      </MenuItem>
+    ) : null
+
+  const deleteItems = (items: ReactNode[]) =>
+    items.some((item) => item !== null) ? <>{items}</> : null
+
+  const addReason = !commentTarget
+    ? 'Select text or place the caret in a paragraph first.'
+    : body.trim() === ''
+      ? 'Write the comment, then add it.'
+      : null
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-item text-ink">
+          {showDeleted ? 'Deleted comments' : 'Comments'}
+        </h4>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowDeleted(!showDeleted)}
+        >
+          {showDeleted ? 'Active comments' : 'Deleted comments'}
+        </Button>
+      </div>
       {error ? (
         <p className="text-sm text-danger" role="alert">
           {error}
@@ -89,19 +132,27 @@ export function DocumentCommentsPanel({
       ) : null}
 
       {showDeleted ? (
-        <div className="flex flex-col gap-3" aria-label="Deleted comments">
-          <h4 className="text-item text-ink">Deleted comments</h4>
+        <div className="flex flex-col gap-3">
           {deletedComments.length === 0 ? (
-            <p>No deleted comments you can restore.</p>
+            <p className="text-caption text-muted">
+              No deleted comments you can restore.
+            </p>
           ) : (
             deletedComments.map((entry) => (
-              <div key={entry.id} className="border-t border-line pt-3">
-                <p className="text-sm text-ink">{entry.authorName}</p>
-                <p className="whitespace-pre-wrap text-sm text-ink">
+              <div
+                key={entry.id}
+                className="flex flex-col gap-2 border-t border-line pt-3"
+              >
+                <p className="text-sm font-medium text-ink">
+                  {entry.authorName}
+                </p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
                   {entry.body}
                 </p>
                 <Button
+                  variant="ghost"
                   size="sm"
+                  className="-ml-2 self-start"
                   disabled={pending}
                   onClick={() => onRestore?.(entry.id)}
                 >
@@ -143,30 +194,25 @@ export function DocumentCommentsPanel({
                     : 'Select text or place the caret first'
                 }
                 disabled={!commentTarget || pending}
+                className="disabled:opacity-60"
               />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col items-start gap-1">
                 <Button
                   type="submit"
                   size="sm"
+                  className="disabled:opacity-60"
                   disabled={!commentTarget || body.trim() === '' || pending}
                   loading={pending}
                   aria-describedby="comment-add-reason"
                 >
                   Add comment
                 </Button>
-                {!commentTarget ? (
+                {addReason ? (
                   <span
                     id="comment-add-reason"
                     className="text-caption text-subtle"
                   >
-                    Select text or place the caret in a paragraph first.
-                  </span>
-                ) : body.trim() === '' ? (
-                  <span
-                    id="comment-add-reason"
-                    className="text-caption text-subtle"
-                  >
-                    Write the comment, then add it.
+                    {addReason}
                   </span>
                 ) : null}
               </div>
@@ -189,111 +235,13 @@ export function DocumentCommentsPanel({
             <>
               {comments.length > 0 ? (
                 <ul className="flex flex-col gap-3" aria-label="Comments">
-                  {open.map((comment) => (
+                  {[...open, ...resolved].map((comment) => (
                     <CommentCard
                       key={comment.id}
-                      deletionActions={
-                        <>
-                          {deletableCommentIds.includes(comment.id) ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={pending}
-                              onClick={() =>
-                                setDeleting({
-                                  id: comment.id,
-                                  body: comment.body,
-                                  thread: true,
-                                })
-                              }
-                            >
-                              Delete thread
-                            </Button>
-                          ) : null}
-                          {comment.replies
-                            .filter(
-                              (reply) =>
-                                !reply.imported &&
-                                deletableCommentIds.includes(reply.id),
-                            )
-                            .map((reply) => (
-                              <Button
-                                key={reply.id}
-                                size="sm"
-                                variant="ghost"
-                                disabled={pending}
-                                onClick={() =>
-                                  setDeleting({
-                                    id: reply.id,
-                                    body: reply.body,
-                                    thread: false,
-                                  })
-                                }
-                              >
-                                Delete reply by {reply.author.name}
-                              </Button>
-                            ))}
-                        </>
-                      }
-                      comment={comment}
-                      canEdit={canEdit}
-                      mayResolve={
-                        canEdit &&
-                        (comment.author.id === currentUserId || canModerate)
-                      }
-                      pending={pending}
-                      onReply={onReply}
-                      onResolve={onResolve}
-                      onReopen={onReopen}
-                      onRevealAnchor={onRevealAnchor}
-                    />
-                  ))}
-                  {resolved.map((comment) => (
-                    <CommentCard
-                      key={comment.id}
-                      deletionActions={
-                        <>
-                          {deletableCommentIds.includes(comment.id) ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={pending}
-                              onClick={() =>
-                                setDeleting({
-                                  id: comment.id,
-                                  body: comment.body,
-                                  thread: true,
-                                })
-                              }
-                            >
-                              Delete thread
-                            </Button>
-                          ) : null}
-                          {comment.replies
-                            .filter(
-                              (reply) =>
-                                !reply.imported &&
-                                deletableCommentIds.includes(reply.id),
-                            )
-                            .map((reply) => (
-                              <Button
-                                key={reply.id}
-                                size="sm"
-                                variant="ghost"
-                                disabled={pending}
-                                onClick={() =>
-                                  setDeleting({
-                                    id: reply.id,
-                                    body: reply.body,
-                                    thread: false,
-                                  })
-                                }
-                              >
-                                Delete reply by {reply.author.name}
-                              </Button>
-                            ))}
-                        </>
-                      }
+                      deleteItems={deleteItems([
+                        deleteThreadItem(comment),
+                        ...comment.replies.map(deleteReplyItem),
+                      ])}
                       comment={comment}
                       canEdit={canEdit}
                       mayResolve={
@@ -320,33 +268,9 @@ export function DocumentCommentsPanel({
                     {importedComments.map((comment) => (
                       <ImportedCommentCard
                         key={comment.id}
-                        deletionActions={
-                          <>
-                            {comment.replies
-                              .filter(
-                                (reply) =>
-                                  !reply.imported &&
-                                  deletableCommentIds.includes(reply.id),
-                              )
-                              .map((reply) => (
-                                <Button
-                                  key={reply.id}
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={pending}
-                                  onClick={() =>
-                                    setDeleting({
-                                      id: reply.id,
-                                      body: reply.body,
-                                      thread: false,
-                                    })
-                                  }
-                                >
-                                  Delete reply by {reply.author.name}
-                                </Button>
-                              ))}
-                          </>
-                        }
+                        deleteItems={deleteItems(
+                          comment.replies.map(deleteReplyItem),
+                        )}
                         comment={comment}
                         canEdit={canEdit}
                         pending={pending}
@@ -375,8 +299,9 @@ export function DocumentCommentsPanel({
                         <ReplyBody reply={reply} />
                         {deletableCommentIds.includes(reply.id) ? (
                           <Button
-                            size="sm"
                             variant="ghost"
+                            size="sm"
+                            className="-ml-2 self-start"
                             disabled={pending}
                             onClick={() =>
                               setDeleting({

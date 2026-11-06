@@ -58,17 +58,18 @@ export function ReplyForm({
         if (await onReply({ parentId, body: body.trim() })) setBody('')
       }}
     >
-      <Input
-        label="Reply"
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        placeholder="Reply to this comment"
-        disabled={pending}
-      />
+      <div className="min-w-0 flex-1">
+        <Input
+          label="Reply"
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+          placeholder="Reply to this comment"
+          disabled={pending}
+        />
+      </div>
       <Button
         type="submit"
         variant="ghost"
-        size="sm"
         disabled={body.trim() === '' || pending}
       >
         Reply

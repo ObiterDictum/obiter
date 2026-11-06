@@ -32,11 +32,11 @@ const props = {
   onReopen: () => {},
   onRevealAnchor: () => {},
 }
-it('hides Delete without an API deletion grant even for a moderator', () => {
+it('hides thread deletion without an API deletion grant even for a moderator', () => {
   render(<DocumentCommentsPanel {...props} />)
-  expect(screen.queryByRole('button', { name: 'Delete thread' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull()
 })
-it('explains thread deletion and recovery before confirmation', () => {
+it('explains thread deletion and recovery before confirmation', async () => {
   const onDelete = mock(() => {})
   render(
     <DocumentCommentsPanel
@@ -45,7 +45,10 @@ it('explains thread deletion and recovery before confirmation', () => {
       onDelete={onDelete}
     />,
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Delete thread' }))
+  fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+  fireEvent.click(
+    await screen.findByRole('menuitem', { name: 'Delete thread' }),
+  )
   expect(
     screen.getByText(/You can restore it from Deleted comments/),
   ).toBeTruthy()
@@ -79,4 +82,38 @@ it('shows retained deleted comments and restores the chosen thread', () => {
   expect(screen.getByText('Retained note')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: 'Restore thread' }))
   expect(onRestore).toHaveBeenCalledWith('c1')
+})
+it('orders the thread actions Show in document, Resolve, More actions in the tab order', () => {
+  render(<DocumentCommentsPanel {...props} deletableCommentIds={['c1']} />)
+  const reveal = screen.getByRole('button', { name: 'Show in document' })
+  const resolve = screen.getByRole('button', { name: 'Resolve' })
+  const more = screen.getByRole('button', { name: 'More actions' })
+  expect(reveal.compareDocumentPosition(resolve)).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  )
+  expect(resolve.compareDocumentPosition(more)).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
+  )
+})
+it('reaches Delete thread by keyboard through the thread action menu', async () => {
+  const onDelete = mock(() => {})
+  render(
+    <DocumentCommentsPanel
+      {...props}
+      deletableCommentIds={['c1']}
+      onDelete={onDelete}
+    />,
+  )
+  const more = screen.getByRole('button', { name: 'More actions' })
+  more.focus()
+  fireEvent.keyDown(more, { key: 'ArrowDown' })
+  const item = await screen.findByRole('menuitem', { name: 'Delete thread' })
+  expect(document.activeElement).toBe(item)
+  fireEvent.keyDown(item, { key: 'Enter' })
+  fireEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Delete thread',
+    }),
+  )
+  expect(onDelete).toHaveBeenCalledWith('c1')
 })
