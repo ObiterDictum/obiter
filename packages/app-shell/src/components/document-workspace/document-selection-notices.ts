@@ -60,7 +60,9 @@ export function refusalMessage(
   hasStructure: boolean,
 ): string | null {
   if (typeof refusal === 'object' && refusal !== null) {
-    return `${refusal.count} ${refusal.count === 1 ? 'footnote was' : 'footnotes were'} removed by the cut. Undo restores them. Pasting restores only the text.`
+    return refusal.count === 1
+      ? '1 footnote was removed by the cut. Undo restores it. Pasting brings back only the text.'
+      : `${refusal.count} footnotes were removed by the cut. Undo restores them. Pasting brings back only the text.`
   }
   if (refusal === 'insert') {
     return hasInsert ? INSERT_BLOCKS_SELECTION : null
