@@ -28,7 +28,16 @@ Obiter is being built around a small set of durable legal workflows:
 - **Research**: source-bound legal analysis with visible support and uncertainty.
 - **Evaluation**: repeatable measurement of legal AI behavior, retrieval quality, and verification performance.
 
-The current product slice is concentrated on Search, stored case pages, the authenticated workspace shell, matter scaffolding, and the API/storage boundaries that later private workflows will rely on.
+What runs today, on the web and in the desktop app:
+
+- **Matter workspace:** matters with their documents, opened as tabs, with a right-hand panel for comments, checks, history and the agent.
+- **Word editor:** editing `.docx` files in place, with tracked changes, comments (including delete and restore), footnotes, tables, pictures and tab stops. Every save is a stored version you can compare and restore.
+- **Search** across stored UK case law and legislation, with stored judgment pages.
+- **Redact:** detection, review, and finalised redacted or pseudonymised outputs with an audit schedule.
+- **Verify:** citation and quotation checks against stored sources.
+- **Agent:** a matter-scoped assistant that uses each organisation's own model provider and key.
+
+Production has been live since November 2026. Access is by request: law students, practitioners and academics apply and are verified before they can create an account. Open tabs and the desktop app notice when a new version ships, and organisations can choose to require updates.
 
 ## Principles
 
@@ -42,7 +51,7 @@ The current product slice is concentrated on Search, stored case pages, the auth
 
 - `apps/web`: browser app.
 - `apps/desktop`: Electron desktop app.
-- `packages/app-shell`: shared app shell, sidebar, route views, Search UI, and case views.
+- `packages/app-shell`: shared app shell, sidebar, route views, the document workspace and editor, Search UI, and case views.
 - `packages/contracts`: shared API and product contracts, read by the API in `backend`.
 - `packages/ui`: shared UI primitives and design tokens.
 - `packages/redact-ui`: redaction review and finalize UI.
@@ -51,7 +60,7 @@ The current product slice is concentrated on Search, stored case pages, the auth
 - `services/redaction-renderer`: sandboxed DOCX-to-PDF rendering worker.
 - `docs`: product, architecture, compliance, roadmap, and implementation notes.
 - `infra`: deployment and operations placeholders.
-- `data`: seed, fixtures, and evaluation placeholders.
+- `data`: fixtures, evaluation sets and the synthetic redaction corpus tooling.
 
 The API (`services/api`), the ingestor (`services/legal-ingestor`), the case-law packages (`legal-schema`, `legal-source-provider`, `search-client`, `verification-core`) and the migrations (`packages/database`) are not in this repository. Run them from a `backend` checkout.
 
@@ -79,9 +88,9 @@ Obiter has no seed script. To get an organisation, user, matters, and documents 
 
 1. Start the API from a `backend` checkout (`bun run dev:api` there; see that repository's README for `.env` and the Docker services). It applies the migrations in `packages/database/migrations` at startup; to apply them separately, run `bun run db:migrate --database-url=<url>` in the same checkout.
 2. Start the web app here with `OBITER_API_ORIGIN` pointing at that API (`bun run dev:web`, or `bun run dev:desktop` for the desktop shell).
-3. Create an account with the API's email sign-up endpoint (`POST /api/auth/sign-up/email`). The app has no self-service sign-up: `/sign-up` redirects to `/request-access`, whose enquiry posts to API routes that are planned and not served yet, so the endpoint is how a development account is made. Registration provisions your organisation automatically.
+3. Create an account. Registration needs a verified access request or an invite for that email: submit a request at `/request-access`, confirm it, then create the account from the confirmation link. Registration provisions a personal workspace organisation with you as its owner.
 4. Verify the email (in development the one-time verification URL is logged to the API console when no Resend key is configured).
-5. Sign in, then create matters and upload document metadata through the UI.
+5. Sign in, then create matters and upload documents through the UI.
 
 ### Redaction model
 
@@ -99,8 +108,6 @@ Useful product context:
 - [Data and Compliance](docs/data-and-compliance.md)
 - [Roadmap](docs/roadmap.md)
 - [Specs](docs/specs/README.md)
-
-Package scopes still use `@obiter/*` while the product rename is in progress.
 
 ## License
 

@@ -143,9 +143,12 @@ pass. Aligned now; do not assume they stay aligned.
 
 ## End-to-end (Playwright)
 
-One proven journey — deliberately small before any suite grows:
-
-`sign in → create an organisation → create a matter → upload a DOCX → see it listed`
+The specs live in `apps/web/e2e`, one file per journey or editor behaviour
+(sign-in, matters, uploads, the Word editor's footnotes, tables, clipboard,
+selection, tracked changes and so on). Add new specs and helpers there, beside
+the existing ones, never in the API checkout. A UI change that alters what a
+spec looks for updates the spec in the same PR, and says in the PR whether the
+suite was run.
 
 The suite runs from a `backend` checkout, whose root Playwright config starts
 the API, the renderer and the web dev server together and executes
