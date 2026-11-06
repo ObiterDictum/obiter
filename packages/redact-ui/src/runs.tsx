@@ -463,7 +463,7 @@ export function RedactionRunsView({
                 ['Output', 'Redacted PDF or pseudonymised Word.'],
                 [
                   'Schedule',
-                  'A separate, access-controlled file. It contains the original redacted text.',
+                  'A separate, access-controlled file. It lists each decision, not the words removed.',
                 ],
               ].map(([term, detail]) => (
                 <div key={term}>
