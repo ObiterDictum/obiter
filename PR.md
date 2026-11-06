@@ -17,7 +17,9 @@ A PR summary must explain:
 
 ## Required Structure
 
-Use this structure unless the change is trivial:
+Open with one to three plain sentences saying what a reviewer will see change
+and why, before any heading. A reviewer who reads only that should know whether
+the PR matters to them. Then use this structure unless the change is trivial:
 
 ### What Changed
 
@@ -34,8 +36,12 @@ Use this structure unless the change is trivial:
 
 ### Testing
 
-- exact commands run
-- manual flows exercised
+- the tests added or changed, by name, and which failed before the fix
+- pass counts for the suites run; list commands only when they differ from the
+  usual package `bun run test`, typecheck, lint and format
+- manual and browser flows exercised
+- end-to-end: which specs ran and their result, or "not run" and why. A change
+  that edits `apps/web/e2e` without running it says so here
 - what was not tested
 
 ### Risks / Follow-Ups
@@ -88,6 +94,17 @@ documents, database effects — need a read of that state, not a screenshot.
 C12 on #148 could not have been verified by screenshot; show the read you
 made.
 
+## Keeping the PR current
+
+The description describes the PR as it will merge, not as it was opened.
+When later commits change what the PR does, rewrite the affected sections, not
+just append to them: drop "draft", "not ready", "stacked on #n" and superseded
+numbers once they stop being true. Reviewers read the top, not the history.
+
+Link issues with `Closes #n` only when the PR fully resolves the issue. A
+partial fix or a stopgap uses `Refs #n` and says what remains, so the issue
+stays open for the rest.
+
 ## Before / After
 
 A change with a user-visible surface — a screen, a control, an editor
@@ -102,6 +119,10 @@ paste the block the script prints:
 ```bash
 scripts/pr-evidence.sh before-01-search.png after-01-search.png
 ```
+
+Take the AFTER media from the final pushed commit and post them as a PR
+comment once the last commit is in, so a reviewer sees the result without
+scrolling a long body. Refresh them if a later commit changes the surface.
 
 The script writes `<branch>/<file>` through the GitHub git-data API and prints
 `## Before / After` with `raw.githubusercontent.com` image tags, which render
@@ -123,6 +144,11 @@ only: never a client matter, a real name, or a private document on screen.
 
 - do not write hypey or promotional summaries
 - do not add agent, tool, or automation prefixes such as `[codex]` to PR titles
+- do not add tool or agent attribution to PR descriptions or comments: no
+  "Generated with Claude Code" line, no agent session links, no "made by"
+  footers
+- do not name private repositories, or their PRs, branches, paths or plans
+  (see RULES.md); describe server work as "the API"
 - do not write generic "improved performance" claims without saying how
 - do not write "this should" or "hopefully" when you mean unverified
 - do not bury risk or missing tests

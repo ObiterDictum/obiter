@@ -20,14 +20,12 @@ Operating model and sync lives in the separate [`obiter-ops`](https://github.com
 
 ## Build order
 
-Follow the roadmap. Do not jump ahead.
+Follow the milestone order in [docs/roadmap.md](docs/roadmap.md). Do not jump ahead.
 
-1. Phase 0 foundation
-2. Search (backend work from stage 3 of the split)
-3. Redact
-4. Verify (backend work)
-5. Verify Advanced (backend work)
-6. Research (backend work)
+## Tests and evidence
+
+- End-to-end specs live in `apps/web/e2e`; how they run is in [TESTING.md](TESTING.md).
+- Screenshots and other PR media go on the `evidence` branch; how to publish them is in [PR.md](PR.md).
 
 ## Synthetic Redaction Corpus
 
