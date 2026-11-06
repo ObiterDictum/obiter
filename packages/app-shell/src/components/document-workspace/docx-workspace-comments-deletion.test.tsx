@@ -33,7 +33,7 @@ function productComment(overrides: Partial<DocumentComment> = {}) {
   return { ...comment, ...overrides }
 }
 
-describe('docked comments panel', () => {
+describe('right-panel Comments opened via Review', () => {
   it('deletes a granted thread and restores a deleted one', async () => {
     api.apiFetch.mockImplementation((url: string) =>
       url.includes('/comments/')
@@ -59,7 +59,12 @@ describe('docked comments panel', () => {
     openRibbonTab('Review')
     fireEvent.click(screen.getByRole('button', { name: /^Comments/ }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete thread' }))
+    const panel = screen.getByRole('complementary', { name: 'Right slot' })
+    expect(panel.getAttribute('data-tab')).toBe('comments')
+    expect(document.querySelector('[data-docked-panel]')).toBeNull()
+    fireEvent.click(
+      within(panel).getByRole('button', { name: 'Delete thread' }),
+    )
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', {
         name: 'Delete thread',

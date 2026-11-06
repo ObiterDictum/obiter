@@ -244,7 +244,6 @@ export function DocxWorkspace({
     model,
     drafts,
     flow,
-    legalChecksOpen: panels.legalChecksFocus !== null,
     insert: {
       caret: formatTarget,
       offset: formatRange?.to ?? null,
@@ -305,8 +304,9 @@ export function DocxWorkspace({
     if (!navOpen) panels.dismiss()
     toggleNavPane()
   }
-  const commentSelection = useLatestCallback(() => togglePanel('comments'))
+  const commentSelection = useLatestCallback(() => panels.tabs.open('comments'))
   const reviewPanel = useLatestCallback(() => togglePanel('review'))
+
   const chrome = useLatestHandlers(
     docxWorkspaceChrome({
       save,
@@ -398,6 +398,7 @@ export function DocxWorkspace({
         />
         <DocxRightSlotTabs
           checks={checksLoad(modelQuery, legalChecks)}
+          checksFocus={panels.tabs.checksFocus}
           authorities={authorities}
           onSelect={caret.revealFinding}
           comments={commentsPanel}
@@ -477,7 +478,6 @@ export function DocxWorkspace({
               panel={panels.active}
               onClosePanel={panels.close}
               popout={panels.popout}
-              legalChecksFocus={panels.legalChecksFocus}
               documentRecord={documentRecord}
               versions={versions}
               matterLink={headerLinks?.matter}
@@ -488,7 +488,6 @@ export function DocxWorkspace({
                 modelQuery.data?.versionNumber ?? versionNumber
               }
               authorities={authorities}
-              legalChecks={legalChecks}
               onSelectAuthority={caret.revealFinding}
             />
           </>

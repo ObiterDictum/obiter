@@ -50,7 +50,11 @@ export function AccountMenu({ platform }: { platform: AppPlatform }) {
           ) : null}
         </div>
         <MenuSeparator />
-        <MenuItem onClick={() => void navigate({ to: '/settings' })}>
+        <MenuItem
+          onClick={() =>
+            void navigate({ to: '/settings', search: { section: 'account' } })
+          }
+        >
           Account settings
         </MenuItem>
         <MenuItem

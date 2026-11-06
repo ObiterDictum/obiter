@@ -9,7 +9,6 @@ import type { RulerContext } from '../../document-ruler'
 import type { WorkspaceCommentsPanelProps } from './use-workspace-comments'
 import type { ChangeReview } from './use-change-review'
 import type { WorkspacePanel } from './use-workspace-panels'
-import type { LegalChecksFocus } from './ribbon-types'
 import type { AuthorityHit } from '../../document-authorities'
 import { DocxDesk } from './docx-desk'
 import { BulkDecisionDialog } from './bulk-decision-dialog'
@@ -47,7 +46,6 @@ export function DocxWorkspaceDesk({
   panel,
   onClosePanel,
   popout,
-  legalChecksFocus,
   documentRecord,
   versions,
   matterLink,
@@ -56,7 +54,6 @@ export function DocxWorkspaceDesk({
   changeReview,
   currentVersionNumber,
   authorities,
-  legalChecks,
   onSelectAuthority,
 }: {
   compareOpen: boolean
@@ -79,7 +76,6 @@ export function DocxWorkspaceDesk({
   panel: WorkspacePanel | null
   onClosePanel: () => void
   popout: Parameters<typeof WorkspaceSidePanels>[0]['popout']
-  legalChecksFocus: LegalChecksFocus | null
   documentRecord?: MatterDocumentRecord
   versions: DocumentVersionRecord[]
   matterLink?: ReactNode
@@ -88,7 +84,6 @@ export function DocxWorkspaceDesk({
   changeReview: ChangeReview
   currentVersionNumber?: number
   authorities: AuthorityHit[]
-  legalChecks: Parameters<typeof WorkspaceSidePanels>[0]['legalChecks']
   onSelectAuthority: (paragraphId: string) => void
 }) {
   const model: DocumentModelWire = pages.model
@@ -145,7 +140,6 @@ export function DocxWorkspaceDesk({
             panel={panel}
             onClose={onClosePanel}
             popout={popout}
-            legalChecksFocus={legalChecksFocus}
             info={
               documentRecord
                 ? {
@@ -156,7 +150,7 @@ export function DocxWorkspaceDesk({
                   }
                 : undefined
             }
-            {...comments}
+            currentUserId={comments.currentUserId}
             changeReview={changeReview}
             reviewComments={{
               comments: comments.comments,
@@ -168,7 +162,6 @@ export function DocxWorkspaceDesk({
               comments.onRevealCommentAnchor(comment.anchor)
             }
             authorities={authorities}
-            legalChecks={legalChecks}
             onSelectAuthority={onSelectAuthority}
           />
         }

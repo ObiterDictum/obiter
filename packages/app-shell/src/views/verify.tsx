@@ -83,6 +83,7 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
           action={
             <Link
               to="/settings"
+              search={{ section: 'organisation' }}
               className="font-semibold text-brand hover:text-brand-pressed"
             >
               Open settings

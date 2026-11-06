@@ -22,6 +22,7 @@ import {
   prefetchVerifyData,
   resolveCaseDocumentIdFromSlug,
   useMatterTabsOptional,
+  validateSettingsSearch,
 } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -328,6 +329,7 @@ const verifyRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'settings',
+  validateSearch: validateSettingsSearch,
   loader: async ({ context }) => {
     await guardAuth(context.queryClient, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),

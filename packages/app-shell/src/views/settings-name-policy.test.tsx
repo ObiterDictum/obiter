@@ -60,7 +60,7 @@ mock.module('../organisation-membership', () =>
 )
 
 const { SettingsContents } = await import('../contents-sections')
-const { ShellContentsProvider } = await import('../shell-contents')
+const { validateSettingsSearch } = await import('../settings-sections')
 const { SettingsRouteView } = await import('./settings')
 
 const ME: MeResponse = {
@@ -83,21 +83,20 @@ function renderSettings(me: MeResponse = ME) {
   })
   queryClient.setQueryData(['current-user'], me)
   const rootRoute = createRootRoute()
-  const indexRoute = createRoute({
+  const settingsRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/',
+    path: '/settings',
+    validateSearch: validateSettingsSearch,
     component: () => (
-      <ShellContentsProvider>
-        <div className="flex">
-          <SettingsContents />
-          <SettingsRouteView />
-        </div>
-      </ShellContentsProvider>
+      <div className="flex">
+        <SettingsContents />
+        <SettingsRouteView />
+      </div>
     ),
   })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute]),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    routeTree: rootRoute.addChildren([settingsRoute]),
+    history: createMemoryHistory({ initialEntries: ['/settings'] }),
   })
   return {
     queryClient,
@@ -163,7 +162,7 @@ describe('Account name form — in-flight save and canonical reconciliation', ()
 
 describe('Organisation name form — in-flight save and canonical reconciliation', () => {
   async function openOrganisation() {
-    fireEvent.click(await screen.findByRole('button', { name: 'Organisation' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Organisation' }))
     return screen.findByRole('region', { name: 'Organisation' })
   }
 

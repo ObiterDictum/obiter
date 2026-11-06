@@ -12,7 +12,10 @@ import {
 } from 'react'
 import { useAuth } from './auth'
 import { CommandPaletteProvider } from './command-palette'
-import { RightSlotPortalProvider } from './right-slot-portal'
+import {
+  RightSlotPortalProvider,
+  type DocumentPanelTab,
+} from './right-slot-portal'
 import { currentUserQueryOptions } from './current-user'
 import { ShellBootLoading, ShellOfflineBanner } from './shell-states'
 import type { ShellSection } from './navigation'
@@ -166,6 +169,16 @@ export function ShellFrame({
     setRightSlotOpen(!rightSlotOpen)
   }
 
+  function showRightSlotTab(tab: DocumentPanelTab | null) {
+    if (tab === null) {
+      setRightSlotOpen(false)
+      return
+    }
+    setRightSlotTab(tab)
+    setRightSlotOpen(true)
+    setFocusMode(false)
+  }
+
   useShellShortcuts({
     'toggle-nav': toggleNav,
     'toggle-right-slot': toggleRightSlot,
@@ -214,7 +227,7 @@ export function ShellFrame({
       onToggleRightSlot={toggleRightSlot}
       onToggleFocusMode={() => setFocusMode(!focusMode)}
     >
-      <RightSlotPortalProvider>
+      <RightSlotPortalProvider onShow={showRightSlotTab}>
         <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
           {focusMode ? null : rail ? (
             <SidebarRail

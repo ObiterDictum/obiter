@@ -4,7 +4,7 @@ import {
   type DocumentPanelTab,
 } from '../../right-slot-portal'
 import '@obiter/test-dom'
-import { createElement, type PropsWithChildren } from 'react'
+import { createElement, useState, type PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, mock } from 'bun:test'
@@ -151,16 +151,35 @@ export const staleConflict = new ApiError(
   'req_1',
 )
 
-function wrapper({ children }: PropsWithChildren) {
-  return createElement(
-    QueryClientProvider,
-    {
-      client: new QueryClient({
-        defaultOptions: { queries: { retry: false } },
-      }),
-    },
-    children,
+function RightSlotHarness({
+  initial,
+  children,
+}: PropsWithChildren<{ initial: DocumentPanelTab | null }>) {
+  const [tab, setTab] = useState(initial)
+  return (
+    <RightSlotPortalProvider onShow={setTab}>
+      {children}
+      {tab ? (
+        <aside aria-label="Right slot" data-tab={tab}>
+          <RightSlotOutlet tab={tab} />
+        </aside>
+      ) : null}
+    </RightSlotPortalProvider>
   )
+}
+
+function wrapperFor(initial: DocumentPanelTab | null) {
+  return function Wrapper({ children }: PropsWithChildren) {
+    return createElement(
+      QueryClientProvider,
+      {
+        client: new QueryClient({
+          defaultOptions: { queries: { retry: false } },
+        }),
+      },
+      <RightSlotHarness initial={initial}>{children}</RightSlotHarness>,
+    )
+  }
 }
 
 function idleMutation(overrides: Record<string, unknown> = {}) {
@@ -377,16 +396,7 @@ export function mountWorkspace(
       filename="brief.docx"
     />
   )
-  if (!options.rightSlot) return render(workspace, { wrapper })
-  return render(
-    <RightSlotPortalProvider>
-      {workspace}
-      <aside aria-label="Right slot">
-        <RightSlotOutlet tab={options.rightSlot} />
-      </aside>
-    </RightSlotPortalProvider>,
-    { wrapper },
-  )
+  return render(workspace, { wrapper: wrapperFor(options.rightSlot ?? null) })
 }
 
 export function rerenderWorkspace(

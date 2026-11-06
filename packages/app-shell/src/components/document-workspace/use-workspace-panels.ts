@@ -6,14 +6,16 @@ import {
   type WorkspaceKeyEvent,
   type WorkspaceKeySources,
 } from '../../document-workspace-keys'
+import {
+  useShowRightSlotTab,
+  useShownRightSlotTab,
+  type DocumentPanelTab,
+} from '../../right-slot-portal'
 import type { LegalChecksFocus } from './ribbon-types'
 
-export type WorkspacePanel =
-  'info' | 'verify' | 'comments' | 'review' | 'authorities' | 'legal-checks'
+export type WorkspacePanel = 'info' | 'verify' | 'review' | 'authorities'
 
-export type WorkspacePanelState =
-  | { panel: Exclude<WorkspacePanel, 'legal-checks'> }
-  | { panel: 'legal-checks'; focus: LegalChecksFocus }
+type RightSlotTab = Exclude<DocumentPanelTab, 'history'>
 
 type Placements = Partial<
   Record<WorkspacePanel, PanelPosition & { floating: boolean }>
@@ -55,54 +57,82 @@ function defaultPosition(): PanelPosition {
 }
 
 export function useWorkspacePanels() {
-  const [state, setState] = useState<WorkspacePanelState | null>(null)
+  const [active, setActive] = useState<WorkspacePanel | null>(null)
   const [placements, setPlacements] = useState<Placements>(readPlacements)
+  const [checksFocus, setChecksFocus] = useState<LegalChecksFocus | null>(null)
   const wide = useMediaQuery('(min-width: 1280px)')
   const trigger = useRef<HTMLElement | null>(null)
+  const tabTrigger = useRef<HTMLElement | null>(null)
+  const shownTab = useShownRightSlotTab()
+  const showTab = useShowRightSlotTab()
 
-  function open(next: WorkspacePanelState) {
-    const active = document.activeElement
-    trigger.current = active instanceof HTMLElement ? active : null
-    setState(next)
+  function focusedElement() {
+    const element = document.activeElement
+    return element instanceof HTMLElement ? element : null
+  }
+
+  function open(next: WorkspacePanel) {
+    trigger.current = focusedElement()
+    setActive(next)
   }
 
   function toggle(panel: WorkspacePanel) {
-    if (state?.panel === panel) {
+    if (active === panel) {
       close()
       return
     }
-    open(
-      panel === 'legal-checks'
-        ? {
-            panel,
-            focus: state?.panel === 'legal-checks' ? state.focus : 'terms',
-          }
-        : { panel },
-    )
+    open(panel)
   }
 
   function openPanel(panel: WorkspacePanel) {
-    if (state?.panel === panel) return
-    open(panel === 'legal-checks' ? { panel, focus: 'terms' } : { panel })
+    if (active === panel) return
+    open(panel)
+  }
+
+  function openTab(tab: RightSlotTab) {
+    if (shownTab === tab) return
+    tabTrigger.current = focusedElement()
+    showTab?.(tab)
+  }
+
+  function toggleTab(tab: RightSlotTab) {
+    if (shownTab === tab) {
+      closeTab()
+      return
+    }
+    setChecksFocus(null)
+    openTab(tab)
+  }
+
+  function closeTab() {
+    const target = tabTrigger.current
+    tabTrigger.current = null
+    setChecksFocus(null)
+    showTab?.(null)
+    target?.focus()
+  }
+
+  function closeOnEscape(target: EventTarget | null) {
+    if (shownTab === null || tabTrigger.current === null) return false
+    if (!inRightSlotTab(target)) return false
+    closeTab()
+    return true
   }
 
   function openLegalChecks(focus: LegalChecksFocus) {
-    if (state?.panel === 'legal-checks') {
-      setState({ panel: 'legal-checks', focus })
-      return
-    }
-    open({ panel: 'legal-checks', focus })
+    setChecksFocus(focus)
+    openTab('checks')
   }
 
   function dismiss() {
     trigger.current = null
-    setState(null)
+    setActive(null)
   }
 
   function close() {
     const target = trigger.current
     trigger.current = null
-    setState(null)
+    setActive(null)
     target?.focus()
   }
 
@@ -137,12 +167,19 @@ export function useWorkspacePanels() {
   }
 
   return {
-    state,
-    active: state?.panel ?? null,
-    legalChecksFocus: state?.panel === 'legal-checks' ? state.focus : null,
+    active,
+    tabs: {
+      shown: shownTab,
+      available: showTab !== null,
+      checksFocus,
+      open: openTab,
+      toggle: toggleTab,
+      close: closeTab,
+      closeOnEscape,
+      openLegalChecks,
+    },
     toggle,
     open: openPanel,
-    openLegalChecks,
     close,
     dismiss,
     popout,
@@ -181,6 +218,13 @@ export function workspaceKeyDown(
 ) {
   if (
     event.key === 'Escape' &&
+    panels.tabs.closeOnEscape(event.target ?? null)
+  ) {
+    event.preventDefault()
+    return
+  }
+  if (
+    event.key === 'Escape' &&
     panels.active !== null &&
     closesPanelOnEscape(event.target ?? null)
   ) {
@@ -209,6 +253,13 @@ export function workspaceKeyDown(
           }
         : undefined,
   })
+}
+
+function inRightSlotTab(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    target.closest('[data-right-slot-tab]') !== null
+  )
 }
 
 export function closesPanelOnEscape(target: EventTarget | null) {

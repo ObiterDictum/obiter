@@ -18,7 +18,7 @@ import {
   type MatterTab,
 } from './matter-tabs'
 import { useMatterPreviewRef } from './matter-preview'
-import { SETTINGS_SECTIONS } from './settings-sections'
+import { SETTINGS_SECTIONS, useSettingsSection } from './settings-sections'
 import { getRecentLegalSearches } from './legal-search-recents'
 import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
 
@@ -424,18 +424,18 @@ export function SearchContents() {
 }
 
 export function SettingsContents() {
-  const { settingsSection, setSettingsSection } = useShellContents()
+  const settingsSection = useSettingsSection()
   return (
     <nav
       aria-label="Settings sections"
       className="flex flex-col gap-px px-1.5 pt-1"
     >
       {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => (
-        <button
+        <Link
           key={id}
-          type="button"
-          aria-current={id === settingsSection ? 'true' : undefined}
-          onClick={() => setSettingsSection(id)}
+          to="/settings"
+          search={{ section: id }}
+          aria-current={id === settingsSection ? 'page' : undefined}
           className={cn(rowClass(id === settingsSection), 'gap-2.5')}
         >
           <Icon size={16} aria-hidden className="shrink-0" />
@@ -443,7 +443,7 @@ export function SettingsContents() {
           {id === settingsSection ? (
             <CaretRight size={12} aria-hidden className="text-subtle" />
           ) : null}
-        </button>
+        </Link>
       ))}
     </nav>
   )

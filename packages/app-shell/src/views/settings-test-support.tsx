@@ -10,7 +10,7 @@ import {
 import { vi } from '../../../../scripts/test/vitest-compat'
 import type { MeResponse } from '@obiter/contracts'
 import { SettingsContents } from '../contents-sections'
-import { ShellContentsProvider } from '../shell-contents'
+import { validateSettingsSearch } from '../settings-sections'
 import { SettingsRouteView } from './settings'
 
 export const ORGLESS_ME: MeResponse = {
@@ -55,23 +55,22 @@ export function idleMutation() {
   return { mutateAsync: vi.fn(), isPending: false, isError: false }
 }
 
-export function renderSettings() {
+export function renderSettings(path = '/settings') {
   const rootRoute = createRootRoute()
-  const indexRoute = createRoute({
+  const settingsRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: '/',
+    path: '/settings',
+    validateSearch: validateSettingsSearch,
     component: () => (
-      <ShellContentsProvider>
-        <div className="flex">
-          <SettingsContents />
-          <SettingsRouteView />
-        </div>
-      </ShellContentsProvider>
+      <div className="flex">
+        <SettingsContents />
+        <SettingsRouteView />
+      </div>
     ),
   })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute]),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    routeTree: rootRoute.addChildren([settingsRoute]),
+    history: createMemoryHistory({ initialEntries: [path] }),
   })
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -87,6 +86,6 @@ export function readOnlyValue(scope: HTMLElement, label: string) {
 export async function openSection(
   name: 'Account' | 'Security' | 'Organisation' | 'Preferences',
 ) {
-  fireEvent.click(await screen.findByRole('button', { name }))
+  fireEvent.click(await screen.findByRole('link', { name }))
   return screen.findByRole('region', { name })
 }

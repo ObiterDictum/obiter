@@ -239,7 +239,11 @@ function HomeDashboard({ me }: { me: MeResponse }) {
           {showNamingPrompt ? (
             <span className="text-caption">
               Your workspace still has its default name.{' '}
-              <Link to="/settings" className="text-ink hover:text-brand">
+              <Link
+                to="/settings"
+                search={{ section: 'organisation' }}
+                className="text-ink hover:text-brand"
+              >
                 Name it in Settings
               </Link>
               .

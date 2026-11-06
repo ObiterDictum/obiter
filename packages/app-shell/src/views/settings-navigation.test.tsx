@@ -92,15 +92,15 @@ describe('SettingsRouteView — information architecture', () => {
     })
     expect(
       within(nav)
-        .getAllByRole('button')
+        .getAllByRole('link')
         .map((button) => button.textContent),
     ).toEqual(['Account', 'Security', 'Organisation', 'Preferences'])
 
     expect(
       within(nav)
-        .getByRole('button', { name: 'Account' })
+        .getByRole('link', { name: 'Account' })
         .getAttribute('aria-current'),
-    ).toBe('true')
+    ).toBe('page')
     expect(await screen.findByRole('region', { name: 'Account' })).toBeTruthy()
     expect(screen.queryByRole('region', { name: 'Security' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Organisation' })).toBeNull()
@@ -126,7 +126,7 @@ describe('SettingsRouteView — information architecture', () => {
     const name = await screen.findByLabelText('Name')
     fireEvent.change(name, { target: { value: 'Imogen Hartley-Clarke' } })
 
-    const securityTab = screen.getByRole('button', { name: 'Security' })
+    const securityTab = screen.getByRole('link', { name: 'Security' })
     securityTab.focus()
     expect(document.activeElement).toBe(securityTab)
     fireEvent.click(securityTab)
@@ -136,6 +136,43 @@ describe('SettingsRouteView — information architecture', () => {
     expect(screen.getByLabelText<HTMLInputElement>('Name').value).toBe(
       'Imogen Hartley-Clarke',
     )
+  })
+})
+
+describe('SettingsRouteView — addressable sections', () => {
+  it('opens the section the address names, so a link can land on it', async () => {
+    renderSettings('/settings?section=organisation')
+    expect(
+      await screen.findByRole('region', { name: 'Organisation' }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Account' })).toBeNull()
+    expect(
+      screen
+        .getByRole('link', { name: 'Organisation' })
+        .getAttribute('aria-current'),
+    ).toBe('page')
+  })
+
+  it('gives each section its own address in the section navigation', async () => {
+    renderSettings()
+    const nav = await screen.findByRole('navigation', {
+      name: 'Settings sections',
+    })
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual([
+      '/settings?section=account',
+      '/settings?section=security',
+      '/settings?section=organisation',
+      '/settings?section=preferences',
+    ])
+  })
+
+  it('opens Account for a section the address does not know', async () => {
+    renderSettings('/settings?section=billing')
+    expect(await screen.findByRole('region', { name: 'Account' })).toBeTruthy()
   })
 })
 
