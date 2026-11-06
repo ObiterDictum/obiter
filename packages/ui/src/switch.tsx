@@ -40,7 +40,7 @@ export function Switch({
       >
         <span
           className={cn(
-            'absolute top-0.5 size-3 rounded-pill bg-surface-raised transition-[left] duration-150',
+            'absolute top-0.5 size-3 rounded-pill bg-raised transition-[left] duration-150',
             checked ? 'left-3.5' : 'left-0.5',
           )}
         />
