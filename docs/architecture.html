@@ -5431,6 +5431,19 @@
             <a href="#infra">Deployment</a>).
           </div>
           <div class="callout note">
+            <b>Open apps learn about new versions.</b> The web build bakes the
+            commit its marker records into the client, and
+            <code>serve.mjs</code> serves the running commit at
+            <code>GET /.well-known/obiter-version</code>
+            (<code>no-store</code>). The shell polls it every 5 minutes while
+            visible and on focus, and offers a reload when the commit differs.
+            The packaged Windows app checks the GitHub Releases feed with
+            electron-updater at start and every 4 hours and offers a restart
+            once the update has downloaded. Neither reloads nor restarts by
+            itself. See <code>docs/specs/deployment.md</code> and
+            <code>docs/specs/desktop-release.md</code>.
+          </div>
+          <div class="callout note">
             <b>The desktop build has a size budget of its own.</b>
             <code>bun run --filter @obiter/desktop build</code> emits a Vite
             chunk manifest, and

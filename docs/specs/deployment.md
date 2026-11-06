@@ -119,6 +119,10 @@ It serves `dist/client` assets directly, forwards everything else to the SSR
 handler, keeps multiple `Set-Cookie` headers distinct and marks SSR output
 `private, no-store`. `apps/web/serve.test.mjs` covers its helpers.
 
+`GET /.well-known/obiter-version` is routed whenever the marker names a commit
+and answers `{"build":"<commit>"}` with `Cache-Control: no-store`. It feeds the
+new-version prompt below.
+
 ### API
 
 The API image is built from the API's own source, not from this repository. It
@@ -202,6 +206,27 @@ live one.
 - Production data to development. Agents and contributors work against local
   databases; nobody runs migrations, seeds or tests against production.
 
+## New-version prompt (web)
+
+After a deploy, open tabs keep running the bundle they loaded. The production
+build bakes the commit its marker records into the client as
+`__OBITER_BUILD_COMMIT__` (`apps/web/vite.config.ts`, from `buildIdentity` in
+`build-provenance.mjs`), and `serve.mjs` serves the running commit at
+`/.well-known/obiter-version`. The shell (`packages/app-shell/src/build-version.ts`)
+asks that route every 5 minutes while the tab is visible and whenever the
+window regains focus. When the served commit differs from the one the page
+loaded, it stops polling and shows a compact update icon in the top bar,
+labelled "Update available. Reload to update". It never reloads by itself,
+because a person may be editing.
+
+- A failed request, an error status or an unreadable body is silent: the next
+  poll tries again.
+- The dev server defines the commit as `null`, so a dev tab never polls.
+- An image built without `OBITER_BUILD_COMMIT` has no commit, serves no version
+  route and never prompts. The production image build passes it.
+- The polling hook uses `useEffect` because it syncs with timers and the window
+  focus event, which RULES.md allows.
+
 ## Local development
 
 Production does not replace the local loop. Develop against local PostgreSQL
@@ -214,4 +239,6 @@ tests, and hand over the exact local start-up steps labelled unverified.
 
 - Background workers and legal ingestion get their own containers when they do
   something worth deploying.
-- Auto-update for the desktop app needs a release feed and code signing first.
+- Signing desktop updates waits for code signing in general. Until then the
+  desktop app auto-updates from unsigned GitHub Releases; see
+  `desktop-release.md`.

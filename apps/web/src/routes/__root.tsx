@@ -81,7 +81,7 @@ function WebShellError(props: ErrorComponentProps) {
   if (failure === 'not-found') return <ShellNotFound />
   if (failure === 'forbidden')
     return (
-      <AppShellLayout platform="web">
+      <AppShellLayout platform="web" loadedBuild={__OBITER_BUILD_COMMIT__}>
         <ShellPermissionDenied />
       </AppShellLayout>
     )
@@ -90,7 +90,7 @@ function WebShellError(props: ErrorComponentProps) {
 
 function RootShell() {
   return (
-    <AppShellLayout platform="web">
+    <AppShellLayout platform="web" loadedBuild={__OBITER_BUILD_COMMIT__}>
       <Outlet />
     </AppShellLayout>
   )

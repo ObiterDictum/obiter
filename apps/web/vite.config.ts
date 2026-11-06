@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { assertNoDuplicateEnvKeys } from '@obiter/config/env-keys'
+import { buildIdentity } from './build-provenance.mjs'
 import { applyDevServerApiOrigin } from './dev-api-origin.mjs'
 import { readPort, SHARED_WEB_PORT } from './lane-target.mjs'
 
@@ -53,6 +54,9 @@ export default defineConfig(({ command, mode }) => {
   if (isBuild) {
     return {
       envDir: false,
+      define: {
+        __OBITER_BUILD_COMMIT__: JSON.stringify(buildIdentity(repoRoot).commit),
+      },
       resolve: {
         tsconfigPaths: true,
       },
@@ -67,6 +71,7 @@ export default defineConfig(({ command, mode }) => {
   )
 
   return {
+    define: { __OBITER_BUILD_COMMIT__: 'null' },
     resolve: {
       tsconfigPaths: true,
     },

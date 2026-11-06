@@ -54,12 +54,19 @@ win:
   # No signing configuration: unsigned for now (documented).
 
 nsis:
+  artifactName: Obiter-Setup-${version}.${ext}
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Obiter
+
+publish:
+  provider: github
+  owner: ObiterDictum
+  repo: obiter
+  releaseType: release
 
 # macOS (configured, not built/verified in this PR).
 mac:

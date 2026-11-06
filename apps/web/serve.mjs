@@ -133,7 +133,7 @@ export function streamResponse(res, webRes, { compress = false } = {}) {
 
 export function createRequestHandler(
   handle,
-  { clientDir, webOrigin, immutableAssets, buildProvenance } = {},
+  { clientDir, webOrigin, immutableAssets, buildProvenance, buildVersion } = {},
 ) {
   return async (req, res) => {
     const base = resolveBaseUrl(
@@ -170,6 +170,19 @@ export function createRequestHandler(
           'content-length': String(Buffer.byteLength(body)),
         })
         await streamResponse(res, provenanceRes)
+        return
+      }
+
+      if (url.pathname === '/.well-known/obiter-version' && buildVersion) {
+        const body = JSON.stringify({ build: buildVersion })
+        const versionRes = new Response(body, {
+          headers: { 'content-type': 'application/json' },
+        })
+        applyResponseHeaders(res, versionRes, {
+          'cache-control': 'no-store',
+          'content-length': String(Buffer.byteLength(body)),
+        })
+        await streamResponse(res, versionRes)
         return
       }
 
@@ -303,6 +316,7 @@ export async function start() {
   const requestHandler = createRequestHandler(handle, {
     clientDir,
     immutableAssets: new Set(marker?.hashedAssets ?? []),
+    buildVersion: marker?.commit ?? null,
     buildProvenance:
       process.env.OBITER_BUILD_PROVENANCE === '1' && marker ? marker : null,
   })
