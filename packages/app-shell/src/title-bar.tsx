@@ -178,7 +178,11 @@ export function TitleBar({
         ))}
       </nav>
 
-      <AppUpdateNotice platform={platform} loadedBuild={loadedBuild} />
+      <AppUpdateNotice
+        platform={platform}
+        loadedBuild={loadedBuild}
+        organisationId={me?.organisation?.id ?? null}
+      />
       <PaletteTrigger />
     </header>
   )

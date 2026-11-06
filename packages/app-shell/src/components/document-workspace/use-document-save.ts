@@ -1,5 +1,6 @@
+import { registerUpdateSave } from '../../update-saves'
 import { useQueryClient } from '@tanstack/react-query'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   TRACKED_DECISION_MAX_IDS,
   type DocumentModelWire,
@@ -420,6 +421,20 @@ export function useDocumentSave({
             : dirty || editsPending
               ? { status: 'unsaved' }
               : { status: 'saved' }
+
+  const updateSave = useRef({ save, saveState })
+  useEffect(() => {
+    updateSave.current = { save, saveState }
+  })
+  useEffect(
+    () =>
+      registerUpdateSave(async () => {
+        await updateSave.current.save()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        return updateSave.current.saveState.status === 'saved'
+      }),
+    [],
+  )
 
   return {
     operations: plan.operations,
