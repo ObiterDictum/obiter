@@ -19,6 +19,8 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import type { DocumentVersionRecord } from '../../documents'
+import { DocumentTabStatusProvider } from '../../document-tab-status'
+import { TabSaveStateProbe } from '../../document-tab-status-harness'
 
 const hooks = vi.hoisted(() => ({
   useDocumentModel: vi.fn(),
@@ -174,11 +176,14 @@ function idleMutation(overrides: Record<string, unknown> = {}) {
 
 function elementFor(documentId: string) {
   return (
-    <DocumentWorkspace
-      documentId={documentId}
-      version={version(documentId)}
-      layout="pane"
-    />
+    <DocumentTabStatusProvider>
+      <DocumentWorkspace
+        documentId={documentId}
+        version={version(documentId)}
+        layout="pane"
+      />
+      <TabSaveStateProbe documentId={documentId} />
+    </DocumentTabStatusProvider>
   )
 }
 

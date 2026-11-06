@@ -70,11 +70,6 @@ await instrument(
   'DocxWorkspaceChrome',
   'DocxWorkspaceChrome',
 )
-await instrument(
-  './document-editor-header',
-  'DocxEditorHeader',
-  'DocxEditorHeader',
-)
 
 const { mountWorkspace, multiParagraphModel, paragraph } =
   await import('./docx-workspace-harness')
@@ -124,14 +119,18 @@ it('typing a character does not re-render the toolbar, palette, menu bar or side
   expect(rendersOf('DocxWorkspaceChrome')).toBe(0)
 })
 
-it('the first keystroke re-renders the save indicator and undo availability', () => {
+it('the first keystroke marks the document unsaved and re-renders the toolbar and undo', () => {
   mountWorkspace({ models: { doc_1: bodyModel() } })
   fireEvent.click(screen.getByText('Paragraph 0 text'))
   renders.clear()
 
   fireEvent.change(bodyField(), { target: { value: 'Paragraph 0 textX' } })
 
-  expect(rendersOf('DocxEditorHeader')).toBe(1)
+  expect(
+    document
+      .querySelector('[data-save-state]')
+      ?.getAttribute('data-save-state'),
+  ).toBe('unsaved')
   expect(rendersOf('EditorToolbar')).toBe(1)
   expect(rendersOf('EditorCommandPalette')).toBe(0)
   expect(rendersOf('WorkspaceSidePanels')).toBe(0)

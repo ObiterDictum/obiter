@@ -1,10 +1,7 @@
-import { Skeleton } from '@obiter/ui'
+import { Skeleton, Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
 import { ArrowsLeftRight, X } from '@obiter/ui/icons'
 import { useMemo } from 'react'
-import {
-  DocumentEditorHeader,
-  readOnlyHeaderState,
-} from './components/document-workspace/document-editor-header'
+import { readOnlySaveState } from './components/document-workspace/document-save-state'
 import {
   HistoricalPdfPages,
   HistoricalText,
@@ -58,32 +55,11 @@ export function MatterSplitSide({
       aria-label={tab ? `${tab.title}, read only` : 'Split view'}
       className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-line bg-raised"
     >
-      <DocumentEditorHeader
+      <SplitPaneHeader
         filename={version?.filename ?? tab?.title ?? 'Document'}
-        state={readOnlyHeaderState(
-          `version ${String(version?.versionNumber ?? 1)}`,
-        )}
-        actions={
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Swap sides"
-              title="Make this the document you edit"
-              onClick={swapSides}
-              className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <ArrowsLeftRight size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              aria-label="Close split view"
-              onClick={onClose}
-              className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <X size={12} aria-hidden />
-            </button>
-          </div>
-        }
+        versionLabel={`version ${String(version?.versionNumber ?? 1)}`}
+        onClose={onClose}
+        onSwap={swapSides}
       />
       {ribbonHeight > 0 ? (
         <div
@@ -122,5 +98,58 @@ export function MatterSplitSide({
         )}
       </div>
     </section>
+  )
+}
+
+function SplitPaneHeader({
+  filename,
+  versionLabel,
+  onSwap,
+  onClose,
+}: {
+  filename: string
+  versionLabel: string
+  onSwap: () => void
+  onClose: () => void
+}) {
+  const state = readOnlySaveState(versionLabel)
+  return (
+    <header className="flex h-9 min-w-0 shrink-0 items-center gap-2 border-b border-line px-3">
+      <h1 className="min-w-0 truncate text-item text-ink" title={filename}>
+        {filename}
+      </h1>
+      <div className="ms-auto flex min-w-0 shrink-0 items-center gap-1">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                tabIndex={0}
+                className="inline-flex items-center rounded-sm text-caption whitespace-nowrap text-subtle focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+              />
+            }
+          >
+            {state.label}
+          </TooltipTrigger>
+          <TooltipContent>{state.detail}</TooltipContent>
+        </Tooltip>
+        <button
+          type="button"
+          aria-label="Swap sides"
+          title="Make this the document you edit"
+          onClick={onSwap}
+          className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <ArrowsLeftRight size={14} aria-hidden />
+        </button>
+        <button
+          type="button"
+          aria-label="Close split view"
+          onClick={onClose}
+          className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <X size={12} aria-hidden />
+        </button>
+      </div>
+    </header>
   )
 }

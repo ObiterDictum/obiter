@@ -1,58 +1,40 @@
 import type { AppPlatform } from '@obiter/contracts'
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  KeyboardHint,
   Menu,
   MenuContent,
   MenuItem,
+  MenuSeparator,
   MenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   cn,
 } from '@obiter/ui'
+import { DotsThree, SidebarSimple, Trash, X } from '@obiter/ui/icons'
+import { useEffect, useState } from 'react'
 import {
-  DotsThree,
-  FileText,
-  Folders,
-  PencilSimple,
-  ShieldCheck,
-  SidebarSimple,
-  X,
-} from '@obiter/ui/icons'
-import { useCallback, useEffect, type ReactNode } from 'react'
-import { formatShortcut, useIsMacPlatform } from './keyboard-platform'
-import type { AppPlatform as Platform } from '@obiter/contracts'
+  DeleteDocumentDialog,
+  useCanManageDocuments,
+} from './matter-tab-actions'
+import {
+  MatterTabButton,
+  TabIcon,
+  tabAccessibleName,
+} from './matter-tab-button'
+import { SaveStateMark } from './document-tab-save-indicator'
+import {
+  useDocumentTabStatuses,
+  type DocumentTabStatus,
+} from './document-tab-status'
 import { useMatterDocuments } from './documents'
-import {
-  matchMatterTabKey,
-  type MatterTab,
-  type MatterTabKind,
-} from './matter-tabs'
+import { PresenceAvatars } from './components/document-workspace/presence-avatars'
+import { matchMatterTabKey, type MatterTab } from './matter-tabs'
 import { useMatterTabs } from './matter-tabs-state'
 import { useMatter } from './matters'
-import { useRedactionRunsList } from './redaction-runs'
 import { MatterNewItemMenu } from './matter-tab-new-menu'
-
-interface TabIconProps {
-  size?: number
-  weight?: 'regular' | 'fill'
-  className?: string
-  'aria-hidden'?: boolean
-}
-
-const TAB_ICONS = {
-  overview: Folders,
-  document: FileText,
-  verify: ShieldCheck,
-  redact: PencilSimple,
-} satisfies Record<MatterTabKind, (props: TabIconProps) => ReactNode>
+import { useRedactionRunsList } from './redaction-runs'
 
 const stripButtonClass =
-  'grid size-7 shrink-0 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40'
+  'grid size-7 shrink-0 self-center place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40'
+
+type Statuses = Readonly<Record<string, DocumentTabStatus>>
 
 export function MatterTabStrip({
   platform,
@@ -63,13 +45,29 @@ export function MatterTabStrip({
   compact: boolean
   onTabDrag: (id: string | null) => void
 }) {
-  const { tabs, activeId } = useMatterTabs()
+  const { tabs, activeId, matterId, close } = useMatterTabs()
   const named = useResolvedTabs(tabs)
   useMatterTabShortcuts(platform, named)
+  const statuses = useDocumentTabStatuses()
+  const canManage = useCanManageDocuments()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const activeTab = named.find((tab) => tab.id === activeId) ?? null
+  const activeDocumentId =
+    activeTab?.kind === 'document' ? activeTab.target : null
+  const activeStatus = statusFor(activeTab, statuses)
+  const documentActions =
+    canManage && activeDocumentId
+      ? () => setDeletingId(activeDocumentId)
+      : undefined
   return (
     <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-line bg-surface px-2">
       {compact ? (
-        <CompactTabs tabs={named} activeId={activeId} />
+        <CompactTabs
+          tabs={named}
+          activeId={activeId}
+          statuses={statuses}
+          documentActions={documentActions}
+        />
       ) : (
         <div className="flex min-w-0 flex-1 items-stretch gap-0.5">
           <div
@@ -83,7 +81,13 @@ export function MatterTabStrip({
                 tab={tab}
                 platform={platform}
                 active={tab.id === activeId}
+                status={statusFor(tab, statuses)}
                 onTabDrag={onTabDrag}
+                onDelete={
+                  canManage && tab.kind === 'document' && tab.target
+                    ? () => setDeletingId(tab.target)
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -91,13 +95,48 @@ export function MatterTabStrip({
         </div>
       )}
       {compact ? <MatterNewItemMenu /> : null}
-      {compact ? null : <OverflowMenu tabs={named} activeId={activeId} />}
+      {activeStatus ? (
+        <span className="flex shrink-0 items-center self-center">
+          <PresenceAvatars
+            presence={activeStatus.participants}
+            currentUserId={activeStatus.currentUserId}
+            names={activeStatus.presenceNames}
+          />
+        </span>
+      ) : null}
+      {compact ? null : (
+        <OverflowMenu
+          tabs={named}
+          activeId={activeId}
+          statuses={statuses}
+          documentActions={documentActions}
+        />
+      )}
       <SplitControls />
+      {deletingId ? (
+        <DeleteDocumentDialog
+          documentId={deletingId}
+          matterId={matterId}
+          onClose={() => setDeletingId(null)}
+          onDeleted={() => {
+            close(`document:${deletingId}`)
+            setDeletingId(null)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
 
-function useMatterTabShortcuts(platform: Platform, tabs: MatterTab[]) {
+function statusFor(
+  tab: MatterTab | null,
+  statuses: Statuses,
+): DocumentTabStatus | null {
+  if (!tab || tab.kind !== 'document' || !tab.target) return null
+  return statuses[tab.target] ?? null
+}
+
+function useMatterTabShortcuts(platform: AppPlatform, tabs: MatterTab[]) {
   const { activeId, close, reopenLastClosed, goToTab } = useMatterTabs()
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -158,117 +197,29 @@ function liveTitle(
   return tab.title
 }
 
-function MatterTabButton({
-  tab,
-  active,
-  platform,
-  onTabDrag,
-}: {
-  tab: MatterTab
-  active: boolean
-  platform: AppPlatform
-  onTabDrag: (id: string | null) => void
-}) {
-  const { close, goToTab, openToSide, promote } = useMatterTabs()
-  const Icon = TAB_ICONS[tab.kind]
-  const keepInView = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!active || !node || typeof node.scrollIntoView !== 'function') return
-      node.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-    },
-    [active],
-  )
+function TabMenuActions({ documentActions }: { documentActions?: () => void }) {
+  if (!documentActions) return null
   return (
-    <ContextMenu>
-      <ContextMenuTrigger
-        render={
-          <div
-            ref={keepInView}
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = 'move'
-              event.dataTransfer.setData('text/plain', tab.id)
-              onTabDrag(tab.id)
-            }}
-            onDragEnd={() => onTabDrag(null)}
-            onAuxClick={(event) => {
-              if (event.button !== 1) return
-              event.preventDefault()
-              close(tab.id)
-            }}
-            className={cn(
-              'group -mb-px flex min-w-0 shrink-0 items-center rounded-t-lg border border-transparent',
-              active
-                ? 'border-line border-b-transparent bg-raised text-ink'
-                : 'text-muted hover:bg-hover hover:text-ink',
-            )}
-          >
-            <button
-              type="button"
-              aria-current={active ? 'page' : undefined}
-              onClick={() => goToTab(tab)}
-              onDoubleClick={() => promote(tab.id)}
-              className="flex min-w-0 items-center gap-2 py-1.5 pr-1 pl-2.5 text-meta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <Icon size={13} aria-hidden className="shrink-0 text-subtle" />
-              <span
-                className={cn(
-                  'max-w-[11rem] truncate',
-                  tab.preview && 'italic',
-                )}
-              >
-                {tab.title}
-              </span>
-            </button>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label={`Close ${tab.title}`}
-                    onClick={() => close(tab.id)}
-                    className="mr-1 grid size-5 shrink-0 place-items-center rounded-sm text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:bg-fill hover:text-ink focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                  >
-                    <X size={11} aria-hidden />
-                  </button>
-                }
-              />
-              <TooltipContent side="bottom">
-                <span className="flex items-center gap-2">
-                  Close tab
-                  {platform === 'desktop' ? <CloseShortcutHint /> : null}
-                </span>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        }
-      />
-      <ContextMenuContent aria-label={`${tab.title} tab actions`}>
-        <ContextMenuItem
-          disabled={tab.kind !== 'document'}
-          onClick={() => openToSide(tab.id)}
-        >
-          Open to the side
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => close(tab.id)}>
-          Close tab
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+    <>
+      <MenuSeparator />
+      <MenuItem onClick={documentActions} className="text-danger">
+        <Trash size={14} aria-hidden />
+        Delete document
+      </MenuItem>
+    </>
   )
-}
-
-function CloseShortcutHint() {
-  const isMac = useIsMacPlatform()
-  return <KeyboardHint>{formatShortcut(['primary', 'W'], isMac)}</KeyboardHint>
 }
 
 function OverflowMenu({
   tabs,
   activeId,
+  statuses,
+  documentActions,
 }: {
   tabs: MatterTab[]
   activeId: string | null
+  statuses: Statuses
+  documentActions?: () => void
 }) {
   const { goToTab } = useMatterTabs()
   return (
@@ -285,29 +236,25 @@ function OverflowMenu({
         }
       />
       <MenuContent aria-label="All open tabs">
-        {tabs.map((tab) => {
-          const Icon = TAB_ICONS[tab.kind]
-          return (
-            <MenuItem
-              key={tab.id}
-              onClick={() => goToTab(tab)}
-              className={cn('gap-2', tab.id === activeId && 'text-ink')}
+        {tabs.map((tab) => (
+          <MenuItem
+            key={tab.id}
+            onClick={() => goToTab(tab)}
+            className={cn('gap-2', tab.id === activeId && 'text-ink')}
+          >
+            <TabIcon kind={tab.kind} size={14} />
+            <span
+              className={cn('min-w-0 flex-1 truncate', tab.preview && 'italic')}
             >
-              <Icon size={14} aria-hidden className="shrink-0 text-subtle" />
-              <span
-                className={cn(
-                  'min-w-0 flex-1 truncate',
-                  tab.preview && 'italic',
-                )}
-              >
-                {tab.title}
-              </span>
-              {tab.id === activeId ? (
-                <span className="text-caption text-subtle">Open</span>
-              ) : null}
-            </MenuItem>
-          )
-        })}
+              {tab.title}
+            </span>
+            <SaveStateMark state={statusFor(tab, statuses)?.save ?? null} />
+            {tab.id === activeId ? (
+              <span className="text-caption text-subtle">Open</span>
+            ) : null}
+          </MenuItem>
+        ))}
+        <TabMenuActions documentActions={documentActions} />
       </MenuContent>
     </Menu>
   )
@@ -316,12 +263,17 @@ function OverflowMenu({
 function CompactTabs({
   tabs,
   activeId,
+  statuses,
+  documentActions,
 }: {
   tabs: MatterTab[]
   activeId: string | null
+  statuses: Statuses
+  documentActions?: () => void
 }) {
   const { goToTab } = useMatterTabs()
-  const active = tabs.find((tab) => tab.id === activeId)
+  const active = tabs.find((tab) => tab.id === activeId) ?? null
+  const activeStatus = statusFor(active, statuses)
   return (
     <div className="flex min-w-0 flex-1 items-center">
       <Menu>
@@ -329,7 +281,7 @@ function CompactTabs({
           render={
             <button
               type="button"
-              aria-label={`${String(tabs.length)} open, show tabs`}
+              aria-label={`${String(tabs.length)} open, ${active ? tabAccessibleName(active, activeStatus) : 'show tabs'}`}
               className="flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 text-meta text-ink hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <span className="shrink-0 tabular-nums">{tabs.length} open</span>
@@ -338,23 +290,23 @@ function CompactTabs({
                   {active.title}
                 </span>
               ) : null}
+              <SaveStateMark state={activeStatus?.save ?? null} />
             </button>
           }
         />
         <MenuContent aria-label="All open tabs">
-          {tabs.map((tab) => {
-            const Icon = TAB_ICONS[tab.kind]
-            return (
-              <MenuItem
-                key={tab.id}
-                onClick={() => goToTab(tab)}
-                className="gap-2"
-              >
-                <Icon size={14} aria-hidden className="shrink-0 text-subtle" />
-                <span className="min-w-0 flex-1 truncate">{tab.title}</span>
-              </MenuItem>
-            )
-          })}
+          {tabs.map((tab) => (
+            <MenuItem
+              key={tab.id}
+              onClick={() => goToTab(tab)}
+              className="gap-2"
+            >
+              <TabIcon kind={tab.kind} size={14} />
+              <span className="min-w-0 flex-1 truncate">{tab.title}</span>
+              <SaveStateMark state={statusFor(tab, statuses)?.save ?? null} />
+            </MenuItem>
+          ))}
+          <TabMenuActions documentActions={documentActions} />
         </MenuContent>
       </Menu>
     </div>

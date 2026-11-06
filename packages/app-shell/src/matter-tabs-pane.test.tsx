@@ -79,6 +79,22 @@ function documentFixture(id: string, filename: string): MatterDocumentRecord {
   }
 }
 
+const currentUserModule = { ...(await import('./current-user')) }
+mock.module('./current-user', () => ({
+  ...currentUserModule,
+  useCurrentUser: () => ({
+    data: {
+      user: {
+        id: 'usr_1',
+        name: 'Lex',
+        email: 'lex@obiter.dev',
+        role: 'owner',
+      },
+      organisation: { id: 'org_1', name: 'Chambers', plan: 'private_beta' },
+    },
+  }),
+}))
+
 const mattersModule = { ...(await import('./matters')) }
 mock.module('./matters', () => ({
   ...mattersModule,
