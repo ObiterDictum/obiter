@@ -134,6 +134,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   await expect(menuItem(page, 'Mark defined term')).toBeEnabled()
   await menuItem(page, 'Mark defined term').click()
   await expect(markedText(page)).toContainText('IN THE')
+  await expect(editor(page)).toBeFocused()
   await shot(page, '03-pending-mark')
 
   await reviewCommand(page, 'Check defined terms')
