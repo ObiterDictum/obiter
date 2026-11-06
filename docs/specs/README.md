@@ -12,6 +12,7 @@ These folders hold the executable planning layer for the modules built in this r
 - [Verification Evidence](verification-evidence.md)
 - [Matter Artefacts](matter-artefacts.md)
 - [Pi Agent Framework](pi-agent-framework.md)
+- [Access requests and onboarding](onboarding.md) — eligibility-verified access, review queue, first-run checklists
 
 Search, Atlas, Verify and Research are server modules. Their specs live in the
 private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend)
