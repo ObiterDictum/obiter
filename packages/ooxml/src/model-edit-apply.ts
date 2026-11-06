@@ -1,3 +1,4 @@
+import { editTableStructure } from './table-structure-edits'
 import {
   insertParagraphRuns,
   type DocumentParagraphWire,
@@ -11,7 +12,7 @@ import {
 } from './document-lineage'
 import { insertCrossReference } from './cross-reference-edits'
 import { markDefinedTerm } from './defined-term-edits'
-import { insertFootnote } from './footnote-edits'
+import { deleteFootnote, insertFootnote } from './footnote-edits'
 import { setHyperlink } from './hyperlink-edits'
 import { insertImage, setImageSize } from './image-edits'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
@@ -264,6 +265,15 @@ export function applyPlannedOperation(
   } else if (operation.type === 'insert_section_break') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) insertSectionBreak(document, operation.paragraph)
+  } else if (
+    operation.type === 'insert_table_row' ||
+    operation.type === 'insert_table_column' ||
+    operation.type === 'delete_table_row' ||
+    operation.type === 'delete_table_column' ||
+    operation.type === 'delete_table'
+  ) {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    editTableStructure(document, operation.paragraph, operation)
   } else if (operation.type === 'insert_table') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {
@@ -375,6 +385,10 @@ export function applyPlannedOperation(
       )
       state.structureCounts.set(key, occurrence + 1)
     }
+  } else if (operation.type === 'delete_footnote') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    if (!deletedLater)
+      deleteFootnote(document, operation.run, operation.paragraph)
   } else if (operation.type === 'insert_page_number') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {

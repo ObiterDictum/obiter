@@ -464,3 +464,50 @@ describe('paragraphFace indentation and spacing merge', () => {
     expect(face.marginBottomPx).toBe(16)
   })
 })
+
+it('uses 10pt single-spaced note text when no document size exists', () => {
+  const face = paragraphFace(
+    { id: 'note', runs: [], preservedXmlFragments: [] },
+    [],
+    undefined,
+    true,
+  )
+  expect(face.run.fontSizePx).toBeCloseTo(40 / 3)
+  expect(face.lineHeight).toBe('1')
+  expect(face.marginBottomPx).toBe(0)
+})
+
+it('keeps an explicit inherited document size for note text', () => {
+  const face = paragraphFace(
+    { id: 'note', styleId: 'Custom', runs: [], preservedXmlFragments: [] },
+    [
+      {
+        styleId: 'Custom',
+        sourceFragment: '<w:style><w:rPr><w:sz w:val="28"/></w:rPr></w:style>',
+      },
+    ],
+    undefined,
+    true,
+  )
+  expect(face.run.fontSizePx).toBeCloseTo(56 / 3)
+})
+
+it('lets direct note run size override the note fallback', () => {
+  const face = paragraphFace(
+    { id: 'note', runs: [], preservedXmlFragments: [] },
+    [],
+    undefined,
+    true,
+  )
+  expect(
+    runFace(
+      {
+        id: 'r',
+        text: 'note',
+        preservedXmlFragments: ['<w:r><w:rPr><w:sz w:val="32"/></w:rPr></w:r>'],
+      },
+      face,
+      [],
+    ).fontSizePx,
+  ).toBeCloseTo(64 / 3)
+})

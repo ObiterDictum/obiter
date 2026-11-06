@@ -1,3 +1,6 @@
+import { storyTables } from '../../document-page-tables'
+import { foldTableStructure } from '../../document-table-structure-fold'
+import { OoxmlError } from '@obiter/ooxml'
 import { useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
 import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
@@ -54,8 +57,15 @@ export function useInsertRibbon(
 ): InsertRibbonProps {
   const pictureInput = useRef<HTMLInputElement>(null)
   const cellParagraphIds = useMemo(
-    () => storyTableCellIds(model ? documentStory(model) : undefined),
-    [model],
+    () =>
+      storyTableCellIds(
+        painted
+          ? documentStory(painted)
+          : model
+            ? documentStory(model)
+            : undefined,
+      ),
+    [painted, model],
   )
   const paragraphId = (caret.kind === 'caret' && caret.paragraphId) || null
   const selectionActive = caret.kind === 'selection'
@@ -102,6 +112,59 @@ export function useInsertRibbon(
       setBreaks: drafts.setBreaks,
     }),
     structure: {
+      tableStructureUnavailable: trackChanges
+        ? 'Table structure changes are not recorded as tracked changes'
+        : !paragraphId || !cellParagraphIds.has(paragraphId)
+          ? 'Place the cursor in a table cell'
+          : undefined,
+      onTableStructure: (operation) => {
+        const targetId = operation.paragraphId || paragraphId
+        if (trackChanges || !targetId || !cellParagraphIds.has(targetId)) return
+        const story = (painted ?? model)?.stories.find(
+          (item) => item.kind === 'document',
+        )
+        if (!story) return
+        try {
+          foldTableStructure(
+            [...story.preservedXmlFragments],
+            [...story.paragraphs],
+            { ...operation, paragraphId: targetId },
+            () => crypto.randomUUID().replaceAll('-', '').slice(0, 8),
+          )
+        } catch (error) {
+          if (!(error instanceof OoxmlError)) throw error
+          onImageError(error.message)
+          return
+        }
+        const table = storyTables(story).find((item) =>
+          item.paragraphIds.includes(targetId),
+        )
+        const baselineIds = new Set(
+          model?.stories.flatMap((item) => item.paragraphs.map((p) => p.id)),
+        )
+        const anchorId = table?.paragraphIds.find((id) => baselineIds.has(id))
+        if (!table || !anchorId) return
+        const rowIndex = table.rows.findIndex((row) =>
+          row.cells.some((cell) => cell.paragraphIds.includes(targetId)),
+        )
+        const columnIndex = table.rows[rowIndex]?.cells.findIndex((cell) =>
+          cell.paragraphIds.includes(targetId),
+        )
+        drafts.setStructures((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            kind: 'table-structure',
+            paragraphId: anchorId,
+            operation: {
+              ...operation,
+              paragraphId: anchorId,
+              rowIndex,
+              columnIndex,
+            },
+          },
+        ])
+      },
       tableUnavailable: structure.tableUnavailable,
       pictureUnavailable: structure.pictureUnavailable,
       linkUnavailable: structure.linkUnavailable,

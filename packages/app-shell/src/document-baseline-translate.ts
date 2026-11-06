@@ -35,12 +35,14 @@ import {
 
 const STRUCTURE_KIND_REMOVABLE = {
   table: false,
+  'table-structure': false,
   image: false,
   'image-size': true,
   link: true,
   'cross-reference': false,
   'page-number': false,
   footnote: false,
+  'footnote-removal': false,
   'table-of-contents': false,
   'table-of-authorities': false,
   'table-of-authorities-refresh': false,

@@ -6,6 +6,7 @@ import { buildOoxmlFixture } from '../fixtures/builder'
 import {
   applyDocumentEdits,
   canonicaliseParagraphIdentities,
+  missingFootnoteStyles,
   parseDocx,
   serialiseDocx,
 } from './index'
@@ -114,6 +115,118 @@ describe('footnote edits', () => {
     ).toBe(true)
   })
 
+  it('adds the Word footnote styles when the package lacks them, once', async () => {
+    const document = await parseDocx(await fixtureWithoutFootnotes())
+    const anchor = mainParagraphs(document)[0]
+    if (!anchor) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_footnote',
+        paragraphId: anchor.id,
+        offset: 0,
+        text: 'One',
+      },
+      {
+        type: 'insert_footnote',
+        paragraphId: anchor.id,
+        offset: 3,
+        text: 'Two',
+      },
+    ])
+    const output = await serialiseDocx(document)
+    const styles = await zipText(output, 'word/styles.xml')
+
+    expect(styles.match(/w:styleId="FootnoteText"/gu)).toHaveLength(1)
+    expect(styles.match(/w:styleId="FootnoteReference"/gu)).toHaveLength(1)
+    expect(styles).toMatch(
+      /<w:style w:type="character" w:styleId="FootnoteReference">.*<w:vertAlign w:val="superscript"\/>.*<\/w:style>/u,
+    )
+    expect(styles).toMatch(
+      /<w:style w:type="paragraph" w:styleId="FootnoteText">.*<w:sz w:val="20"\/>.*<\/w:style>/u,
+    )
+    expect(styles).toContain('w:styleId="Heading1"')
+    const reparsed = await parseDocx(output)
+    expect(reparsed.model.styles.map((style) => style.styleId)).toEqual(
+      expect.arrayContaining(['FootnoteText', 'FootnoteReference']),
+    )
+  })
+
+  it('writes the reference marks superscript even without a styles part', async () => {
+    const zip = await JSZip.loadAsync(await fixtureWithoutFootnotes())
+    zip.remove('word/styles.xml')
+    const rels = await zip.file('word/_rels/document.xml.rels')?.async('string')
+    const types = await zip.file('[Content_Types].xml')?.async('string')
+    if (!rels || !types) throw new Error('Fixture part is missing.')
+    zip.file(
+      'word/_rels/document.xml.rels',
+      rels.replace(/<Relationship[^>]*relationships\/styles"[^>]*\/>/u, ''),
+    )
+    zip.file(
+      '[Content_Types].xml',
+      types.replace(/<Override[^>]*styles\.xml[^>]*\/>/u, ''),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const anchor = mainParagraphs(document)[0]
+    if (!anchor) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_footnote',
+        paragraphId: anchor.id,
+        offset: 0,
+        text: 'One',
+      },
+    ])
+    const output = await serialiseDocx(document)
+    const superscript =
+      '<w:rPr><w:rStyle w:val="FootnoteReference"/><w:vertAlign w:val="superscript"/></w:rPr>'
+
+    expect(await zipText(output, 'word/document.xml')).toContain(
+      `${superscript}<w:footnoteReference w:id="1"/>`,
+    )
+    expect(await zipText(output, 'word/footnotes.xml')).toContain(
+      `${superscript}<w:footnoteRef/>`,
+    )
+    expect((await JSZip.loadAsync(output)).file('word/styles.xml')).toBeNull()
+  })
+
+  it("keeps a document's own footnote styles untouched", async () => {
+    const zip = await JSZip.loadAsync(await fixtureWithoutFootnotes())
+    const own =
+      '<w:style w:type="paragraph" w:styleId="FootnoteText"><w:name w:val="footnote text"/><w:rPr><w:sz w:val="16"/></w:rPr></w:style>'
+    const styles = await zip.file('word/styles.xml')?.async('string')
+    if (!styles) throw new Error('Fixture part is missing.')
+    zip.file(
+      'word/styles.xml',
+      styles.replace('</w:styles>', `${own}</w:styles>`),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const anchor = mainParagraphs(document)[0]
+    if (!anchor) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_footnote',
+        paragraphId: anchor.id,
+        offset: 0,
+        text: 'One',
+      },
+    ])
+    const saved = await zipText(
+      await serialiseDocx(document),
+      'word/styles.xml',
+    )
+
+    expect(saved).toContain(own)
+    expect(saved.match(/w:styleId="FootnoteText"/gu)).toHaveLength(1)
+    expect(saved.match(/w:styleId="FootnoteReference"/gu)).toHaveLength(1)
+  })
+
   it('allocates ids that never collide with existing or same-batch notes', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document)[0]
@@ -209,7 +322,7 @@ describe('footnote edits', () => {
     ).toThrowError(expect.objectContaining({ code: 'invalid-package' }))
   })
 
-  it('escapes note text and keeps every other part byte for byte', async () => {
+  it('escapes note text and keeps every other part byte for byte, styles only gaining the note styles', async () => {
     const document = await parseFixture()
     const anchor = mainParagraphs(document)[0]
     if (!anchor) throw new Error('Fixture paragraph is missing.')
@@ -230,7 +343,20 @@ describe('footnote edits', () => {
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),
     )
     const after = await JSZip.loadAsync(output)
-    const changed = new Set(['word/document.xml', 'word/footnotes.xml'])
+    const changed = new Set([
+      'word/document.xml',
+      'word/footnotes.xml',
+      'word/styles.xml',
+    ])
+    const stylesBefore = await before.file('word/styles.xml')?.async('string')
+    const stylesAfter = await after.file('word/styles.xml')?.async('string')
+    const added = missingFootnoteStyles(document.model.styles.slice(0, -2))
+      .map((style) => style.sourceFragment)
+      .join('')
+    expect(added).not.toBe('')
+    expect(stylesAfter).toBe(
+      stylesBefore?.replace('</w:styles>', `${added}</w:styles>`),
+    )
     for (const name of Object.keys(before.files)) {
       if (changed.has(name)) continue
       expect(await after.file(name)?.async('uint8array')).toEqual(
@@ -379,6 +505,135 @@ describe('footnote edits', () => {
     expect(notes).not.toContain('Alice Example footnote')
   })
 })
+
+describe('footnote deletion', () => {
+  it('removes the reference run and its note entry, leaving the other note', async () => {
+    const document = await parseFixture()
+    const anchor = mainParagraphs(document)[0]
+    if (!anchor) throw new Error('Fixture paragraph is missing.')
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_footnote',
+        paragraphId: anchor.id,
+        offset: 6,
+        text: 'Kept note',
+      },
+    ])
+    const seeded = await parseDocx(await serialiseDocx(document))
+    const reference = referenceRuns(seeded).find((run) =>
+      run.preservedXmlFragments.join('').includes('w:id="2"'),
+    )
+    if (!reference) throw new Error('Inserted reference is missing.')
+    const before = referenceRuns(seeded).length
+
+    applyDocumentEdits(seeded, [
+      { type: 'delete_footnote', runId: reference.id },
+    ])
+    const output = await serialiseDocx(seeded)
+    const body = await zipText(output, 'word/document.xml')
+    const notes = await zipText(output, 'word/footnotes.xml')
+
+    expect(body).not.toContain('<w:footnoteReference w:id="2"/>')
+    expect(notes).not.toMatch(/<w:footnote\b[^>]*w:id="2"/u)
+    expect(notes).not.toContain('Kept note')
+    expect(notes).toContain('w:id="-1"')
+    const reparsed = await parseDocx(output)
+    expect(referenceRuns(reparsed)).toHaveLength(before - 1)
+    expect(
+      mainParagraphs(reparsed)[0]
+        ?.runs.map((run) => run.text)
+        .join(''),
+    ).toBe(
+      mainParagraphs(seeded)[0]
+        ?.runs.map((run) => run.text)
+        .join(''),
+    )
+    const story = reparsed.model.stories.find(
+      (item) => item.kind === 'footnotes',
+    )
+    expect(
+      story?.paragraphs.some((paragraph) =>
+        paragraph.runs.some((run) => run.text.includes('Kept note')),
+      ),
+    ).toBe(false)
+  })
+
+  it('deletes alongside a text edit in the same paragraph', async () => {
+    const document = await parseFixture()
+    const anchor = mainParagraphs(document)[0]
+    if (!anchor) throw new Error('Fixture paragraph is missing.')
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_footnote',
+        paragraphId: anchor.id,
+        offset: 6,
+        text: 'Gone',
+      },
+    ])
+    const seeded = await parseDocx(await serialiseDocx(document))
+    const paragraph = mainParagraphs(seeded)[0]
+    const reference = paragraph?.runs.find((run) =>
+      run.preservedXmlFragments.join('').includes('<w:footnoteReference'),
+    )
+    const text = paragraph?.runs.find((run) => run.text.length > 0)
+    if (!reference || !text) throw new Error('Inserted reference is missing.')
+
+    applyDocumentEdits(seeded, [
+      { type: 'replace_run_text', runId: text.id, text: 'Edited ' },
+      { type: 'delete_footnote', runId: reference.id },
+    ])
+    const output = await serialiseDocx(seeded)
+    const body = await zipText(output, 'word/document.xml')
+    expect(body).toContain('Edited ')
+    expect(body).not.toContain('<w:footnoteReference w:id="2"/>')
+    expect(await zipText(output, 'word/footnotes.xml')).not.toContain('Gone')
+  })
+
+  it('refuses a reference that shares its run with other content', async () => {
+    const document = await parseFixture()
+    const shared = referenceRuns(document)[0]
+    if (!shared) throw new Error('Fixture reference is missing.')
+    expect(() =>
+      applyDocumentEdits(document, [
+        { type: 'delete_footnote', runId: shared.id },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'model-node-not-editable' }))
+  })
+
+  it('refuses a run that holds no footnote reference', async () => {
+    const document = await parseFixture()
+    const run = mainParagraphs(document)[0]?.runs.find(
+      (item) => item.text.length > 0,
+    )
+    if (!run) throw new Error('Fixture run is missing.')
+    expect(() =>
+      applyDocumentEdits(document, [
+        { type: 'delete_footnote', runId: run.id },
+      ]),
+    ).toThrow()
+  })
+
+  it('refuses while changes are tracked', async () => {
+    const document = await parseFixture()
+    const reference = referenceRuns(document)[0]
+    if (!reference) throw new Error('Fixture reference is missing.')
+    expect(() =>
+      applyDocumentEdits(
+        document,
+        [{ type: 'delete_footnote', runId: reference.id }],
+        TRACKING,
+      ),
+    ).toThrow()
+  })
+})
+
+function referenceRuns(document: Awaited<ReturnType<typeof parseDocx>>) {
+  return mainParagraphs(document).flatMap((paragraph) =>
+    paragraph.runs.filter((run) =>
+      run.preservedXmlFragments.join('').includes('<w:footnoteReference'),
+    ),
+  )
+}
 
 async function parseFixture() {
   return parseDocx(await buildOoxmlFixture('full-fidelity-with-w14-ids'))

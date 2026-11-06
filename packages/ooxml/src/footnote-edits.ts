@@ -14,10 +14,15 @@ import {
   type OoxmlDocument,
   type ParagraphAnchor,
   type SourcePart,
+  type TextRunAnchor,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { allocateModelId } from './model-paragraph-edits'
-import { parseXmlElements, type XmlOverlay } from './parts/overlay'
+import {
+  parseXmlElements,
+  setOverlayReplacement,
+  type XmlOverlay,
+} from './parts/overlay'
 import { attributeValue, isWord, WORD_NAMESPACE } from './parts/xml-elements'
 import {
   addXmlStoryPart,
@@ -36,6 +41,7 @@ import {
   FOOTNOTES_CONTENT_TYPE,
   FOOTNOTES_PART_NAME,
   FOOTNOTES_RELATIONSHIP_TYPE,
+  missingFootnoteStyles,
 } from './structure-xml'
 
 const FOOTNOTE_REFERENCE_STYLE = 'FootnoteReference'
@@ -56,6 +62,7 @@ export function insertFootnote(
     throw new OoxmlError('model-node-not-editable')
   }
   const footnotes = ensureFootnotesStory(document, lineage)
+  ensureFootnoteStyles(document)
   const footnoteId = nextFootnoteId(
     document.model.stories,
     footnotes.part.overlay,
@@ -86,7 +93,7 @@ export function insertFootnote(
     styleId: FOOTNOTE_REFERENCE_STYLE,
     text: '',
     preservedXmlFragments: [
-      `<w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr>`,
+      `<w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/><w:vertAlign w:val="superscript"/></w:rPr>`,
       `<w:footnoteReference w:id="${String(footnoteId)}"/>`,
     ],
   }
@@ -106,6 +113,106 @@ export function insertFootnote(
     ])
     recordInsertedParagraph(lineage.recorder, noteWire, lineage.operationIndex)
   }
+}
+
+const REFERENCE_ONLY_RUN =
+  /^<w:r\b[^>]*>(?:<w:rPr\b[^>]*\/>|<w:rPr\b[\s\S]*?<\/w:rPr>)?<w:footnoteReference\b[^>]*\/><\/w:r>$/u
+
+export function deleteFootnote(
+  document: OoxmlDocument,
+  run: TextRunAnchor,
+  paragraph: ParagraphAnchor,
+) {
+  const part = requireEditablePart(document, run.partName)
+  const runXml = part.overlay.source.slice(run.runRange.start, run.runRange.end)
+  const footnoteId = /<w:footnoteReference\b[^>]*\bw:id="(\d+)"/u.exec(
+    runXml,
+  )?.[1]
+  if (
+    run.wire.text !== '' ||
+    footnoteId === undefined ||
+    /customMarkFollows/u.test(runXml) ||
+    !REFERENCE_ONLY_RUN.test(runXml)
+  ) {
+    throw new OoxmlError('model-node-not-editable')
+  }
+  const notes = document.model.stories.find(
+    (story) => story.kind === 'footnotes',
+  )
+  if (!notes) throw new OoxmlError('invalid-document-edit')
+  const notesPart = requireEditablePart(document, notes.partName)
+  const entry = parseXmlElements(notesPart.overlay.source).find(
+    (element) =>
+      isWord(element, 'footnote') &&
+      attributeValue(element, WORD_NAMESPACE, 'id') === footnoteId,
+  )
+  if (!entry) throw new OoxmlError('invalid-document-edit')
+
+  setOverlayReplacement(part.overlay, `delete-footnote-ref-${run.wire.id}`, {
+    start: run.runRange.start,
+    end: run.runRange.end,
+    value: '',
+  })
+  part.dirty = true
+  paragraph.wire.runs = paragraph.wire.runs.filter(
+    (item) => item.id !== run.wire.id,
+  )
+
+  const stillReferenced = document.model.stories
+    .filter((story) => story.kind === 'document')
+    .some((story) =>
+      story.paragraphs.some((item) =>
+        item.runs.some((other) =>
+          other.preservedXmlFragments.some((fragment) =>
+            new RegExp(
+              `<w:footnoteReference\\b[^>]*\\bw:id="${footnoteId}"`,
+              'u',
+            ).test(fragment),
+          ),
+        ),
+      ),
+    )
+  if (stillReferenced) return
+  setOverlayReplacement(notesPart.overlay, `delete-footnote-${footnoteId}`, {
+    start: entry.start,
+    end: entry.end,
+    value: '',
+  })
+  notesPart.dirty = true
+  let cursor = 0
+  const fragments: string[] = []
+  const paragraphs: DocumentParagraphWire[] = []
+  for (const fragment of notes.preservedXmlFragments) {
+    const count = Math.max(1, (fragment.match(/<w:p\b/gu) ?? []).length)
+    const own = notes.paragraphs.slice(cursor, cursor + count)
+    cursor += count
+    const id = /^<w:footnote\b[^>]*\bw:id="(-?\d+)"/u.exec(fragment)?.[1]
+    if (id === footnoteId) continue
+    fragments.push(fragment)
+    paragraphs.push(...own)
+  }
+  paragraphs.push(...notes.paragraphs.slice(cursor))
+  notes.preservedXmlFragments = fragments
+  notes.paragraphs = paragraphs
+}
+
+const STYLES_PART_NAME = 'word/styles.xml'
+
+function ensureFootnoteStyles(document: OoxmlDocument) {
+  if (!document.sourceParts.has(STYLES_PART_NAME)) return
+  const missing = missingFootnoteStyles(document.model.styles)
+  if (missing.length === 0) return
+  const part = requireEditablePart(document, STYLES_PART_NAME)
+  for (const style of missing) {
+    insertRootChildXml(
+      part.overlay,
+      'styles',
+      style.sourceFragment,
+      `style-${style.styleId}`,
+    )
+    document.model.styles.push(style)
+  }
+  part.dirty = true
 }
 
 function ensureFootnotesStory(
@@ -227,7 +334,7 @@ function noteParagraphWire(
         styleId: FOOTNOTE_REFERENCE_STYLE,
         text: '',
         preservedXmlFragments: [
-          `<w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr>`,
+          `<w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/><w:vertAlign w:val="superscript"/></w:rPr>`,
           '<w:footnoteRef/>',
         ],
       },
