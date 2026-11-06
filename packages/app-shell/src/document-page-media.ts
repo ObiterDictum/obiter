@@ -18,10 +18,20 @@ export function xmlContainsImage(xml: string): boolean {
 }
 
 export function paragraphImageXml(paragraph: DocumentParagraphWire): string[] {
+  return paragraphPictureFragments(paragraph).map((picture) => picture.xml)
+}
+
+export function paragraphPictureFragments(
+  paragraph: DocumentParagraphWire,
+): Array<{ xml: string; runId?: string }> {
   return [
-    ...paragraph.preservedXmlFragments.filter(xmlContainsImage),
+    ...paragraph.preservedXmlFragments
+      .filter(xmlContainsImage)
+      .map((xml) => ({ xml })),
     ...paragraph.runs.flatMap((run) =>
-      run.preservedXmlFragments.filter(xmlContainsImage),
+      run.preservedXmlFragments
+        .filter(xmlContainsImage)
+        .map((xml) => ({ xml, runId: run.id })),
     ),
   ]
 }

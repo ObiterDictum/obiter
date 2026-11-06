@@ -158,6 +158,7 @@ export function workspaceKeyDown(
     redo,
     print,
     insertFootnote,
+    picture,
     format,
     request,
     review,
@@ -168,6 +169,7 @@ export function workspaceKeyDown(
     redo: () => void
     print: () => void
     insertFootnote?: () => void
+    picture?: WorkspaceKeySources['picture']
     format?: WorkspaceKeySources['format']
     request: (surface: 'find' | 'palette' | 'formatting') => void
     review: {
@@ -187,6 +189,7 @@ export function workspaceKeyDown(
     return
   }
   documentWorkspaceKeyDown(event, {
+    picture,
     save,
     undo,
     redo,

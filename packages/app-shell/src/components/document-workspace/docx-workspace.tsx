@@ -305,6 +305,7 @@ export function DocxWorkspace({
     toggleNavPane()
   }
   const commentSelection = useLatestCallback(() => togglePanel('comments'))
+  const reviewPanel = useLatestCallback(() => togglePanel('review'))
   const chrome = useLatestHandlers(
     docxWorkspaceChrome({
       save,
@@ -362,7 +363,7 @@ export function DocxWorkspace({
     <WorkspaceTableSurface
       structure={insert.structure}
       review={changeReview}
-      onReview={() => togglePanel('review')}
+      onReview={reviewPanel}
     >
       <WorkspaceShell
         layout={layout}
@@ -376,6 +377,7 @@ export function DocxWorkspace({
             insertFootnote: insert.structure.footnoteUnavailable
               ? undefined
               : insert.structure.onInsertFootnote,
+            picture: drafts.picture.keydown,
             format,
             request,
             review: changeReview,

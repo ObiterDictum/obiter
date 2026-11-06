@@ -1,4 +1,6 @@
 import { editableParagraphs } from './document-model-text'
+import { pictureSizeDraftId } from './document-picture-resize'
+import type { StructuralDraft } from './document-structural-drafts'
 import {
   isPendingBaselineId,
   PENDING_BASELINE_PREFIX,
@@ -68,6 +70,53 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
     ]
   })
 
+  const structures = state.structures.map((item): StructuralDraft => {
+    if (item.kind === 'cross-reference') {
+      return {
+        ...item,
+        paragraphId: remapParagraph(item.paragraphId),
+        targetParagraphId: remapParagraph(item.targetParagraphId),
+      }
+    }
+    if (item.kind !== 'image-size') {
+      return { ...item, paragraphId: remapParagraph(item.paragraphId) }
+    }
+    const continuations = identities.runContinuations.get(item.runId)
+    let runId = item.runId
+    if (continuations?.length === 1) {
+      const [continuation] = continuations
+      runId = continuation.runId ?? pendingRunAddressId(continuation.address)
+    } else if (continuations && continuations.length > 1) {
+      const addressed = continuations.filter((continuation) => {
+        const run = continuation.runId
+          ? toModel.stories
+              .flatMap((story) => story.paragraphs)
+              .flatMap((paragraph) => paragraph.runs)
+              .find((entry) => entry.id === continuation.runId)
+          : storyParagraph(toModel, continuation.address.paragraphId)?.runs[
+              continuation.address.runIndex
+            ]
+        return run?.preservedXmlFragments.some((fragment) =>
+          /<w:drawing\b/i.test(fragment),
+        )
+      })
+      if (addressed.length === 1) {
+        const [continuation] = addressed
+        runId = continuation.runId ?? pendingRunAddressId(continuation.address)
+      } else {
+        unresolved = true
+      }
+    } else if (fromRunIds.has(item.runId)) {
+      unresolved = true
+    }
+    return {
+      ...item,
+      id: isPendingBaselineId(runId) ? item.id : pictureSizeDraftId(runId),
+      paragraphId: remapParagraph(item.paragraphId),
+      runId,
+    }
+  })
+
   const remapped: DraftState = {
     ...state,
     drafts,
@@ -97,6 +146,7 @@ export function remapLiveDraftState(state: DraftState, baseline: SaveBaseline) {
       ),
       emphasis,
     },
+    structures,
   }
   const resolved = resolveBaselineIdentities(remapped, baseline)
   return {
@@ -160,11 +210,22 @@ export function resolveBaselineIdentities(
       : undefined
     return runId ? { ...item, runId } : item
   })
+  const structures = state.structures.map((item) => {
+    if (item.kind !== 'image-size' || !isPendingBaselineId(item.runId)) {
+      return item
+    }
+    const address = parsePendingRunAddress(item.runId)
+    const runId = address
+      ? storyParagraph(toModel, address.paragraphId)?.runs[address.runIndex]?.id
+      : undefined
+    return runId ? { ...item, id: pictureSizeDraftId(runId), runId } : item
+  })
   return {
     ...state,
     drafts,
     deletedParagraphIds,
     format: { ...state.format, emphasis },
+    structures,
   }
 }
 
@@ -174,6 +235,9 @@ export function hasUnresolvedBaselineIdentities(state: DraftState): boolean {
     state.deletedParagraphIds.some(isPendingBaselineId) ||
     state.format.emphasis.some(
       (item) => item.runId !== undefined && isPendingBaselineId(item.runId),
+    ) ||
+    state.structures.some(
+      (item) => item.kind === 'image-size' && isPendingBaselineId(item.runId),
     )
   )
 }

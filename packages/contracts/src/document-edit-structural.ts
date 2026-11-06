@@ -128,6 +128,18 @@ export type DocumentEditInsertImageOperation = z.infer<
   typeof insertImageOperationSchema
 >
 
+export const setImageSizeOperationSchema = z
+  .object({
+    type: z.literal('set_image_size'),
+    runId: editIdSchema,
+    widthPx: imageDimensionSchema,
+    heightPx: imageDimensionSchema,
+  })
+  .strict()
+export type DocumentEditSetImageSizeOperation = z.infer<
+  typeof setImageSizeOperationSchema
+>
+
 export const setHyperlinkOperationSchema = z
   .object({
     type: z.literal('set_hyperlink'),

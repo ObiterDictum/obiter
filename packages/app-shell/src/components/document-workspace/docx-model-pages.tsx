@@ -187,6 +187,7 @@ export function DocxModelPages({
             selectionSegments={selectionSegments}
             linkOverlays={linkOverlays}
             selectionHandlers={selectionHandlers}
+            picture={drafts.picture.interaction}
             onFocusParagraph={focus}
             onMoveCaret={move}
             drafts={drafts.drafts}

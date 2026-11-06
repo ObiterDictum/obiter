@@ -51,6 +51,10 @@ export type PlannedOperation =
       paragraph: ParagraphAnchor
       targetParagraph: ParagraphAnchor
     })
+  | (Extract<DocumentEditOperation, { type: 'set_image_size' }> & {
+      run: TextRunAnchor
+      paragraph: ParagraphAnchor
+    })
   | Extract<DocumentEditOperation, { type: 'set_section_properties' }>
 
 export function validatePlannedOperations(
@@ -184,6 +188,7 @@ export function validateTrackedOperations(
       operation.type === 'delete_table' ||
       operation.type === 'insert_table' ||
       operation.type === 'insert_image' ||
+      operation.type === 'set_image_size' ||
       operation.type === 'set_hyperlink' ||
       operation.type === 'insert_cross_reference' ||
       operation.type === 'insert_footnote' ||

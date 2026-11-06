@@ -1,6 +1,9 @@
 import type { DocumentParagraphWire } from '@obiter/contracts'
 import { drawingScene } from './document-page-drawings'
-import { drawingIsTextBox, paragraphImageXml } from './document-page-media'
+import {
+  drawingIsTextBox,
+  paragraphPictureFragments,
+} from './document-page-media'
 import type { ColumnFrame, ContentFrame, PageBox } from './document-page-layout'
 import { emuToPx, xmlAttr, xmlNumber } from './document-page-units'
 
@@ -38,12 +41,20 @@ export type PageTextBox = PageFloat & {
 }
 
 export function paragraphAnchorXml(paragraph: DocumentParagraphWire): string[] {
-  return paragraphImageXml(paragraph).filter((xml) => /<wp:anchor\b/i.test(xml))
+  return paragraphPictureFragments(paragraph)
+    .filter((picture) => /<wp:anchor\b/i.test(picture.xml))
+    .map((picture) => picture.xml)
 }
 
 export function paragraphInlineXml(paragraph: DocumentParagraphWire): string[] {
-  return paragraphImageXml(paragraph).filter(
-    (xml) => !/<wp:anchor\b/i.test(xml),
+  return paragraphInlinePictures(paragraph).map((picture) => picture.xml)
+}
+
+export function paragraphInlinePictures(
+  paragraph: DocumentParagraphWire,
+): Array<{ xml: string; runId?: string }> {
+  return paragraphPictureFragments(paragraph).filter(
+    (picture) => !/<wp:anchor\b/i.test(picture.xml),
   )
 }
 
