@@ -37,6 +37,7 @@ import {
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
+import type { PictureInteraction } from './picture-frame'
 import { PageMarginBand, type EditableMargin } from './page-margin-band'
 import { useMarginEdit } from './use-margin-edit'
 
@@ -94,6 +95,7 @@ function ModelPage({
   selectionSegments = new Map(),
   linkOverlays,
   selectionHandlers,
+  picture,
   onFocusParagraph,
   onMoveCaret,
   marginEditing,
@@ -145,6 +147,7 @@ function ModelPage({
   selectionSegments?: ReadonlyMap<string, ParagraphSelectionRange>
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
   selectionHandlers?: ParagraphSelectionHandlers
+  picture?: PictureInteraction
   onFocusParagraph?: (paragraphId: string) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
   marginEditing?: DocumentStoryWire
@@ -236,6 +239,7 @@ function ModelPage({
     firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
 
   const sharedCtx = {
+    extraRuns,
     model,
     pendingRedlines,
     selectedParagraphId,
@@ -267,6 +271,7 @@ function ModelPage({
     selectionSegments,
     linkOverlays,
     selectionHandlers,
+    picture,
     onFocusParagraph,
     onMoveCaret,
     pageNumber,
@@ -308,6 +313,11 @@ function ModelPage({
           : page.heightPx,
       }}
       data-document-page
+      onClickCapture={(event) => {
+        if (!(event.target instanceof Element)) return
+        if (event.target.closest('[data-picture-run-id]')) return
+        picture?.onClear()
+      }}
       {...pageClickHandlers({
         editing,
         marginEditing,

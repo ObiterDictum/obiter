@@ -215,6 +215,7 @@ export const documentModelWireSchema = z.object({
   preservedXmlFragments: z.array(preservedDocumentXmlFragmentSchema),
   changes: z.array(documentChangeWireSchema).default([]),
   trackRevisions: z.boolean(),
+  defaultTabStopTwips: z.number().int().positive().optional(),
   comments: z.array(documentImportedCommentSchema),
   markings: documentMarkingsStateSchema,
 })

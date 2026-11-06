@@ -1,4 +1,5 @@
-import { SidePanel } from '@obiter/ui'
+import { Button, SidePanel, cn } from '@obiter/ui'
+import { useId, useState } from 'react'
 import { useSearch } from '@tanstack/react-router'
 import { ContentFrame } from '../content-frame'
 import {
@@ -89,6 +90,8 @@ export function LegalSearchView() {
     setTypeFilter,
   } = useLegalSearch(initialQuery)
   const activeFilterCount = countActiveLegalSearchFilters(filters)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const filtersId = useId()
 
   return (
     <ContentFrame className="flex flex-col gap-6 py-14">
@@ -133,8 +136,26 @@ export function LegalSearchView() {
             onRemoveDateTo={() => removeFilter('dateTo')}
             onRemoveType={clearTypeFilter}
           />
+          <Button
+            variant="secondary"
+            size="sm"
+            className="self-start @pane-wide:hidden"
+            aria-expanded={filtersOpen}
+            aria-controls={filtersId}
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            {activeFilterCount > 0
+              ? `Filters (${String(activeFilterCount)})`
+              : 'Filters'}
+          </Button>
           <div className="grid items-start gap-6 @pane-wide:grid-cols-[196px_minmax(0,1fr)] @pane-full:grid-cols-[216px_minmax(0,1fr)_340px]">
-            <div className="hidden @pane-wide:block">
+            <div
+              id={filtersId}
+              className={cn(
+                filtersOpen ? 'block' : 'hidden',
+                '@pane-wide:block',
+              )}
+            >
               <SearchFacets
                 response={state.response}
                 filters={filters}

@@ -149,14 +149,14 @@ describe('drawingShapeFill', () => {
 })
 
 describe('tabColumns', () => {
-  it('splits runs on Word tab marks', () => {
+  it('splits runs on tab characters', () => {
     const columns = tabColumns({
       id: 'p1',
       runs: [
         { id: 'a', text: 'phone', preservedXmlFragments: [] },
-        { id: 't', text: '', preservedXmlFragments: ['<w:tab/>'] },
+        { id: 't', text: '\t', preservedXmlFragments: [] },
         { id: 'b', text: '1', preservedXmlFragments: [] },
-        { id: 'u', text: '', preservedXmlFragments: ['<w:tab/>'] },
+        { id: 'u', text: '\t', preservedXmlFragments: [] },
         { id: 'c', text: 'www', preservedXmlFragments: [] },
       ],
       preservedXmlFragments: [],
@@ -168,12 +168,12 @@ describe('tabColumns', () => {
     ])
   })
 
-  it('splits a run that carries both text and a tab mark', () => {
+  it('splits a run that carries both text and a tab', () => {
     const columns = tabColumns({
       id: 'p1',
       runs: [
-        { id: 'a', text: 'phone', preservedXmlFragments: ['<w:tab/>'] },
-        { id: 'b', text: '1', preservedXmlFragments: ['<w:tab/>'] },
+        { id: 'a', text: 'phone\t', preservedXmlFragments: [] },
+        { id: 'b', text: '1\t', preservedXmlFragments: [] },
         { id: 'c', text: 'www', preservedXmlFragments: [] },
       ],
       preservedXmlFragments: [],

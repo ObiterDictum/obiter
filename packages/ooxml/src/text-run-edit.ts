@@ -14,28 +14,15 @@ export function replaceTextRunAtAnchor(
 ) {
   const part = document.sourceParts.get(anchor.partName)
   const overlay = part?.overlay
-  if (!part || !overlay || anchor.textRanges.length === 0) return false
+  const span = runTextSpan(anchor)
+  if (!part || !overlay || (!span && anchor.textRanges.length === 0))
+    return false
   if (hasPendingBreakSplice(overlay, anchor.runRange)) {
     throw new OoxmlError('invalid-document-edit')
   }
 
-  const breakReplacements = lineBreakRunReplacements(
-    anchor,
-    text,
-    overlay.source,
-    0,
-  )
-  const replacements =
-    breakReplacements ??
-    anchor.textRanges.map((range, index) => ({
-      ...range,
-      value: index === 0 ? escapeXmlText(text) : '',
-    }))
-  const overlayReplacements = [
-    ...replacements,
-    ...textBreakReplacements(anchor, 0),
-  ]
-  overlayReplacements.forEach((replacement, index) => {
+  const replacements = runTextReplacements(overlay.source, anchor, text, 0)
+  replacements.forEach((replacement, index) => {
     setOverlayReplacement(
       overlay,
       `${anchor.wire.id}:text:${index}`,
@@ -43,7 +30,7 @@ export function replaceTextRunAtAnchor(
     )
   })
   const firstTextElement = anchor.textElements[0]
-  if (!breakReplacements && firstTextElement) {
+  if (!tabbedRunSpan(anchor, text) && firstTextElement) {
     const opening = overlay.source.slice(
       firstTextElement.start,
       firstTextElement.startTagEnd,
@@ -62,6 +49,80 @@ export function replaceTextRunAtAnchor(
   return true
 }
 
+function runPrefix(source: string, anchor: TextRunAnchor) {
+  const opening = source.slice(
+    anchor.runRange.start,
+    anchor.runRange.startTagEnd,
+  )
+  return opening.match(/^<([^:>\s]+):/u)?.[1] ?? 'w'
+}
+
+function runTextSpan(anchor: TextRunAnchor) {
+  const ranges = [
+    ...anchor.textElements,
+    ...anchor.textTabs,
+    ...anchor.textBreaks,
+  ]
+  if (ranges.length === 0) return undefined
+  const start = Math.min(...ranges.map((range) => range.start))
+  const end = Math.max(...ranges.map((range) => range.end))
+  return { start, end }
+}
+
+export function runTextReplacements(
+  source: string,
+  anchor: TextRunAnchor,
+  text: string,
+  origin: number,
+): OverlayReplacement[] {
+  const breakReplacements = lineBreakRunReplacements(
+    anchor,
+    text,
+    source,
+    origin,
+  )
+  if (breakReplacements)
+    return [
+      ...breakReplacements,
+      ...textBreakReplacements(anchor, origin),
+      ...tabReplacements(anchor, origin),
+    ]
+  const span = tabbedRunSpan(anchor, text)
+  if (span)
+    return [
+      {
+        start: span.start - origin,
+        end: span.end - origin,
+        value: wordRunInnerTextXml(runPrefix(source, anchor), text),
+      },
+    ]
+  return [
+    ...anchor.textRanges.map((range, index) => ({
+      start: range.start - origin,
+      end: range.end - origin,
+      value: index === 0 ? escapeXmlText(text) : '',
+    })),
+    ...textBreakReplacements(anchor, origin),
+  ]
+}
+
+export function tabbedRunSpan(anchor: TextRunAnchor, text: string) {
+  if (/[\r\n]/u.test(text)) return undefined
+  if (anchor.textTabs.length === 0 && !text.includes('\t')) return undefined
+  return runTextSpan(anchor)
+}
+
+function tabReplacements(
+  anchor: TextRunAnchor,
+  origin: number,
+): OverlayReplacement[] {
+  return anchor.textTabs.map(({ start, end }) => ({
+    start: start - origin,
+    end: end - origin,
+    value: '',
+  }))
+}
+
 export function textBreakReplacements(
   anchor: TextRunAnchor,
   origin: number,
@@ -77,7 +138,7 @@ export function wordRunInnerTextXml(prefix: string, text: string) {
   return normaliseEditText(text)
     .split('\n')
     .map((line, index) => {
-      const element = textElementXml(prefix, line)
+      const element = lineInnerXml(prefix, line)
       return index === 0 ? element : `<${prefix}:br/>${element}`
     })
     .join('')
@@ -110,7 +171,7 @@ export function lineBreakRunReplacements(
       index === assigned - 1 && lines.length > elements.length
         ? lines
             .slice(elements.length)
-            .map((rest) => `<${prefix}:br/>${textElementXml(prefix, rest)}`)
+            .map((rest) => `<${prefix}:br/>${lineInnerXml(prefix, rest)}`)
             .join('')
         : index < lines.length - 1
           ? `<${prefix}:br/>`
@@ -118,9 +179,19 @@ export function lineBreakRunReplacements(
     return {
       start: element.start - origin,
       end: element.end - origin,
-      value: `${textElementXml(prefix, line)}${extra}`,
+      value: `${lineInnerXml(prefix, line)}${extra}`,
     }
   })
+}
+
+function lineInnerXml(prefix: string, line: string) {
+  return line
+    .split('\t')
+    .map((piece, index) => {
+      const tab = index === 0 ? '' : `<${prefix}:tab/>`
+      return `${tab}${piece ? textElementXml(prefix, piece) : ''}`
+    })
+    .join('')
 }
 
 function textElementXml(prefix: string, text: string) {

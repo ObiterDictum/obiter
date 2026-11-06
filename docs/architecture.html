@@ -3718,6 +3718,26 @@
                   <td>Comment-author or owner/admin comment reopen</td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/delete
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>
+                    Author or matter owner soft deletion; thread deletion hides
+                    replies
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/restore
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>
+                    Author or matter owner recovery; active restores are
+                    idempotent
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">PATCH /api/documents/:id/restore</td>
                   <td class="id">documents.ts</td>
                   <td>Undo soft delete, cascading to its runs</td>
@@ -7891,6 +7911,36 @@
                 </tr>
                 <tr>
                   <td>
+                    <code>set_image_size</code> resizes an inline picture only,
+                    and never as a tracked change
+                  </td>
+                  <td>
+                    The operation rewrites the stored drawing's
+                    <code>wp:extent</code> <code>cx</code>/<code>cy</code> and
+                    the matching <code>a:ext</code> inside
+                    <code>pic:spPr</code> in EMUs, leaving the picture's
+                    relationship, name, geometry and offset untouched, and the
+                    run's preserved fragment is rewritten with it so the page
+                    repaints at the new size before any save. A
+                    <code>wp:anchor</code> drawing, a grouped (<code>wpg</code>)
+                    or shape (<code>wps</code>) drawing, or a drawing with no
+                    numeric extent is refused rather than half-resized, and the
+                    same fail-closed rule rejects the operation under tracked
+                    changes, where the client states that a picture size change
+                    is not recorded as one. The editor keeps the picture inside
+                    the text column and above a 16 px floor, which is a product
+                    bound, not a format one, and a picture inserted but not yet
+                    saved resizes through its insertion instead. Rotation,
+                    flipping and crop are not offered.
+                  </td>
+                  <td class="id">
+                    ooxml/image-edits.ts · ooxml/structure-xml.ts ·
+                    app-shell/document-picture-resize.ts ·
+                    app-shell/use-picture-selection.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>
                     A pending cross-reference paints as a zero-width marker, not
                     the field result
                   </td>
@@ -8404,5 +8454,12 @@
         })
       })()
     </script>
+    <p>
+      Table structure edits add insert_table_row, insert_table_column,
+      delete_table_row, delete_table_column and delete_table operations anchored
+      to cell paragraph identities. Pending structures repaint the table before
+      save. The API must accept these operations before production saves can use
+      them. Tracked table structure changes are refused.
+    </p>
   </body>
 </html>

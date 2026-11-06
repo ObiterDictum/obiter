@@ -469,6 +469,7 @@ it('uses 10pt single-spaced note text when no document size exists', () => {
   const face = paragraphFace(
     { id: 'note', runs: [], preservedXmlFragments: [] },
     [],
+    undefined,
     true,
   )
   expect(face.run.fontSizePx).toBeCloseTo(40 / 3)
@@ -485,6 +486,7 @@ it('keeps an explicit inherited document size for note text', () => {
         sourceFragment: '<w:style><w:rPr><w:sz w:val="28"/></w:rPr></w:style>',
       },
     ],
+    undefined,
     true,
   )
   expect(face.run.fontSizePx).toBeCloseTo(56 / 3)
@@ -494,6 +496,7 @@ it('lets direct note run size override the note fallback', () => {
   const face = paragraphFace(
     { id: 'note', runs: [], preservedXmlFragments: [] },
     [],
+    undefined,
     true,
   )
   expect(

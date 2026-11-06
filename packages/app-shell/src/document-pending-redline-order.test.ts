@@ -38,7 +38,7 @@ it('paints pending replacements after stored revisions at the source run edge, m
       9,
     ],
     ['ins', '<w:t>word rest</w:t>', 'ward rest', 'keep oldwordward rest', 12],
-    ['del', '<w:t>word</w:t><w:tab/>', 'ward', 'keep oldword\tward\t', 13],
+    ['del', '<w:t>word</w:t><w:tab/>', 'ward', 'keep oldword\tward', 13],
   ] as const) {
     const document = await fixture(
       `<w:r><w:t xml:space="preserve">keep </w:t></w:r><w:${kind} w:id="1"><w:r><w:${kind === 'del' ? 'delText' : 't'}>old</w:${kind === 'del' ? 'delText' : 't'}></w:r></w:${kind}><w:r>${source}</w:r>`,

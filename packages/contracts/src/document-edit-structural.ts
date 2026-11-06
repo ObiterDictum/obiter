@@ -128,6 +128,18 @@ export type DocumentEditInsertImageOperation = z.infer<
   typeof insertImageOperationSchema
 >
 
+export const setImageSizeOperationSchema = z
+  .object({
+    type: z.literal('set_image_size'),
+    runId: editIdSchema,
+    widthPx: imageDimensionSchema,
+    heightPx: imageDimensionSchema,
+  })
+  .strict()
+export type DocumentEditSetImageSizeOperation = z.infer<
+  typeof setImageSizeOperationSchema
+>
+
 export const setHyperlinkOperationSchema = z
   .object({
     type: z.literal('set_hyperlink'),
@@ -252,3 +264,64 @@ export const updateTableOfAuthoritiesOperationSchema = z
 export type DocumentEditUpdateTableOfAuthoritiesOperation = z.infer<
   typeof updateTableOfAuthoritiesOperationSchema
 >
+
+const tableCellEditsSchema = z
+  .array(
+    z
+      .object({
+        row: z.number().int().min(0).max(1000),
+        column: z.number().int().min(0).max(1000),
+        text: z.string().max(100000),
+      })
+      .strict(),
+  )
+  .max(10000)
+  .optional()
+
+export const insertTableRowOperationSchema = z
+  .object({
+    type: z.literal('insert_table_row'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+    position: z.enum(['before', 'after']),
+  })
+  .strict()
+export const insertTableColumnOperationSchema = z
+  .object({
+    type: z.literal('insert_table_column'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+    position: z.enum(['before', 'after']),
+  })
+  .strict()
+export const deleteTableRowOperationSchema = z
+  .object({
+    type: z.literal('delete_table_row'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+  })
+  .strict()
+export const deleteTableColumnOperationSchema = z
+  .object({
+    type: z.literal('delete_table_column'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+  })
+  .strict()
+export const deleteTableOperationSchema = z
+  .object({
+    type: z.literal('delete_table'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+  })
+  .strict()

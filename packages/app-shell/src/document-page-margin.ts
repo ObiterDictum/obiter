@@ -279,7 +279,7 @@ function paddedColumns(
   text: string,
   allowSingle: boolean,
 ): { left: string; right: string } | undefined {
-  const value = text.replace(/\u00a0/g, ' ')
+  const value = text.replace(/\t+/gu, ' ').replace(/\u00a0/g, ' ')
   if (!value.trim() || /^\d+$/.test(value.trim())) return undefined
   const parts = value
     .split(/\s{2,}/)

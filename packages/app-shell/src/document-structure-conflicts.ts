@@ -7,7 +7,9 @@ import type { StructuralDraft } from './document-structural-drafts'
 type ParagraphRunSpan = { start: number; end: number }
 
 export type StructuralPlacement =
+  | { kind: 'table-structure'; paragraphId: string }
   | { kind: 'table'; paragraphId: string }
+  | { kind: 'image-size'; paragraphId: string; runId: string }
   | { kind: 'image'; paragraphId: string; offset: number }
   | {
       kind:
@@ -80,11 +82,15 @@ function structuralDraftConflict(
   earlier: StructuralPlacement,
   later: StructuralPlacement,
 ): boolean {
+  if (earlier.kind === 'table-structure' || later.kind === 'table-structure')
+    return earlier.kind !== later.kind
   if (
     earlier.kind === 'table-of-authorities-refresh' ||
     later.kind === 'table-of-authorities-refresh' ||
     earlier.kind === 'footnote-removal' ||
-    later.kind === 'footnote-removal'
+    later.kind === 'footnote-removal' ||
+    earlier.kind === 'image-size' ||
+    later.kind === 'image-size'
   ) {
     return false
   }
@@ -153,6 +159,8 @@ export function conflictingStructure(
 
 export function structuralKindNoun(kind: StructuralPlacement['kind']) {
   switch (kind) {
+    case 'table-structure':
+      return 'table change'
     case 'table':
       return 'table'
     case 'image':
@@ -177,6 +185,8 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'citation mark'
     case 'defined-term':
       return 'defined-term mark'
+    case 'image-size':
+      return 'picture size'
   }
 }
 

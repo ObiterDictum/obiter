@@ -135,8 +135,9 @@ export function useDocumentSave({
   const inFlight = useRef(false)
 
   const plan = useMemo(
-    () => (model ? planDocumentSave(model, drafts.state) : EMPTY_PLAN),
-    [model, drafts.state],
+    () =>
+      model ? planDocumentSave(model, drafts.state, trackChanges) : EMPTY_PLAN,
+    [model, drafts.state, trackChanges],
   )
   const togglePending = model ? trackChanges !== model.trackRevisions : false
   const dirty =
@@ -266,7 +267,7 @@ export function useDocumentSave({
     for (const candidate of candidates.slice(0, MAX_ISOLATION_ATTEMPTS)) {
       const latest = drafts.latestState()
       const without = removeDraftSlots(latest, [candidate])
-      const attempt = planDocumentSave(source, without)
+      const attempt = planDocumentSave(source, without, trackChanges)
       if (attempt.operations.length === 0) continue
       try {
         const result = await sendBatch(
@@ -314,7 +315,7 @@ export function useDocumentSave({
     if (drafts.boundaryPending) return
     if (inFlight.current) return
     const sent = drafts.state
-    const current = planDocumentSave(model, sent)
+    const current = planDocumentSave(model, sent, trackChanges)
     if (current.operations.length === 0 && current.rejections.length > 0) {
       const changeIds = [
         ...new Set(

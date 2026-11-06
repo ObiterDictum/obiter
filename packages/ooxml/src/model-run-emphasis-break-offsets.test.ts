@@ -244,18 +244,18 @@ describe('range emphasis across a text-wrapping break', () => {
     },
   )
 
-  it('keeps a preserved run child and a tab that consume no offset', async () => {
+  it('keeps a preserved run child while a tab consumes one offset', async () => {
     const { document, paragraph } = await loadRun(
       `<w:r><w:t>ab</w:t><w:noBreakHyphen/><w:tab/>${TEXT_BREAK}<w:t>cdef</w:t></w:r>`,
     )
-    expect(paragraph.runs.map((run) => run.text).join('')).toBe('ab\ncdef')
+    expect(paragraph.runs.map((run) => run.text).join('')).toBe('ab\t\ncdef')
 
     applyDocumentEdits(document, [
       {
         type: 'set_run_emphasis',
         paragraphId: paragraph.id,
-        from: 4,
-        to: 6,
+        from: 5,
+        to: 7,
         bold: true,
       },
     ])
@@ -265,7 +265,7 @@ describe('range emphasis across a text-wrapping break', () => {
     expect(count(xml, '<w:tab/>')).toBe(1)
     expect(count(xml, TEXT_BREAK)).toBe(1)
     const runs = paragraphs(await save(document))[0]?.runs ?? []
-    expect(runs.map((run) => run.text).join('')).toBe('ab\ncdef')
+    expect(runs.map((run) => run.text).join('')).toBe('ab\t\ncdef')
     expect(styled(runs, 'bold')).toEqual(['de'])
   })
 

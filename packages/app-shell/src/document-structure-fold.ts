@@ -1,3 +1,4 @@
+import { foldTableStructure } from './document-table-structure-fold'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -9,6 +10,7 @@ import {
   buildTableXml,
   decideTablePlacement,
   IMAGE_RELATIONSHIP_TYPE,
+  setDrawingExtent,
 } from '@obiter/ooxml'
 import { storyTableCellIds } from './document-page-tables'
 import { foldFootnoteDrafts, spliceRunAtOffset } from './document-footnote-fold'
@@ -146,6 +148,11 @@ function foldStory(
   let changed = false
 
   for (const draft of structures) {
+    if (draft.kind === 'table-structure') {
+      foldTableStructure(fragments, paragraphs, draft.operation, nextParaId)
+      changed = true
+      continue
+    }
     if (draft.kind === 'table') {
       const anchorWire = paragraphs.find(
         (paragraph) => paragraph.id === draft.paragraphId,
@@ -190,6 +197,31 @@ function foldStory(
       for (const id of cellParaIds) tableCellIds.add(`para-w14-${id}`)
       fragments.push(buildTableXml(draft.rows, draft.columns, cellParaIds))
       tails.set(draft.paragraphId, wires[wires.length - 1] ?? anchor)
+      changed = true
+      continue
+    }
+    if (draft.kind === 'image-size') {
+      const paragraph = paragraphs.find((item) => item.id === draft.paragraphId)
+      const run = paragraph?.runs.find((item) => item.id === draft.runId)
+      const drawing = run?.preservedXmlFragments.find((fragment) =>
+        /<w:drawing\b/i.test(fragment),
+      )
+      const resized = drawing ? setDrawingExtent(drawing, draft) : undefined
+      if (!(paragraph && run && resized)) continue
+      const runs = paragraph.runs.map((item) =>
+        item.id === draft.runId
+          ? {
+              ...item,
+              preservedXmlFragments: item.preservedXmlFragments.map(
+                (fragment) => (fragment === drawing ? resized : fragment),
+              ),
+            }
+          : item,
+      )
+      paragraphs.splice(paragraphs.indexOf(paragraph), 1, {
+        ...paragraph,
+        runs,
+      })
       changed = true
       continue
     }

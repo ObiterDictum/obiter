@@ -16,6 +16,8 @@ import type {
   DraftState,
 } from './document-draft-state'
 import { storyTableCellIds } from './document-page-tables'
+import { pictureSizeRefusal } from './document-picture-resize'
+import type { StructuralDraft } from './document-structural-drafts'
 import { slotLabel } from './document-save-slots'
 import {
   conflictingStructure,
@@ -33,6 +35,48 @@ import {
   tableOfAuthoritiesUpdateBlock,
 } from './document-toa-availability'
 
+const PICTURE_NOT_TRACKED =
+  'Picture size changes are not recorded as tracked changes'
+
+function imageSizeBlock({
+  wire,
+  structure,
+  kept,
+  changes,
+  trackChanges,
+}: {
+  wire: DocumentParagraphWire | undefined
+  structure: StructuralDraft & { kind: 'image-size' }
+  kept: readonly StructuralDraft[]
+  changes: DocumentModelWire['changes']
+  trackChanges: boolean
+}) {
+  const { runId } = structure
+  if (
+    kept.some((item) => item.kind === 'image' && `${item.id}:drawing` === runId)
+  ) {
+    return undefined
+  }
+  if (
+    trackChanges ||
+    changes.some(
+      (change) =>
+        change.runId === runId || change.paragraphId === structure.paragraphId,
+    )
+  ) {
+    return PICTURE_NOT_TRACKED
+  }
+  if (!wire)
+    return 'The paragraph this picture sits in is no longer in the document.'
+  const run = wire.runs.find((item) => item.id === runId)
+  const drawing = run?.preservedXmlFragments.find((fragment) =>
+    /<w:drawing\b/i.test(fragment),
+  )
+  if (!drawing)
+    return 'The picture this size belongs to is no longer in the document.'
+  return pictureSizeRefusal(drawing)
+}
+
 export function partitionStructureSlots({
   model,
   state,
@@ -44,6 +88,7 @@ export function partitionStructureSlots({
   covered,
   blocked,
   blockedStructureReasons,
+  trackChanges,
 }: {
   model: DocumentModelWire
   state: DraftState
@@ -55,6 +100,7 @@ export function partitionStructureSlots({
   covered: DraftSlot[]
   blocked: BlockedDraft[]
   blockedStructureReasons: Map<string, string>
+  trackChanges: boolean
 }) {
   let tocFacts:
     | { cellIds: ReadonlySet<string>; headings: DocumentParagraphWire[] }
@@ -104,6 +150,16 @@ export function partitionStructureSlots({
       anchorStoryKind !== undefined &&
       !PAGE_STORY_KINDS.has(anchorStoryKind)
     const wire = paragraphWires.get(structure.paragraphId)
+    const pictureBlock =
+      structure.kind === 'image-size'
+        ? imageSizeBlock({
+            wire,
+            structure,
+            kept: keep.structures,
+            changes: model.changes,
+            trackChanges,
+          })
+        : undefined
     const tableOfContentsBlock =
       structure.kind === 'table-of-contents' && wire !== undefined
         ? (tableOfContentsAnchorBlock(
@@ -201,6 +257,7 @@ export function partitionStructureSlots({
       missingTarget ||
       nonBodyAnchor ||
       nonPageAnchor ||
+      pictureBlock ||
       tableOfContentsBlock ||
       tableOfAuthoritiesBlock ||
       refreshBlock ||
@@ -226,7 +283,8 @@ export function partitionStructureSlots({
               ? 'The paragraph this was placed after is marked for deletion.'
               : coveredByRefresh
                 ? 'This is inside a table of authorities that is already queued to update.'
-                : (tableOfContentsBlock ??
+                : (pictureBlock ??
+                  tableOfContentsBlock ??
                   tableOfAuthoritiesBlock ??
                   refreshBlock ??
                   (definedTermDrift

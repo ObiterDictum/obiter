@@ -68,6 +68,17 @@ export function planOperation(
     }
     return { ...operation, paragraph }
   }
+  if (operation.type === 'set_image_size') {
+    const run = requireEditableRun(
+      document,
+      runParagraphs,
+      operation.runId,
+      false,
+    )
+    const paragraph = runParagraphs.get(operation.runId)
+    if (!paragraph) throw new OoxmlError('model-node-not-editable')
+    return { ...operation, run, paragraph }
+  }
   if (operation.type === 'set_run_emphasis') {
     const runId = operation.runId
     if (runId === undefined) {

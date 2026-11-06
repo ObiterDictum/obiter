@@ -22,6 +22,7 @@ import { EditorFindBar } from './editor-find-bar'
 import { EditorCommandPalette } from './editor-command-palette'
 import { EditorFormattingPanel } from './editor-formatting-panel'
 import { EditorSelectionToolbar } from './editor-selection-toolbar'
+import { PictureSizeToolbar } from './picture-size-toolbar'
 import { InsertTableDialog } from './insert-table-dialog'
 import { InsertLinkDialog } from './insert-link-dialog'
 import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
@@ -198,6 +199,7 @@ function DocxWorkspaceChromeInner({
         onOpenChange={setPaletteOpen}
         menus={menus}
       />
+      <PictureSizeToolbar control={props.picture} />
       <EditorSelectionToolbar
         visible={selectionActive && props.canEdit}
         format={props.format}
@@ -388,6 +390,7 @@ export function docxWorkspaceChrome({
         ? 'The edit history needs a reload before saving.'
         : 'There are no unsaved changes.',
     format,
+    picture: drafts.picture.control,
     clipboard: documentClipboardToolbar({
       editable: true,
       selectionActive,

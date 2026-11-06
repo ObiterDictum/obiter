@@ -1,3 +1,4 @@
+import { editTableStructure } from './table-structure-edits'
 import {
   insertParagraphRuns,
   type DocumentParagraphWire,
@@ -13,7 +14,7 @@ import { insertCrossReference } from './cross-reference-edits'
 import { markDefinedTerm } from './defined-term-edits'
 import { deleteFootnote, insertFootnote } from './footnote-edits'
 import { setHyperlink } from './hyperlink-edits'
-import { insertImage } from './image-edits'
+import { insertImage, setImageSize } from './image-edits'
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import {
   isSectionOperation,
@@ -47,6 +48,7 @@ export type EditApplyState = {
   postAnchorTails: Map<string, DocumentParagraphWire>
   tableCounts: Map<string, number>
   imageCounts: Map<string, number>
+  imageSizeCounts: Map<string, number>
   structureCounts: Map<string, number>
   breakOffsets: Map<string, number[]>
   rangeEmphasis: Map<ParagraphAnchor, RunEmphasisRange[]>
@@ -63,6 +65,7 @@ export function newEditApplyState(): EditApplyState {
     postAnchorTails: new Map(),
     tableCounts: new Map(),
     imageCounts: new Map(),
+    imageSizeCounts: new Map(),
     structureCounts: new Map(),
     breakOffsets: new Map(),
     rangeEmphasis: new Map(),
@@ -262,6 +265,15 @@ export function applyPlannedOperation(
   } else if (operation.type === 'insert_section_break') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) insertSectionBreak(document, operation.paragraph)
+  } else if (
+    operation.type === 'insert_table_row' ||
+    operation.type === 'insert_table_column' ||
+    operation.type === 'delete_table_row' ||
+    operation.type === 'delete_table_column' ||
+    operation.type === 'delete_table'
+  ) {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    editTableStructure(document, operation.paragraph, operation)
   } else if (operation.type === 'insert_table') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {
@@ -302,6 +314,18 @@ export function applyPlannedOperation(
       insertImage(document, operation.paragraph, operation, occurrence, lineage)
       state.imageCounts.set(key, occurrence + 1)
     }
+  } else if (operation.type === 'set_image_size') {
+    if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+    const key = operation.run.wire.id
+    const occurrence = state.imageSizeCounts.get(key) ?? 0
+    setImageSize(
+      document,
+      operation.paragraph,
+      operation.run,
+      operation,
+      occurrence,
+    )
+    state.imageSizeCounts.set(key, occurrence + 1)
   } else if (operation.type === 'set_hyperlink') {
     if (trackedWriter) throw new OoxmlError('model-node-not-editable')
     if (!deletedLater) {

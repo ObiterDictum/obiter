@@ -120,6 +120,7 @@ export function paragraphMeasure(
   const face = paragraphFace(
     paragraph,
     model.styles,
+    model.defaultTabStopTwips,
     partName === 'word/footnotes.xml' || partName === 'word/endnotes.xml',
   )
   const linePx = paragraphLineHeightPx(face)

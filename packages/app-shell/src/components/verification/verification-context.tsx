@@ -219,7 +219,7 @@ export function VerificationWorkspaceProvider({
     runsError: runs.isError ? runs.error : null,
     documentLost: document.isError,
     findings,
-    findingsPending: findingsQuery.isPending,
+    findingsPending: findingsRunId !== null && findingsQuery.isPending,
     findingsError: findingsQuery.isError ? findingsQuery.error : null,
     retryFindings,
     hasNextPage: findingsQuery.hasNextPage,

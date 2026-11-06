@@ -1,3 +1,5 @@
+import { effectiveParagraph } from '../../document-model-text'
+import type { ExtraRuns } from '../../document-word-edits'
 import {
   type PendingRedlines,
   pendingParagraphDeletion,
@@ -15,6 +17,7 @@ import {
 } from '../../document-format-types'
 import {
   cellWrapWidthPx,
+  tableBordered,
   type DisplayTableCell,
 } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
@@ -29,6 +32,7 @@ import type { NoteKind } from '../../document-page-notes'
 import type { ParagraphSelectionRange } from './model-run'
 import { ModelParagraph } from './model-paragraph-memo'
 import type { ParagraphWordEdit } from './model-paragraph'
+import type { PictureInteraction } from './picture-frame'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import {
   type ParagraphNeighborResolver,
@@ -41,6 +45,7 @@ import { PageDrawing } from './page-drawing'
 const noSelection = () => undefined
 
 export type BlockContext = {
+  extraRuns?: ExtraRuns
   model: DocumentModelWire
   pendingRedlines?: PendingRedlines
   storyPartName: string
@@ -80,6 +85,7 @@ export type BlockContext = {
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
   selectionHandlers?: ParagraphSelectionHandlers
+  picture?: PictureInteraction
   neighbors?: ParagraphNeighborResolver
   onFocusParagraph?: (paragraphId: string) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
@@ -101,6 +107,7 @@ export function renderBlock(
       <PageTable
         key={`tbl-${index}`}
         table={block.table}
+        bordered={tableBordered(block.table, ctx.model.styles)}
         renderCell={(cell) =>
           cell.paragraphIds.flatMap((id) => {
             const paragraph = ctx.paragraphs.find((item) => item.id === id)
@@ -119,7 +126,11 @@ export function renderBlock(
             return [
               <ModelParagraph
                 key={paragraph.id}
-                paragraph={paragraph}
+                paragraph={effectiveParagraph(
+                  paragraph,
+                  {},
+                  ctx.extraRuns?.[paragraph.id] ?? [],
+                )}
                 changes={ctx.model.changes}
                 pendingChanges={pendingParagraphChanges(
                   ctx.pendingRedlines,
@@ -147,6 +158,7 @@ export function renderBlock(
                 relationships={ctx.model.relationships}
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
+                defaultTabStopTwips={ctx.model.defaultTabStopTwips}
                 listMarker={ctx.listMarkers.get(paragraph.id)}
                 pageNumber={ctx.pageNumber}
                 pageReferences={ctx.pageReferences}
@@ -155,6 +167,7 @@ export function renderBlock(
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
                 story={ctx.storyOf(paragraph.id)}
                 linkOverlay={ctx.linkOverlays?.get(paragraph.id)}
+                picture={ctx.picture}
               />,
             ]
           })
@@ -230,6 +243,7 @@ export function renderBlock(
       relationships={ctx.model.relationships}
       imageUrls={ctx.imageUrls}
       styles={ctx.model.styles}
+      defaultTabStopTwips={ctx.model.defaultTabStopTwips}
       from={block.from}
       to={block.to}
       padLeftPx={block.padLeftPx}
@@ -244,6 +258,7 @@ export function renderBlock(
       noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
       story={ctx.storyOf(paragraph.id)}
       linkOverlay={ctx.linkOverlays?.get(paragraph.id)}
+      picture={ctx.picture}
     />,
   ]
 }
@@ -339,6 +354,7 @@ export function PageOverlays({
                 relationships={model.relationships}
                 imageUrls={imageUrls}
                 styles={model.styles}
+                defaultTabStopTwips={model.defaultTabStopTwips}
               />,
             ]
           })}

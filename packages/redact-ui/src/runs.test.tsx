@@ -119,6 +119,14 @@ describe('RedactionRunsView', () => {
     expect(openPicker).toHaveBeenCalled()
   })
 
+  it('describes the schedule as a list of decisions that never reproduces the removed words', () => {
+    render(<RedactionRunsView onOpenRun={vi.fn()} />)
+
+    const schedule = screen.getByText('Schedule').nextElementSibling
+    expect(schedule?.textContent).toContain('not the words removed')
+    expect(schedule?.textContent).not.toContain('original redacted text')
+  })
+
   it('keeps delete behind a menu and a confirmation, away from Continue', () => {
     const mutateAsync = vi.fn()
     hooks.useDeleteRedactionRun.mockReturnValue({ mutateAsync })

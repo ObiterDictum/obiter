@@ -1,51 +1,73 @@
 import { cn } from '@obiter/ui'
 import type { ReactNode } from 'react'
-import type { DisplayTable, DisplayTableCell } from '../../document-page-tables'
+import {
+  tablePaintRows,
+  type DisplayTable,
+  type DisplayTableCell,
+} from '../../document-page-tables'
 
 export function PageTable({
   table,
+  bordered,
   renderCell,
 }: {
   table: DisplayTable
+  bordered: boolean
   renderCell: (cell: DisplayTableCell) => ReactNode
 }) {
   return (
     <table className="w-full table-fixed border-collapse">
       <tbody>
-        {table.rows.map((row, rowIndex) => (
+        {tablePaintRows(table).map(({ row, cells }, rowIndex) => (
           <tr
             key={rowIndex}
             style={row.heightPx ? { height: row.heightPx } : undefined}
           >
-            {row.cells.map((cell, cellIndex) => (
-              <td
-                key={cellIndex}
-                colSpan={cell.span}
-                className={cn(
-                  'align-middle',
-                  cell.fill ? 'p-0' : 'px-1 py-0.5',
-                  table.bordered && 'border border-[#c5c1b8]',
-                )}
-                style={{
-                  ...(cell.fill ? { backgroundColor: cell.fill } : {}),
-                  ...(cell.widthPct ? { width: `${cell.widthPct}%` } : {}),
-                }}
-              >
-                <div
+            {cells.map(({ cell, rowSpan }, cellIndex) => {
+              const continued = cell.vMerge === 'continue'
+              const fill = continued ? cell.mergeFill : cell.fill
+              const vAlign = continued ? cell.mergeVAlign : cell.vAlign
+              return (
+                <td
+                  key={cellIndex}
+                  colSpan={cell.span}
+                  rowSpan={rowSpan > 1 ? rowSpan : undefined}
+                  data-table-cell
                   className={cn(
-                    'flex h-full w-full flex-col justify-center',
-                    cell.fill && 'min-h-12',
+                    vAlign === 'top'
+                      ? 'align-top'
+                      : vAlign === 'bottom'
+                        ? 'align-bottom'
+                        : 'align-middle',
+                    fill ? 'p-0' : 'px-1 py-0.5',
+                    bordered && 'border border-[#c5c1b8]',
                   )}
-                  style={
-                    cell.minHeightPx
-                      ? { minHeight: cell.minHeightPx }
-                      : undefined
-                  }
+                  style={{
+                    ...(fill ? { backgroundColor: fill } : {}),
+                    ...(cell.widthPct ? { width: `${cell.widthPct}%` } : {}),
+                  }}
                 >
-                  {renderCell(cell)}
-                </div>
-              </td>
-            ))}
+                  <div
+                    className={cn(
+                      'flex h-full w-full flex-col',
+                      vAlign === 'top'
+                        ? 'justify-start'
+                        : vAlign === 'bottom'
+                          ? 'justify-end'
+                          : 'justify-center',
+                      fill && 'min-h-12',
+                    )}
+                    style={
+                      cell.minHeightPx
+                        ? { minHeight: cell.minHeightPx }
+                        : undefined
+                    }
+                  >
+                    {continued ? null : renderCell(cell)}
+                  </div>
+                </td>
+              )
+            })}
           </tr>
         ))}
       </tbody>

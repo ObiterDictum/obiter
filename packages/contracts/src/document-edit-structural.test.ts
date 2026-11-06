@@ -46,6 +46,13 @@ const crossReference = {
   targetParagraphId: 'para_2',
 }
 
+const imageSize = {
+  type: 'set_image_size' as const,
+  runId: 'run_1',
+  widthPx: 240,
+  heightPx: 160,
+}
+
 const pageNumber = {
   type: 'insert_page_number' as const,
   paragraphId: 'para_1',
@@ -207,6 +214,27 @@ describe('structural edit contracts', () => {
     ['a missing target', { ...crossReference, targetParagraphId: '' }],
     ['an extra field', { ...crossReference, bookmark: 'x' }],
   ])('rejects a cross-reference with %s', (_label, operation) => {
+    expect(parse([operation]).success).toBe(false)
+  })
+
+  it('accepts a picture size change on a run', () => {
+    const parsed = parse([imageSize])
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.operations[0]).toEqual(imageSize)
+  })
+
+  it.each([
+    ['a missing run', { ...imageSize, runId: '' }],
+    ['a zero width', { ...imageSize, widthPx: 0 }],
+    ['a fractional height', { ...imageSize, heightPx: 12.5 }],
+    [
+      'an oversized width',
+      { ...imageSize, widthPx: DOCUMENT_EDIT_IMAGE_DIMENSION_MAX + 1 },
+    ],
+    ['a paragraph instead of a run', { ...imageSize, paragraphId: 'para_1' }],
+    ['an extra field', { ...imageSize, offset: 3 }],
+  ])('rejects a picture size change with %s', (_label, operation) => {
     expect(parse([operation]).success).toBe(false)
   })
 

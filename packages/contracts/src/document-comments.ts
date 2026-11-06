@@ -151,6 +151,20 @@ export const documentCommentListResponseSchema = z
     comments: z.array(documentCommentSchema),
     importedComments: z.array(documentImportedCommentThreadSchema),
     orphanedReplies: z.array(documentCommentReplySchema),
+    deletableCommentIds: z.array(z.string().min(1)).optional(),
+    deletedComments: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            body: z.string(),
+            authorName: z.string(),
+            deletedAt: z.string().datetime({ offset: true }),
+            isReply: z.boolean(),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict()
 export type DocumentCommentListResponse = z.infer<
@@ -193,4 +207,25 @@ export const documentCommentReopenResponseSchema = z
   .strict()
 export type DocumentCommentReopenResponse = z.infer<
   typeof documentCommentReopenResponseSchema
+>
+
+export const documentCommentDeleteRequestSchema = z.object({}).strict()
+export type DocumentCommentDeleteRequest = z.infer<
+  typeof documentCommentDeleteRequestSchema
+>
+export const documentCommentDeleteResponseSchema = z
+  .object({ commentId: z.string().min(1) })
+  .strict()
+export type DocumentCommentDeleteResponse = z.infer<
+  typeof documentCommentDeleteResponseSchema
+>
+export const documentCommentRestoreRequestSchema = z.object({}).strict()
+export type DocumentCommentRestoreRequest = z.infer<
+  typeof documentCommentRestoreRequestSchema
+>
+export const documentCommentRestoreResponseSchema = z
+  .object({ commentId: z.string().min(1) })
+  .strict()
+export type DocumentCommentRestoreResponse = z.infer<
+  typeof documentCommentRestoreResponseSchema
 >

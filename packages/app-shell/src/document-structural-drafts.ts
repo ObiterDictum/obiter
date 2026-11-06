@@ -6,6 +6,11 @@ import {
   DOCUMENT_EDIT_TABLE_MAX_COLUMNS,
   DOCUMENT_EDIT_TABLE_MAX_ROWS,
   documentEditHyperlinkTargetSchema,
+  insertTableRowOperationSchema,
+  insertTableColumnOperationSchema,
+  deleteTableRowOperationSchema,
+  deleteTableColumnOperationSchema,
+  deleteTableOperationSchema,
   documentEditImageContentTypeSchema,
   type DocumentEditImageContentType,
   type DocumentEditOperation,
@@ -30,6 +35,15 @@ export type StructuralImageDraft = {
   widthPx: number
   heightPx: number
   name: string
+}
+
+export type StructuralImageSizeDraft = {
+  id: string
+  kind: 'image-size'
+  paragraphId: string
+  runId: string
+  widthPx: number
+  heightPx: number
 }
 
 export type StructuralLinkDraft = {
@@ -103,9 +117,18 @@ export function footnoteNoteParagraphId(draft: { id: string }) {
   return `${draft.id}:note`
 }
 
+type TableStructureDraft = {
+  id: string
+  kind: 'table-structure'
+  paragraphId: string
+  operation: import('@obiter/ooxml').TableStructureOperation
+}
+
 export type StructuralDraft =
+  | TableStructureDraft
   | StructuralTableDraft
   | StructuralImageDraft
+  | StructuralImageSizeDraft
   | StructuralLinkDraft
   | StructuralCrossReferenceDraft
   | StructuralPageNumberDraft
@@ -117,6 +140,20 @@ export type StructuralDraft =
   | StructuralDefinedTermDraft
 
 export const structuralDraftSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('table-structure'),
+      paragraphId: z.string().min(1),
+      operation: z.union([
+        insertTableRowOperationSchema,
+        insertTableColumnOperationSchema,
+        deleteTableRowOperationSchema,
+        deleteTableColumnOperationSchema,
+        deleteTableOperationSchema,
+      ]),
+    })
+    .strict(),
   z
     .object({
       id: z.string().min(1),
@@ -137,6 +174,16 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
       widthPx: z.number().int().min(1).max(DOCUMENT_EDIT_IMAGE_DIMENSION_MAX),
       heightPx: z.number().int().min(1).max(DOCUMENT_EDIT_IMAGE_DIMENSION_MAX),
       name: z.string().min(1).max(DOCUMENT_EDIT_IMAGE_NAME_MAX_LENGTH),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('image-size'),
+      paragraphId: z.string().min(1),
+      runId: z.string().min(1),
+      widthPx: z.number().int().min(1).max(DOCUMENT_EDIT_IMAGE_DIMENSION_MAX),
+      heightPx: z.number().int().min(1).max(DOCUMENT_EDIT_IMAGE_DIMENSION_MAX),
     })
     .strict(),
   z
@@ -241,8 +288,22 @@ export function structuralEditOperations(
   extraRuns: Record<string, DocumentTextRunWire[]> = {},
 ): DocumentEditOperation[] {
   const operations: DocumentEditOperation[] = []
+  const pictureSizes = new Map(
+    structures
+      .filter((item) => item.kind === 'image-size')
+      .map((item) => [item.runId, item] as const),
+  )
+  const pendingPictureRunIds = new Set(
+    structures
+      .filter((item) => item.kind === 'image')
+      .map((item) => `${item.id}:drawing`),
+  )
   for (const structure of structures) {
     if (deletedIds.has(structure.paragraphId)) continue
+    if (structure.kind === 'table-structure') {
+      operations.push(structure.operation)
+      continue
+    }
     if (structure.kind === 'table') {
       operations.push({
         type: 'insert_table',
@@ -253,15 +314,26 @@ export function structuralEditOperations(
       continue
     }
     if (structure.kind === 'image') {
+      const resized = pictureSizes.get(`${structure.id}:drawing`)
       operations.push({
         type: 'insert_image',
         paragraphId: structure.paragraphId,
         offset: structure.offset,
         contentType: structure.contentType,
         dataBase64: structure.dataBase64,
+        widthPx: resized?.widthPx ?? structure.widthPx,
+        heightPx: resized?.heightPx ?? structure.heightPx,
+        name: structure.name,
+      })
+      continue
+    }
+    if (structure.kind === 'image-size') {
+      if (pendingPictureRunIds.has(structure.runId)) continue
+      operations.push({
+        type: 'set_image_size',
+        runId: structure.runId,
         widthPx: structure.widthPx,
         heightPx: structure.heightPx,
-        name: structure.name,
       })
       continue
     }

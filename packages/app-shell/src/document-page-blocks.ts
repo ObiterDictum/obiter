@@ -23,6 +23,7 @@ import {
 import {
   rowPaintHeight,
   cellWrapWidthPx,
+  tableBordered,
   type DisplayTable,
   type StoryBlock,
 } from './document-page-tables'
@@ -304,7 +305,7 @@ export function tableHeight(
         return (
           Math.max(textHeight, cell.minHeightPx ?? 0, cell.fill ? 48 : 0) +
           (cell.fill ? 0 : 4) +
-          (table.bordered ? 1 : 0)
+          (tableBordered(table, model.styles) ? 1 : 0)
         )
       }),
     )
