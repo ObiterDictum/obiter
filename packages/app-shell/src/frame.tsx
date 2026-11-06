@@ -33,7 +33,6 @@ import {
   useStoredText,
 } from './shell-preferences'
 import { useShellShortcuts } from './shell-shortcuts'
-import { AppUpdateNotice } from './update-notice'
 import { useMediaQuery } from './use-media-query'
 
 const ContentsPanelLazy = lazy(() =>
@@ -87,7 +86,9 @@ export function AppShellLayout({
   } else {
     body = (
       <ShellContentsProvider>
-        <ShellFrame platform={platform}>{children}</ShellFrame>
+        <ShellFrame platform={platform} loadedBuild={loadedBuild}>
+          {children}
+        </ShellFrame>
       </ShellContentsProvider>
     )
   }
@@ -95,7 +96,6 @@ export function AppShellLayout({
   return (
     <ToastProvider>
       {body}
-      <AppUpdateNotice platform={platform} loadedBuild={loadedBuild} />
       <Toaster />
     </ToastProvider>
   )
@@ -104,9 +104,11 @@ export function AppShellLayout({
 export function ShellFrame({
   children,
   platform,
+  loadedBuild = null,
 }: {
   children: ReactNode
   platform: AppPlatform
+  loadedBuild?: string | null
 }) {
   const { data: me } = useQuery(currentUserQueryOptions())
   const pathname = useRouterState({
@@ -230,6 +232,7 @@ export function ShellFrame({
           )}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <TitleBar
+              loadedBuild={loadedBuild}
               platform={platform}
               navLabel={navLabel}
               navExpanded={home ? !sidebarCollapsed : contentsVisible}

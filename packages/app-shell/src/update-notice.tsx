@@ -1,5 +1,6 @@
 import type { AppPlatform } from '@obiter/contracts'
-import { Button } from '@obiter/ui'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
+import { ArrowClockwise } from '@obiter/ui/icons/shell'
 import { useEffect, useState } from 'react'
 import { watchServedBuild } from './build-version'
 import { readDesktopBridge } from './lib/desktop-bridge'
@@ -35,34 +36,30 @@ export function AppUpdateNotice({
   const desktop = platform === 'desktop'
   const webBuildChanged = useNewWebBuild(desktop ? null : loadedBuild)
   const desktopReady = useDesktopUpdateReady(desktop)
-  const [dismissed, setDismissed] = useState(false)
-
-  if (dismissed || !(desktop ? desktopReady : webBuildChanged)) return null
-
+  if (!(desktop ? desktopReady : webBuildChanged)) return null
+  const label = desktop
+    ? 'Update ready. Restart to update'
+    : 'Update available. Reload to update'
   return (
-    <div
-      role="status"
-      className="fixed bottom-4 left-4 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border border-line bg-raised py-2 pr-2 pl-4 shadow-md max-md:right-4 max-md:bottom-16"
-    >
-      <p className="min-w-0 flex-1 text-meta text-ink">
-        {desktop
-          ? 'A new version of Obiter is ready.'
-          : 'A new version of Obiter is available.'}
-      </p>
-      <Button variant="ghost" size="sm" onClick={() => setDismissed(true)}>
-        Later
-      </Button>
-      <Button
-        variant="primary"
-        size="sm"
-        onClick={() =>
-          desktop
-            ? void readDesktopBridge()?.restartToUpdate()
-            : window.location.reload()
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className="app-no-drag relative grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-ring"
+            onClick={() =>
+              desktop
+                ? void readDesktopBridge()?.restartToUpdate()
+                : window.location.reload()
+            }
+          >
+            <ArrowClockwise size={16} aria-hidden />
+            <span className="absolute top-0 right-0 size-1.5 rounded-full bg-accent" />
+          </button>
         }
-      >
-        {desktop ? 'Restart to update' : 'Reload'}
-      </Button>
-    </div>
+      />
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
   )
 }

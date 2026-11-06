@@ -302,9 +302,9 @@ The server database does **not** replace the local loop:
 
 ## New-version prompt (web)
 
-After a deploy, open tabs keep running the bundle they loaded. The production build bakes the same commit its marker records into the client as `__OBITER_BUILD_COMMIT__` (`apps/web/vite.config.ts`, from `buildIdentity` in `build-provenance.mjs`), and `serve.mjs` serves the running commit at `/.well-known/obiter-version`. The shell (`packages/app-shell/src/build-version.ts`) asks that route every 5 minutes while the tab is visible and whenever the window regains focus. When the served commit differs from the one the page loaded, it stops polling and shows "A new version of Obiter is available." with Reload and Later. It never reloads by itself, because a person may be editing.
+After a deploy, open tabs keep running the bundle they loaded. The production build bakes the same commit its marker records into the client as `__OBITER_BUILD_COMMIT__` (`apps/web/vite.config.ts`, from `buildIdentity` in `build-provenance.mjs`), and `serve.mjs` serves the running commit at `/.well-known/obiter-version`. The shell (`packages/app-shell/src/build-version.ts`) asks that route every 5 minutes while the tab is visible and whenever the window regains focus. When the served commit differs from the one the page loaded, it stops polling and shows a compact update icon in the top bar, labelled "Update available. Reload to update". It never reloads by itself, because a person may be editing.
 
 - A failed request, an error status or an unreadable body is silent: the next poll tries again.
 - The dev server defines the commit as `null`, so a dev tab never polls.
-- An image built without `OBITER_BUILD_COMMIT` has no commit, so it serves no version route and its tabs never prompt. Dokploy must pass the build arg for the prompt to work.
+- An image built without `OBITER_BUILD_COMMIT` has no commit, so it serves no version route and its tabs never prompt. Production deploys with Kamal behind Cloudflare; the image receives `OBITER_BUILD_COMMIT` at build time.
 - The polling hook uses `useEffect` because it syncs with timers and the window focus event, which RULES.md allows.

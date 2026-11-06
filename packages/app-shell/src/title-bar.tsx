@@ -1,3 +1,4 @@
+import { AppUpdateNotice } from './update-notice'
 import { Link, useRouter, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -77,6 +78,7 @@ function TitleButton({
 
 export function TitleBar({
   platform,
+  loadedBuild = null,
   navLabel,
   navExpanded,
   navControls,
@@ -84,6 +86,7 @@ export function TitleBar({
   navRef,
 }: {
   platform: AppPlatform
+  loadedBuild?: string | null
   navLabel: string
   navExpanded: boolean
   navControls: string
@@ -175,6 +178,7 @@ export function TitleBar({
         ))}
       </nav>
 
+      <AppUpdateNotice platform={platform} loadedBuild={loadedBuild} />
       <PaletteTrigger />
     </header>
   )
