@@ -10,6 +10,7 @@ import {
 } from 'bun:test'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { DesktopBridge } from './lib/desktop-bridge'
+import { registerUpdateSave } from './update-saves'
 import { AppUpdateNotice } from './update-notice'
 
 type BridgeWindow = Window & { obiterDesktop?: Partial<DesktopBridge> }
@@ -140,5 +141,60 @@ describe('the desktop update notice', () => {
     const view = render(<AppUpdateNotice platform="desktop" />)
     view.unmount()
     expect(bridge.unsubscribe).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('required updates', () => {
+  it('cannot be dismissed and waits when a document save fails', async () => {
+    serveBuild('b')
+    const unregister = registerUpdateSave(async () => false)
+    const reload = spyOn(window.location, 'reload').mockImplementation(() => {})
+    try {
+      render(<AppUpdateNotice platform="web" loadedBuild="a" requireUpdates />)
+      await focusTab()
+      const dialog = await screen.findByRole('dialog')
+      expect(dialog.textContent).toContain(
+        'Your organisation requires the latest version of Obiter.',
+      )
+      expect(screen.queryByRole('button', { name: /close/i })).toBeNull()
+      fireEvent.keyDown(dialog, { key: 'Escape' })
+      expect(screen.getByRole('dialog')).toBeTruthy()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      expect(screen.getByRole('alert').textContent).toContain(
+        'The update waits until your work is saved',
+      )
+      expect(screen.getByRole('dialog')).toBeTruthy()
+      expect(reload).not.toHaveBeenCalled()
+    } finally {
+      unregister()
+      reload.mockRestore()
+    }
+  })
+  it('flushes pending saves before applying a required update', async () => {
+    serveBuild('b')
+    const order: string[] = []
+    const unregister = registerUpdateSave(async () => {
+      order.push('saved')
+      return true
+    })
+    const reload = spyOn(window.location, 'reload').mockImplementation(() => {
+      order.push('reload')
+    })
+    try {
+      render(<AppUpdateNotice platform="web" loadedBuild="a" requireUpdates />)
+      await focusTab()
+      await screen.findByRole('dialog')
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Update now' }))
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      expect(order).toEqual(['saved', 'reload'])
+    } finally {
+      unregister()
+      reload.mockRestore()
+    }
   })
 })

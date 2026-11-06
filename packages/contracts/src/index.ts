@@ -481,3 +481,4 @@ export {
   resolveCaseDocumentIdFromSlug,
 } from './case-paths'
 export { planTextRevision } from './text-revision-plan'
+export * from './organisation-update-policy'
