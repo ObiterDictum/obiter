@@ -72,10 +72,15 @@ export function useChangeReview({
   const [active, setActive] = useState<{ id: string; index: number } | null>(
     null,
   )
+  const [bulkConfirm, setBulkConfirm] = useState<{
+    action: 'accept' | 'reject'
+    changeIds: string[]
+  } | null>(null)
   const documentRef = useRef(documentId)
   if (documentRef.current !== documentId) {
     documentRef.current = documentId
     setActive(null)
+    setBulkConfirm(null)
   }
 
   const listed = changes.findIndex((change) => change.id === active?.id)
@@ -258,11 +263,20 @@ export function useChangeReview({
       if (index >= 0) setActive({ id: current.id, index })
       decide(action, [current.id])
     },
-    decideAll: (action: 'accept' | 'reject') =>
-      decide(
+    requestBulkDecision: (action: 'accept' | 'reject') => {
+      if (!model || bulkUnavailable) return
+      setBulkConfirm({
         action,
-        supported.map((change) => change.id),
-      ),
+        changeIds: supported.map((change) => change.id),
+      })
+    },
+    confirmBulkDecision: () => {
+      const pending = bulkConfirm
+      setBulkConfirm(null)
+      if (pending) decide(pending.action, pending.changeIds)
+    },
+    cancelBulkDecision: () => setBulkConfirm(null),
+    bulkConfirm,
     decideSelected: (action: 'accept' | 'reject', changeIds: string[]) => {
       const chosen = new Set(changeIds)
       decide(
