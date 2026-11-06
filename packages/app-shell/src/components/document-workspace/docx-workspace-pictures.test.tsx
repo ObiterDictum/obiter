@@ -501,6 +501,40 @@ describe('the picture size control', () => {
     }
   })
 
+  it('puts both units on the size row and the lock and reset on one row below it', async () => {
+    const restorePicker = stubImagePicker()
+    try {
+      const target = await server(['Page body'])
+      mountWorkspace({
+        editAsync: target.editAsync,
+        decideAsync: target.decideAsync,
+        modelFor: target.modelFor,
+      })
+      await selectPicture()
+      const panel = screen.getByRole('group', { name: 'Picture size' })
+      const widthRow = screen
+        .getByLabelText('Picture width in centimetres')
+        .closest('label')?.parentElement
+      const heightRow = screen
+        .getByLabelText('Picture height in centimetres')
+        .closest('label')?.parentElement
+      expect(widthRow).toBe(heightRow)
+      expect(widthRow).not.toBeNull()
+      expect(screen.getAllByText('cm')).toHaveLength(2)
+
+      const lock = screen.getByLabelText('Lock aspect ratio')
+      const reset = screen.getByRole('button', {
+        name: 'Reset to original size',
+      })
+      const lockRow = lock.closest('label')?.parentElement
+      expect(lockRow).toBe(reset.parentElement)
+      expect(lockRow).not.toBe(widthRow)
+      expect(panel.contains(lockRow)).toBe(true)
+    } finally {
+      restorePicker()
+    }
+  })
+
   it('commits a typed size once so a single undo restores the original', async () => {
     const restorePicker = stubImagePicker()
     try {

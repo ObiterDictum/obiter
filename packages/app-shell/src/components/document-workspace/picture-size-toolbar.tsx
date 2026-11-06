@@ -1,6 +1,12 @@
-import { useLayoutEffect, useState } from 'react'
-import { cn } from '@obiter/ui'
-import type { PictureSize } from '../../document-picture-resize'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { Button, Input, cn } from '@obiter/ui'
+import {
+  centimetresFromPx,
+  pxFromCentimetres,
+  type PictureSize,
+} from '../../document-picture-resize'
+import { pictureSizeToolbarPlacement } from './picture-size-toolbar-placement'
+import { useLatestCallback } from './use-latest-callback'
 
 export type PictureSizeControl = {
   runId: string
@@ -13,15 +19,15 @@ export type PictureSizeControl = {
   onReset: () => void
 }
 
-const PX_PER_CM = 96 / 2.54
-
 function centimetresText(px: number) {
-  return (px / PX_PER_CM).toFixed(2)
+  return centimetresFromPx(px).toFixed(2)
 }
 
 function parseCentimetres(text: string) {
   const value = Number(text.replace(',', '.'))
-  return Number.isFinite(value) && value > 0 ? value * PX_PER_CM : undefined
+  return Number.isFinite(value) && value > 0
+    ? pxFromCentimetres(value)
+    : undefined
 }
 
 type Placement = { left: number; top: number } & PictureSize
@@ -31,35 +37,65 @@ export function PictureSizeToolbar({
 }: {
   control: PictureSizeControl | undefined
 }) {
+  const toolbar = useRef<HTMLDivElement | null>(null)
   const [placement, setPlacement] = useState<Placement | null>(null)
   const runId = control?.runId
-  useLayoutEffect(() => {
+  const place = useLatestCallback(() => {
     if (!runId) {
       setPlacement(null)
       return
     }
-    const place = () => {
-      const picture = document.querySelector(`[data-picture-run-id="${runId}"]`)
-      if (!(picture instanceof HTMLElement)) return
-      const rect = picture.getBoundingClientRect()
-      const widthPx = Number.parseFloat(picture.style.width) || rect.width
-      const heightPx = Number.parseFloat(picture.style.height) || rect.height
-      if (!(widthPx > 0) || !(heightPx > 0)) return
-      setPlacement({
-        left: Math.min(Math.max(8, rect.left), Math.max(8, innerWidth - 288)),
-        top: Math.max(56, rect.top - 12),
-        widthPx,
-        heightPx,
-      })
-    }
+    const picture = document.querySelector(`[data-picture-run-id="${runId}"]`)
+    const panel = toolbar.current
+    if (!(picture instanceof HTMLElement) || !panel) return
+    const rect = picture.getBoundingClientRect()
+    const widthPx = Number.parseFloat(picture.style.width) || rect.width
+    const heightPx = Number.parseFloat(picture.style.height) || rect.height
+    if (!(widthPx > 0) || !(heightPx > 0)) return
+    const page = picture
+      .closest('[data-document-sheet]')
+      ?.getBoundingClientRect()
+    const at = pictureSizeToolbarPlacement({
+      picture: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      },
+      panel: { width: panel.offsetWidth, height: panel.offsetHeight },
+      viewport: { width: innerWidth, height: innerHeight },
+      page: page
+        ? {
+            left: page.left,
+            top: page.top,
+            right: page.right,
+            bottom: page.bottom,
+          }
+        : undefined,
+    })
+    setPlacement((current) =>
+      current &&
+      current.left === at.left &&
+      current.top === at.top &&
+      current.widthPx === widthPx &&
+      current.heightPx === heightPx
+        ? current
+        : { ...at, widthPx, heightPx },
+    )
+  })
+  useLayoutEffect(() => {
     place()
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
+  })
+  useLayoutEffect(() => {
+    if (!runId) return
+    const reposition = () => place()
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
     return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
     }
-  }, [runId, control?.resized])
+  }, [runId, place])
   if (!control) return null
   const size = placement ?? { widthPx: 0, heightPx: 0 }
   const ratio = size.widthPx / size.heightPx
@@ -87,11 +123,11 @@ export function PictureSizeToolbar({
   }
   const fieldKey = `${control.runId}:${String(Math.round(size.widthPx))}:${String(Math.round(size.heightPx))}`
   const field = (axis: 'width' | 'height') => (
-    <label className="flex flex-1 items-center gap-1">
+    <label className="flex items-center gap-1 whitespace-nowrap">
       <span className="text-muted">
         {axis === 'width' ? 'Width' : 'Height'}
       </span>
-      <input
+      <Input
         key={`${axis}:${fieldKey}`}
         aria-label={`Picture ${axis} in centimetres`}
         type="number"
@@ -101,7 +137,7 @@ export function PictureSizeToolbar({
           axis === 'width' ? size.widthPx : size.heightPx,
         )}
         disabled={disabled}
-        className="w-16 rounded border border-line bg-transparent px-1 py-0.5"
+        className="w-20"
         onBlur={(event) => commit(axis, event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') commit(axis, event.currentTarget.value)
@@ -112,25 +148,27 @@ export function PictureSizeToolbar({
   )
   return (
     <div
+      ref={toolbar}
       role="group"
       aria-label="Picture size"
       data-print-hide
       data-picture-size
       className={cn(
-        'fixed z-30 w-64 rounded-md border border-line bg-raised p-2 text-[12px] shadow-lg',
+        'fixed z-30 flex w-max max-w-[calc(100vw-16px)] flex-col gap-1.5 rounded-md border border-line bg-raised px-2 py-1.5 text-caption shadow-lg',
         placement ? '' : 'top-16 left-2',
       )}
       style={placement ?? undefined}
       onMouseDown={(event) => event.preventDefault()}
     >
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {field('width')}
         {field('height')}
       </div>
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <label className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <label className="flex items-center gap-1 whitespace-nowrap">
           <input
             type="checkbox"
+            className="size-4 shrink-0 accent-brand"
             aria-label="Lock aspect ratio"
             checked={control.lockRatio}
             disabled={disabled}
@@ -138,17 +176,18 @@ export function PictureSizeToolbar({
           />
           <span>Lock aspect ratio</span>
         </label>
-        <button
-          type="button"
-          className="rounded border border-line px-1.5 py-0.5 disabled:opacity-50"
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
           disabled={disabled || !control.resized}
           onClick={control.onReset}
         >
           Reset to original size
-        </button>
+        </Button>
       </div>
       {control.unavailable ? (
-        <p className="mt-1 text-[#8a3d2a]" role="status">
+        <p className="text-[#8a3d2a]" role="status">
           {control.unavailable}
         </p>
       ) : null}
