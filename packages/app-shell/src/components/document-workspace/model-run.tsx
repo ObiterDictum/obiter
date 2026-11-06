@@ -4,7 +4,7 @@ import type {
 } from '../../document-inline-changes'
 import { InlineChange } from './inline-change-review'
 import { TRACKED_DELETE_MARK, TRACKED_INSERT_MARK } from './tracked-marks'
-import { useMemo, type ReactNode } from 'react'
+import { createContext, use, useMemo, type ReactNode } from 'react'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
@@ -23,11 +23,15 @@ import type { WrappedLine } from '../../document-page-flow'
 import { readableRunColor, runDisplayText } from '../../document-page-media'
 import { DEFAULT_TAB_STOP_PX, tabAdvancePx } from '../../document-page-tabs'
 import { textWidthPx } from '../../document-page-flow'
-import { runNoteRefs } from '../../document-page-notes'
+import { noteNumberKey, runNoteRefs } from '../../document-page-notes'
 import { runCss, runFace } from '../../document-page-style'
 import type { ParagraphFace } from '../../document-page-style'
 
 const SELECTION_PAINT = '#b8d4f5'
+
+export const NoteNumbersContext = createContext<ReadonlyMap<string, string>>(
+  new Map(),
+)
 
 export type ParagraphSelectionRange = { from: number; to: number }
 
@@ -181,7 +185,7 @@ export function ParagraphRunPaint({
           columnPx += advance
         }
         const pieceFrom = from + index + pieces.slice(0, index).join('').length
-        if (piece) {
+        if (piece || pieces.length === 1) {
           nodes.push(content(piece, pieceFrom))
           columnPx += textWidthPx(
             piece,
@@ -252,6 +256,14 @@ function paintSlices(
       }
       continue
     }
+    if (
+      start === end &&
+      runNoteRefs(run.preservedXmlFragments.join(''), run.id).length > 0
+    ) {
+      if (start === 0 ? from === 0 : start > from && start <= to)
+        slices.push({ run, text: '', from: start })
+      continue
+    }
     if (end <= from || start >= to) continue
     const sliceFrom = start + Math.max(0, from - start)
     slices.push({
@@ -304,6 +316,7 @@ function ModelRun({
     () => runEndNotes(run, text, drafts),
     [run.preservedXmlFragments, run.id, run.text, text, drafts?.[run.id]],
   )
+  const numbers = use(NoteNumbersContext)
   const color = revision ? 'inherit' : readableRunColor(face.color)
   return (
     <span
@@ -315,7 +328,11 @@ function ModelRun({
         kinds.has('property') &&
           'underline decoration-dotted decoration-[#8a6a2a]',
       )}
-      style={runCss({ ...face, color })}
+      style={runCss({
+        ...face,
+        color,
+        ...(notes.length ? { vertAlign: 'baseline' as const } : {}),
+      })}
     >
       {caret ? <PresenceCaret userId={caret.userId} /> : null}
       {rangedParts(
@@ -330,9 +347,9 @@ function ModelRun({
         <sup
           key={`${note.kind}-${note.noteId}-${note.runId}`}
           data-note-mark
-          className="text-[0.75em] leading-none"
+          className="relative -top-[0.5em] align-baseline text-[0.65em] leading-none"
         >
-          {note.mark}
+          {numbers.get(noteNumberKey(note.kind, note.noteId)) ?? note.mark}
         </sup>
       ))}
     </span>

@@ -25,6 +25,7 @@ export type StructuralPlacement =
   | { kind: 'link'; paragraphId: string; from: number; to: number }
   | { kind: 'defined-term'; paragraphId: string; from: number; to: number }
   | { kind: 'table-of-authorities-refresh'; paragraphId: string }
+  | { kind: 'footnote-removal'; paragraphId: string; runId: string }
 
 type RangePlacement = Extract<StructuralPlacement, { from: number }>
 type SplicePlacement = Extract<
@@ -86,6 +87,8 @@ function structuralDraftConflict(
   if (
     earlier.kind === 'table-of-authorities-refresh' ||
     later.kind === 'table-of-authorities-refresh' ||
+    earlier.kind === 'footnote-removal' ||
+    later.kind === 'footnote-removal' ||
     earlier.kind === 'image-size' ||
     later.kind === 'image-size'
   ) {
@@ -170,6 +173,8 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'page number'
     case 'footnote':
       return 'footnote'
+    case 'footnote-removal':
+      return 'footnote deletion'
     case 'table-of-contents':
       return 'table of contents'
     case 'table-of-authorities':

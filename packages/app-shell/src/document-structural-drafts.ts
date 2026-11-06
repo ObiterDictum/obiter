@@ -77,6 +77,13 @@ export type StructuralFootnoteDraft = {
   offset: number
 }
 
+export type StructuralFootnoteRemovalDraft = {
+  id: string
+  kind: 'footnote-removal'
+  paragraphId: string
+  runId: string
+}
+
 type StructuralTableOfContentsDraft = {
   id: string
   kind: 'table-of-contents'
@@ -126,6 +133,7 @@ export type StructuralDraft =
   | StructuralCrossReferenceDraft
   | StructuralPageNumberDraft
   | StructuralFootnoteDraft
+  | StructuralFootnoteRemovalDraft
   | StructuralTableOfContentsDraft
   | StructuralTableOfAuthoritiesDraft
   | StructuralTableOfAuthoritiesRefreshDraft
@@ -214,6 +222,14 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
       kind: z.literal('footnote'),
       paragraphId: z.string().min(1),
       offset: z.number().int().min(0),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1),
+      kind: z.literal('footnote-removal'),
+      paragraphId: z.string().min(1),
+      runId: z.string().min(1),
     })
     .strict(),
   z
@@ -349,6 +365,10 @@ export function structuralEditOperations(
         offset: structure.offset,
         text,
       })
+      continue
+    }
+    if (structure.kind === 'footnote-removal') {
+      operations.push({ type: 'delete_footnote', runId: structure.runId })
       continue
     }
     if (structure.kind === 'table-of-contents') {

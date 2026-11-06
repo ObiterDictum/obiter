@@ -9,12 +9,25 @@ import {
   buildFootnoteSeparatorXml,
   buildFootnoteXml,
   FOOTNOTES_PART_NAME,
+  missingFootnoteStyles,
 } from '@obiter/ooxml'
 import {
   footnoteNoteParagraphId,
   type StructuralDraft,
 } from './document-structural-drafts'
 import { documentStory } from './document-model-text'
+import {
+  selectionSegmentMap,
+  type DocumentSelection,
+  type SelectionSegment,
+} from './document-selection'
+import { storyFlowOrder } from './document-story-flow'
+import {
+  blockRuns,
+  blockText,
+  type EditorResult,
+  type EditorState,
+} from './document-word-edits'
 
 const FOOTNOTE_ID =
   /<w:footnote\b[^>]*\bw:id="(-?\d+)"|<w:footnoteReference\b[^>]*\bw:id="(-?\d+)"/gu
@@ -73,7 +86,12 @@ export function foldFootnoteDrafts(
   } else {
     stories[storyIndex] = foldedNoteStory(noteStory, spliced, nextParaId)
   }
-  return { ...model, stories }
+  const styles = missingFootnoteStyles(model.styles)
+  return {
+    ...model,
+    stories,
+    ...(styles.length ? { styles: [...model.styles, ...styles] } : {}),
+  }
 }
 
 function foldedNoteStory(
@@ -137,7 +155,7 @@ function noteParagraphWire(
         styleId: 'FootnoteReference',
         text: '',
         preservedXmlFragments: [
-          '<w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr>',
+          '<w:rPr><w:rStyle w:val="FootnoteReference"/><w:vertAlign w:val="superscript"/></w:rPr>',
           '<w:footnoteRef/>',
         ],
       },
@@ -213,4 +231,180 @@ export function spliceRunAtOffset(
   }
   runs.push(...insertedRuns)
   return { ...paragraph, runs }
+}
+
+export function followFootnoteEdits(
+  model: DocumentModelWire,
+  before: EditorState,
+  after: EditorResult,
+  structures: readonly StructuralDraft[],
+  newId: () => string,
+  selection?: DocumentSelection,
+) {
+  const body = documentStory(model)
+  const structureChanged =
+    before.inserts.length !== after.state.inserts.length ||
+    before.deletedParagraphIds.length !== after.state.deletedParagraphIds.length
+  const selected = selection
+    ? selectionSegmentMap(
+        {
+          order: storyFlowOrder(
+            model,
+            before.inserts,
+            before.deletedParagraphIds,
+            selection.anchor.paragraphId,
+          ),
+          textOf: (id) => blockText(model, before, id),
+        },
+        selection,
+      )
+    : new Map<string, SelectionSegment>()
+  const firstSelected = selected.keys().next().value
+  const next: StructuralDraft[] = []
+  const dropped = new Set<string>()
+  const removals: StructuralDraft[] = []
+  const regions = new Map<string, EditRegion | null>()
+  const regionOf = (paragraphId: string) => {
+    if (!regions.has(paragraphId)) {
+      const segment = selected.get(paragraphId)
+      const old = blockRuns(model, before, paragraphId)
+      const now = blockRuns(model, after.state, paragraphId)
+      const length = old.reduce((sum, run) => sum + run.text.length, 0)
+      regions.set(
+        paragraphId,
+        segment
+          ? {
+              from: paragraphId === firstSelected ? segment.from : -1,
+              to: segment.to,
+              length,
+              shift: structureChanged
+                ? 0
+                : now.reduce((sum, run) => sum + run.text.length, 0) - length,
+              selected: true,
+            }
+          : structureChanged
+            ? null
+            : editRegion(
+                old,
+                now,
+                after.caret.paragraphId === paragraphId
+                  ? after.caret.offset
+                  : undefined,
+              ),
+      )
+    }
+    return regions.get(paragraphId) ?? null
+  }
+  for (const structure of structures) {
+    if (structure.kind !== 'footnote') {
+      next.push(structure)
+      continue
+    }
+    const region = regionOf(structure.paragraphId)
+    if (!region || structure.offset <= region.from) {
+      next.push(structure)
+    } else if (
+      structure.offset > region.to ||
+      (structure.offset === region.to &&
+        !(region.selected && region.to === region.length))
+    ) {
+      next.push({ ...structure, offset: structure.offset + region.shift })
+    } else {
+      dropped.add(footnoteNoteParagraphId(structure))
+    }
+  }
+  for (const paragraph of body?.paragraphs ?? []) {
+    const references = paragraph.runs.filter(removableReference)
+    if (references.length === 0) continue
+    const region = regionOf(paragraph.id)
+    if (!region) continue
+    let offset = 0
+    for (const run of blockRuns(model, before, paragraph.id)) {
+      if (
+        references.some((reference) => reference.id === run.id) &&
+        region.from < offset &&
+        (offset < region.to ||
+          (region.selected &&
+            offset === region.to &&
+            region.to === region.length)) &&
+        !structures.some(
+          (item) => item.kind === 'footnote-removal' && item.runId === run.id,
+        )
+      ) {
+        removals.push({
+          id: newId(),
+          kind: 'footnote-removal',
+          paragraphId: paragraph.id,
+          runId: run.id,
+        })
+      }
+      offset += run.text.length
+    }
+  }
+  const removedRunIds = new Set(
+    removals.flatMap((removal) =>
+      removal.kind === 'footnote-removal' ? [removal.runId] : [],
+    ),
+  )
+  const keepRun = (run: DocumentTextRunWire) => !removedRunIds.has(run.id)
+  const inserts = after.state.inserts.map((insert) =>
+    insert.runs ? { ...insert, runs: insert.runs.filter(keepRun) } : insert,
+  )
+  const extraRuns = Object.fromEntries(
+    Object.entries(after.state.extraRuns).map(([id, runs]) => [
+      id,
+      runs.filter(keepRun),
+    ]),
+  )
+  for (const id of dropped) delete extraRuns[id]
+  const drafts = { ...after.state.drafts }
+  for (const removal of removals) {
+    if (removal.kind === 'footnote-removal') delete drafts[removal.runId]
+  }
+  return { structures: [...next, ...removals], extraRuns, drafts, inserts }
+}
+
+type EditRegion = {
+  from: number
+  to: number
+  shift: number
+  length: number
+  selected?: boolean
+}
+
+function editRegion(
+  before: readonly DocumentTextRunWire[],
+  after: readonly DocumentTextRunWire[],
+  caret: number | undefined,
+): EditRegion | null {
+  const old = before.map((run) => run.text).join('')
+  const now = after.map((run) => run.text).join('')
+  if (old === now) return null
+  const shortest = Math.min(old.length, now.length)
+  let suffix = 0
+  while (
+    suffix < shortest &&
+    old[old.length - 1 - suffix] === now[now.length - 1 - suffix]
+  )
+    suffix += 1
+  if (caret !== undefined) suffix = Math.min(suffix, now.length - caret)
+  let prefix = 0
+  while (prefix < shortest - suffix && old[prefix] === now[prefix]) prefix += 1
+  return {
+    from: prefix,
+    to: old.length - suffix,
+    shift: now.length - old.length,
+    length: old.length,
+  }
+}
+
+function removableReference(run: DocumentTextRunWire): boolean {
+  const xml = run.preservedXmlFragments.join('')
+  return (
+    run.text === '' &&
+    (xml.match(/<w:footnoteReference\b/gu) ?? []).length === 1 &&
+    !/customMarkFollows|<w:t\b|<w:endnoteReference|<w:commentReference/u.test(
+      xml,
+    )
+  )
 }

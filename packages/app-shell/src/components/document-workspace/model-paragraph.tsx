@@ -155,11 +155,21 @@ export function ModelParagraphInner({
       item.cursor?.paragraphId === paragraph.id,
   )
   const face = useMemo(
-    () => paragraphFace(paragraph, styles, defaultTabStopTwips),
+    () =>
+      paragraphFace(
+        paragraph,
+        styles,
+        defaultTabStopTwips,
+        noteKind !== undefined ||
+          story?.kind === 'footnotes' ||
+          story?.kind === 'endnotes',
+      ),
     [
       paragraph.preservedXmlFragments,
       paragraph.styleId,
       styles,
+      noteKind,
+      story?.kind,
       defaultTabStopTwips,
     ],
   )
@@ -379,14 +389,19 @@ export function ModelParagraphInner({
           </span>
         ) : noteMark && !continuation ? (
           <span
-            className="shrink-0 pr-1 align-super text-[0.75em]"
+            className="shrink-0 self-start pr-1"
             aria-label={
               noteKind === 'endnote'
                 ? `Endnote ${noteMark}`
                 : `Footnote ${noteMark}`
             }
           >
-            <span aria-hidden="true">{noteMark}</span>
+            <span
+              aria-hidden="true"
+              className="relative -top-[0.5em] text-[0.65em] leading-none"
+            >
+              {noteMark}
+            </span>
           </span>
         ) : null}
         <div

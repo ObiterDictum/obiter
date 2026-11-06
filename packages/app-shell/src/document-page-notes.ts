@@ -12,6 +12,7 @@ export type NoteRef = {
   noteId: string
   mark: string
   runId: string
+  custom: boolean
 }
 
 export type NoteBody = {
@@ -23,19 +24,51 @@ export type NoteBody = {
 
 export function runNoteRefs(runXml: string, runId: string): NoteRef[] {
   return [
-    ...noteTags(runXml, 'footnoteReference').map((noteId) => ({
+    ...noteTags(runXml, 'footnoteReference').map((tag) => ({
       kind: 'footnote' as const,
-      noteId,
-      mark: noteMark(noteId),
+      noteId: tag.noteId,
+      mark: noteMark(tag.noteId),
       runId,
+      custom: tag.custom,
     })),
-    ...noteTags(runXml, 'endnoteReference').map((noteId) => ({
+    ...noteTags(runXml, 'endnoteReference').map((tag) => ({
       kind: 'endnote' as const,
-      noteId,
-      mark: noteMark(noteId),
+      noteId: tag.noteId,
+      mark: noteMark(tag.noteId),
       runId,
+      custom: tag.custom,
     })),
   ]
+}
+
+export function noteNumberKey(kind: NoteKind, noteId: string): string {
+  return `${kind}:${noteId}`
+}
+
+const numbersByModel = new WeakMap<DocumentModelWire, Map<string, string>>()
+
+export function documentNoteNumbers(
+  model: DocumentModelWire,
+): Map<string, string> {
+  const cached = numbersByModel.get(model)
+  if (cached) return cached
+  const numbers = new Map<string, string>()
+  const counters = { footnote: 0, endnote: 0 }
+  const story = model.stories.find((item) => item.kind === 'document')
+  for (const paragraph of story?.paragraphs ?? []) {
+    for (const ref of paragraphNoteRefs(paragraph)) {
+      const key = noteNumberKey(ref.kind, ref.noteId)
+      if (numbers.has(key)) continue
+      if (ref.custom) {
+        numbers.set(key, '')
+        continue
+      }
+      counters[ref.kind] += 1
+      numbers.set(key, String(counters[ref.kind]))
+    }
+  }
+  numbersByModel.set(model, numbers)
+  return numbers
 }
 
 export function paragraphNoteRefs(paragraph: DocumentParagraphWire): NoteRef[] {
@@ -61,9 +94,10 @@ function collectNotes(model: DocumentModelWire): NoteBody[] {
   const ordered: NoteBody[] = []
   const story = model.stories.find((item) => item.kind === 'document')
   if (!story) return [...footnotes.values(), ...endnotes.values()]
+  const numbers = documentNoteNumbers(model)
   for (const paragraph of story.paragraphs) {
     for (const ref of paragraphNoteRefs(paragraph)) {
-      const key = `${ref.kind}:${ref.noteId}`
+      const key = noteNumberKey(ref.kind, ref.noteId)
       if (used.has(key)) continue
       const body =
         ref.kind === 'footnote'
@@ -71,7 +105,7 @@ function collectNotes(model: DocumentModelWire): NoteBody[] {
           : endnotes.get(ref.noteId)
       if (!body) continue
       used.add(key)
-      ordered.push(body)
+      ordered.push({ ...body, mark: numbers.get(key) ?? body.mark })
     }
   }
   return ordered
@@ -119,12 +153,17 @@ function noteStoryBodies(
 
 function noteTags(xml: string, name: 'footnoteReference' | 'endnoteReference') {
   const tags = xml.matchAll(new RegExp(`<w:${name}\\b([^>]*)\\/?>`, 'gi'))
-  const ids: string[] = []
+  const found: { noteId: string; custom: boolean }[] = []
   for (const tag of tags) {
     const noteId = xmlAttr(tag[1], 'id')
-    if (noteId && noteId !== '-1' && noteId !== '0') ids.push(noteId)
+    const custom = xmlAttr(tag[1], 'customMarkFollows')
+    if (noteId && noteId !== '-1' && noteId !== '0')
+      found.push({
+        noteId,
+        custom: custom !== undefined && !['0', 'false', 'off'].includes(custom),
+      })
   }
-  return ids
+  return found
 }
 
 function noteMark(noteId: string): string {
