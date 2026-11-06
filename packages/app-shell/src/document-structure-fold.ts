@@ -1,3 +1,4 @@
+import { foldTableStructure } from './document-table-structure-fold'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -147,6 +148,11 @@ function foldStory(
   let changed = false
 
   for (const draft of structures) {
+    if (draft.kind === 'table-structure') {
+      foldTableStructure(fragments, paragraphs, draft.operation, nextParaId)
+      changed = true
+      continue
+    }
     if (draft.kind === 'table') {
       const anchorWire = paragraphs.find(
         (paragraph) => paragraph.id === draft.paragraphId,
@@ -229,6 +235,19 @@ function foldStory(
     }
     if (draft.kind === 'table-of-authorities-refresh') {
       changed = foldToa.refresh(paragraphs, draft) || changed
+      continue
+    }
+    if (draft.kind === 'footnote-removal') {
+      const index = paragraphs.findIndex(
+        (item) => item.id === draft.paragraphId,
+      )
+      const paragraph = paragraphs[index]
+      if (!paragraph?.runs.some((run) => run.id === draft.runId)) continue
+      paragraphs[index] = {
+        ...paragraph,
+        runs: paragraph.runs.filter((run) => run.id !== draft.runId),
+      }
+      changed = true
       continue
     }
     if (draft.kind !== 'image') continue

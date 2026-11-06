@@ -1,3 +1,5 @@
+import { effectiveParagraph } from '../../document-model-text'
+import type { ExtraRuns } from '../../document-word-edits'
 import {
   type PendingRedlines,
   pendingParagraphDeletion,
@@ -43,6 +45,7 @@ import { PageDrawing } from './page-drawing'
 const noSelection = () => undefined
 
 export type BlockContext = {
+  extraRuns?: ExtraRuns
   model: DocumentModelWire
   pendingRedlines?: PendingRedlines
   storyPartName: string
@@ -123,7 +126,11 @@ export function renderBlock(
             return [
               <ModelParagraph
                 key={paragraph.id}
-                paragraph={paragraph}
+                paragraph={effectiveParagraph(
+                  paragraph,
+                  {},
+                  ctx.extraRuns?.[paragraph.id] ?? [],
+                )}
                 changes={ctx.model.changes}
                 pendingChanges={pendingParagraphChanges(
                   ctx.pendingRedlines,

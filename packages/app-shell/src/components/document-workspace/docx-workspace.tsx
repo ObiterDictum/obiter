@@ -1,7 +1,4 @@
-import {
-  InlineChangeReview,
-  useInlineReviewValue,
-} from './inline-change-review'
+import { WorkspaceTableSurface } from './workspace-table-surface'
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
@@ -362,10 +359,12 @@ export function DocxWorkspace({
     }),
   )
 
-  const review = useInlineReviewValue(changeReview, reviewPanel)
-
   return (
-    <InlineChangeReview value={review}>
+    <WorkspaceTableSurface
+      structure={insert.structure}
+      review={changeReview}
+      onReview={reviewPanel}
+    >
       <WorkspaceShell
         layout={layout}
         onKeyDown={(event) =>
@@ -493,6 +492,6 @@ export function DocxWorkspace({
           </>
         ) : null}
       </WorkspaceShell>
-    </InlineChangeReview>
+    </WorkspaceTableSurface>
   )
 }

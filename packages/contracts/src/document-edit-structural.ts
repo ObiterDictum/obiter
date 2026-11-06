@@ -218,6 +218,16 @@ export type DocumentEditInsertFootnoteOperation = z.infer<
   typeof insertFootnoteOperationSchema
 >
 
+export const deleteFootnoteOperationSchema = z
+  .object({
+    type: z.literal('delete_footnote'),
+    runId: editIdSchema,
+  })
+  .strict()
+export type DocumentEditDeleteFootnoteOperation = z.infer<
+  typeof deleteFootnoteOperationSchema
+>
+
 export const DOCUMENT_EDIT_TABLE_OF_CONTENTS_MAX_ENTRIES = 500
 
 export const insertTableOfContentsOperationSchema = z
@@ -254,3 +264,64 @@ export const updateTableOfAuthoritiesOperationSchema = z
 export type DocumentEditUpdateTableOfAuthoritiesOperation = z.infer<
   typeof updateTableOfAuthoritiesOperationSchema
 >
+
+const tableCellEditsSchema = z
+  .array(
+    z
+      .object({
+        row: z.number().int().min(0).max(1000),
+        column: z.number().int().min(0).max(1000),
+        text: z.string().max(100000),
+      })
+      .strict(),
+  )
+  .max(10000)
+  .optional()
+
+export const insertTableRowOperationSchema = z
+  .object({
+    type: z.literal('insert_table_row'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+    position: z.enum(['before', 'after']),
+  })
+  .strict()
+export const insertTableColumnOperationSchema = z
+  .object({
+    type: z.literal('insert_table_column'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+    position: z.enum(['before', 'after']),
+  })
+  .strict()
+export const deleteTableRowOperationSchema = z
+  .object({
+    type: z.literal('delete_table_row'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+  })
+  .strict()
+export const deleteTableColumnOperationSchema = z
+  .object({
+    type: z.literal('delete_table_column'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+  })
+  .strict()
+export const deleteTableOperationSchema = z
+  .object({
+    type: z.literal('delete_table'),
+    paragraphId: editIdSchema,
+    cellEdits: tableCellEditsSchema,
+    rowIndex: z.number().int().min(0).max(1000).optional(),
+    columnIndex: z.number().int().min(0).max(1000).optional(),
+  })
+  .strict()

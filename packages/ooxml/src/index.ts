@@ -42,6 +42,7 @@ export {
   buildFootnoteReferenceRunXml,
   buildFootnoteSeparatorXml,
   buildFootnoteXml,
+  missingFootnoteStyles,
   buildInlineDrawingXml,
   drawingSizeSupport,
   pxToEmu,
@@ -129,3 +130,8 @@ export {
   WORD_NAMESPACE,
   type XmlElement,
 } from './parts/xml-elements'
+
+export {
+  transformTableXml,
+  type TableStructureOperation,
+} from './table-structure-edits'

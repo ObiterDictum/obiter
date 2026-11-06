@@ -81,7 +81,7 @@ private package name.
 integration, the search benchmark, the web end-to-end suite and the API image
 builds (`services/api/Dockerfile`, Bun default and Node rollback targets).
 
-Dokploy's `api` application changes its source to `backend` with a read-only
+The production API image builds from `backend` with a read-only
 deploy key. `web` and the renderer are unchanged.
 
 ## History purge
@@ -130,7 +130,7 @@ Each stage ends in a PR reviewed before the next starts.
    the web end-to-end suite.
 3. **Cut over this repository.** Remove the private paths, CI jobs and root
    scripts; add the private-path check; update `README.md`, `AGENTS.md`,
-   `docs/architecture.html` and the moved docs' stubs. Point Dokploy's `api` at
+   `docs/architecture.html` and the moved docs' stubs. Point the API deploy at
    `backend`, deploy and confirm health.
 4. **Re-point `sources`** to `backend` and bump its pin.
 5. **Purge history** as above, after explicit approval of the force-push.
