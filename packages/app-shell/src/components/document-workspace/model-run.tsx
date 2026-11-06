@@ -185,7 +185,7 @@ export function ParagraphRunPaint({
           columnPx += advance
         }
         const pieceFrom = from + index + pieces.slice(0, index).join('').length
-        if (piece) {
+        if (piece || pieces.length === 1) {
           nodes.push(content(piece, pieceFrom))
           columnPx += textWidthPx(
             piece,
