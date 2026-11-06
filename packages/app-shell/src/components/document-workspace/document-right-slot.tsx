@@ -122,6 +122,10 @@ export function DocumentCommentsTab({
       onReply={comments.onReplyComment}
       onResolve={comments.onResolveComment}
       onReopen={comments.onReopenComment}
+      deletableCommentIds={comments.deletableCommentIds}
+      deletedComments={comments.deletedComments}
+      onDelete={comments.onDeleteComment}
+      onRestore={comments.onRestoreComment}
       onRevealAnchor={comments.onRevealCommentAnchor}
     />
   )
