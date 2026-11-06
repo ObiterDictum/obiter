@@ -11,9 +11,16 @@ const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const WORD_2010_NS = 'http://schemas.microsoft.com/office/word/2010/wordml'
 const TABLE_WRAP = `xmlns:w="${WORD_NS}" xmlns:w14="${WORD_2010_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" xmlns:v="urn:schemas-microsoft-com:vml"`
 
+export type TableCellVAlign = 'top' | 'center' | 'bottom'
+
 export type DisplayTableCell = {
   fill?: string
   span: number
+  rowSpan?: number
+  vMerge?: 'restart' | 'continue'
+  mergeFill?: string
+  mergeVAlign?: TableCellVAlign
+  vAlign?: TableCellVAlign
   widthPct?: number
   minHeightPx?: number
   paragraphIds: string[]
@@ -65,6 +72,78 @@ export function rowPaintHeight(row: DisplayTable['rows'][number]): number {
 
 export function tablePaintHeight(table: DisplayTable): number {
   return table.rows.reduce((sum, row) => sum + rowPaintHeight(row), 0)
+}
+
+export type TablePaintCell = {
+  cell: DisplayTableCell
+  rowSpan: number
+}
+
+export type TablePaintRow = {
+  row: DisplayTable['rows'][number]
+  cells: TablePaintCell[]
+}
+
+export function tablePaintRows(table: DisplayTable): TablePaintRow[] {
+  const positions = table.rows.map(cellPositions)
+  const active: { start: number; end: number; until: number }[] = []
+  const out: TablePaintRow[] = []
+  for (const [rowIndex, row] of table.rows.entries()) {
+    const cells: TablePaintCell[] = []
+    for (const { cell, start, end } of positions[rowIndex] ?? []) {
+      const covered = active.some(
+        (block) =>
+          block.until > rowIndex && block.start <= start && end <= block.end,
+      )
+      if (cell.vMerge === 'continue' && covered) continue
+      const rowSpan = paintRowSpan(positions, rowIndex, start, end, cell)
+      cells.push({ cell, rowSpan })
+      if (rowSpan > 1) active.push({ start, end, until: rowIndex + rowSpan })
+    }
+    out.push({ row, cells })
+  }
+  return out
+}
+
+function cellPositions(row: DisplayTable['rows'][number]) {
+  const positioned: { cell: DisplayTableCell; start: number; end: number }[] =
+    []
+  let column = 0
+  for (const cell of row.cells) {
+    positioned.push({ cell, start: column, end: column + cell.span })
+    column += cell.span
+  }
+  return positioned
+}
+
+function paintRowSpan(
+  positions: ReturnType<typeof cellPositions>[],
+  rowIndex: number,
+  start: number,
+  end: number,
+  cell: DisplayTableCell,
+): number {
+  if (
+    cell.vMerge !== 'continue' &&
+    (cell.rowSpan === undefined || cell.rowSpan <= 1)
+  ) {
+    return 1
+  }
+  const limit =
+    cell.vMerge === 'continue' ? Number.POSITIVE_INFINITY : (cell.rowSpan ?? 1)
+  let run = 1
+  while (
+    run < limit &&
+    (positions[rowIndex + run] ?? []).some(
+      (item) =>
+        item.cell.vMerge === 'continue' &&
+        item.start === start &&
+        item.end === end,
+    )
+  ) {
+    run += 1
+  }
+  return run
 }
 
 export function storyBlocks(story: DocumentStoryWire): StoryBlock[] {
@@ -257,6 +336,15 @@ function parseWordTable(xml: string): DisplayTable | undefined {
         const spanEl = tcPr ? children(tcPr, 'gridSpan')[0] : undefined
         const span = Number(attr(spanEl, 'val') ?? '1')
         const safeSpan = Number.isFinite(span) && span > 0 ? span : 1
+        const vMergeEl = tcPr ? children(tcPr, 'vMerge')[0] : undefined
+        const vMerge = vMergeEl
+          ? attr(vMergeEl, 'val') === 'restart'
+            ? ('restart' as const)
+            : ('continue' as const)
+          : undefined
+        const vAlign = tableCellVAlign(
+          tcPr ? children(tcPr, 'vAlign')[0] : undefined,
+        )
         const fill =
           shdFill(tcPr ? children(tcPr, 'shd')[0] : undefined) ?? tableFill
         const widthPct = columnPcts
@@ -269,6 +357,8 @@ function parseWordTable(xml: string): DisplayTable | undefined {
           span: safeSpan,
           paragraphIds,
           paragraphCount,
+          ...(vMerge ? { vMerge } : {}),
+          ...(vAlign ? { vAlign } : {}),
           ...(paragraphIds.length < paragraphCount
             ? {
                 paragraphTexts: cellParagraphs(tc).map((paragraph) =>
@@ -287,6 +377,7 @@ function parseWordTable(xml: string): DisplayTable | undefined {
       }),
     }
   })
+  resolveVerticalMerges(rows)
 
   const paragraphIds = rows.flatMap((row) =>
     row.cells.flatMap((cell) => cell.paragraphIds),
@@ -297,6 +388,38 @@ function parseWordTable(xml: string): DisplayTable | undefined {
     rows,
     paragraphIds,
   }
+}
+
+function resolveVerticalMerges(rows: DisplayTable['rows']): void {
+  const open = new Map<number, { cell: DisplayTableCell; span: number }>()
+  for (const row of rows) {
+    const next = new Map<number, { cell: DisplayTableCell; span: number }>()
+    let column = 0
+    for (const cell of row.cells) {
+      const start = column
+      column += cell.span
+      if (cell.vMerge === 'restart') {
+        next.set(start, { cell, span: cell.span })
+        continue
+      }
+      if (cell.vMerge !== 'continue') continue
+      const merge = open.get(start)
+      if (!merge || merge.span !== cell.span) continue
+      merge.cell.rowSpan = (merge.cell.rowSpan ?? 1) + 1
+      cell.mergeFill = merge.cell.fill
+      cell.mergeVAlign = merge.cell.vAlign
+      next.set(start, merge)
+    }
+    open.clear()
+    for (const [key, value] of next) open.set(key, value)
+  }
+}
+
+function tableCellVAlign(el: Element | undefined): TableCellVAlign | undefined {
+  const value = attr(el, 'val')
+  return value === 'top' || value === 'center' || value === 'bottom'
+    ? value
+    : undefined
 }
 
 function tableStructureXml(xml: string) {
