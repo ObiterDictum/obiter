@@ -152,7 +152,7 @@ export function DocumentCommentsPanel({
                 <Button
                   variant="secondary"
                   size="sm"
-                  className="-ml-2 self-start"
+                  className="self-start"
                   disabled={pending}
                   onClick={() => onRestore?.(entry.id)}
                 >

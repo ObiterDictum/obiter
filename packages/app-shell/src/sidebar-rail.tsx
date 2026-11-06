@@ -45,7 +45,7 @@ export function SidebarRail({
       <Link
         to="/"
         aria-label="Obiter home"
-        className="mb-2 grid size-7 shrink-0 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:mb-0"
+        className="grid h-10 w-7 shrink-0 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:h-7"
       >
         <ObiterMark className="size-6" title="" />
       </Link>
