@@ -30,6 +30,7 @@ import type { NoteKind } from '../../document-page-notes'
 import type { ParagraphSelectionRange } from './model-run'
 import { ModelParagraph } from './model-paragraph-memo'
 import type { ParagraphWordEdit } from './model-paragraph'
+import type { PictureInteraction } from './picture-frame'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import {
   type ParagraphNeighborResolver,
@@ -81,6 +82,7 @@ export type BlockContext = {
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
   selectionHandlers?: ParagraphSelectionHandlers
+  picture?: PictureInteraction
   neighbors?: ParagraphNeighborResolver
   onFocusParagraph?: (paragraphId: string) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
@@ -158,6 +160,7 @@ export function renderBlock(
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
                 story={ctx.storyOf(paragraph.id)}
                 linkOverlay={ctx.linkOverlays?.get(paragraph.id)}
+                picture={ctx.picture}
               />,
             ]
           })
@@ -248,6 +251,7 @@ export function renderBlock(
       noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
       story={ctx.storyOf(paragraph.id)}
       linkOverlay={ctx.linkOverlays?.get(paragraph.id)}
+      picture={ctx.picture}
     />,
   ]
 }

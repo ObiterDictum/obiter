@@ -18,6 +18,7 @@ import {
   insertTableOperationSchema,
   markDefinedTermOperationSchema,
   setHyperlinkOperationSchema,
+  setImageSizeOperationSchema,
 } from './document-edit-structural'
 
 export {
@@ -445,6 +446,7 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
     .strict(),
   insertTableOperationSchema,
   insertImageOperationSchema,
+  setImageSizeOperationSchema,
   setHyperlinkOperationSchema,
   insertCrossReferenceOperationSchema,
   insertPageNumberOperationSchema,

@@ -308,6 +308,7 @@ export function DocxWorkspace({
     toggleNavPane()
   }
   const commentSelection = useLatestCallback(() => togglePanel('comments'))
+  const reviewPanel = useLatestCallback(() => togglePanel('review'))
   const chrome = useLatestHandlers(
     docxWorkspaceChrome({
       save,
@@ -361,12 +362,10 @@ export function DocxWorkspace({
     }),
   )
 
-  const inlineReview = useInlineReviewValue(changeReview, () =>
-    togglePanel('review'),
-  )
+  const review = useInlineReviewValue(changeReview, reviewPanel)
 
   return (
-    <InlineChangeReview value={inlineReview}>
+    <InlineChangeReview value={review}>
       <WorkspaceShell
         layout={layout}
         onKeyDown={(event) =>
@@ -379,6 +378,7 @@ export function DocxWorkspace({
             insertFootnote: insert.structure.footnoteUnavailable
               ? undefined
               : insert.structure.onInsertFootnote,
+            picture: drafts.picture.keydown,
             format,
             request,
             review: changeReview,

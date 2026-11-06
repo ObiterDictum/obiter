@@ -16,6 +16,7 @@ import {
   type RecoverableDraft,
 } from '../../document-draft-store'
 import { useWorkspaceDraftHistory } from '../../document-editor-history'
+import { usePicture } from './use-picture-selection'
 import {
   draftStorage,
   resolveDraftScope,
@@ -358,6 +359,11 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     update: (current: StructuralDraft[]) => StructuralDraft[],
   ) => setField('structures', update)
 
+  const picture = usePicture({
+    trackChanges:
+      bundle.trackChangesFlip ?? scope.model?.trackRevisions ?? false,
+    drafts: { structures: bundle.state.structures, setStructures },
+  })
   function setTrackChangesFlip(value: boolean | undefined) {
     setBundle((current) =>
       value === undefined
@@ -408,6 +414,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     discardRecoverable,
     undoDraft,
     redoDraft,
+    picture,
     ...edits,
     canUndo: history.canUndo && blockedReason === null,
     canRedo: history.canRedo && blockedReason === null,

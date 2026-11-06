@@ -11,6 +11,22 @@ export type WorkspaceKeyEvent = {
   target?: EventTarget | null
 }
 
+function pictureArrow(
+  key: string,
+): 'left' | 'right' | 'up' | 'down' | undefined {
+  if (key === 'ArrowLeft') return 'left'
+  if (key === 'ArrowRight') return 'right'
+  if (key === 'ArrowUp') return 'up'
+  if (key === 'ArrowDown') return 'down'
+  return undefined
+}
+
+function pictureSizeControlFocused(target: EventTarget | null | undefined) {
+  return (
+    target instanceof Element && target.closest('[data-picture-size]') !== null
+  )
+}
+
 function isForeignFormField(target: EventTarget | null | undefined) {
   if (
     !(target instanceof HTMLInputElement) &&
@@ -53,9 +69,30 @@ export function handleDocumentWorkspaceKeys(
     toggleBold?: () => void
     toggleItalic?: () => void
     toggleUnderline?: () => void
+    picture?: {
+      onClear: () => void
+      onNudge: (direction: 'left' | 'right' | 'up' | 'down') => void
+    }
   },
 ) {
   const key = event.key.toLowerCase()
+  if (
+    handlers.picture &&
+    !(event.metaKey || event.ctrlKey || event.altKey) &&
+    !pictureSizeControlFocused(event.target)
+  ) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      handlers.picture.onClear()
+      return
+    }
+    const direction = pictureArrow(event.key)
+    if (event.shiftKey && direction) {
+      event.preventDefault()
+      handlers.picture.onNudge(direction)
+      return
+    }
+  }
   if (
     handlers.review &&
     !(event.metaKey || event.ctrlKey || event.altKey) &&
@@ -125,6 +162,10 @@ export type WorkspaceKeySources = {
     onNext: () => void
     onPrevious: () => void
   }
+  picture?: {
+    onClear: () => void
+    onNudge: (direction: 'left' | 'right' | 'up' | 'down') => void
+  }
   format?: {
     emphasisUnavailable?: string
     onToggleBold: () => void
@@ -147,6 +188,7 @@ export function documentWorkspaceKeyDown(
     openFind,
     openPalette,
     review,
+    picture,
     format,
   }: WorkspaceKeySources = {},
 ) {
@@ -157,6 +199,7 @@ export function documentWorkspaceKeyDown(
     redo,
     print,
     review,
+    picture,
     insertFootnote,
     focusFind: openFind ?? focusDocumentFind,
     openPalette,

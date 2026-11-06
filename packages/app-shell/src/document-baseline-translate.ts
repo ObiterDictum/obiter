@@ -1,6 +1,8 @@
 import { insertPlainText, removeInsert } from './document-edits'
 import { mergeEmphasis, paragraphNumPr } from './document-format-edits'
 import { paragraphFormatOf } from './document-paragraph-format'
+import { pictureFrameOf } from './document-picture-resize'
+import type { StructuralImageSizeDraft } from './document-structural-drafts'
 import {
   emphasisSlotKey,
   removeDraftSlots,
@@ -34,6 +36,7 @@ import {
 const STRUCTURE_KIND_REMOVABLE = {
   table: false,
   image: false,
+  'image-size': true,
   link: true,
   'cross-reference': false,
   'page-number': false,
@@ -321,6 +324,40 @@ export function translateSnapshot(
       case 'structure': {
         if (snapshot.structures.some((item) => item.id === slot.id)) {
           Object.assign(next, removeDraftSlots(next, [slot]))
+          break
+        }
+        if (slot.structureKind === 'image-size') {
+          const sent = baseline.sent.structures.find(
+            (item): item is StructuralImageSizeDraft =>
+              item.id === slot.id && item.kind === 'image-size',
+          )
+          const original = sent
+            ? pictureFrameOf(baseline.fromModel, sent)
+            : undefined
+          const sameSize =
+            sent &&
+            original &&
+            Math.round(original.widthPx) === sent.widthPx &&
+            Math.round(original.heightPx) === sent.heightPx
+          const clashes = sent
+            ? next.structures.some(
+                (item) =>
+                  item.kind === 'image-size' && item.runId === sent.runId,
+              )
+            : true
+          if (sent && original && !sameSize && !clashes) {
+            next.structures = [
+              ...next.structures,
+              {
+                id: sent.id,
+                kind: 'image-size',
+                paragraphId: sent.paragraphId,
+                runId: sent.runId,
+                widthPx: Math.round(original.widthPx),
+                heightPx: Math.round(original.heightPx),
+              },
+            ]
+          }
           break
         }
         if (!STRUCTURE_KIND_REMOVABLE[slot.structureKind]) break
