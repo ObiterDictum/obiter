@@ -33,6 +33,9 @@ export function ModelParagraphEditor({
   lines,
   previous,
   next,
+  previousCell,
+  nextCell,
+  onMoveCell,
   verticalCaret,
   selection,
   onFocusParagraph,
@@ -53,6 +56,9 @@ export function ModelParagraphEditor({
   | 'lines'
   | 'previous'
   | 'next'
+  | 'previousCell'
+  | 'nextCell'
+  | 'onMoveCell'
   | 'verticalCaret'
   | 'selection'
   | 'onFocusParagraph'
@@ -91,6 +97,9 @@ export function ModelParagraphEditor({
       lines={lines}
       previous={previous}
       next={next}
+      previousCell={previousCell}
+      nextCell={nextCell}
+      onMoveCell={onMoveCell}
       verticalCaret={verticalCaret}
       selection={selection}
       onFocusParagraph={onFocusParagraph}

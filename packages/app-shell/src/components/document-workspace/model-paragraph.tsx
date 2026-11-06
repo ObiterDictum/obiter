@@ -438,6 +438,9 @@ export function ModelParagraphInner({
                 }
                 previous={adjacent?.previous}
                 next={adjacent?.next}
+                previousCell={adjacent?.previousCell}
+                nextCell={adjacent?.nextCell}
+                onMoveCell={onSelectParagraph}
                 verticalCaret={verticalCaret}
                 selection={selectionBinding}
                 onFocusParagraph={

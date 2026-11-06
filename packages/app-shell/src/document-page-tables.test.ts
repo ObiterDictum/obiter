@@ -4,6 +4,7 @@ import {
   cellWrapWidthPx,
   storyBlocks,
   storyTables,
+  tableCellNeighbours,
   tablePaintHeight,
 } from './document-page-tables'
 
@@ -400,5 +401,46 @@ describe('tables without Word paragraph ids', () => {
         block.type === 'table' ? block.table.paragraphIds : block.paragraph.id,
       ),
     ).toEqual(['a', ['b', 'c'], 'd', ['e', 'f']])
+  })
+})
+
+describe('tableCellNeighbours', () => {
+  it('steps through cells row by row, landing on the first paragraph of each cell', () => {
+    const cell = (...ids: string[]) =>
+      `<w:tc>${ids.map((id) => `<w:p w14:paraId="${id}"><w:r><w:t>${id}</w:t></w:r></w:p>`).join('')}</w:tc>`
+    const story = {
+      partName: 'word/document.xml',
+      kind: 'document' as const,
+      paragraphs: [
+        '0000000A',
+        '0000000B',
+        '0000000C',
+        '0000000D',
+        '0000000E',
+      ].map((id) => ({
+        id: `para-w14-${id}`,
+        runs: [{ id: `r-${id}`, text: id, preservedXmlFragments: [] }],
+        preservedXmlFragments: [],
+      })),
+      preservedXmlFragments: [
+        `<w:tbl><w:tr>${cell('0000000A', '0000000B')}${cell('0000000C')}</w:tr><w:tr>${cell('0000000D')}${cell('0000000E')}</w:tr></w:tbl>`,
+      ],
+      fields: [],
+      unanchoredFieldParagraphIds: [],
+    }
+    const neighbours = tableCellNeighbours(story)
+    expect(neighbours.get('para-w14-0000000A')).toEqual({
+      next: 'para-w14-0000000C',
+    })
+    expect(neighbours.get('para-w14-0000000B')).toEqual({
+      next: 'para-w14-0000000C',
+    })
+    expect(neighbours.get('para-w14-0000000C')).toEqual({
+      previous: 'para-w14-0000000A',
+      next: 'para-w14-0000000D',
+    })
+    expect(neighbours.get('para-w14-0000000E')).toEqual({
+      previous: 'para-w14-0000000D',
+    })
   })
 })

@@ -119,6 +119,36 @@ export function storyBlocks(story: DocumentStoryWire): StoryBlock[] {
   return blocks
 }
 
+type CellNeighbours = Map<string, { previous?: string; next?: string }>
+
+const cellNeighboursByStory = new WeakMap<DocumentStoryWire, CellNeighbours>()
+
+export function tableCellNeighbours(
+  story: DocumentStoryWire | undefined,
+): CellNeighbours {
+  const cached = story ? cellNeighboursByStory.get(story) : undefined
+  if (cached) return cached
+  const neighbours: CellNeighbours = new Map()
+  for (const block of story ? storyBlocks(story) : []) {
+    if (block.type !== 'table') continue
+    const cells = block.table.rows
+      .flatMap((row) => row.cells)
+      .filter((cell) => cell.paragraphIds.length > 0)
+    cells.forEach((cell, index) => {
+      const previous = cells[index - 1]?.paragraphIds[0]
+      const next = cells[index + 1]?.paragraphIds[0]
+      for (const id of cell.paragraphIds) {
+        neighbours.set(id, {
+          ...(previous ? { previous } : {}),
+          ...(next ? { next } : {}),
+        })
+      }
+    })
+  }
+  if (story) cellNeighboursByStory.set(story, neighbours)
+  return neighbours
+}
+
 export function storyTableCellIds(
   story: DocumentStoryWire | undefined,
 ): Set<string> {

@@ -19,6 +19,7 @@ import {
   type WrappedLine,
 } from '../../document-page-flow'
 import { paragraphFace } from '../../document-page-style'
+import { tableCellNeighbours } from '../../document-page-tables'
 import { paragraphListIndent } from '../../document-page-lists'
 
 export type ArrowNeighbor = {
@@ -174,7 +175,12 @@ export type ParagraphNeighborResolver = (
   paragraphId: string,
   wrapWidthPx?: number,
   drafts?: Record<string, string>,
-) => { previous?: ArrowNeighbor; next?: ArrowNeighbor }
+) => {
+  previous?: ArrowNeighbor
+  next?: ArrowNeighbor
+  previousCell?: ArrowNeighbor
+  nextCell?: ArrowNeighbor
+}
 
 type NeighborSource = {
   model: DocumentModelWire
@@ -198,13 +204,19 @@ export function paragraphNeighborResolver(
     flowParagraphIds(ctx.model, ctx.inserts, ctx.deletedParagraphIds)
   ).filter((id) => !readOnly.has(id))
   const index = new Map(order.map((id, at) => [id, at]))
+  const cells = tableCellNeighbours(
+    ctx.model.stories.find((story) => story.kind === 'document'),
+  )
   return (paragraphId, wrapWidthPx, drafts) => {
     const at = index.get(paragraphId)
     if (at === undefined) return {}
     const live = drafts ? { ...ctx, drafts } : ctx
+    const cell = cells.get(paragraphId)
     return {
       previous: arrowNeighbor(order[at - 1], live, wrapWidthPx),
       next: arrowNeighbor(order[at + 1], live, wrapWidthPx),
+      previousCell: arrowNeighbor(cell?.previous, live),
+      nextCell: arrowNeighbor(cell?.next, live),
     }
   }
 }
