@@ -35,6 +35,21 @@ export function planOperation(
     const paragraph = requireMainParagraph(document, operation.paragraphId)
     return { ...operation, paragraph }
   }
+  if (operation.type === 'delete_footnote') {
+    const run = requireEditableRun(
+      document,
+      runParagraphs,
+      operation.runId,
+      false,
+    )
+    const paragraph = runParagraphs.get(operation.runId)
+    if (
+      !paragraph ||
+      storyOfParagraph(document, paragraph)?.kind !== 'document'
+    )
+      throw new OoxmlError('model-node-not-editable')
+    return { ...operation, run, paragraph }
+  }
   if (operation.type === 'insert_cross_reference') {
     return {
       ...operation,
@@ -52,6 +67,17 @@ export function planOperation(
       throw new OoxmlError('model-node-not-editable')
     }
     return { ...operation, paragraph }
+  }
+  if (operation.type === 'set_image_size') {
+    const run = requireEditableRun(
+      document,
+      runParagraphs,
+      operation.runId,
+      false,
+    )
+    const paragraph = runParagraphs.get(operation.runId)
+    if (!paragraph) throw new OoxmlError('model-node-not-editable')
+    return { ...operation, run, paragraph }
   }
   if (operation.type === 'set_run_emphasis') {
     const runId = operation.runId

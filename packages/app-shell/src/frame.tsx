@@ -60,9 +60,11 @@ const BOTTOM_BAR_QUERY = '(max-width: 767px)'
 export function AppShellLayout({
   children,
   platform,
+  loadedBuild = null,
 }: {
   children: ReactNode
   platform: AppPlatform
+  loadedBuild?: string | null
 }) {
   const { session, isPending } = useAuth()
   const currentPath = useRouterState({
@@ -87,7 +89,9 @@ export function AppShellLayout({
   } else {
     body = (
       <ShellContentsProvider>
-        <ShellFrame platform={platform}>{children}</ShellFrame>
+        <ShellFrame platform={platform} loadedBuild={loadedBuild}>
+          {children}
+        </ShellFrame>
       </ShellContentsProvider>
     )
   }
@@ -103,9 +107,11 @@ export function AppShellLayout({
 export function ShellFrame({
   children,
   platform,
+  loadedBuild = null,
 }: {
   children: ReactNode
   platform: AppPlatform
+  loadedBuild?: string | null
 }) {
   const { data: me } = useQuery(currentUserQueryOptions())
   const pathname = useRouterState({
@@ -239,6 +245,7 @@ export function ShellFrame({
           )}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <TitleBar
+              loadedBuild={loadedBuild}
               platform={platform}
               navLabel={navLabel}
               navExpanded={home ? !sidebarCollapsed : contentsVisible}

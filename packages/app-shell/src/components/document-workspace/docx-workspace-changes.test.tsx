@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
@@ -75,6 +75,14 @@ function decided(
 ) {
   callbacks?.onSuccess?.({ versionId: 'ver_2', versionNumber: 2 })
   return Promise.resolve({ versionId: 'ver_2', versionNumber: 2 })
+}
+
+function bulkDialog() {
+  return screen.getByRole('dialog')
+}
+
+function confirmBulk(label: 'Accept all' | 'Reject all') {
+  fireEvent.click(within(bulkDialog()).getByRole('button', { name: label }))
 }
 
 describe('DocxWorkspace change review', () => {
@@ -176,7 +184,9 @@ describe('DocxWorkspace change review', () => {
     mountWorkspace({ changes: [inserted, format], decideAsync: decide })
     openRibbonTab('Review')
     fireEvent.click(command('Accept all changes'))
+    confirmBulk('Accept all')
 
+    expect(decide).toHaveBeenCalledTimes(1)
     expect(decide).toHaveBeenCalledWith(
       {
         baseVersionId: 'ver_1',
@@ -187,11 +197,69 @@ describe('DocxWorkspace change review', () => {
     )
   })
 
+  it('asks before accepting every change and focuses Cancel', async () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({ changes: [inserted, format], decideAsync: decide })
+    openRibbonTab('Review')
+    fireEvent.click(command('Accept all changes'))
+
+    const dialog = bulkDialog()
+    expect(
+      within(dialog).getByRole('heading', { name: 'Accept all changes?' }),
+    ).toBeTruthy()
+    expect(dialog.textContent).toContain('2 changes will be accepted')
+    expect(dialog.textContent).toContain('saves version 2')
+    expect(dialog.textContent).toContain('cannot be undone with Ctrl+Z')
+    expect(dialog.textContent).toContain('restored from History')
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+    await waitFor(() => expect(document.activeElement === cancel).toBe(true))
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('cancels the bulk confirmation without deciding', async () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({ changes: [inserted, format], decideAsync: decide })
+    openRibbonTab('Review')
+    fireEvent.click(command('Accept all changes'))
+    fireEvent.click(
+      within(bulkDialog()).getByRole('button', { name: 'Cancel' }),
+    )
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('cancels the bulk confirmation on Escape', async () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({ changes: [inserted], decideAsync: decide })
+    openRibbonTab('Review')
+    fireEvent.click(command('Accept all changes'))
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('asks before rejecting every change', () => {
+    const decide = vi.fn(decided)
+    mountWorkspace({ changes: [inserted], decideAsync: decide })
+    openRibbonTab('Review')
+    fireEvent.click(command('Reject all changes'))
+
+    const dialog = bulkDialog()
+    expect(
+      within(dialog).getByRole('heading', { name: 'Reject all changes?' }),
+    ).toBeTruthy()
+    expect(dialog.textContent).toContain('1 change will be rejected')
+    expect(decide).not.toHaveBeenCalled()
+  })
+
   it('carries a pending toggle flip on a decision', () => {
     const decide = vi.fn(decided)
     mountWorkspace({ changes: [inserted], decideAsync: decide })
     setTrackChanges(true)
     fireEvent.click(command('Accept all changes'))
+    confirmBulk('Accept all')
 
     expect(decide).toHaveBeenCalledWith(
       {
@@ -221,7 +289,9 @@ describe('DocxWorkspace change review', () => {
     expect(commandDisabled(accept)).toBe(true)
     expect(commandReason(accept)).toBe(reason)
     fireEvent.click(accept)
+    fireEvent.click(acceptAll)
     expect(decide).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('names the save barrier ahead of the decision cap', () => {
@@ -403,6 +473,7 @@ describe('DocxWorkspace change review', () => {
     })
     openRibbonTab('Review')
     fireEvent.click(command('Reject all changes'))
+    confirmBulk('Reject all')
 
     expect(decide).toHaveBeenCalledWith(
       {
@@ -423,6 +494,12 @@ describe('DocxWorkspace change review', () => {
     })
     openRibbonTab('Review')
     fireEvent.click(command('Accept all supported changes'))
+    expect(
+      within(bulkDialog()).getByRole('heading', {
+        name: 'Accept all supported changes?',
+      }),
+    ).toBeTruthy()
+    confirmBulk('Accept all')
 
     expect(decide).toHaveBeenCalledWith(
       {

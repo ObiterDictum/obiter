@@ -1,13 +1,18 @@
 import '@obiter/test-dom'
 import { afterEach, describe, expect, it } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
-import { handleDocumentWorkspaceKeys } from './document-workspace-keys'
+import {
+  documentWorkspaceKeyDown,
+  handleDocumentWorkspaceKeys,
+} from './document-workspace-keys'
 
 const DEFAULT_PLATFORM = navigator.platform
 const DEFAULT_USER_AGENT = navigator.userAgent
 
 const MAC_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+const WINDOWS_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
 
 function stubPlatform(platform: string, userAgent: string) {
   Object.defineProperty(window.navigator, 'platform', {
@@ -290,5 +295,80 @@ describe('document workspace keys', () => {
     const boldEvent = event('b')
     handleDocumentWorkspaceKeys(boldEvent, { save: vi.fn() })
     expect(boldEvent.preventDefault).not.toHaveBeenCalled()
+  })
+
+  describe('footnote shortcut', () => {
+    it('inserts a footnote on Ctrl+Alt+F without opening Find', () => {
+      stubPlatform('Win32', WINDOWS_USER_AGENT)
+      const insertFootnote = vi.fn()
+      const focusFind = vi.fn()
+
+      const findEvent = event('f')
+      handleDocumentWorkspaceKeys(findEvent, { focusFind, insertFootnote })
+      expect(findEvent.preventDefault).toHaveBeenCalled()
+      expect(focusFind).toHaveBeenCalledTimes(1)
+
+      const chord = { ...event('f', { altKey: true }), code: 'KeyF' }
+      handleDocumentWorkspaceKeys(chord, { focusFind, insertFootnote })
+      expect(chord.preventDefault).toHaveBeenCalled()
+      expect(insertFootnote).toHaveBeenCalledTimes(1)
+      expect(focusFind).toHaveBeenCalledTimes(1)
+    })
+
+    it('inserts a footnote on ⌘⌥F on a Mac', () => {
+      stubPlatform('MacIntel', MAC_USER_AGENT)
+      const insertFootnote = vi.fn()
+      const chord = {
+        ...event('ƒ', { altKey: true }),
+        ctrlKey: false,
+        metaKey: true,
+        code: 'KeyF',
+      }
+      handleDocumentWorkspaceKeys(chord, { insertFootnote })
+      expect(chord.preventDefault).toHaveBeenCalled()
+      expect(insertFootnote).toHaveBeenCalledTimes(1)
+    })
+
+    it('lets an AltGr character type instead of inserting a footnote', () => {
+      stubPlatform('Win32', WINDOWS_USER_AGENT)
+      const insertFootnote = vi.fn()
+      const altGr = { ...event('ƒ', { altKey: true }), code: 'KeyF' }
+      handleDocumentWorkspaceKeys(altGr, { insertFootnote })
+      expect(insertFootnote).not.toHaveBeenCalled()
+      expect(altGr.preventDefault).not.toHaveBeenCalled()
+    })
+
+    it('does not insert a footnote from a foreign form field', () => {
+      stubPlatform('Win32', WINDOWS_USER_AGENT)
+      const insertFootnote = vi.fn()
+      const chord = {
+        ...event('f', {
+          altKey: true,
+          target: document.createElement('input'),
+        }),
+        code: 'KeyF',
+      }
+      handleDocumentWorkspaceKeys(chord, { insertFootnote })
+      expect(insertFootnote).not.toHaveBeenCalled()
+      expect(chord.preventDefault).not.toHaveBeenCalled()
+    })
+
+    it('claims nothing for Ctrl+Alt+F when insertion is unavailable', () => {
+      stubPlatform('Win32', WINDOWS_USER_AGENT)
+      const focusFind = vi.fn()
+      const chord = { ...event('f', { altKey: true }), code: 'KeyF' }
+      handleDocumentWorkspaceKeys(chord, { focusFind })
+      expect(chord.preventDefault).not.toHaveBeenCalled()
+      expect(focusFind).not.toHaveBeenCalled()
+    })
+
+    it('routes the footnote source through documentWorkspaceKeyDown', () => {
+      stubPlatform('Win32', WINDOWS_USER_AGENT)
+      const insertFootnote = vi.fn()
+      const chord = { ...event('f', { altKey: true }), code: 'KeyF' }
+      documentWorkspaceKeyDown(chord, { insertFootnote })
+      expect(chord.preventDefault).toHaveBeenCalled()
+      expect(insertFootnote).toHaveBeenCalledTimes(1)
+    })
   })
 })

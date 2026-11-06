@@ -110,6 +110,7 @@ export function remapMergeOperations(
     switch (operation.type) {
       case 'replace_run_text':
       case 'set_run_style':
+      case 'set_image_size':
         return { ...operation, runId: run(operation.runId) }
       case 'set_run_emphasis':
         return {

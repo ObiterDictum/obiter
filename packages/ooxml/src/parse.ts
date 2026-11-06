@@ -11,7 +11,7 @@ import {
 import { extractImportedComments } from './comment-import'
 import { loadOoxmlZipEntries } from './package-loader'
 import { readDocumentMarkings } from './parts/custom-properties'
-import { readTrackRevisions } from './parts/settings'
+import { readDefaultTabStop, readTrackRevisions } from './parts/settings'
 import { parseContentTypes, isXmlPart } from './parts/content-types'
 import { parseNumbering } from './parts/numbering'
 import { createOpaquePart } from './parts/opaque'
@@ -157,6 +157,10 @@ function parseParts(
       preservedXmlFragments,
       changes: [...trackedChanges.values()].map(({ wire }) => wire),
       trackRevisions: readTrackRevisions({
+        model: { relationships },
+        sourceParts,
+      }),
+      defaultTabStopTwips: readDefaultTabStop({
         model: { relationships },
         sourceParts,
       }),

@@ -1,3 +1,5 @@
+import { withStructuralDrafts } from './document-structure-fold'
+import { storyTables } from './document-page-tables'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { collectEditOperations } from './document-edits'
 import type {
@@ -33,22 +35,62 @@ export type SavePlan = {
 export function planDocumentSave(
   model: DocumentModelWire,
   state: DraftState,
+  trackChanges?: boolean,
 ): SavePlan {
   const { keep, covered, blocked, pending, rejections } = partitionDraftState(
     model,
     state,
+    trackChanges,
   )
+  const operations = collectEditOperations(
+    model,
+    keep.drafts,
+    keep.inserts,
+    keep.deletedParagraphIds,
+    keep.extraRuns,
+    keep.format,
+    keep.breaks,
+    keep.structures,
+  )
+  const baselineIds = new Set(
+    model.stories.flatMap((story) => story.paragraphs.map((p) => p.id)),
+  )
+  const painted = withStructuralDrafts(model, keep.structures)
+  for (const table of painted.stories.flatMap(storyTables)) {
+    const cellEdits = table.rows.flatMap((row, rowIndex) =>
+      row.cells.flatMap((cell, column) =>
+        cell.paragraphIds.flatMap((id) => {
+          if (baselineIds.has(id)) return []
+          const runs = keep.extraRuns[id]
+          if (!runs?.length) return []
+          return [
+            {
+              row: rowIndex,
+              column,
+              text: runs.map((run) => keep.drafts[run.id] ?? run.text).join(''),
+            },
+          ]
+        }),
+      ),
+    )
+    if (!cellEdits.length) continue
+    for (let index = operations.length - 1; index >= 0; index--) {
+      const operation = operations[index]
+      if (
+        operation &&
+        (operation.type === 'insert_table_row' ||
+          operation.type === 'insert_table_column' ||
+          operation.type === 'delete_table_row' ||
+          operation.type === 'delete_table_column') &&
+        table.paragraphIds.includes(operation.paragraphId)
+      ) {
+        operations[index] = { ...operation, cellEdits }
+        break
+      }
+    }
+  }
   return {
-    operations: collectEditOperations(
-      model,
-      keep.drafts,
-      keep.inserts,
-      keep.deletedParagraphIds,
-      keep.extraRuns,
-      keep.format,
-      keep.breaks,
-      keep.structures,
-    ),
+    operations,
     covered,
     blocked,
     pending,

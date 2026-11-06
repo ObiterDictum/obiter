@@ -34,12 +34,17 @@ export function effectiveRunView(
   const textBreaks = children
     .filter((element) => isTextWrappingBreak(element))
     .map(elementRange)
+  const textTabs = children
+    .filter((element) => element.localName === 'tab')
+    .map(elementRange)
   let effectiveText = ''
   for (const element of children) {
     if (element.localName === 't' && !element.selfClosing) {
       effectiveText += decodeXmlReferences(
         source.slice(element.startTagEnd, element.endTagStart),
       )
+    } else if (element.localName === 'tab') {
+      effectiveText += '\t'
     } else if (isTextWrappingBreak(element)) {
       effectiveText += '\n'
     }
@@ -49,7 +54,10 @@ export function effectiveRunView(
   }
   const fragments = children
     .filter(
-      (element) => element.localName !== 't' && !isTextWrappingBreak(element),
+      (element) =>
+        element.localName !== 't' &&
+        element.localName !== 'tab' &&
+        !isTextWrappingBreak(element),
     )
     .map((element) => elementFragment(source, element))
   const runRange: XmlElementRange = {
@@ -68,6 +76,7 @@ export function effectiveRunView(
     })),
     textElements,
     textBreaks,
+    textTabs,
     runProperties: fragments.filter((fragment) => /<w:rPr\b/u.test(fragment)),
   }
   return {

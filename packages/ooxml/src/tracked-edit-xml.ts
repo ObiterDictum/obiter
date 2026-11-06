@@ -9,12 +9,11 @@ import {
   applyFragmentReplacements,
   renameFragmentElements,
   escapeXmlAttribute,
-  escapeXmlText,
 } from './parts/overlay'
 import {
-  lineBreakRunReplacements,
   preserveTextElementXmlSpace,
-  textBreakReplacements,
+  runTextReplacements,
+  tabbedRunSpan,
 } from './text-run-edit'
 
 export function replaceRunText(
@@ -23,45 +22,18 @@ export function replaceRunText(
   text: string,
 ) {
   const origin = anchor.runRange.start
-  const breakReplacements = lineBreakRunReplacements(
-    anchor,
-    text,
-    source,
-    origin,
-  )
-  const consumedBreaks = textBreakReplacements(anchor, origin)
-  if (breakReplacements) {
-    const broken = applyFragmentReplacements(
-      source.slice(anchor.runRange.start, anchor.runRange.end),
-      [...breakReplacements, ...consumedBreaks],
-    )
-    if (broken === undefined) throw new OoxmlError('model-node-not-editable')
-    return broken
-  }
-  const replacements = anchor.textRanges.map((range, index) => ({
-    start: range.start - origin,
-    end: range.end - origin,
-    value: index === 0 ? escapeXmlText(text) : '',
-  }))
-  replacements.push(...consumedBreaks)
-  const first = anchor.textElements[0]
-  if (first) {
-    const opening = source.slice(first.start, first.startTagEnd)
-    const preservedOpening = preserveTextElementXmlSpace(opening, text)
-    if (preservedOpening !== opening) {
-      replacements.push({
-        start: first.start - anchor.runRange.start,
-        end: first.startTagEnd - anchor.runRange.start,
-        value: preservedOpening,
-      })
-    }
-  }
+  const replacements = runTextReplacements(source, anchor, text, origin)
   const fragment = applyFragmentReplacements(
     source.slice(anchor.runRange.start, anchor.runRange.end),
     replacements,
   )
   if (fragment === undefined) throw new OoxmlError('model-node-not-editable')
-  return fragment
+  const first = anchor.textElements[0]
+  if (!first || tabbedRunSpan(anchor, text)) return fragment
+  const opening = source.slice(first.start, first.startTagEnd)
+  const preservedOpening = preserveTextElementXmlSpace(opening, text)
+  if (preservedOpening === opening) return fragment
+  return `${fragment.slice(0, first.start - origin)}${preservedOpening}${fragment.slice(first.startTagEnd - origin)}`
 }
 
 export function renameTextElements(

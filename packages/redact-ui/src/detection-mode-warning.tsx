@@ -41,7 +41,7 @@ export function DetectionModeWarning({
         size={16}
         aria-hidden="true"
       />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-[1_1_15rem]">
         <p id={titleId} className="text-item">
           {copy.title}
         </p>

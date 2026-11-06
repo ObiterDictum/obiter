@@ -29,6 +29,10 @@ import { revealTypingLine } from './paragraph-reveal'
 export { revealTypingLine } from './paragraph-reveal'
 
 export type { ParagraphSelectionBinding, ParagraphSelectionHandlers }
+function insideTableCell(node: HTMLElement) {
+  return node.closest('[data-table-cell]') !== null
+}
+
 export function ParagraphEditor({
   paragraphId,
   text,
@@ -41,17 +45,21 @@ export function ParagraphEditor({
   lines,
   previous,
   next,
+  previousCell,
+  nextCell,
   verticalCaret,
   selection,
   onSelect,
   onFocusParagraph,
   onMoveCaret,
+  onMoveCell,
   onTextSelection,
   onChangeText,
   onBackspace,
   onDelete,
   onEnter,
   onLineBreak,
+  onInsertTab,
 }: {
   paragraphId: string
   text: string
@@ -64,11 +72,14 @@ export function ParagraphEditor({
   lines: WrappedLine[]
   previous?: ArrowNeighbor
   next?: ArrowNeighbor
+  previousCell?: ArrowNeighbor
+  nextCell?: ArrowNeighbor
   verticalCaret?: VerticalCaretColumn
   selection?: ParagraphSelectionBinding
   onSelect: (offset?: number) => void
   onFocusParagraph?: () => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
+  onMoveCell?: (paragraphId: string, offset: number) => void
   onTextSelection?: (
     start: number,
     end: number,
@@ -79,6 +90,7 @@ export function ParagraphEditor({
   onDelete: (offset: number) => void
   onEnter: (offset: number) => void
   onLineBreak: (offset: number) => void
+  onInsertTab: (from: number, to: number) => void
 }) {
   const editable = (at: number) => projection?.toEditable(at) ?? at
   const display = (at: number) => projection?.toDisplay(at) ?? at
@@ -200,6 +212,20 @@ export function ParagraphEditor({
       }}
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing || composing.current) return
+        const cell =
+          event.key === 'Tab' &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.metaKey
+            ? event.shiftKey
+              ? previousCell
+              : nextCell
+            : undefined
+        if (cell && onMoveCell) {
+          event.preventDefault()
+          onMoveCell(cell.id, cell.text.length)
+          return
+        }
         const node = event.currentTarget
         const start = editable(node.selectionStart)
         const end = editable(node.selectionEnd)
@@ -222,6 +248,13 @@ export function ParagraphEditor({
           })
         )
           return
+        if (event.key === 'Tab' && !insideTableCell(node)) {
+          event.preventDefault()
+          if (event.shiftKey) return
+          if (selection?.active) selection.onReplaceRange('\t')
+          else onInsertTab(start, end)
+          return
+        }
         if (event.key === 'Escape') {
           if (selection?.active) {
             event.preventDefault()

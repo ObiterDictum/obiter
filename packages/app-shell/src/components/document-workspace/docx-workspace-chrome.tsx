@@ -22,6 +22,7 @@ import { EditorFindBar } from './editor-find-bar'
 import { EditorCommandPalette } from './editor-command-palette'
 import { EditorFormattingPanel } from './editor-formatting-panel'
 import { EditorSelectionToolbar } from './editor-selection-toolbar'
+import { PictureSizeToolbar } from './picture-size-toolbar'
 import { InsertTableDialog } from './insert-table-dialog'
 import { InsertLinkDialog } from './insert-link-dialog'
 import { InsertCrossReferenceDialog } from './insert-cross-reference-dialog'
@@ -52,6 +53,7 @@ type DocxWorkspaceChromeProps = {
   drafts: ChromeDrafts
   remoteChange: boolean
   transientNotice: string | null
+  selectionNoticeVisible?: boolean
   selectionNotice: string
   onReload: () => void
   requests: { find: number; palette: number; formatting: number }
@@ -68,6 +70,7 @@ function DocxWorkspaceChromeInner({
   drafts,
   remoteChange,
   transientNotice,
+  selectionNoticeVisible,
   selectionNotice,
   onReload,
   requests,
@@ -183,6 +186,7 @@ function DocxWorkspaceChromeInner({
         drafts={drafts}
         remoteChange={remoteChange}
         transientNotice={transientNotice}
+        selectionNoticeVisible={selectionNoticeVisible}
         selectionNotice={selectionNotice}
         onReload={onReload}
       />
@@ -198,6 +202,7 @@ function DocxWorkspaceChromeInner({
         onOpenChange={setPaletteOpen}
         menus={menus}
       />
+      <PictureSizeToolbar control={props.picture} />
       <EditorSelectionToolbar
         visible={selectionActive && props.canEdit}
         format={props.format}
@@ -390,6 +395,7 @@ export function docxWorkspaceChrome({
         ? 'The edit history needs a reload before saving.'
         : 'There are no unsaved changes.',
     format,
+    picture: drafts.picture.control,
     clipboard: documentClipboardToolbar({
       editable: true,
       selectionActive,

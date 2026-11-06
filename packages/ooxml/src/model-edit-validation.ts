@@ -13,7 +13,7 @@ import { parseXmlElements } from './parts/overlay'
 export type PlannedOperation =
   | (Extract<
       DocumentEditOperation,
-      { type: 'replace_run_text' | 'set_run_style' }
+      { type: 'replace_run_text' | 'set_run_style' | 'delete_footnote' }
     > & { run: TextRunAnchor; paragraph: ParagraphAnchor })
   | (Extract<DocumentEditOperation, { type: 'set_run_emphasis' }> & {
       run?: TextRunAnchor
@@ -32,6 +32,11 @@ export type PlannedOperation =
           | 'insert_break'
           | 'insert_section_break'
           | 'insert_table'
+          | 'insert_table_row'
+          | 'insert_table_column'
+          | 'delete_table_row'
+          | 'delete_table_column'
+          | 'delete_table'
           | 'insert_image'
           | 'set_hyperlink'
           | 'insert_footnote'
@@ -45,6 +50,10 @@ export type PlannedOperation =
   | (Extract<DocumentEditOperation, { type: 'insert_cross_reference' }> & {
       paragraph: ParagraphAnchor
       targetParagraph: ParagraphAnchor
+    })
+  | (Extract<DocumentEditOperation, { type: 'set_image_size' }> & {
+      run: TextRunAnchor
+      paragraph: ParagraphAnchor
     })
   | Extract<DocumentEditOperation, { type: 'set_section_properties' }>
 
@@ -172,11 +181,18 @@ export function validateTrackedOperations(
     if (!('paragraph' in operation)) continue
     if (deletedIds.has(operation.paragraph.wire.id)) continue
     if (
+      operation.type === 'insert_table_row' ||
+      operation.type === 'insert_table_column' ||
+      operation.type === 'delete_table_row' ||
+      operation.type === 'delete_table_column' ||
+      operation.type === 'delete_table' ||
       operation.type === 'insert_table' ||
       operation.type === 'insert_image' ||
+      operation.type === 'set_image_size' ||
       operation.type === 'set_hyperlink' ||
       operation.type === 'insert_cross_reference' ||
       operation.type === 'insert_footnote' ||
+      operation.type === 'delete_footnote' ||
       operation.type === 'insert_page_number' ||
       operation.type === 'insert_table_of_contents' ||
       operation.type === 'insert_table_of_authorities' ||

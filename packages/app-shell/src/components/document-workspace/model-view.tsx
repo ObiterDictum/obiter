@@ -26,25 +26,44 @@ import type { PageFloat, PageTextBox } from '../../document-page-floats'
 import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 import { documentListMarkers } from '../../document-page-lists'
 import { paragraphStoryResolver } from '../../document-model-text'
-import { documentNotes } from '../../document-page-notes'
+import { documentNoteNumbers, documentNotes } from '../../document-page-notes'
 import { pageClickHandlers } from './model-page-clicks'
 import { useLatestCallback } from './use-latest-callback'
 import type { ParagraphWordEdit } from './model-paragraph'
-import type { ParagraphSelectionRange } from './model-run'
+import { NoteNumbersContext, type ParagraphSelectionRange } from './model-run'
 import { PageOverlays, renderBlock } from './model-page-blocks'
 import {
   paragraphNeighborResolver,
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
+import type { PictureInteraction } from './picture-frame'
 import { PageMarginBand, type EditableMargin } from './page-margin-band'
 import { useMarginEdit } from './use-margin-edit'
+
+const FOOTNOTE_SEPARATOR_PX = 192
+
+function footnoteContinues(blocks: readonly LaidOutBlock[]): boolean {
+  const first = blocks[0]
+  return (
+    first?.type === 'paragraph' &&
+    Boolean(first.continuation || (first.from ?? 0) > 0)
+  )
+}
 
 const NO_INSERTS: LocalInsert[] = []
 const NO_DELETED_PARAGRAPH_IDS: string[] = []
 const NO_EXTRA_RUNS: ExtraRuns = {}
 
-export function DocumentModelPage({
+export function DocumentModelPage(props: Parameters<typeof ModelPage>[0]) {
+  return (
+    <NoteNumbersContext value={documentNoteNumbers(props.model)}>
+      <ModelPage {...props} />
+    </NoteNumbersContext>
+  )
+}
+
+function ModelPage({
   model,
   pendingRedlines,
   selectedParagraphId,
@@ -76,6 +95,7 @@ export function DocumentModelPage({
   selectionSegments = new Map(),
   linkOverlays,
   selectionHandlers,
+  picture,
   onFocusParagraph,
   onMoveCaret,
   marginEditing,
@@ -127,6 +147,7 @@ export function DocumentModelPage({
   selectionSegments?: ReadonlyMap<string, ParagraphSelectionRange>
   linkOverlays?: ReadonlyMap<string, ParagraphLinkOverlay>
   selectionHandlers?: ParagraphSelectionHandlers
+  picture?: PictureInteraction
   onFocusParagraph?: (paragraphId: string) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
   marginEditing?: DocumentStoryWire
@@ -218,6 +239,7 @@ export function DocumentModelPage({
     firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
 
   const sharedCtx = {
+    extraRuns,
     model,
     pendingRedlines,
     selectedParagraphId,
@@ -249,6 +271,7 @@ export function DocumentModelPage({
     selectionSegments,
     linkOverlays,
     selectionHandlers,
+    picture,
     onFocusParagraph,
     onMoveCaret,
     pageNumber,
@@ -290,6 +313,11 @@ export function DocumentModelPage({
           : page.heightPx,
       }}
       data-document-page
+      onClickCapture={(event) => {
+        if (!(event.target instanceof Element)) return
+        if (event.target.closest('[data-picture-run-id]')) return
+        picture?.onClear()
+      }}
       {...pageClickHandlers({
         editing,
         marginEditing,
@@ -389,6 +417,22 @@ export function DocumentModelPage({
             paddingTop: 12,
           }}
         >
+          <div
+            aria-hidden="true"
+            data-footnote-separator={
+              footnoteContinues(pageLayout.footnotes.blocks)
+                ? 'continuation'
+                : 'separator'
+            }
+            className="shrink-0 bg-current"
+            style={{
+              height: 1,
+              marginBottom: 8,
+              width: footnoteContinues(pageLayout.footnotes.blocks)
+                ? '100%'
+                : Math.min(FOOTNOTE_SEPARATOR_PX, frame.widthPx),
+            }}
+          />
           {pageLayout.footnotes.blocks.flatMap((block, index) =>
             renderBlock(block, index, {
               ...sharedCtx,

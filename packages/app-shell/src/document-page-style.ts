@@ -12,6 +12,7 @@ import {
   xmlNumber,
   xmlTagAttrs,
 } from './document-page-units'
+import { DEFAULT_TAB_STOP_TWIPS } from './document-page-tabs'
 import type { HighlightValue } from './document-format-types'
 import {
   runFlag,
@@ -45,6 +46,8 @@ export type ParagraphFace = {
   keepNext?: boolean
   keepLines?: boolean
   widowControl?: boolean
+  tabStopsPx?: number[]
+  tabStopPx?: number
   run: RunFace
 }
 
@@ -88,6 +91,8 @@ export function documentDefaultFace(styles: DocumentStyleWire[]): RunFace {
 export function paragraphFace(
   paragraph: DocumentParagraphWire,
   styles: DocumentStyleWire[],
+  defaultTabStopTwips = DEFAULT_TAB_STOP_TWIPS,
+  note = false,
 ): ParagraphFace {
   const chain = styleChain(styles, paragraph.styleId)
   const merged = mergeParagraph(
@@ -96,14 +101,19 @@ export function paragraphFace(
   )
   return {
     ...merged,
+    lineHeight: merged.lineHeight ?? (note ? '1' : undefined),
     marginTopPx: merged.marginTopPx ?? 0,
     marginBottomPx: merged.marginBottomPx ?? 0,
     keepNext: merged.keepNext ?? false,
     keepLines: merged.keepLines ?? false,
     widowControl: merged.widowControl ?? true,
+    tabStopPx: twipToPx(
+      defaultTabStopTwips > 0 ? defaultTabStopTwips : DEFAULT_TAB_STOP_TWIPS,
+    ),
     run: {
       fontFamily: merged.run.fontFamily ?? DEFAULT_FONT,
-      fontSizePx: merged.run.fontSizePx ?? DEFAULT_SIZE_PX,
+      fontSizePx:
+        merged.run.fontSizePx ?? (note ? halfPointToPx(20) : DEFAULT_SIZE_PX),
       ...omitUndefined(merged.run),
     },
   }
@@ -237,8 +247,21 @@ function faceFromXml(xml: string): ParagraphFace {
     keepNext: wordFlag(pPr, 'keepNext'),
     keepLines: wordFlag(pPr, 'keepLines'),
     widowControl: wordFlag(pPr, 'widowControl'),
+    tabStopsPx: tabStopsPx(pPr),
+    tabStopPx: 0,
     run: runFromXml(rPr),
   }
+}
+
+function tabStopsPx(pPr: string) {
+  const stops = [...pPr.matchAll(/<w:tab\b([^>]*)\/?>/giu)]
+    .map((match) => xmlNumber(match[1], 'pos'))
+    .filter((pos): pos is number => pos !== undefined)
+    .map((pos) => Math.round(twipToPx(pos)))
+    .filter((pos) => pos > 0)
+  return stops.length > 0
+    ? [...new Set(stops)].sort((a, b) => a - b)
+    : undefined
 }
 
 function runFromXml(xml: string): RunFace {
@@ -299,12 +322,15 @@ function mergeParagraph(...faces: ParagraphFace[]): ParagraphFace {
       keepNext: next.keepNext ?? current.keepNext,
       keepLines: next.keepLines ?? current.keepLines,
       widowControl: next.widowControl ?? current.widowControl,
+      tabStopsPx: next.tabStopsPx ?? current.tabStopsPx,
+      tabStopPx: next.tabStopPx || current.tabStopPx,
       run: mergeRun(current.run, next.run),
     }),
     {
       keepNext: false,
       keepLines: false,
       widowControl: true,
+      tabStopPx: 0,
       run: {},
     },
   )

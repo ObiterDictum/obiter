@@ -23,6 +23,7 @@ import {
 import {
   rowPaintHeight,
   cellWrapWidthPx,
+  tableBordered,
   type DisplayTable,
   type StoryBlock,
 } from './document-page-tables'
@@ -125,8 +126,19 @@ export function layoutParagraph(
       advance()
     }
     place()
+    if (!text.trim()) {
+      session.page.blocks.push({
+        type: 'paragraph',
+        paragraph,
+        from: 0,
+        to: text.length,
+        column: session.col,
+        wrapWidthPx: Math.max(1, column().widthPx - indent),
+      })
+      session.y += imagePx
+      return
+    }
     session.y += imagePx
-    if (!text.trim()) return
   }
 
   if (hosts.has(paragraph.id) && !text.trim()) {
@@ -293,7 +305,7 @@ export function tableHeight(
         return (
           Math.max(textHeight, cell.minHeightPx ?? 0, cell.fill ? 48 : 0) +
           (cell.fill ? 0 : 4) +
-          (table.bordered ? 1 : 0)
+          (tableBordered(table, model.styles) ? 1 : 0)
         )
       }),
     )

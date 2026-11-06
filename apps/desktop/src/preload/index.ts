@@ -12,4 +12,13 @@ contextBridge.exposeInMainWorld('obiterDesktop', {
   setAuthToken: (token: string) =>
     ipcRenderer.invoke('obiter:set-auth-token', token),
   clearAuthToken: () => ipcRenderer.invoke('obiter:clear-auth-token'),
+  onUpdateReady: (listener: () => void) => {
+    const announce = () => listener()
+    ipcRenderer.on('obiter:update-ready', announce)
+    void ipcRenderer.invoke('obiter:update-status').then((version: unknown) => {
+      if (typeof version === 'string') listener()
+    })
+    return () => ipcRenderer.removeListener('obiter:update-ready', announce)
+  },
+  restartToUpdate: () => ipcRenderer.invoke('obiter:restart-to-update'),
 })

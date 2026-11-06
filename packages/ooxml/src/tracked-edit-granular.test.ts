@@ -379,7 +379,7 @@ describe('granular tracked text edits', () => {
     const { xml } = await editAndParse(
       '<w:r><w:t>keep tab</w:t><w:tab/><w:t>here</w:t></w:r>',
       'keep tab gone here',
-      'keep tabhere',
+      'keep tab\there',
     )
     expect(xml).not.toContain('<w:delText>tab</w:delText>')
     expect(xml).toContain('<w:delText>keep tab</w:delText>')

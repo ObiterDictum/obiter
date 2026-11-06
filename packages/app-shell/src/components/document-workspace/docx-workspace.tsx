@@ -1,7 +1,4 @@
-import {
-  InlineChangeReview,
-  useInlineReviewValue,
-} from './inline-change-review'
+import { WorkspaceTableSurface } from './workspace-table-surface'
 import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
@@ -115,11 +112,7 @@ export function DocxWorkspace({
   const splitScale = useSplitScale()
   const panels = useWorkspacePanels()
   const legalTools = useLegalToolsState(documentId)
-  const trackChanges =
-    drafts.trackChangesFlip !== undefined &&
-    drafts.trackChangesFlip !== (model?.trackRevisions ?? false)
-      ? drafts.trackChangesFlip
-      : (model?.trackRevisions ?? false)
+  const trackChanges = drafts.trackChangesFlip ?? model?.trackRevisions ?? false
   const [banner, setBanner] = useState<string | null>(null)
   const { printBanner, printDocument } = useDocumentPrint()
   const {
@@ -178,6 +171,7 @@ export function DocxWorkspace({
     selectionActive,
     selectionSegments,
     selectionNotice,
+    selectionNoticeVisible,
     commentTarget,
     revealCommentAnchor,
     focusParagraph,
@@ -311,6 +305,8 @@ export function DocxWorkspace({
     toggleNavPane()
   }
   const commentSelection = useLatestCallback(() => panels.tabs.open('comments'))
+  const reviewPanel = useLatestCallback(() => togglePanel('review'))
+
   const chrome = useLatestHandlers(
     docxWorkspaceChrome({
       save,
@@ -364,12 +360,12 @@ export function DocxWorkspace({
     }),
   )
 
-  const inlineReview = useInlineReviewValue(changeReview, () =>
-    togglePanel('review'),
-  )
-
   return (
-    <InlineChangeReview value={inlineReview}>
+    <WorkspaceTableSurface
+      structure={insert.structure}
+      review={changeReview}
+      onReview={reviewPanel}
+    >
       <WorkspaceShell
         layout={layout}
         onKeyDown={(event) =>
@@ -379,6 +375,10 @@ export function DocxWorkspace({
             undo,
             redo,
             print,
+            insertFootnote: insert.structure.footnoteUnavailable
+              ? undefined
+              : insert.structure.onInsertFootnote,
+            picture: drafts.picture.keydown,
             format,
             request,
             review: changeReview,
@@ -419,6 +419,7 @@ export function DocxWorkspace({
               drafts={chromeDrafts}
               remoteChange={remoteChange}
               transientNotice={transientBanner}
+              selectionNoticeVisible={selectionNoticeVisible}
               selectionNotice={
                 selectionNotice ?? selectionAnnouncement(selectionSegments.size)
               }
@@ -492,6 +493,6 @@ export function DocxWorkspace({
           </>
         ) : null}
       </WorkspaceShell>
-    </InlineChangeReview>
+    </WorkspaceTableSurface>
   )
 }

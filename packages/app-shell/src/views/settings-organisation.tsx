@@ -1,3 +1,4 @@
+import { OrganisationUpdates } from './settings-updates'
 import { Button, Input } from '@obiter/ui'
 import { ArrowRight } from '@obiter/ui/icons'
 import { useRef, useState, type FormEvent } from 'react'
@@ -73,6 +74,10 @@ export function OrganisationSection({
             />
           </dl>
 
+          <OrganisationUpdates
+            organisationId={organisation.id}
+            role={me.user.role}
+          />
           <OrganisationAgentSettingsSection
             organisationId={organisation.id}
             role={me.user.role}

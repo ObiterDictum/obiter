@@ -60,7 +60,7 @@ export function useWorkspaceClipboard({
   replaceSelection: (
     text: string,
     range?: { start: SelectionEndpoint; end: SelectionEndpoint },
-  ) => void
+  ) => number | undefined
   selectedParagraphId: string | null
   selectionParagraphIds: ReadonlySet<string>
   isStructuralParagraph: (paragraphId: string) => boolean
@@ -93,7 +93,11 @@ export function useWorkspaceClipboard({
       setRefusal('clipboard')
       return
     }
-    replaceSelection('')
+    reportCut(replaceSelection(''))
+  }
+
+  function reportCut(count: number | undefined) {
+    if (count) setRefusal({ kind: 'cut-footnotes', count })
   }
 
   async function copyToClipboard() {
@@ -116,7 +120,7 @@ export function useWorkspaceClipboard({
       setRefusal('clipboard')
       return
     }
-    replaceSelection('', range)
+    reportCut(replaceSelection('', range))
   }
 
   type PasteOffsets = { paragraphId: string; from: number; to: number }

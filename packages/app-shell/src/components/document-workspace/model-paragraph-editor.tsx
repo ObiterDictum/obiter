@@ -4,6 +4,7 @@ import type { ParagraphFace } from '../../document-page-style'
 import { deleteCharBeforeOffset, textDiff } from '../../document-model-text'
 import type { ModelParagraph } from './model-paragraph-memo'
 import { ParagraphEditor } from './paragraph-editor'
+import { DEFAULT_TAB_STOP_PX } from '../../document-page-tabs'
 
 export type ParagraphWordEdit = {
   type: 'replace' | 'deleteBackward' | 'deleteForward' | 'split' | 'lineBreak'
@@ -33,6 +34,9 @@ export function ModelParagraphEditor({
   lines,
   previous,
   next,
+  previousCell,
+  nextCell,
+  onMoveCell,
   verticalCaret,
   selection,
   onFocusParagraph,
@@ -53,6 +57,9 @@ export function ModelParagraphEditor({
   | 'lines'
   | 'previous'
   | 'next'
+  | 'previousCell'
+  | 'nextCell'
+  | 'onMoveCell'
   | 'verticalCaret'
   | 'selection'
   | 'onFocusParagraph'
@@ -91,6 +98,9 @@ export function ModelParagraphEditor({
       lines={lines}
       previous={previous}
       next={next}
+      previousCell={previousCell}
+      nextCell={nextCell}
+      onMoveCell={onMoveCell}
       verticalCaret={verticalCaret}
       selection={selection}
       onFocusParagraph={onFocusParagraph}
@@ -106,6 +116,7 @@ export function ModelParagraphEditor({
         height: editorHeight,
         lineHeight: `${linePx}px`,
         whiteSpace: 'pre-wrap',
+        tabSize: face.tabStopsPx?.[0] ?? face.tabStopPx ?? DEFAULT_TAB_STOP_PX,
         overflowWrap: 'normal',
         wordBreak: 'normal',
         textAlign: face.align ?? 'left',
@@ -185,6 +196,26 @@ export function ModelParagraphEditor({
             paragraphId: paragraph.id,
             offset: start + local,
           })
+        }
+      }}
+      onInsertTab={(from, to) => {
+        if (onWordEdit) {
+          onWordEdit({
+            type: 'replace',
+            paragraphId: paragraph.id,
+            offset: start + from,
+            from: start + from,
+            to: start + to,
+            insert: '\t',
+          })
+          return
+        }
+        const first = effective.runs[0]
+        if (first) {
+          onRunTextChange?.(
+            first.id,
+            `${fullText.slice(0, start + from)}\t${fullText.slice(start + to)}`,
+          )
         }
       }}
     />

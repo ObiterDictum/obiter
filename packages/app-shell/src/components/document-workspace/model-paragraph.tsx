@@ -29,10 +29,8 @@ import {
   paragraphPlainText,
   sliceContainsOffset,
 } from '../../document-model-text'
-import { paragraphInlineXml } from '../../document-page-floats'
 import { firstLineIndentPx, wrapLines } from '../../document-page-flow'
 import type { ListMarker } from '../../document-page-lists'
-import { imagePartNameForDrawing } from '../../document-page-media'
 import type { NoteKind } from '../../document-page-notes'
 import {
   paragraphCss,
@@ -40,7 +38,8 @@ import {
   paragraphLineHeightPx,
 } from '../../document-page-style'
 import { toModelEndpoint } from '../../document-selection'
-import { PageDrawing } from './page-drawing'
+import { ParagraphPictures } from './paragraph-pictures'
+import type { PictureInteraction } from './picture-frame'
 import type {
   ParagraphNeighborResolver,
   VerticalCaretColumn,
@@ -84,6 +83,7 @@ export function ModelParagraphInner({
   relationships,
   imageUrls,
   styles,
+  defaultTabStopTwips,
   from,
   to,
   padLeftPx = 0,
@@ -98,6 +98,7 @@ export function ModelParagraphInner({
   noteKind,
   story,
   linkOverlay,
+  picture,
 }: {
   paragraph: DocumentParagraphWire
   pendingChanges?: PendingInlineChange[]
@@ -131,6 +132,7 @@ export function ModelParagraphInner({
   relationships: DocumentRelationshipWire[]
   imageUrls: Record<string, string>
   styles: DocumentStyleWire[]
+  defaultTabStopTwips?: number
   from?: number
   to?: number
   padLeftPx?: number
@@ -145,6 +147,7 @@ export function ModelParagraphInner({
   noteKind?: NoteKind
   story?: { kind: string; partName: string }
   linkOverlay?: ParagraphLinkOverlay
+  picture?: PictureInteraction
 }) {
   const carets = (presence ?? []).filter(
     (item) =>
@@ -152,8 +155,23 @@ export function ModelParagraphInner({
       item.cursor?.paragraphId === paragraph.id,
   )
   const face = useMemo(
-    () => paragraphFace(paragraph, styles),
-    [paragraph.preservedXmlFragments, paragraph.styleId, styles],
+    () =>
+      paragraphFace(
+        paragraph,
+        styles,
+        defaultTabStopTwips,
+        noteKind !== undefined ||
+          story?.kind === 'footnotes' ||
+          story?.kind === 'endnotes',
+      ),
+    [
+      paragraph.preservedXmlFragments,
+      paragraph.styleId,
+      styles,
+      noteKind,
+      story?.kind,
+      defaultTabStopTwips,
+    ],
   )
   const bucket = useMemo(
     () =>
@@ -195,7 +213,6 @@ export function ModelParagraphInner({
     ? inlineSlice(projection, displayStart, displayEnd)
     : undefined
   const linePx = paragraphLineHeightPx(face)
-  const images = continuation ? [] : paragraphInlineXml(paragraph)
   const ownsBreak = end < fullText.length && fullText[end] === '\n'
   const restore =
     restoreCaret?.paragraphId === paragraph.id &&
@@ -301,6 +318,7 @@ export function ModelParagraphInner({
       linkOverlay={inlineLinkOverlay(projection, linkOverlay)}
       carets={carets}
       continuation={continuation}
+      indentFirstPx={onBodyEdge ? 0 : (face.indentFirstPx ?? 0)}
       pageNumber={pageNumber}
       pageReferences={pageReferences}
     />
@@ -341,21 +359,16 @@ export function ModelParagraphInner({
         paddingRight: (face.indentRightPx ?? 0) + padRightPx,
       }}
     >
-      {images.map((xml, index) => {
-        const partName = imagePartNameForDrawing(
-          xml,
-          storyPartName,
-          relationships,
-        )
-        return (
-          <PageDrawing
-            key={`${paragraph.id}-img-${index}`}
-            xml={xml}
-            imageUrl={partName ? imageUrls[partName] : undefined}
-            fallbackLabel="Document image"
-          />
-        )
-      })}
+      {continuation ? null : (
+        <ParagraphPictures
+          paragraph={paragraph}
+          storyPartName={storyPartName}
+          relationships={relationships}
+          imageUrls={imageUrls}
+          columnWidthPx={wrapWidthPx ?? 0}
+          picture={picture}
+        />
+      )}
       <div
         className="flex min-h-[1em] w-full"
         style={{ textAlign: face.align ?? 'left', lineHeight: `${linePx}px` }}
@@ -376,14 +389,19 @@ export function ModelParagraphInner({
           </span>
         ) : noteMark && !continuation ? (
           <span
-            className="shrink-0 pr-1 align-super text-[0.75em]"
+            className="shrink-0 self-start pr-1"
             aria-label={
               noteKind === 'endnote'
                 ? `Endnote ${noteMark}`
                 : `Footnote ${noteMark}`
             }
           >
-            <span aria-hidden="true">{noteMark}</span>
+            <span
+              aria-hidden="true"
+              className="relative -top-[0.5em] text-[0.65em] leading-none"
+            >
+              {noteMark}
+            </span>
           </span>
         ) : null}
         <div
@@ -438,6 +456,9 @@ export function ModelParagraphInner({
                 }
                 previous={adjacent?.previous}
                 next={adjacent?.next}
+                previousCell={adjacent?.previousCell}
+                nextCell={adjacent?.nextCell}
+                onMoveCell={onSelectParagraph}
                 verticalCaret={verticalCaret}
                 selection={selectionBinding}
                 onFocusParagraph={

@@ -1,3 +1,5 @@
+import type { DocumentStyleWire } from '@obiter/contracts'
+
 import { escapeXmlAttribute } from './parts/overlay'
 import { WORD_NAMESPACE } from './parts/xml-elements'
 import { wordRunInnerTextXml } from './text-run-edit'
@@ -17,6 +19,10 @@ export const RELATIONSHIPS_NAMESPACE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
 const EMU_PER_PX = 9525
+
+export function pxToEmu(px: number) {
+  return Math.round(px * EMU_PER_PX)
+}
 
 const TABLE_WIDTH_TWIPS = 9000
 
@@ -101,8 +107,8 @@ export function buildInlineDrawingXml({
   name: string
   docPrId: number
 }) {
-  const cx = Math.round(widthPx * EMU_PER_PX)
-  const cy = Math.round(heightPx * EMU_PER_PX)
+  const cx = pxToEmu(widthPx)
+  const cy = pxToEmu(heightPx)
   const id = String(docPrId)
   const escaped = escapeXmlAttribute(name)
   return (
@@ -121,12 +127,80 @@ export function buildInlineDrawingXml({
   )
 }
 
+export type DrawingSizeSupport = 'resizable' | 'floating' | 'unsupported'
+
+export function drawingSizeSupport(xml: string): DrawingSizeSupport {
+  if (/<wp:anchor\b/i.test(xml)) return 'floating'
+  if (!/<wp:inline\b/i.test(xml) || !/<pic:pic\b/i.test(xml)) {
+    return 'unsupported'
+  }
+  if (/<wpg\b|<wps\b|<mc:AlternateContent\b/i.test(xml)) return 'unsupported'
+  return 'resizable'
+}
+
+export function setDrawingExtent(
+  xml: string,
+  size: { widthPx: number; heightPx: number },
+) {
+  if (drawingSizeSupport(xml) !== 'resizable') return undefined
+  const cx = String(pxToEmu(size.widthPx))
+  const cy = String(pxToEmu(size.heightPx))
+  const extent = /<wp:extent\b[^>]*>/i.exec(xml)?.[0]
+  const resizedExtent = extent ? resizeEmuAttributes(extent, cx, cy) : undefined
+  if (!extent || !resizedExtent) return undefined
+  const resized = xml.replace(extent, resizedExtent)
+  const properties = /<pic:spPr\b[\s\S]*?<\/pic:spPr>/i.exec(resized)?.[0]
+  const ext = properties ? /<a:ext\b[^>]*>/i.exec(properties)?.[0] : undefined
+  const resizedExt = ext ? resizeEmuAttributes(ext, cx, cy) : undefined
+  if (!properties || !ext || !resizedExt) return resized
+  return resized.replace(properties, properties.replace(ext, resizedExt))
+}
+
+function resizeEmuAttributes(tag: string, cx: string, cy: string) {
+  if (!/\bcx="\d+"/i.test(tag) || !/\bcy="\d+"/i.test(tag)) return undefined
+  return tag
+    .replace(/\bcx="\d+"/i, `cx="${cx}"`)
+    .replace(/\bcy="\d+"/i, `cy="${cy}"`)
+}
+
 const FOOTNOTE_REFERENCE_STYLE = 'FootnoteReference'
 const FOOTNOTE_TEXT_STYLE = 'FootnoteText'
 
+export function missingFootnoteStyles(
+  styles: readonly DocumentStyleWire[],
+): DocumentStyleWire[] {
+  const present = new Set(styles.map((style) => style.styleId))
+  const basedOn = (styleId: string) =>
+    present.has(styleId) ? `<w:basedOn w:val="${styleId}"/>` : ''
+  const wires: DocumentStyleWire[] = [
+    {
+      styleId: FOOTNOTE_TEXT_STYLE,
+      ...(present.has('Normal') ? { basedOnStyleId: 'Normal' } : {}),
+      sourceFragment:
+        `<w:style w:type="paragraph" w:styleId="${FOOTNOTE_TEXT_STYLE}">` +
+        `<w:name w:val="footnote text"/>${basedOn('Normal')}` +
+        '<w:uiPriority w:val="99"/><w:unhideWhenUsed/>' +
+        '<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>' +
+        '<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr></w:style>',
+    },
+    {
+      styleId: FOOTNOTE_REFERENCE_STYLE,
+      ...(present.has('DefaultParagraphFont')
+        ? { basedOnStyleId: 'DefaultParagraphFont' }
+        : {}),
+      sourceFragment:
+        `<w:style w:type="character" w:styleId="${FOOTNOTE_REFERENCE_STYLE}">` +
+        `<w:name w:val="footnote reference"/>${basedOn('DefaultParagraphFont')}` +
+        '<w:uiPriority w:val="99"/><w:unhideWhenUsed/>' +
+        '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style>',
+    },
+  ]
+  return wires.filter((wire) => !present.has(wire.styleId))
+}
+
 export function buildFootnoteReferenceRunXml(footnoteId: number) {
   return (
-    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr>` +
+    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/><w:vertAlign w:val="superscript"/></w:rPr>` +
     `<w:footnoteReference w:id="${String(footnoteId)}"/></w:r>`
   )
 }
@@ -140,7 +214,7 @@ export function buildFootnoteXml(
   return (
     `<w:footnote w:id="${String(footnoteId)}">` +
     `<w:p${identity}><w:pPr><w:pStyle w:val="${FOOTNOTE_TEXT_STYLE}"/></w:pPr>` +
-    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/></w:rPr><w:footnoteRef/></w:r>` +
+    `<w:r><w:rPr><w:rStyle w:val="${FOOTNOTE_REFERENCE_STYLE}"/><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteRef/></w:r>` +
     `<w:r>${wordRunInnerTextXml('w', text)}</w:r>` +
     `</w:p></w:footnote>`
   )

@@ -10,8 +10,8 @@
     "build": "electron-vite build",
     "dev": "electron-vite dev",
     "preview": "electron-vite preview",
-    "package": "electron-vite build && electron-builder",
-    "package:win": "electron-vite build && electron-builder --win",
+    "package": "electron-vite build && electron-builder --publish never",
+    "package:win": "electron-vite build && electron-builder --win --publish never",
     "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts --preload ../../scripts/test/dom-preload.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -30,6 +30,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^45.0.0",
     "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.11",
     "electron-vite": "^5.0.0",
     "tailwindcss": "^4.3.2",
     "vite": "^7.2.0"

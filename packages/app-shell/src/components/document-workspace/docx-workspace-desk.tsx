@@ -11,6 +11,7 @@ import type { ChangeReview } from './use-change-review'
 import type { WorkspacePanel } from './use-workspace-panels'
 import type { AuthorityHit } from '../../document-authorities'
 import { DocxDesk } from './docx-desk'
+import { BulkDecisionDialog } from './bulk-decision-dialog'
 import { DocxModelPages } from './docx-model-pages'
 import { WorkspaceSidePanels } from './workspace-side-panels'
 const DocumentCompareRedline = lazy(() =>
@@ -86,74 +87,86 @@ export function DocxWorkspaceDesk({
   onSelectAuthority: (paragraphId: string) => void
 }) {
   const model: DocumentModelWire = pages.model
+  const bulkDialog = (
+    <BulkDecisionDialog
+      review={changeReview}
+      versionNumber={currentVersionNumber}
+    />
+  )
   if (compareOpen) {
     return (
-      <Suspense
-        fallback={
-          <div className="p-6 text-body text-muted" aria-busy="true">
-            Opening the comparison…
-          </div>
-        }
-      >
-        <DocumentCompareRedline
-          documentId={documentId}
-          versions={versions}
-          onClose={onCloseCompare}
-        />
-      </Suspense>
+      <>
+        <Suspense
+          fallback={
+            <div className="p-6 text-body text-muted" aria-busy="true">
+              Opening the comparison…
+            </div>
+          }
+        >
+          <DocumentCompareRedline
+            documentId={documentId}
+            versions={versions}
+            onClose={onCloseCompare}
+          />
+        </Suspense>
+        {bulkDialog}
+      </>
     )
   }
   return (
-    <DocxDesk
-      model={model}
-      navOpen={navOpen}
-      outline={outline}
-      activeParagraphId={activeParagraphId}
-      onSelectOutline={onSelectOutline}
-      onCloseNav={onCloseNav}
-      columnRef={columnRef}
-      spelling={spelling}
-      rulerOn={rulerOn}
-      ruler={ruler}
-      zoom={zoom}
-      paperWidth={paperWidth}
-      pages={
-        <DocxModelPages
-          {...pages}
-          onExitMarginEditing={onExitMarginEditing}
-          onOpenNoteEditing={onOpenNoteEditing}
-        />
-      }
-      sidePanels={
-        <WorkspaceSidePanels
-          panel={panel}
-          onClose={onClosePanel}
-          popout={popout}
-          info={
-            documentRecord
-              ? {
-                  document: documentRecord,
-                  versions,
-                  matterLink,
-                  onViewVersion,
-                }
-              : undefined
-          }
-          currentUserId={comments.currentUserId}
-          changeReview={changeReview}
-          reviewComments={{
-            comments: comments.comments,
-            importedComments: comments.importedComments,
-          }}
-          model={model}
-          currentVersionNumber={currentVersionNumber}
-          onRevealReviewComment={(comment) =>
-            comments.onRevealCommentAnchor(comment.anchor)
-          }
-          authorities={authorities}
-          onSelectAuthority={onSelectAuthority}
-        />
-      }
-    />
+    <>
+      <DocxDesk
+        model={model}
+        navOpen={navOpen}
+        outline={outline}
+        activeParagraphId={activeParagraphId}
+        onSelectOutline={onSelectOutline}
+        onCloseNav={onCloseNav}
+        columnRef={columnRef}
+        spelling={spelling}
+        rulerOn={rulerOn}
+        ruler={ruler}
+        zoom={zoom}
+        paperWidth={paperWidth}
+        pages={
+          <DocxModelPages
+            {...pages}
+            onExitMarginEditing={onExitMarginEditing}
+            onOpenNoteEditing={onOpenNoteEditing}
+          />
+        }
+        sidePanels={
+          <WorkspaceSidePanels
+            panel={panel}
+            onClose={onClosePanel}
+            popout={popout}
+            info={
+              documentRecord
+                ? {
+                    document: documentRecord,
+                    versions,
+                    matterLink,
+                    onViewVersion,
+                  }
+                : undefined
+            }
+            currentUserId={comments.currentUserId}
+            changeReview={changeReview}
+            reviewComments={{
+              comments: comments.comments,
+              importedComments: comments.importedComments,
+            }}
+            model={model}
+            currentVersionNumber={currentVersionNumber}
+            onRevealReviewComment={(comment) =>
+              comments.onRevealCommentAnchor(comment.anchor)
+            }
+            authorities={authorities}
+            onSelectAuthority={onSelectAuthority}
+          />
+        }
+      />
+      {bulkDialog}
+    </>
   )
 }

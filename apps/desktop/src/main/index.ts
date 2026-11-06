@@ -18,6 +18,7 @@ import {
   isSafeExternalUrl,
   parseAllowedOrigin,
 } from './navigation-guard'
+import { startDesktopUpdates } from './updates'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -141,9 +142,31 @@ function createWindow() {
   }
 }
 
+let updates: ReturnType<typeof startDesktopUpdates> | null = null
+
+ipcMain.handle('obiter:update-status', () => updates?.readyVersion() ?? null)
+ipcMain.handle('obiter:restart-to-update', () => updates?.restart() ?? false)
+
 app.whenReady().then(() => {
   registerRendererProtocol()
   createWindow()
+
+  if (app.isPackaged && process.platform === 'win32') {
+    void import('electron-updater')
+      .then(({ default: electronUpdater }) => {
+        updates = startDesktopUpdates({
+          updater: new electronUpdater.NsisUpdater(),
+          timers: { setInterval, clearInterval },
+          onReady: (version) => {
+            for (const window of BrowserWindow.getAllWindows())
+              window.webContents.send('obiter:update-ready', version)
+          },
+        })
+      })
+      .catch((error: unknown) => {
+        console.error('[obiter] could not start the updater:', error)
+      })
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

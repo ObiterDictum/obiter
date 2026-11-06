@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { act, type ReactNode } from 'react'
+import { StrictMode, act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
@@ -1014,6 +1014,41 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('offers a Filters toggle that reveals the facets on a pane too narrow for the facet column', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(createSearchResponse(createTwoResultHits())),
+    )
+    const host = mount()
+    container = host
+
+    await changeSearchInput(getSearchInput(host), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    const toggle = [...host.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Filters',
+    )
+    if (!toggle) throw new Error('Filters toggle was not rendered')
+    const facets = document.getElementById(
+      toggle.getAttribute('aria-controls') ?? '',
+    )
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(facets?.querySelector('aside[aria-label="Filters"]')).toBeTruthy()
+    expect(facets?.classList.contains('hidden')).toBe(true)
+
+    await act(async () => {
+      toggle.click()
+    })
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(facets?.classList.contains('hidden')).toBe(false)
+  })
+
   it('names the wait on rate-limited search instead of a generic failure', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       jsonResponse(
@@ -1484,6 +1519,31 @@ describe('LegalSearchView search parameter', () => {
     expect(JSON.parse(String(request?.body))).toMatchObject({
       query: 'unfair dismissal',
     })
+  })
+
+  it('still shows the results of the q parameter search when effects are mounted twice', async () => {
+    routerMocks.search = { q: 'unfair dismissal' }
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(createSearchResponse(createTwoResultHits())),
+    )
+    container = document.createElement('div')
+    document.body.append(container)
+    const strictRoot = createRoot(container)
+    root = strictRoot
+    act(() => {
+      strictRoot.render(
+        <StrictMode>
+          <LegalSearchView />
+        </StrictMode>,
+      )
+    })
+    await flushMicrotasks()
+
+    expect(container.querySelectorAll('[data-result-index]')).toHaveLength(2)
+    expect(container.textContent).not.toContain('Searching')
   })
 
   it('leaves the search idle without a q parameter', async () => {

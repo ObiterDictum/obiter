@@ -10,5 +10,7 @@ interface Window {
     getAuthToken(): Promise<string | null>
     setAuthToken(token: string): Promise<void>
     clearAuthToken(): Promise<void>
+    onUpdateReady(listener: () => void): () => void
+    restartToUpdate(): Promise<void>
   }
 }

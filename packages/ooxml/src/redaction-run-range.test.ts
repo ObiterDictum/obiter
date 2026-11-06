@@ -32,7 +32,7 @@ const text = (value: string) =>
 for (const [children, ranges, runs] of [
   [
     `${text('cat')}${tab}${text('dog')}`,
-    [[3, 6]],
+    [[4, 7]],
     [`${text('cat')}${tab}`, text('XXX')],
   ],
   [
@@ -54,25 +54,27 @@ for (const [children, ranges, runs] of [
     `${text('cat')}${tab}${text('dog')}`,
     [
       [1, 3],
-      [3, 5],
+      [4, 6],
     ],
     [
       text('c'),
-      `${text('XX')}${tab}`,
+      text('XX'),
+      tab,
       text('Y'),
       '<w:t xml:space="preserve">g</w:t>',
     ],
   ],
   [
     `${tab}${text('catdog')}`,
-    [[0, 3]],
-    [`${tab}${text('XXX')}`, '<w:t xml:space="preserve">dog</w:t>'],
+    [[1, 4]],
+    [tab, text('XXX'), '<w:t xml:space="preserve">dog</w:t>'],
   ],
   [
     `${italic}${tab}${text('catdog')}`,
-    [[0, 3]],
+    [[1, 4]],
     [
-      `${italic}${tab}${text('XXX')}`,
+      `${italic}${tab}`,
+      `${italic}${text('XXX')}`,
       `${italic}<w:t xml:space="preserve">dog</w:t>`,
     ],
   ],
@@ -84,8 +86,8 @@ for (const [children, ranges, runs] of [
   [`${text('catdog')}${end}`, [[3, 6]], [text('cat'), text('XXX')]],
   [
     `${text('cat')}${tab}${text('dog')}`,
-    [[2, 4]],
-    [text('ca'), `${text('XX')}${tab}`, '<w:t xml:space="preserve">og</w:t>'],
+    [[3, 5]],
+    [text('cat'), text('XX'), '<w:t xml:space="preserve">og</w:t>'],
   ],
 ] as const) {
   it(`keeps controls in ${children} when redacting ${JSON.stringify(ranges)}`, async () => {
@@ -131,7 +133,7 @@ for (const [children, ranges, runs] of [
   })
 }
 
-it('keeps tabs in a styled whole-run redaction with a multiline marker', async () => {
+it('redacts a tab inside a styled run and keeps the line break marker', async () => {
   const { document, paragraph } = await revisionFixture(
     `${begin}<w:t>cat</w:t><w:tab/><w:t>dog</w:t>${end}`,
   )
@@ -146,7 +148,8 @@ it('keeps tabs in a styled whole-run redaction with a multiline marker', async (
   )
     .file('word/document.xml')
     ?.async('string')
-  expect(xml).toContain('<w:t>X</w:t><w:br/><w:t>Y</w:t><w:tab/></w:r>')
+  expect(xml).toContain('<w:t>X</w:t><w:br/><w:t>Y</w:t></w:r>')
+  expect(xml).not.toContain('<w:tab/>')
   const saved = (await parseDocx(bytes)).model.stories[0]?.paragraphs[0]?.runs
   expect(paragraph.runs.map((run) => run.textRevisionTokens)).toEqual(
     saved?.map((run) => run.textRevisionTokens) ?? [],

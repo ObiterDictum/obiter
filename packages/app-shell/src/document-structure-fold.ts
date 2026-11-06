@@ -1,3 +1,4 @@
+import { foldTableStructure } from './document-table-structure-fold'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -9,6 +10,7 @@ import {
   buildTableXml,
   decideTablePlacement,
   IMAGE_RELATIONSHIP_TYPE,
+  setDrawingExtent,
 } from '@obiter/ooxml'
 import { storyTableCellIds } from './document-page-tables'
 import { foldFootnoteDrafts, spliceRunAtOffset } from './document-footnote-fold'
@@ -146,6 +148,11 @@ function foldStory(
   let changed = false
 
   for (const draft of structures) {
+    if (draft.kind === 'table-structure') {
+      foldTableStructure(fragments, paragraphs, draft.operation, nextParaId)
+      changed = true
+      continue
+    }
     if (draft.kind === 'table') {
       const anchorWire = paragraphs.find(
         (paragraph) => paragraph.id === draft.paragraphId,
@@ -193,6 +200,31 @@ function foldStory(
       changed = true
       continue
     }
+    if (draft.kind === 'image-size') {
+      const paragraph = paragraphs.find((item) => item.id === draft.paragraphId)
+      const run = paragraph?.runs.find((item) => item.id === draft.runId)
+      const drawing = run?.preservedXmlFragments.find((fragment) =>
+        /<w:drawing\b/i.test(fragment),
+      )
+      const resized = drawing ? setDrawingExtent(drawing, draft) : undefined
+      if (!(paragraph && run && resized)) continue
+      const runs = paragraph.runs.map((item) =>
+        item.id === draft.runId
+          ? {
+              ...item,
+              preservedXmlFragments: item.preservedXmlFragments.map(
+                (fragment) => (fragment === drawing ? resized : fragment),
+              ),
+            }
+          : item,
+      )
+      paragraphs.splice(paragraphs.indexOf(paragraph), 1, {
+        ...paragraph,
+        runs,
+      })
+      changed = true
+      continue
+    }
     if (draft.kind === 'table-of-contents') {
       changed = foldToc(paragraphs, draft, tails) || changed
       continue
@@ -203,6 +235,19 @@ function foldStory(
     }
     if (draft.kind === 'table-of-authorities-refresh') {
       changed = foldToa.refresh(paragraphs, draft) || changed
+      continue
+    }
+    if (draft.kind === 'footnote-removal') {
+      const index = paragraphs.findIndex(
+        (item) => item.id === draft.paragraphId,
+      )
+      const paragraph = paragraphs[index]
+      if (!paragraph?.runs.some((run) => run.id === draft.runId)) continue
+      paragraphs[index] = {
+        ...paragraph,
+        runs: paragraph.runs.filter((run) => run.id !== draft.runId),
+      }
+      changed = true
       continue
     }
     if (draft.kind !== 'image') continue

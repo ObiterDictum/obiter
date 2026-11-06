@@ -12,6 +12,7 @@ const COMMAND_HOME = {
   Link: 'Insert',
   'Cross-reference': 'Insert',
   Footnote: 'Insert',
+  'Close footnotes': 'Insert',
   Header: 'Insert',
   Footer: 'Insert',
   'Page number': 'Insert',

@@ -37,6 +37,9 @@ export interface DialogContentProps {
   size?: Size
   surface?: DialogSurface
   className?: string
+  initialFocus?: ComponentPropsWithoutRef<
+    typeof BaseDialog.Popup
+  >['initialFocus']
 }
 
 export function DialogContent({
@@ -44,11 +47,13 @@ export function DialogContent({
   size = 'md',
   surface = 'dialog',
   className,
+  initialFocus,
 }: DialogContentProps) {
   return (
     <BaseDialog.Portal>
       <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-overlay" />
       <BaseDialog.Popup
+        initialFocus={initialFocus}
         className={cn(
           'fixed left-1/2 z-50 -translate-x-1/2 border border-line bg-raised shadow-lg outline-none',
           surfaceClasses[surface],

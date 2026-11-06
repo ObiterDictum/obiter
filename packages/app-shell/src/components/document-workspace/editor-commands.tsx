@@ -10,6 +10,7 @@ import type {
   DocumentReviewToolbar,
 } from './ribbon-types'
 import type { InsertRibbonProps } from './use-insert-ribbon'
+import type { PictureSizeControl } from './picture-size-toolbar'
 import { revealDocumentRedactionRuns } from './document-actions'
 
 type EditorMenuId = 'file' | 'edit' | 'insert' | 'format' | 'review' | 'view'
@@ -73,6 +74,7 @@ export type EditorChromeProps = InsertRibbonProps & {
   onDeleteParagraph: () => void
   deleteParagraphReason?: string
   format?: DocumentFormatToolbar
+  picture?: PictureSizeControl
   clipboard?: DocumentClipboardToolbar
   find?: DocumentFindToolbar
   review?: DocumentReviewToolbar
@@ -313,6 +315,36 @@ export function editorMenus(
           ],
         },
         {
+          label: 'Table tools',
+          commands: (
+            [
+              ['Insert row above', 'insert_table_row', 'before'],
+              ['Insert row below', 'insert_table_row', 'after'],
+              ['Insert column left', 'insert_table_column', 'before'],
+              ['Insert column right', 'insert_table_column', 'after'],
+              ['Delete row', 'delete_table_row'],
+              ['Delete column', 'delete_table_column'],
+              ['Delete table', 'delete_table'],
+            ] as const
+          ).map(([label, type, position]) => ({
+            id: type + (position ?? ''),
+            label,
+            disabled:
+              !structure?.onTableStructure ||
+              Boolean(structure.tableStructureUnavailable),
+            disabledReason: structure?.tableStructureUnavailable,
+            run: () => {
+              if (type === 'insert_table_row' || type === 'insert_table_column')
+                structure?.onTableStructure?.({
+                  type,
+                  position: position ?? 'after',
+                  paragraphId: '',
+                })
+              else structure?.onTableStructure?.({ type, paragraphId: '' })
+            },
+          })),
+        },
+        {
           label: 'Tables and pictures',
           commands: [
             {
@@ -361,6 +393,8 @@ export function editorMenus(
             {
               id: 'footnote',
               label: story === 'footnotes' ? 'Close footnotes' : 'Footnote',
+              shortcut:
+                story === 'footnotes' ? undefined : ['primary', 'alt', 'F'],
               pressed: story === 'footnotes',
               disabled:
                 !structure ||

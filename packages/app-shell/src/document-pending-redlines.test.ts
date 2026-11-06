@@ -27,7 +27,7 @@ it('keeps covered draft redlines, editable mappings and saved revisions equal fo
       xml: '<w:t>old</w:t><w:tab/>',
       next: 'new',
       removed: 'old\t',
-      inserted: 'new\t',
+      inserted: 'new',
     },
     {
       xml: '<w:t>old</w:t><w:br/><w:t>line</w:t>',

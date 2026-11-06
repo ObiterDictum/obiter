@@ -3203,6 +3203,16 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    GET · PATCH /api/organisations/:organisationId/update-policy
+                  </td>
+                  <td class="id">update-policy.ts</td>
+                  <td>
+                    Whether the organisation requires updates. Members read it;
+                    owners and admins change it, and each change is audited.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET /api/invites/preview</td>
                   <td class="id">organisations.ts</td>
                   <td>
@@ -3720,6 +3730,26 @@
                   </td>
                   <td class="id">comments.ts</td>
                   <td>Comment-author or owner/admin comment reopen</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/delete
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>
+                    Author or matter owner soft deletion; thread deletion hides
+                    replies
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/restore
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>
+                    Author or matter owner recovery; active restores are
+                    idempotent
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">PATCH /api/documents/:id/restore</td>
@@ -5415,6 +5445,29 @@
             <a href="#infra">Deployment</a>).
           </div>
           <div class="callout note">
+            <b>Organisation update policy.</b> Owners and admins can opt in to
+            requiring updates in organisation settings. The API exposes
+            <code>GET /api/organisations/:organisationId/update-policy</code>
+            to members and <code>PATCH</code> to owners and admins. A missing
+            route means the policy is off. The app asks for the policy only once
+            an update is ready. Every update, required or not, saves pending
+            document edits first and waits if a save fails; a required update
+            keeps a modal open until it is applied.
+          </div>
+          <div class="callout note">
+            <b>Open apps learn about new versions.</b> The web build bakes the
+            commit its marker records into the client, and
+            <code>serve.mjs</code> serves the running commit at
+            <code>GET /.well-known/obiter-version</code>
+            (<code>no-store</code>). The shell polls it every 5 minutes while
+            visible and on focus, and offers a reload when the commit differs.
+            The packaged Windows app checks the GitHub Releases feed with
+            electron-updater at start and every 4 hours and offers a restart
+            once the update has downloaded. Neither reloads nor restarts by
+            itself. See <code>docs/specs/deployment.md</code> and
+            <code>docs/specs/desktop-release.md</code>.
+          </div>
+          <div class="callout note">
             <b>The desktop build has a size budget of its own.</b>
             <code>bun run --filter @obiter/desktop build</code> emits a Vite
             chunk manifest, and
@@ -6935,8 +6988,8 @@
         <section id="infra">
           <h2>Deployment</h2>
           <p class="lede">
-            Largely unbuilt. Recorded honestly because the directory structure
-            implies more than exists.
+            One host behind Cloudflare. The <code>infra/</code> directories here
+            are placeholders and imply more than this repository holds.
           </p>
           <div class="scroll">
             <table>
@@ -6963,12 +7016,18 @@
             </table>
           </div>
           <p>
-            There are no deployments yet. Data residency is committed to the EU,
-            which constrains hosting choices when that changes. The Postgres and
-            Meilisearch compose services and the test database bootstrap live in
-            the private
-            <a href="https://github.com/ObiterDictum/backend">backend</a>
-            repository under <code>infra/</code>.
+            Production runs on one Hetzner host in the EU behind Cloudflare,
+            deployed with Kamal from <code>main</code>. kamal-proxy holds a
+            Cloudflare origin certificate for <code>app.obiter.si</code> and
+            routes <code>/api</code> to the API and everything else to the web
+            app on that one origin, which the auth cookies require. PostgreSQL
+            and Meilisearch run as private containers, and encrypted backups go
+            nightly to object storage in the EU. The Kamal configuration is not
+            in this repository. See
+            <a
+              href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/deployment.md"
+              >specs/deployment.md</a
+            >.
           </p>
           <div class="callout note">
             <b>The web serving boundary.</b>
@@ -6990,9 +7049,10 @@
             <code>docker-web</code> job passes both (<code>$GITHUB_SHA</code>,
             <code>0</code>) in its supported <code>docker build</code>
             invocation, and the local invocation is documented in
-            <code>docs/specs/deployment.md</code>. A Dokploy-built image is an
-            external boundary: unless its build args are set it records a null
-            commit and can be served but not measured as a named commit.
+            <code>docs/specs/deployment.md</code>. The production image is built
+            for the Kamal deploy, which must pass the same build arguments; an
+            image built without them records a null commit and can be served but
+            not measured as a named commit.
           </div>
         </section>
 
@@ -7495,16 +7555,11 @@
                       >requestTimeout</code
                     >
                     have no <code>Bun.serve</code> equivalent, and there is no
-                    configurable header-size limit. The bounds are specified in
-                    <code>backend/infra/traefik/entrypoints.yml</code> in the
-                    private
-                    <a href="https://github.com/ObiterDictum/backend"
-                      >backend</a
-                    >
-                    repository and validated locally there by
-                    <code>scripts/api-ingress</code> against Traefik v3.6.25;
-                    applying them to the deployed Dokploy Traefik is still
-                    pending. See
+                    configurable header-size limit. The bounds belong at the
+                    proxy. Production now runs behind Cloudflare and
+                    kamal-proxy, and the earlier validation was against the
+                    previous proxy, so the bounds still need re-validating
+                    there. See
                     <a
                       href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/deployment.md"
                       >specs/deployment.md</a
@@ -7622,7 +7677,22 @@
                     resolve. The note story takes run edits alone: marks, fields
                     and tables anchor in the document body, so a footnote's text
                     cannot carry a defined-term mark, a cross-reference or a
-                    generated table.
+                    generated table. Notes are numbered by where their
+                    references sit in the body, never by stored id, and the body
+                    mark and the note always show the same number.
+                    <code>delete_footnote</code> removes a reference run that
+                    holds nothing else, and its entry once no reference remains;
+                    the editor queues it when a selected range covering the
+                    reference is deleted, typed over or pasted over, including a
+                    reference at the paragraph end. Collapsed Backspace and
+                    Delete keep references, including when joining paragraphs. A
+                    pending note follows the text typed before it. Cut deletes
+                    the note: the clipboard carries plain text, so a paste does
+                    not bring the note back. Inserting a note adds the
+                    <code>FootnoteText</code> and
+                    <code>FootnoteReference</code> styles the package lacks, and
+                    every reference run is also superscript directly, so a
+                    package with no styles part still shows raised marks.
                   </td>
                   <td class="id">
                     ooxml/footnote-edits.ts ·
@@ -7880,6 +7950,36 @@
                 </tr>
                 <tr>
                   <td>
+                    <code>set_image_size</code> resizes an inline picture only,
+                    and never as a tracked change
+                  </td>
+                  <td>
+                    The operation rewrites the stored drawing's
+                    <code>wp:extent</code> <code>cx</code>/<code>cy</code> and
+                    the matching <code>a:ext</code> inside
+                    <code>pic:spPr</code> in EMUs, leaving the picture's
+                    relationship, name, geometry and offset untouched, and the
+                    run's preserved fragment is rewritten with it so the page
+                    repaints at the new size before any save. A
+                    <code>wp:anchor</code> drawing, a grouped (<code>wpg</code>)
+                    or shape (<code>wps</code>) drawing, or a drawing with no
+                    numeric extent is refused rather than half-resized, and the
+                    same fail-closed rule rejects the operation under tracked
+                    changes, where the client states that a picture size change
+                    is not recorded as one. The editor keeps the picture inside
+                    the text column and above a 16 px floor, which is a product
+                    bound, not a format one, and a picture inserted but not yet
+                    saved resizes through its insertion instead. Rotation,
+                    flipping and crop are not offered.
+                  </td>
+                  <td class="id">
+                    ooxml/image-edits.ts · ooxml/structure-xml.ts ·
+                    app-shell/document-picture-resize.ts ·
+                    app-shell/use-picture-selection.ts
+                  </td>
+                </tr>
+                <tr>
+                  <td>
                     A pending cross-reference paints as a zero-width marker, not
                     the field result
                   </td>
@@ -7936,19 +8036,20 @@
                     <code>insert_table</code>, <code>insert_image</code>,
                     <code>insert_cross_reference</code>,
                     <code>insert_page_number</code>,
-                    <code>insert_footnote</code>,
                     <code>insert_table_of_contents</code>,
                     <code>insert_table_of_authorities</code>,
                     <code>update_table_of_authorities</code>,
                     <code>insert_break</code> and
-                    <code>insert_section_break</code> have no inverse — so once
-                    one is saved it is baseline content: a history snapshot that
-                    predates it survives translation, but undo cannot offer its
-                    removal. A structure spliced strictly inside a run splits
-                    that run into two continuations in the saved lineage, and a
-                    pre-save run text is re-expressed across every continuing
-                    run; a covered run the lineage cannot name still blocks
-                    rather than persisting a partial reversal. Only
+                    <code>insert_section_break</code> have no inverse (a
+                    footnote alone can be removed, through
+                    <code>delete_footnote</code>) — so once one is saved it is
+                    baseline content: a history snapshot that predates it
+                    survives translation, but undo cannot offer its removal. A
+                    structure spliced strictly inside a run splits that run into
+                    two continuations in the saved lineage, and a pre-save run
+                    text is re-expressed across every continuing run; a covered
+                    run the lineage cannot name still blocks rather than
+                    persisting a partial reversal. Only
                     <code>set_hyperlink</code> can remove a stored structure (a
                     null target unwraps the link), so a snapshot predating a
                     saved link still blocks history reconciliation rather than
@@ -8392,5 +8493,12 @@
         })
       })()
     </script>
+    <p>
+      Table structure edits add insert_table_row, insert_table_column,
+      delete_table_row, delete_table_column and delete_table operations anchored
+      to cell paragraph identities. Pending structures repaint the table before
+      save. The API must accept these operations before production saves can use
+      them. Tracked table structure changes are refused.
+    </p>
   </body>
 </html>
