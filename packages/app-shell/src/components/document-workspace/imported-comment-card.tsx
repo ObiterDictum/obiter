@@ -3,17 +3,19 @@ import type {
   DocumentImportedCommentThread,
 } from '@obiter/contracts'
 import { Button } from '@obiter/ui'
+import type { ReactNode } from 'react'
 import { formatDateTime } from '../../format'
+import { CommentFooter } from './comment-card'
 import { ReplyList, ReplyForm } from './comment-replies'
 export function ImportedCommentCard({
-  deletionActions,
+  deleteItems,
   comment,
   canEdit,
   pending,
   onReply,
   onRevealAnchor,
 }: {
-  deletionActions: import('react').ReactNode
+  deleteItems: ReactNode | null
   comment: DocumentImportedCommentThread
   canEdit: boolean
   pending: boolean
@@ -21,6 +23,10 @@ export function ImportedCommentCard({
   onRevealAnchor: (anchor: DocumentCommentAnchor) => void
 }) {
   const anchor = comment.anchor
+  const note = [
+    comment.resolved ? 'resolved in file' : null,
+    anchor === null ? 'anchor no longer resolves' : null,
+  ].filter((part) => part !== null)
   return (
     <li className="flex flex-col gap-2 border-t border-line pt-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -37,23 +43,23 @@ export function ImportedCommentCard({
         {comment.body}
         {comment.bodyTruncated ? '…' : ''}
       </p>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-caption text-subtle">
-          Imported
-          {comment.resolved ? ' · resolved in file' : ''}
-          {comment.anchor === null ? ' · anchor no longer resolves' : ''}
-        </p>
-        {anchor !== null ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onRevealAnchor(anchor)}
-          >
-            Show in document
-          </Button>
-        ) : null}
-      </div>
-      {deletionActions}
+      <CommentFooter
+        status="Imported"
+        tone="neutral"
+        note={note.length > 0 ? note.join(' · ') : null}
+        actions={
+          anchor !== null ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onRevealAnchor(anchor)}
+            >
+              Show in document
+            </Button>
+          ) : null
+        }
+        menu={deleteItems}
+      />
       <ReplyList replies={comment.replies} />
       {canEdit && comment.ooxmlId !== null ? (
         <ReplyForm parentId={comment.id} pending={pending} onReply={onReply} />

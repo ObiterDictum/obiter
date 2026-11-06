@@ -62,8 +62,9 @@ describe('right-panel Comments opened via Review', () => {
     const panel = screen.getByRole('complementary', { name: 'Right slot' })
     expect(panel.getAttribute('data-tab')).toBe('comments')
     expect(document.querySelector('[data-docked-panel]')).toBeNull()
+    fireEvent.click(within(panel).getByRole('button', { name: 'More actions' }))
     fireEvent.click(
-      within(panel).getByRole('button', { name: 'Delete thread' }),
+      await screen.findByRole('menuitem', { name: 'Delete thread' }),
     )
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', {
