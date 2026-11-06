@@ -1,6 +1,7 @@
 import type {
   DocumentParagraphWire,
   DocumentStoryWire,
+  DocumentStyleWire,
 } from '@obiter/contracts'
 import { paragraphPlainText } from './document-model-text'
 import { drawingShapeFill } from './document-page-media'
@@ -30,6 +31,7 @@ export type DisplayTableCell = {
 
 export type DisplayTable = {
   bordered: boolean
+  styleId?: string
   rows: Array<{
     cells: DisplayTableCell[]
     heightPx?: number
@@ -58,6 +60,29 @@ export function storyTables(story: DocumentStoryWire): DisplayTable[] {
   return story.preservedXmlFragments
     .map(parseWordTable)
     .filter((table): table is DisplayTable => table !== undefined)
+}
+
+export function tableBordered(
+  table: DisplayTable,
+  styles: readonly DocumentStyleWire[],
+): boolean {
+  if (table.bordered) return true
+  const seen = new Set<string>()
+  let styleId = table.styleId
+  while (styleId && !seen.has(styleId)) {
+    seen.add(styleId)
+    const style = styles.find((item) => item.styleId === styleId)
+    if (!style) return false
+    const borders = style.sourceFragment.match(
+      /<w:tblBorders\b[^>]*>([\s\S]*?)<\/w:tblBorders>/u,
+    )?.[1]
+    if (borders !== undefined)
+      return [...borders.matchAll(/\bw:val="([^"]+)"/gu)].some(
+        (match) => !['nil', 'none'].includes(match[1] ?? ''),
+      )
+    styleId = style.basedOnStyleId
+  }
+  return false
 }
 
 export function rowPaintHeight(row: DisplayTable['rows'][number]): number {
@@ -383,8 +408,13 @@ function parseWordTable(xml: string): DisplayTable | undefined {
     row.cells.flatMap((cell) => cell.paragraphIds),
   )
   if (rows.length === 0) return undefined
+  const styleId = attr(
+    children(children(tbl, 'tblPr')[0], 'tblStyle')[0],
+    'val',
+  )
   return {
     bordered: xml.includes('<w:tblBorders') || xml.includes('<w:tcBorders'),
+    ...(styleId ? { styleId } : {}),
     rows,
     paragraphIds,
   }

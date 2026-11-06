@@ -15,6 +15,7 @@ import {
 } from '../../document-format-types'
 import {
   cellWrapWidthPx,
+  tableBordered,
   type DisplayTableCell,
 } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
@@ -101,6 +102,7 @@ export function renderBlock(
       <PageTable
         key={`tbl-${index}`}
         table={block.table}
+        bordered={tableBordered(block.table, ctx.model.styles)}
         renderCell={(cell) =>
           cell.paragraphIds.flatMap((id) => {
             const paragraph = ctx.paragraphs.find((item) => item.id === id)

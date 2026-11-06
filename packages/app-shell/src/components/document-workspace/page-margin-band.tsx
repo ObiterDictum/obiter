@@ -42,7 +42,7 @@ import {
   runCss,
   runFace,
 } from '../../document-page-style'
-import { storyBlocks } from '../../document-page-tables'
+import { storyBlocks, tableBordered } from '../../document-page-tables'
 import { FooterBand, LetterheadBar, TabLine } from './page-letterhead'
 import { PageDrawing } from './page-drawing'
 import { PageTable } from './page-table'
@@ -293,6 +293,7 @@ function MarginStory({
           <PageTable
             key={`${story.partName}-tbl-${index}`}
             table={block.table}
+            bordered={tableBordered(block.table, styles)}
             renderCell={(cell) =>
               cell.paragraphIds.map((id) => {
                 const paragraph = paragraphs.get(id)

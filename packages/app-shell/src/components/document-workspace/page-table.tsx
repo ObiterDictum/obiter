@@ -8,9 +8,11 @@ import {
 
 export function PageTable({
   table,
+  bordered,
   renderCell,
 }: {
   table: DisplayTable
+  bordered: boolean
   renderCell: (cell: DisplayTableCell) => ReactNode
 }) {
   return (
@@ -38,7 +40,7 @@ export function PageTable({
                         ? 'align-bottom'
                         : 'align-middle',
                     fill ? 'p-0' : 'px-1 py-0.5',
-                    table.bordered && 'border border-[#c5c1b8]',
+                    bordered && 'border border-[#c5c1b8]',
                   )}
                   style={{
                     ...(fill ? { backgroundColor: fill } : {}),
