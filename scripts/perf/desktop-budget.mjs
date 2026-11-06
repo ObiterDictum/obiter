@@ -7,13 +7,13 @@ import { classifyManifest } from './desktop-manifest.mjs'
 export const BUDGETS = {
   rendererInitialJsBytes: 861_000,
   rendererInitialCssBytes: 93_000,
-  lazyChunksBytes: 1_416_000,
+  lazyChunksBytes: 2_000_000,
   largestLazyChunkBytes: 560_000,
   workerPayloadBytes: 1_150_000,
   productAssetsBytes: 790_000,
   mainBundleBytes: 380_000,
   preloadBundleBytes: 2_000,
-  applicationPayloadBytes: 4_249_000,
+  applicationPayloadBytes: 4_833_000,
 }
 
 const MANIFEST_PARTS = ['renderer', '.vite', 'manifest.json']

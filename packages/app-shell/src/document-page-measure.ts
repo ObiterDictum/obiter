@@ -117,7 +117,7 @@ export function paragraphMeasure(
     partName,
     pendingParagraphChanges(pendingRedlines, paragraph.id, partName),
   )
-  const face = paragraphFace(paragraph, model.styles)
+  const face = paragraphFace(paragraph, model.styles, model.defaultTabStopTwips)
   const linePx = paragraphLineHeightPx(face)
   const list = paragraphListIndent(paragraph, model)
   const measure: ParagraphMeasure = {

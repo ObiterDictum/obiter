@@ -49,7 +49,7 @@ describe('table-of-contents edits', () => {
     expect(anchorIndex).toBeGreaterThanOrEqual(0)
     const entry = paragraphs[anchorIndex + 1]
     expect(entry?.runs.map((run) => run.text).join('')).toBe(
-      'Alice Example overview',
+      'Alice Example overview\t',
     )
     expect(
       entry?.runs.some((run) =>
@@ -113,7 +113,7 @@ describe('table-of-contents edits', () => {
     )
     expect(head).toBeGreaterThanOrEqual(0)
     expect(paragraphs[head + 1]?.runs.map((item) => item.text).join('')).toBe(
-      'Alice Example overview',
+      'Alice Example overview\t',
     )
     expect(paragraphs[head + 2]?.runs.map((item) => item.text).join('')).toBe(
       ' replacement textJane Example reference',
@@ -145,7 +145,7 @@ describe('table-of-contents edits', () => {
     )
     expect(
       entries.map((item) => item.runs.map((run) => run.text).join('')),
-    ).toEqual(['Alice Example overview'])
+    ).toEqual(['Alice Example overview\t'])
   })
 
   it('saves a field when the same batch deletes a heading', async () => {
@@ -173,7 +173,7 @@ describe('table-of-contents edits', () => {
     )
     expect(
       entries.map((item) => item.runs.map((run) => run.text).join('')),
-    ).toEqual(['Commented text'])
+    ).toEqual(['Commented text\t'])
     expect(
       paragraphs.some(
         (paragraph) =>
@@ -227,7 +227,7 @@ describe('table-of-contents edits', () => {
     )
     expect(
       entries.map((item) => item.runs.map((run) => run.text).join('')),
-    ).toEqual(['Alice Example overview'])
+    ).toEqual(['Alice Example overview\t'])
   })
 
   it('reuses an existing _Toc bookmark for a second field', async () => {

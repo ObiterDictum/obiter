@@ -59,7 +59,10 @@ function nestHeaderImages(
   if (!first) return table
   const empty = first.cells
     .map((cell, cellIndex) => ({ cell, cellIndex }))
-    .filter(({ cell }) => !cellHasContent(cell, paragraphs))
+    .filter(
+      ({ cell }) =>
+        cell.vMerge !== 'continue' && !cellHasContent(cell, paragraphs),
+    )
   if (empty.length === 0) return table
   const target =
     unbound.length === 1 && empty.length >= 2
@@ -69,11 +72,13 @@ function nestHeaderImages(
   if (!target || !image) return table
   const rows = table.rows.map((row, rowIndex) => ({
     cells: row.cells.map((cell, cellIndex) =>
-      rowIndex === 0 && cellIndex === target.cellIndex
-        ? { ...cell, paragraphIds: [image.id] }
-        : cellHasContent(cell, paragraphs)
-          ? cell
-          : { ...cell, paragraphIds: [] },
+      cell.vMerge === 'continue'
+        ? cell
+        : rowIndex === 0 && cellIndex === target.cellIndex
+          ? { ...cell, paragraphIds: [image.id] }
+          : cellHasContent(cell, paragraphs)
+            ? cell
+            : { ...cell, paragraphIds: [] },
     ),
   }))
   return {
@@ -104,7 +109,12 @@ function paintEmptyHeaderCells(
   const rows = equal.rows.map((row) => ({
     ...row,
     cells: row.cells.map((cell) => {
-      if (cell.fill || cellHasContent(cell, paragraphs)) return cell
+      if (
+        cell.vMerge === 'continue' ||
+        cell.fill ||
+        cellHasContent(cell, paragraphs)
+      )
+        return cell
       return { ...cell, fill, minHeightPx: cell.minHeightPx ?? 48 }
     }),
   }))
@@ -151,7 +161,8 @@ function nestFooterContent(
   let index = 0
   const rows = table.rows.map((row) => ({
     cells: row.cells.map((cell) => {
-      if (cellHasContent(cell, paragraphs)) return cell
+      if (cell.vMerge === 'continue' || cellHasContent(cell, paragraphs))
+        return cell
       const take = Math.max(cell.paragraphIds.length, 1)
       const paragraphIds = unusedText
         .slice(index, index + take)
@@ -188,7 +199,9 @@ function paintTableFromShapes(
   return {
     ...table,
     rows: table.rows.map((row) => ({
-      cells: row.cells.map((cell) => ({ ...cell, fill })),
+      cells: row.cells.map((cell) =>
+        cell.vMerge === 'continue' ? cell : { ...cell, fill },
+      ),
     })),
   }
 }

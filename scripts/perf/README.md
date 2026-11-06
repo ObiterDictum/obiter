@@ -43,8 +43,10 @@ disk:
 
 - **renderer initial** — the entry chunk, its static-import closure, and the CSS
   those chunks use. Every open window pays it.
-- **lazy chunks** — chunks reached only through dynamic imports (the PDF viewer),
-  and their lazy CSS.
+- **lazy chunks** — chunks reached only through dynamic imports, and their lazy
+  CSS: the route views (document workspace, search, case law, legislation,
+  Verify, Redact, matters, settings) and the PDF viewer. A view pays its chunks
+  the first time it opens.
 - **largest lazy chunk** — catches one lazy surface ballooning.
 - **worker payload** — scripts referenced as assets (the PDF worker), parsed only
   when a worker is constructed.
@@ -61,8 +63,12 @@ browser downloads it. The two numbers must not be compared as if they measured
 the same thing. `main` and `preload` are contract-sized entry bundles and get
 absolute ceilings rather than a percentage.
 
-Budgets live in `scripts/perf/desktop-budget.mjs` with the measured baseline and
-roughly 10% headroom. A missing build, a missing or malformed manifest, a
+Budgets live in `scripts/perf/desktop-budget.mjs`. Renderer initial and the
+largest lazy chunk are the ones a user feels, so they stay close to the measured
+baseline. The lazy total and the application payload carry wide headroom (about
+590 kB over the 6 November 2026 measurement) while editor features land, to be
+brought back down by a dedicated speed pass rather than re-baselined PR by PR.
+The other ceilings sit roughly 10% above their baseline. A missing build, a missing or malformed manifest, a
 manifest entry with no file on disk, or a zero-byte file fails the check rather
 than measuring as a passing zero. CI builds the desktop app immediately before
 running it; run it on a fresh build locally too.

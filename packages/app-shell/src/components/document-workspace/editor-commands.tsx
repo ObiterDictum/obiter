@@ -10,6 +10,7 @@ import type {
   DocumentReviewToolbar,
 } from './ribbon-types'
 import type { InsertRibbonProps } from './use-insert-ribbon'
+import type { PictureSizeControl } from './picture-size-toolbar'
 import { revealDocumentRedactionRuns } from './document-actions'
 
 type EditorMenuId = 'file' | 'edit' | 'insert' | 'format' | 'review' | 'view'
@@ -73,6 +74,7 @@ export type EditorChromeProps = InsertRibbonProps & {
   onDeleteParagraph: () => void
   deleteParagraphReason?: string
   format?: DocumentFormatToolbar
+  picture?: PictureSizeControl
   clipboard?: DocumentClipboardToolbar
   find?: DocumentFindToolbar
   review?: DocumentReviewToolbar
@@ -361,6 +363,8 @@ export function editorMenus(
             {
               id: 'footnote',
               label: story === 'footnotes' ? 'Close footnotes' : 'Footnote',
+              shortcut:
+                story === 'footnotes' ? undefined : ['primary', 'alt', 'F'],
               pressed: story === 'footnotes',
               disabled:
                 !structure ||

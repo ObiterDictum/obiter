@@ -18,7 +18,7 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
       next: 'x',
       eligible: false,
       removed: 'a\tb',
-      inserted: 'x\t',
+      inserted: 'x',
       pendingProperties: false,
     },
     {
@@ -41,7 +41,7 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
       next: 'dog\rearth',
       eligible: false,
       removed: 'cat\t',
-      inserted: 'dog\nearth\t',
+      inserted: 'dog\nearth',
     },
     {
       children: '<w:t>Order 60,000 units</w:t>',
@@ -69,7 +69,7 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
       next: 'dog',
       eligible: false,
       removed: 'cat\t',
-      inserted: 'dog\t',
+      inserted: 'dog',
     },
     {
       children: '<w:t>cat</w:t><w:rPr><w:b/></w:rPr>',
@@ -87,14 +87,14 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
     },
   ]
   const mappings = [
-    [0, 0, 'x', [{ offset: 1, text: '\t' }]],
+    [0, 0, 'x', []],
     [0, 0, 'Order 45,000 units', []],
     [3, 0, '\ndog', []],
-    [0, 0, 'dog\nearth', [{ offset: 9, text: '\t' }]],
+    [0, 0, 'dog\nearth', []],
     [6, 6, '45,000', []],
     [7, 4, 's', []],
     [0, 0, 'hello\nearth', []],
-    [0, 0, 'dog', [{ offset: 3, text: '\t' }]],
+    [0, 0, 'dog', []],
     [0, 0, 'dog', []],
     [0, 0, '😃', []],
   ]
@@ -155,7 +155,9 @@ it('exposes source eligibility and plans exactly the text the tracked writer per
 })
 
 it('regenerates cached models carrying the retired break token kind', async () => {
-  const { document } = await revisionFixture('<w:t>a</w:t><w:tab/>')
+  const { document } = await revisionFixture(
+    '<w:t>a</w:t><w:br w:type="page"/><w:t>b</w:t>',
+  )
   const cached = JSON.stringify(document.model)
   expect(() => parseModelJson(cached)).not.toThrow()
   expect(() =>
@@ -219,7 +221,7 @@ it('keeps split run revision text local after inserting a footnote', async () =>
         run.textRevisionTextRanges?.length,
       ),
     )
-  expect(plans.map((plan) => plan.removed)).toEqual(['cat\td', 'og'])
+  expect(plans.map((plan) => plan.removed)).toEqual(['cat\t', 'dog'])
 })
 
 async function revisionFixture(children: string) {
@@ -285,7 +287,7 @@ it('keeps retained tabs after their source text when CRLF is normalised', async 
   ])
 })
 
-it('assigns a tab at an emphasis cut to the piece containing its XML', async () => {
+it('keeps a tab in the emphasised piece when the cut starts at the tab', async () => {
   const { document, paragraph } = await revisionFixture(
     '<w:t>cat</w:t><w:tab/><w:t>dog</w:t>',
   )
@@ -313,7 +315,7 @@ it('assigns a tab at an emphasis cut to the piece containing its XML', async () 
         run.textRevisionTextRanges?.length,
       ).removed,
   )
-  expect(removed).toEqual(['cat', '\tdog'])
+  expect(removed).toEqual(['cat', '\tdo', 'g'])
   const saved = await parseDocx(await serialiseDocx(document))
   expect(
     saved.model.stories[0]?.paragraphs[0]?.runs.map(
@@ -353,11 +355,11 @@ it('keeps source coordinates after a line-ending-only tracked no-op before a foo
   ).toBe('a\nb')
 })
 
-it('uses the same source walk for editable text, breaks and retained controls', async () => {
+it('uses the same source walk for editable text, breaks and tabs', async () => {
   const { run } = await revisionFixture(
     '<w:t>a</w:t><w:smartTag><w:br/></w:smartTag><w:del w:id="9" w:author="Synthetic"><w:r><w:delText>hidden</w:delText><w:tab/></w:r></w:del><w:t>b</w:t><w:tab/>',
   )
-  expect(run.text).toBe('a\nb')
+  expect(run.text).toBe('a\nb\t')
   expect(
     planTextRevision(
       run.text,

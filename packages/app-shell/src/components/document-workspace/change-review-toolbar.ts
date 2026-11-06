@@ -15,7 +15,7 @@ export function changeReviewToolbar(
     onNextChange: review.goToNext,
     onAcceptChange: () => review.decideCurrent('accept'),
     onRejectChange: () => review.decideCurrent('reject'),
-    onAcceptAll: () => review.decideAll('accept'),
-    onRejectAll: () => review.decideAll('reject'),
+    onAcceptAll: () => review.requestBulkDecision('accept'),
+    onRejectAll: () => review.requestBulkDecision('reject'),
   }
 }

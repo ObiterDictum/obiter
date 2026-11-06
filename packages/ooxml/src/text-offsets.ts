@@ -66,11 +66,16 @@ export function locateOffset(
   throw new OoxmlError('comment-anchor-unresolved')
 }
 
-export type EditableTextNode = { range: XmlElementRange; textBreak: boolean }
+export type EditableTextNode = {
+  range: XmlElementRange
+  textBreak: boolean
+  tab?: boolean
+}
 
 export function editableTextNodes(run: TextRunAnchor): EditableTextNode[] {
   return [
     ...run.textElements.map((range) => ({ range, textBreak: false })),
+    ...run.textTabs.map((range) => ({ range, textBreak: false, tab: true })),
     ...run.textBreaks.map((range) => ({ range, textBreak: true })),
   ].sort((left, right) => left.range.start - right.range.start)
 }
@@ -83,13 +88,18 @@ function locateInsideRun(
 ): InsertionPoint {
   const nodes = editableTextNodes(run).map((node) => ({
     ...node,
-    raw: node.textBreak
-      ? ''
-      : source.slice(node.range.startTagEnd, node.range.endTagStart),
+    raw:
+      node.textBreak || node.tab
+        ? ''
+        : source.slice(node.range.startTagEnd, node.range.endTagStart),
   }))
   const decoded = nodes.map((node) => ({
     ...node,
-    text: node.textBreak ? '\n' : decodeXmlReferences(node.raw),
+    text: node.textBreak
+      ? '\n'
+      : node.tab
+        ? '\t'
+        : decodeXmlReferences(node.raw),
   }))
   if (decoded.map((node) => node.text).join('') !== run.wire.text) {
     throw new OoxmlError('comment-anchor-unresolved')
@@ -109,7 +119,12 @@ function locateInsideRun(
         },
       }
     }
-    if (!node.textBreak && localOffset > textStart && localOffset < textEnd) {
+    if (
+      !node.textBreak &&
+      !node.tab &&
+      localOffset > textStart &&
+      localOffset < textEnd
+    ) {
       return {
         sourceOffset:
           node.range.startTagEnd +

@@ -278,6 +278,17 @@ describe('access request form', () => {
     expect(await screen.findByText('A request is already open.')).toBeTruthy()
   })
 
+  it('shows the reason the API gives for refusing the request', async () => {
+    api.apiFetch.mockRejectedValueOnce(
+      new ApiError('invalid_request', 'Complete the bot check.', 400, 'r'),
+    )
+    renderRequestAccess()
+    await fillRequest()
+    submit()
+
+    expect(await screen.findByText('Complete the bot check.')).toBeTruthy()
+  })
+
   describe('with the bot check', () => {
     it('waits for the check, then sends its token', async () => {
       const { fake, widget } = installFakeTurnstile()

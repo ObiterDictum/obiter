@@ -18,10 +18,20 @@ export function xmlContainsImage(xml: string): boolean {
 }
 
 export function paragraphImageXml(paragraph: DocumentParagraphWire): string[] {
+  return paragraphPictureFragments(paragraph).map((picture) => picture.xml)
+}
+
+export function paragraphPictureFragments(
+  paragraph: DocumentParagraphWire,
+): Array<{ xml: string; runId?: string }> {
   return [
-    ...paragraph.preservedXmlFragments.filter(xmlContainsImage),
+    ...paragraph.preservedXmlFragments
+      .filter(xmlContainsImage)
+      .map((xml) => ({ xml })),
     ...paragraph.runs.flatMap((run) =>
-      run.preservedXmlFragments.filter(xmlContainsImage),
+      run.preservedXmlFragments
+        .filter(xmlContainsImage)
+        .map((xml) => ({ xml, runId: run.id })),
     ),
   ]
 }
@@ -195,26 +205,17 @@ export function tabColumns(
   const groups: DocumentTextRunWire[][] = [[]]
   let sawTab = false
   for (const run of paragraph.runs) {
-    const tabCount = run.preservedXmlFragments.filter((xml) =>
-      /<w:tab\b/.test(xml),
-    ).length
-    if (tabCount === 0) {
-      groups[groups.length - 1]?.push(run)
-      continue
+    const carriesInstruction = run.preservedXmlFragments.some((xml) =>
+      /<w:instrText\b/i.test(xml),
+    )
+    for (const [index, piece] of run.text.split('\t').entries()) {
+      if (index > 0) {
+        sawTab = true
+        groups.push([])
+      }
+      if (piece) groups[groups.length - 1]?.push({ ...run, text: piece })
+      else if (index === 0 && carriesInstruction) groups.at(-1)?.push(run)
     }
-    sawTab = true
-    if (
-      run.text.trim() ||
-      run.preservedXmlFragments.some((xml) => /<w:instrText\b/i.test(xml))
-    ) {
-      groups[groups.length - 1]?.push({
-        ...run,
-        preservedXmlFragments: run.preservedXmlFragments.filter(
-          (xml) => !/<w:tab\b/.test(xml),
-        ),
-      })
-    }
-    for (let i = 0; i < tabCount; i += 1) groups.push([])
   }
   return sawTab ? groups : undefined
 }

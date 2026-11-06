@@ -8,6 +8,7 @@ type ParagraphRunSpan = { start: number; end: number }
 
 export type StructuralPlacement =
   | { kind: 'table'; paragraphId: string }
+  | { kind: 'image-size'; paragraphId: string; runId: string }
   | { kind: 'image'; paragraphId: string; offset: number }
   | {
       kind:
@@ -81,7 +82,9 @@ function structuralDraftConflict(
 ): boolean {
   if (
     earlier.kind === 'table-of-authorities-refresh' ||
-    later.kind === 'table-of-authorities-refresh'
+    later.kind === 'table-of-authorities-refresh' ||
+    earlier.kind === 'image-size' ||
+    later.kind === 'image-size'
   ) {
     return false
   }
@@ -172,6 +175,8 @@ export function structuralKindNoun(kind: StructuralPlacement['kind']) {
       return 'citation mark'
     case 'defined-term':
       return 'defined-term mark'
+    case 'image-size':
+      return 'picture size'
   }
 }
 
