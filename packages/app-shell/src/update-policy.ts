@@ -1,43 +1,38 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  organisationUpdatePolicySchema,
-  type OrganisationUpdatePolicy,
-} from '@obiter/contracts'
+import { useQuery } from '@tanstack/react-query'
 import { apiFetch, ApiError } from './api'
 
-const key = (id: string | null) => ['organisation-update-policy', id] as const
-const path = (id: string) => `/api/organisations/${id}/update-policy`
+export const updatePolicyKey = (id: string | null) =>
+  ['organisation-update-policy', id] as const
 
-export function useUpdatePolicy(id: string | null) {
+export const updatePolicyPath = (id: string) =>
+  `/api/organisations/${id}/update-policy`
+
+function readRequireUpdates(body: unknown): boolean {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    'requireUpdates' in body &&
+    body.requireUpdates === true
+  )
+}
+
+export function useUpdatePolicy(id: string | null, enabled = true) {
   return useQuery({
-    queryKey: key(id),
-    enabled: id !== null,
-    refetchInterval: 60_000,
+    queryKey: updatePolicyKey(id),
+    enabled: enabled && id !== null,
     queryFn: async () => {
       if (!id) return { requireUpdates: false }
       try {
-        return organisationUpdatePolicySchema.parse(
-          await apiFetch<unknown>(path(id)),
-        )
+        return {
+          requireUpdates: readRequireUpdates(
+            await apiFetch<unknown>(updatePolicyPath(id)),
+          ),
+        }
       } catch (error) {
         if (error instanceof ApiError && error.status === 404)
           return { requireUpdates: false }
         throw error
       }
     },
-  })
-}
-
-export function useChangeUpdatePolicy(id: string) {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: async (input: OrganisationUpdatePolicy) =>
-      organisationUpdatePolicySchema.parse(
-        await apiFetch<unknown>(path(id), {
-          method: 'PATCH',
-          body: JSON.stringify(input),
-        }),
-      ),
-    onSuccess: (policy) => client.setQueryData(key(id), policy),
   })
 }

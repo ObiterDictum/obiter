@@ -5431,6 +5431,16 @@
             <a href="#infra">Deployment</a>).
           </div>
           <div class="callout note">
+            <b>Organisation update policy.</b> Owners and admins can opt in to
+            requiring updates in organisation settings. The API exposes
+            <code>GET /api/organisations/:organisationId/update-policy</code>
+            to members and <code>PATCH</code> to owners and admins. A missing
+            route means the policy is off. The app asks for the policy only once
+            an update is ready. Every update, required or not, saves pending
+            document edits first and waits if a save fails; a required update
+            keeps a modal open until it is applied.
+          </div>
+          <div class="callout note">
             <b>Open apps learn about new versions.</b> The web build bakes the
             commit its marker records into the client, and
             <code>serve.mjs</code> serves the running commit at

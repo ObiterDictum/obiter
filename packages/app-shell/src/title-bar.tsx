@@ -1,4 +1,3 @@
-import { useUpdatePolicy } from './update-policy'
 import { AppUpdateNotice } from './update-notice'
 import { Link, useRouter, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
@@ -96,7 +95,6 @@ export function TitleBar({
 }) {
   const router = useRouter()
   const { data: me } = useQuery(currentUserQueryOptions())
-  const updatePolicy = useUpdatePolicy(me?.organisation?.id ?? null)
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
@@ -183,7 +181,7 @@ export function TitleBar({
       <AppUpdateNotice
         platform={platform}
         loadedBuild={loadedBuild}
-        requireUpdates={updatePolicy.data?.requireUpdates ?? false}
+        organisationId={me?.organisation?.id ?? null}
       />
       <PaletteTrigger />
     </header>

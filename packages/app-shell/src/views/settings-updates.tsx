@@ -1,7 +1,31 @@
-import type { UserRole } from '@obiter/contracts'
+import {
+  organisationUpdatePolicySchema,
+  type OrganisationUpdatePolicy,
+  type UserRole,
+} from '@obiter/contracts'
 import { Switch } from '@obiter/ui'
-import { useUpdatePolicy, useChangeUpdatePolicy } from '../update-policy'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '../api'
+import {
+  updatePolicyKey,
+  updatePolicyPath,
+  useUpdatePolicy,
+} from '../update-policy'
 import { ErrorNotice, SectionHeading } from './settings-fields'
+
+function useChangeUpdatePolicy(id: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: OrganisationUpdatePolicy) =>
+      organisationUpdatePolicySchema.parse(
+        await apiFetch<unknown>(updatePolicyPath(id), {
+          method: 'PATCH',
+          body: JSON.stringify(input),
+        }),
+      ),
+    onSuccess: (policy) => client.setQueryData(updatePolicyKey(id), policy),
+  })
+}
 
 export function OrganisationUpdates({
   organisationId,
