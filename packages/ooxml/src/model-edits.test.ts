@@ -286,12 +286,12 @@ describe('OOXML document edits', () => {
     )
   })
 
-  it('keeps interleaved run elements when a newline is introduced', async () => {
+  it('keeps an interleaved preserved child when a newline is introduced', async () => {
     const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const zip = await JSZip.loadAsync(input)
     zip.file(
       'word/document.xml',
-      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>First</w:t><w:tab/><w:t>Second</w:t></w:r></w:p></w:body></w:document>',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>First</w:t><w:noBreakHyphen/><w:t>Second</w:t></w:r></w:p></w:body></w:document>',
     )
     const document = await parseDocx(
       await zip.generateAsync({ type: 'uint8array' }),
@@ -308,7 +308,7 @@ describe('OOXML document edits', () => {
     )
 
     expect(xml).toContain(
-      '<w:r><w:t>First</w:t><w:br/><w:tab/><w:t>Second</w:t></w:r>',
+      '<w:r><w:t>First</w:t><w:br/><w:noBreakHyphen/><w:t>Second</w:t></w:r>',
     )
   })
 

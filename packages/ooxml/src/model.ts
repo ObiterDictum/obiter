@@ -67,6 +67,7 @@ export type TextRunAnchor = {
   textRanges: TextRange[]
   textElements: XmlElementRange[]
   textBreaks: XmlElementRange[]
+  textTabs: XmlElementRange[]
   runProperties: string[]
   runPropertiesRange?: XmlElementRange
   runStyleRange?: XmlElementRange

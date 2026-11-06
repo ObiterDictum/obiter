@@ -21,6 +21,8 @@ import {
 import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
 import type { WrappedLine } from '../../document-page-flow'
 import { readableRunColor, runDisplayText } from '../../document-page-media'
+import { DEFAULT_TAB_STOP_PX, tabAdvancePx } from '../../document-page-tabs'
+import { textWidthPx } from '../../document-page-flow'
 import { runNoteRefs } from '../../document-page-notes'
 import { runCss, runFace } from '../../document-page-style'
 import type { ParagraphFace } from '../../document-page-style'
@@ -52,6 +54,7 @@ export function ParagraphRunPaint({
   linkOverlay,
   carets = [],
   continuation = false,
+  indentFirstPx,
   pageNumber = 1,
   pageReferences,
 }: {
@@ -73,12 +76,14 @@ export function ParagraphRunPaint({
   linkOverlay?: LinkOverlay
   carets?: DocumentPresence[]
   continuation?: boolean
+  indentFirstPx?: number
   pageNumber?: number
   pageReferences?: ReadonlyMap<string, number>
 }) {
   const paragraphEnd = paragraphPlainText(paragraph).length
   const inlineByRun = new Map(inlineSpans.map((span) => [span.runId, span]))
-  const paint = (slices: RunSlice[]) => {
+  const stops = face.tabStopsPx ?? []
+  const paint = (slices: RunSlice[], columnStartPx: number) => {
     if (slices.length === 0) {
       return (
         <span
@@ -89,49 +94,103 @@ export function ParagraphRunPaint({
         </span>
       )
     }
-    return slices.map(({ run, text, from }) => {
+    let columnPx = columnStartPx
+    return slices.flatMap(({ run, text, from }) => {
       const span = inlineByRun.get(run.id)
       const source = runSources?.get(run.id)
       const original = source?.run ?? run
-      const content = (
-        <ModelRun
-          key={`${run.id}-${from}`}
-          run={original}
-          revision={
-            span?.pending ? (span.deleted ? 'delete' : 'insert') : undefined
-          }
-          text={text}
-          from={from}
-          notesVisible={
-            (!span || span.editable) &&
-            (!source || from + text.length === source.to)
-          }
-          selection={span && !span.editable ? undefined : selection}
-          linkOverlay={span && !span.editable ? undefined : linkOverlay}
-          paragraphEnd={paragraphEnd}
-          paragraphFace={face}
-          changes={changes}
-          styles={styles}
-          drafts={drafts}
-          caret={
-            (!span || span.editable) && (!source || from === source.from)
-              ? carets.find((item) => item.cursor?.runId === original.id)
-              : undefined
-          }
-        />
-      )
-      return span ? (
-        <InlineChange
-          key={`${run.id}-${from}`}
-          span={span}
-          text={text}
-          tabStop={reviewable && span.tabStop && from === span.from}
-        >
-          {span.pending ? content : undefined}
-        </InlineChange>
-      ) : (
-        content
-      )
+      const runMetrics = runFace(original, face, styles)
+      const content = (piece: string, pieceFrom: number) => {
+        const inner = (
+          <ModelRun
+            key={`${run.id}-${pieceFrom}`}
+            run={original}
+            revision={
+              span?.pending ? (span.deleted ? 'delete' : 'insert') : undefined
+            }
+            text={piece}
+            from={pieceFrom}
+            notesVisible={
+              (!span || span.editable) &&
+              (!source || pieceFrom + piece.length === source.to)
+            }
+            selection={span && !span.editable ? undefined : selection}
+            linkOverlay={span && !span.editable ? undefined : linkOverlay}
+            paragraphEnd={paragraphEnd}
+            paragraphFace={face}
+            changes={changes}
+            styles={styles}
+            drafts={drafts}
+            caret={
+              (!span || span.editable) && (!source || pieceFrom === source.from)
+                ? carets.find((item) => item.cursor?.runId === original.id)
+                : undefined
+            }
+          />
+        )
+        return span ? (
+          <InlineChange
+            key={`${run.id}-${pieceFrom}`}
+            span={span}
+            text={piece}
+            tabStop={
+              reviewable &&
+              span.tabStop &&
+              pieceFrom === span.from &&
+              piece.length > 0
+            }
+          >
+            {span.pending ? inner : undefined}
+          </InlineChange>
+        ) : (
+          inner
+        )
+      }
+      const nodes: ReactNode[] = []
+      const pieces = text.split('\t')
+      for (const [index, piece] of pieces.entries()) {
+        if (index > 0) {
+          const advance = tabAdvancePx(
+            columnPx,
+            stops,
+            face.tabStopPx ?? DEFAULT_TAB_STOP_PX,
+          )
+          nodes.push(
+            <span
+              key={`${run.id}-tab-${from + index}`}
+              data-tab-stop={Math.round(columnPx + advance)}
+              data-selected-text={
+                selection &&
+                from + index >= selection.from &&
+                from + index < selection.to
+                  ? 'true'
+                  : undefined
+              }
+              className="inline-block h-[1em] align-baseline"
+              style={{
+                width: advance,
+                backgroundColor:
+                  selection &&
+                  from + index >= selection.from &&
+                  from + index < selection.to
+                    ? SELECTION_PAINT
+                    : undefined,
+              }}
+            />,
+          )
+          columnPx += advance
+        }
+        const pieceFrom = from + index + pieces.slice(0, index).join('').length
+        if (piece) {
+          nodes.push(content(piece, pieceFrom))
+          columnPx += textWidthPx(
+            piece,
+            runMetrics.fontSizePx ?? face.run.fontSizePx ?? linePx,
+            runMetrics.fontFamily ?? face.run.fontFamily,
+          )
+        }
+      }
+      return nodes
     })
   }
   if (wrapWidthPx && wrapWidthPx > 0) {
@@ -156,11 +215,17 @@ export function ParagraphRunPaint({
             pageNumber,
             pageReferences,
           ),
+          index === 0 && !continuation && start === 0
+            ? (indentFirstPx ?? 0)
+            : 0,
         )}
       </div>
     ))
   }
-  return paint(paintSlices(paragraph, start, end, pageNumber, pageReferences))
+  return paint(
+    paintSlices(paragraph, start, end, pageNumber, pageReferences),
+    start === 0 ? (indentFirstPx ?? 0) : 0,
+  )
 }
 
 function paintSlices(

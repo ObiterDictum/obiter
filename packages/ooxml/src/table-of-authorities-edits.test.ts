@@ -59,7 +59,7 @@ describe('table-of-authorities edits', () => {
     ).toBe(true)
     const entry = paragraphs[headIndex + 2]
     expect(entry?.styleId).toBe('TableofAuthorities')
-    expect(entry?.runs.map((run) => run.text).join('')).toBe('[2020] UKSC 1')
+    expect(entry?.runs.map((run) => run.text).join('')).toBe('[2020] UKSC 1\t')
     expect(
       entry?.runs.some((run) =>
         run.preservedXmlFragments.some((fragment) =>
@@ -129,7 +129,7 @@ describe('table-of-authorities edits', () => {
       entries.map((paragraph) =>
         paragraph.runs.map((run) => run.text).join(''),
       ),
-    ).toEqual(['[2019] EWCA Civ 12', '[2020] UKSC 1, '])
+    ).toEqual(['[2019] EWCA Civ 12\t', '[2020] UKSC 1\t, '])
     expect(
       entries[1]?.runs.some((run) =>
         run.preservedXmlFragments.some((fragment) =>
@@ -168,7 +168,7 @@ describe('table-of-authorities edits', () => {
       entries.map((paragraph) =>
         paragraph.runs.map((run) => run.text).join(''),
       ),
-    ).toEqual(['[2019] UKSC 3'])
+    ).toEqual(['[2019] UKSC 3\t'])
   })
 
   it('does not mark or list a citation in a same-batch inserted paragraph', async () => {
@@ -200,7 +200,7 @@ describe('table-of-authorities edits', () => {
       entries.map((paragraph) =>
         paragraph.runs.map((run) => run.text).join(''),
       ),
-    ).toEqual(['[2020] UKSC 1'])
+    ).toEqual(['[2020] UKSC 1\t'])
   })
 
   it('skips a citation inside a generated field-result paragraph', async () => {

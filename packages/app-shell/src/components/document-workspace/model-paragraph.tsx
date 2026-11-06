@@ -84,6 +84,7 @@ export function ModelParagraphInner({
   relationships,
   imageUrls,
   styles,
+  defaultTabStopTwips,
   from,
   to,
   padLeftPx = 0,
@@ -131,6 +132,7 @@ export function ModelParagraphInner({
   relationships: DocumentRelationshipWire[]
   imageUrls: Record<string, string>
   styles: DocumentStyleWire[]
+  defaultTabStopTwips?: number
   from?: number
   to?: number
   padLeftPx?: number
@@ -152,8 +154,13 @@ export function ModelParagraphInner({
       item.cursor?.paragraphId === paragraph.id,
   )
   const face = useMemo(
-    () => paragraphFace(paragraph, styles),
-    [paragraph.preservedXmlFragments, paragraph.styleId, styles],
+    () => paragraphFace(paragraph, styles, defaultTabStopTwips),
+    [
+      paragraph.preservedXmlFragments,
+      paragraph.styleId,
+      styles,
+      defaultTabStopTwips,
+    ],
   )
   const bucket = useMemo(
     () =>
@@ -301,6 +308,7 @@ export function ModelParagraphInner({
       linkOverlay={inlineLinkOverlay(projection, linkOverlay)}
       carets={carets}
       continuation={continuation}
+      indentFirstPx={onBodyEdge ? 0 : (face.indentFirstPx ?? 0)}
       pageNumber={pageNumber}
       pageReferences={pageReferences}
     />

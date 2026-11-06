@@ -211,7 +211,7 @@ describe('run-keyed writes listed after a page break splice', () => {
 })
 
 describe('materialised run child order', () => {
-  it('emits the run properties before a preserved structural child', async () => {
+  it('emits the run properties before a leading tab child', async () => {
     const { document, paragraph, run } = await loadRun(
       '<w:r><w:tab/><w:t>abc</w:t></w:r>',
     )
@@ -226,9 +226,9 @@ describe('materialised run child order', () => {
     ])
     const xml = await documentXml(document)
     expect(xml).toMatch(/<w:r><w:rPr>/u)
-    expect(xml).not.toMatch(/<w:r><w:tab/u)
+    expect(xml).toMatch(/<w:tab\/>/u)
     const runs = paragraphs(await save(document))[0]?.runs ?? []
-    expect(runs.map((item) => item.text).join('')).toBe('abc')
+    expect(runs.map((item) => item.text).join('')).toBe('\tabc')
     expect(flag(runs[0] ?? { preservedXmlFragments: [] }, 'bold')).toBe(true)
   })
 })

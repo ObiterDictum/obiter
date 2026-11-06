@@ -310,6 +310,9 @@ function parseRun(
     .filter((element) => !element.selfClosing)
     .map(elementRange)
   const textBreaks = content.filter(isTextWrappingBreak).map(elementRange)
+  const textTabs = content
+    .filter((element) => isWord(element, 'tab'))
+    .map(elementRange)
   const textRanges = anchoredTextElements.map((element) => ({
     start: element.startTagEnd,
     end: element.endTagStart,
@@ -326,6 +329,7 @@ function parseRun(
       .filter(
         (element) =>
           !isWord(element, 't') &&
+          !isWord(element, 'tab') &&
           !isTextWrappingBreak(element) &&
           !index.containsTrackedChange(element),
       )
@@ -338,6 +342,7 @@ function parseRun(
     textRanges,
     textElements: anchoredTextElements,
     textBreaks,
+    textTabs,
     runProperties: propertiesElements.map((element) =>
       elementFragment(source, element),
     ),
@@ -363,7 +368,13 @@ function parseRun(
       if (!['t', 'tab', 'br', 'cr'].some((name) => isWord(element, name)))
         continue
       const text = trackedElementText(source, element)
-      if (anchored.has(element.start)) {
+      if (isWord(element, 'tab')) {
+        wire.textRevisionTextRanges.push({
+          from: offset,
+          to: offset + text.length,
+        })
+        offset += text.length
+      } else if (anchored.has(element.start)) {
         wire.textRevisionTextRanges.push({
           from: offset,
           to: offset + text.length,
@@ -403,6 +414,7 @@ function runPlainText(
       )
       continue
     }
+    if (isWord(element, 'tab')) parts.push('\t')
     if (isTextWrappingBreak(element)) parts.push('\n')
   }
   return parts.join('')

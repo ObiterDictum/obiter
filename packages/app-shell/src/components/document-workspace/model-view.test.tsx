@@ -724,8 +724,7 @@ describe('DocumentModelPage', () => {
             {
               id: 'f1',
               runs: [
-                { id: 'a', text: 'phone', preservedXmlFragments: [] },
-                { id: 't', text: '', preservedXmlFragments: ['<w:tab/>'] },
+                { id: 'a', text: 'phone\t', preservedXmlFragments: [] },
                 {
                   id: 'p',
                   text: '',
@@ -733,7 +732,7 @@ describe('DocumentModelPage', () => {
                     '<w:instrText xml:space="preserve"> PAGE </w:instrText>',
                   ],
                 },
-                { id: 'u', text: '', preservedXmlFragments: ['<w:tab/>'] },
+                { id: 'u', text: '\t', preservedXmlFragments: [] },
                 { id: 'c', text: 'www.example.com', preservedXmlFragments: [] },
               ],
               preservedXmlFragments: [

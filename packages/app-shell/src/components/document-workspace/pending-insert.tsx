@@ -7,6 +7,7 @@ import {
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 import { revealTypingLine } from './paragraph-editor'
+import { DEFAULT_TAB_STOP_PX } from '../../document-page-tabs'
 
 export function PendingInsert({
   insert,
@@ -144,6 +145,28 @@ export function PendingInsert({
           clearColumn()
           const start = event.currentTarget.selectionStart
           const end = event.currentTarget.selectionEnd
+          if (
+            event.key === 'Tab' &&
+            !event.currentTarget.closest('[data-table-cell]')
+          ) {
+            event.preventDefault()
+            if (event.shiftKey) return
+            if (onWordEdit) {
+              onWordEdit({
+                type: 'replace',
+                paragraphId: insert.clientId,
+                offset: start,
+                from: start,
+                to: end,
+                insert: '\t',
+              })
+              return
+            }
+            const next = `${text.slice(0, start)}\t${text.slice(end)}`
+            onTextChange?.(insert.clientId, next)
+            field.current?.setSelectionRange(start + 1, start + 1)
+            return
+          }
           if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault()
             if (onWordEdit) {
@@ -198,6 +221,7 @@ export function PendingInsert({
         style={{
           lineHeight: '1.15',
           minHeight: '1.15em',
+          tabSize: DEFAULT_TAB_STOP_PX,
         }}
       />
 

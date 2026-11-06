@@ -21,6 +21,7 @@ export function PageTable({
               <td
                 key={cellIndex}
                 colSpan={cell.span}
+                data-table-cell
                 className={cn(
                   'align-middle',
                   cell.fill ? 'p-0' : 'px-1 py-0.5',

@@ -4,6 +4,7 @@ import {
   paragraphTextIndentPx,
   type ParagraphFace,
 } from './document-page-style'
+import { DEFAULT_TAB_STOP_PX, tabAdvancePx } from './document-page-tabs'
 
 export const MEASURE_FONT = 'Calibri, "Segoe UI", "Liberation Sans", sans-serif'
 
@@ -282,7 +283,22 @@ function textBoundary(text: string, offset: number): boolean {
   )
 }
 
-function textWidthPx(
+export function textWidthPx(
+  text: string,
+  fontSizePx: number,
+  fontFamily: string = MEASURE_FONT,
+): number {
+  if (!text) return 0
+  if (!text.includes('\t')) return plainWidthPx(text, fontSizePx, fontFamily)
+  let width = 0
+  for (const [index, piece] of text.split('\t').entries()) {
+    if (index > 0) width += tabAdvancePx(width, [], DEFAULT_TAB_STOP_PX)
+    width += plainWidthPx(piece, fontSizePx, fontFamily)
+  }
+  return width
+}
+
+function plainWidthPx(
   text: string,
   fontSizePx: number,
   fontFamily: string,

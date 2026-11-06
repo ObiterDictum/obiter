@@ -147,6 +147,7 @@ export function renderBlock(
                 relationships={ctx.model.relationships}
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
+                defaultTabStopTwips={ctx.model.defaultTabStopTwips}
                 listMarker={ctx.listMarkers.get(paragraph.id)}
                 pageNumber={ctx.pageNumber}
                 pageReferences={ctx.pageReferences}
@@ -230,6 +231,7 @@ export function renderBlock(
       relationships={ctx.model.relationships}
       imageUrls={ctx.imageUrls}
       styles={ctx.model.styles}
+      defaultTabStopTwips={ctx.model.defaultTabStopTwips}
       from={block.from}
       to={block.to}
       padLeftPx={block.padLeftPx}
@@ -339,6 +341,7 @@ export function PageOverlays({
                 relationships={model.relationships}
                 imageUrls={imageUrls}
                 styles={model.styles}
+                defaultTabStopTwips={model.defaultTabStopTwips}
               />,
             ]
           })}
