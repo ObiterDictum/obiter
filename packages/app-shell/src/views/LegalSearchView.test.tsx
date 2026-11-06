@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { act, type ReactNode } from 'react'
+import { StrictMode, act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
@@ -1519,6 +1519,31 @@ describe('LegalSearchView search parameter', () => {
     expect(JSON.parse(String(request?.body))).toMatchObject({
       query: 'unfair dismissal',
     })
+  })
+
+  it('still shows the results of the q parameter search when effects are mounted twice', async () => {
+    routerMocks.search = { q: 'unfair dismissal' }
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(createSearchResponse(createTwoResultHits())),
+    )
+    container = document.createElement('div')
+    document.body.append(container)
+    const strictRoot = createRoot(container)
+    root = strictRoot
+    act(() => {
+      strictRoot.render(
+        <StrictMode>
+          <LegalSearchView />
+        </StrictMode>,
+      )
+    })
+    await flushMicrotasks()
+
+    expect(container.querySelectorAll('[data-result-index]')).toHaveLength(2)
+    expect(container.textContent).not.toContain('Searching')
   })
 
   it('leaves the search idle without a q parameter', async () => {

@@ -187,6 +187,7 @@ export function useLegalSearch(initialQuery = '') {
       clearAutoSearchTimer()
       cancelInFlightSearch()
       searchRequestId.current += 1
+      initialQueryStarted.current = ''
     }
   }, [])
   async function runSearch(
