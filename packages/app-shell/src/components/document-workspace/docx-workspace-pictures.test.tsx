@@ -529,7 +529,7 @@ describe('the picture size control', () => {
       const lockRow = lock.closest('label')?.parentElement
       expect(lockRow).toBe(reset.parentElement)
       expect(lockRow).not.toBe(widthRow)
-      expect(panel.contains(lockRow)).toBe(true)
+      expect(panel.contains(lockRow ?? null)).toBe(true)
     } finally {
       restorePicker()
     }
