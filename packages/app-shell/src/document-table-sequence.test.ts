@@ -84,6 +84,7 @@ for (const twoTables of [false, true]) {
         const html = renderToStaticMarkup(
           createElement(PageTable, {
             table,
+            bordered: table.bordered,
             renderCell: (cell) =>
               cell.paragraphIds
                 .map((id) =>
