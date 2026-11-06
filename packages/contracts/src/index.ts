@@ -482,3 +482,5 @@ export {
 } from './case-paths'
 export { planTextRevision } from './text-revision-plan'
 export * from './organisation-update-policy'
+
+export * from './feedback'

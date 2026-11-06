@@ -5447,6 +5447,8 @@
           <div class="callout note">
             <b>Organisation update policy.</b> Owners and admins can opt in to
             requiring updates in organisation settings. The API exposes
+            <code>POST /api/feedback</code> accepts authenticated tester
+            feedback with optional page path, version and platform.
             <code>GET /api/organisations/:organisationId/update-policy</code>
             to members and <code>PATCH</code> to owners and admins. A missing
             route means the policy is off. The app asks for the policy only once

@@ -39,10 +39,23 @@ const CreateMatterDialogLazy = lazy(() =>
 )
 
 interface CommandPaletteState {
+  feedback: () => void
   open: (trigger?: HTMLElement | null) => void
 }
 
 const CommandPaletteContext = createContext<CommandPaletteState | null>(null)
+
+export function useFeedback() {
+  const context = useContext(CommandPaletteContext)
+  if (!context) throw new Error('Feedback needs the shell')
+  return context.feedback
+}
+
+const FeedbackDialogLazy = lazy(() =>
+  import('./feedback-dialog').then((module) => ({
+    default: module.FeedbackDialog,
+  })),
+)
 
 export function useCommandPalette(): (trigger?: HTMLElement | null) => void {
   const context = useContext(CommandPaletteContext)
@@ -74,6 +87,7 @@ export function CommandPaletteProvider({
   const currentMatterId = matterIdFromPath(pathname)
   const currentMatterName =
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [open, setOpen] = useState(false)
   const [createMatterOpen, setCreateMatterOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -137,6 +151,11 @@ export function CommandPaletteProvider({
 
   const actionRows: PaletteRow[] = [
     {
+      id: 'send-feedback',
+      label: 'Send feedback',
+      target: { kind: 'action', id: 'send-feedback' },
+    },
+    {
       id: 'action-toggle-nav',
       label: 'Toggle sidebar',
       hint: 'Show or hide the navigation',
@@ -170,6 +189,9 @@ export function CommandPaletteProvider({
 
   function runAction(id: PaletteActionId) {
     switch (id) {
+      case 'send-feedback':
+        setFeedbackOpen(true)
+        return
       case 'toggle-nav':
         onToggleNav()
         return
@@ -252,8 +274,15 @@ export function CommandPaletteProvider({
   }
 
   return (
-    <CommandPaletteContext.Provider value={{ open: openPalette }}>
+    <CommandPaletteContext.Provider
+      value={{ open: openPalette, feedback: () => setFeedbackOpen(true) }}
+    >
       {children}
+      {feedbackOpen ? (
+        <Suspense fallback={null}>
+          <FeedbackDialogLazy onClose={() => setFeedbackOpen(false)} />
+        </Suspense>
+      ) : null}
       {open ? (
         <Suspense fallback={null}>
           <CommandPaletteDialogLazy
