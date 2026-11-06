@@ -254,6 +254,19 @@ describe('matter tab strip', () => {
     await waitFor(() => expect(openTabs()).toHaveLength(3))
   })
 
+  it('shows the matter overview as a home icon named after the matter', async () => {
+    renderPane('/matters/mtr_1/documents/doc_1')
+    const overview = await screen.findByRole('button', {
+      name: 'Smith v Jones Lettings Ltd',
+    })
+    expect(overview.textContent).toBe('')
+    expect(overview.querySelector('svg')).toBeTruthy()
+    fireEvent.focus(overview)
+    expect((await screen.findByRole('tooltip')).textContent).toBe(
+      'Smith v Jones Lettings Ltd',
+    )
+  })
+
   it('opens a tab for the route and marks it as the current one', async () => {
     renderPane('/matters/mtr_1/documents/doc_1')
     const current = await screen.findByRole('button', { current: 'page' })

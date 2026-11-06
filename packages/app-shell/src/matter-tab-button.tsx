@@ -11,13 +11,7 @@ import {
   TooltipTrigger,
   cn,
 } from '@obiter/ui'
-import {
-  FileText,
-  Folders,
-  PencilSimple,
-  ShieldCheck,
-  X,
-} from '@obiter/ui/icons'
+import { FileText, House, PencilSimple, ShieldCheck, X } from '@obiter/ui/icons'
 import { useCallback, type ReactNode } from 'react'
 import { DocumentTabSaveIndicator } from './document-tab-save-indicator'
 import type { DocumentTabStatus } from './document-tab-status'
@@ -33,7 +27,7 @@ interface TabIconProps {
 }
 
 const TAB_ICONS = {
-  overview: Folders,
+  overview: House,
   document: FileText,
   verify: ShieldCheck,
   redact: PencilSimple,
@@ -75,6 +69,27 @@ export function MatterTabButton({
   onDelete?: () => void
 }) {
   const { close, goToTab, openToSide, promote } = useMatterTabs()
+  const iconOnly = tab.kind === 'overview'
+  const labelButton = (
+    <button
+      type="button"
+      aria-current={active ? 'page' : undefined}
+      aria-label={tabAccessibleName(tab, status)}
+      onClick={() => goToTab(tab)}
+      onDoubleClick={() => promote(tab.id)}
+      className={cn(
+        'flex min-w-0 items-center gap-2 py-1.5 text-meta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        iconOnly ? 'px-2' : 'pr-1 pl-2.5',
+      )}
+    >
+      <TabIcon kind={tab.kind} />
+      {iconOnly ? null : (
+        <span className={cn('max-w-[11rem] truncate', tab.preview && 'italic')}>
+          {tab.title}
+        </span>
+      )}
+    </button>
+  )
   const keepInView = useCallback(
     (node: HTMLDivElement | null) => {
       if (!active || !node || typeof node.scrollIntoView !== 'function') return
@@ -107,24 +122,14 @@ export function MatterTabButton({
                 : 'text-muted hover:bg-hover hover:text-ink',
             )}
           >
-            <button
-              type="button"
-              aria-current={active ? 'page' : undefined}
-              aria-label={tabAccessibleName(tab, status)}
-              onClick={() => goToTab(tab)}
-              onDoubleClick={() => promote(tab.id)}
-              className="flex min-w-0 items-center gap-2 py-1.5 pr-1 pl-2.5 text-meta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              <TabIcon kind={tab.kind} />
-              <span
-                className={cn(
-                  'max-w-[11rem] truncate',
-                  tab.preview && 'italic',
-                )}
-              >
-                {tab.title}
-              </span>
-            </button>
+            {iconOnly ? (
+              <Tooltip>
+                <TooltipTrigger render={labelButton} />
+                <TooltipContent side="bottom">{tab.title}</TooltipContent>
+              </Tooltip>
+            ) : (
+              labelButton
+            )}
             <DocumentTabSaveIndicator state={status?.save ?? null} />
             <Tooltip>
               <TooltipTrigger
