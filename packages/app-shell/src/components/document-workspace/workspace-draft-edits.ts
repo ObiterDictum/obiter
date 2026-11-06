@@ -82,12 +82,31 @@ export function createWorkspaceDraftEdits({
     from: { paragraphId: string; offset: number },
     to: { paragraphId: string; offset: number },
     text: string,
-  ): { paragraphId: string; offset: number } | null {
+  ): { paragraphId: string; offset: number; removedFootnotes: number } | null {
+    const before = getState()
     const result = applyReplaceDocumentRange(model, getState(), from, to, text)
     if (!result) return null
     checkpoint()
-    commitEditor(model, result, { anchor: from, focus: to })
-    return result.caret
+    const after = followFootnotes(model, before, result, {
+      anchor: from,
+      focus: to,
+    })
+    setState((current) => ({
+      ...current,
+      ...after,
+      deletedParagraphIds: result.state.deletedParagraphIds,
+    }))
+    const pendingRemoved = before.structures.filter(
+      (item) =>
+        item.kind === 'footnote' &&
+        !after.structures.some((next) => next.id === item.id),
+    ).length
+    const storedRemoved = after.structures.filter(
+      (item) =>
+        item.kind === 'footnote-removal' &&
+        !before.structures.some((previous) => previous.id === item.id),
+    ).length
+    return { ...result.caret, removedFootnotes: pendingRemoved + storedRemoved }
   }
 
   function splitDocumentRange(

@@ -28,7 +28,7 @@ const CLIPBOARD_BLOCKS_COPY =
 
 const CLIPBOARD_BLOCKS_PASTE = 'The clipboard could not be read.'
 
-export type SelectionRefusal =
+type RefusalCode =
   | 'insert'
   | 'structure'
   | 'join-formatting'
@@ -40,6 +40,9 @@ export type SelectionRefusal =
   | 'clipboard-read'
   | DocumentRangeRefusal
 
+export type SelectionRefusal =
+  RefusalCode | { kind: 'cut-footnotes'; count: number }
+
 const REFUSAL_MESSAGES = {
   'join-formatting': JOIN_FORMATTING_BLOCKS_EDIT,
   'tracked-change': TRACKED_CHANGE_BLOCKS_JOIN,
@@ -49,13 +52,16 @@ const REFUSAL_MESSAGES = {
   clipboard: CLIPBOARD_BLOCKS_CUT,
   'clipboard-copy': CLIPBOARD_BLOCKS_COPY,
   'clipboard-read': CLIPBOARD_BLOCKS_PASTE,
-} satisfies Partial<Record<SelectionRefusal, string>>
+} satisfies Partial<Record<RefusalCode, string>>
 
 export function refusalMessage(
   refusal: SelectionRefusal | null,
   hasInsert: boolean,
   hasStructure: boolean,
 ): string | null {
+  if (typeof refusal === 'object' && refusal !== null) {
+    return `${refusal.count} ${refusal.count === 1 ? 'footnote was' : 'footnotes were'} removed by the cut. Undo restores them. Pasting restores only the text.`
+  }
   if (refusal === 'insert') {
     return hasInsert ? INSERT_BLOCKS_SELECTION : null
   }

@@ -300,6 +300,7 @@ export function useWorkspaceCaret({
       text,
     )
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
+    return caret?.removedFootnotes
   }
 
   function moveCaret(paragraphId: string, offset: number) {
