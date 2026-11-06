@@ -67,6 +67,17 @@ export function canonicaliseParagraphIdentities(
       const part = requireEditablePart(document, story.partName)
       const anchor = document.paragraphAnchors.get(paragraph.id)
       if (anchor) {
+        const tableReplacement = [...part.overlay.replacements.entries()].find(
+          ([key, replacement]) =>
+            key.startsWith('table-structure-') &&
+            replacement.start <= anchor.paragraphRange.start &&
+            replacement.end >= anchor.paragraphRange.end,
+        )
+        if (tableReplacement) {
+          if (!tableReplacement[1].value.includes(`w14:paraId="${value}"`))
+            throw new Error('table-paragraph-identity-missing')
+          continue
+        }
         const covering = coveringReplacement(
           part.overlay,
           anchor.paragraphRange,
@@ -143,12 +154,12 @@ function ensureWord2010Namespace(overlay: {
   source: string
   replacements: Map<string, { start: number; end: number; value: string }>
 }) {
-  if (/xmlns:w14=/u.test(overlay.source.slice(0, 4096))) return
   const root = parseXmlElements(overlay.source).find(
     (element) => element.depth === 0,
   )
   if (!root) return
   const startTag = overlay.source.slice(root.start, root.startTagEnd)
+  if (/xmlns:w14=/u.test(startTag)) return
   const declared = `xmlns:w14="${WORD_2010_NAMESPACE}"`
   const at = startTag.search(/[\s>]/u)
   if (at < 0) return

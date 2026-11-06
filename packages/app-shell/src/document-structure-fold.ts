@@ -1,3 +1,4 @@
+import { foldTableStructure } from './document-table-structure-fold'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -147,6 +148,11 @@ function foldStory(
   let changed = false
 
   for (const draft of structures) {
+    if (draft.kind === 'table-structure') {
+      foldTableStructure(fragments, paragraphs, draft.operation, nextParaId)
+      changed = true
+      continue
+    }
     if (draft.kind === 'table') {
       const anchorWire = paragraphs.find(
         (paragraph) => paragraph.id === draft.paragraphId,

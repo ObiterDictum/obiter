@@ -1,3 +1,4 @@
+import { withStructuralDrafts } from './document-structure-fold'
 import { revisionOnlyParagraph } from './document-inline-index'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
@@ -57,6 +58,11 @@ export function partitionDraftState(
   )
   const insertById = new Map(state.inserts.map((item) => [item.clientId, item]))
   const realIds = paragraphIds
+  const pendingTableIds = new Set(
+    withStructuralDrafts(model, state.structures).stories.flatMap((story) =>
+      story.paragraphs.filter((p) => !paragraphIds.has(p.id)).map((p) => p.id),
+    ),
+  )
 
   let covered: DraftSlot[] = []
   const blocked: BlockedDraft[] = []
@@ -95,7 +101,7 @@ export function partitionDraftState(
       deferredNoteRuns.push({ paragraphId, structureId })
       continue
     }
-    if (!paragraphIds.has(paragraphId)) {
+    if (!paragraphIds.has(paragraphId) && !pendingTableIds.has(paragraphId)) {
       blocked.push({
         slot: {
           kind: 'extra-runs',

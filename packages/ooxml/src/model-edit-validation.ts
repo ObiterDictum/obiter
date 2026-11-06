@@ -32,6 +32,11 @@ export type PlannedOperation =
           | 'insert_break'
           | 'insert_section_break'
           | 'insert_table'
+          | 'insert_table_row'
+          | 'insert_table_column'
+          | 'delete_table_row'
+          | 'delete_table_column'
+          | 'delete_table'
           | 'insert_image'
           | 'set_hyperlink'
           | 'insert_footnote'
@@ -176,6 +181,11 @@ export function validateTrackedOperations(
     if (!('paragraph' in operation)) continue
     if (deletedIds.has(operation.paragraph.wire.id)) continue
     if (
+      operation.type === 'insert_table_row' ||
+      operation.type === 'insert_table_column' ||
+      operation.type === 'delete_table_row' ||
+      operation.type === 'delete_table_column' ||
+      operation.type === 'delete_table' ||
       operation.type === 'insert_table' ||
       operation.type === 'insert_image' ||
       operation.type === 'set_image_size' ||

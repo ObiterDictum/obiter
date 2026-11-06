@@ -315,6 +315,36 @@ export function editorMenus(
           ],
         },
         {
+          label: 'Table tools',
+          commands: (
+            [
+              ['Insert row above', 'insert_table_row', 'before'],
+              ['Insert row below', 'insert_table_row', 'after'],
+              ['Insert column left', 'insert_table_column', 'before'],
+              ['Insert column right', 'insert_table_column', 'after'],
+              ['Delete row', 'delete_table_row'],
+              ['Delete column', 'delete_table_column'],
+              ['Delete table', 'delete_table'],
+            ] as const
+          ).map(([label, type, position]) => ({
+            id: type + (position ?? ''),
+            label,
+            disabled:
+              !structure?.onTableStructure ||
+              Boolean(structure.tableStructureUnavailable),
+            disabledReason: structure?.tableStructureUnavailable,
+            run: () => {
+              if (type === 'insert_table_row' || type === 'insert_table_column')
+                structure?.onTableStructure?.({
+                  type,
+                  position: position ?? 'after',
+                  paragraphId: '',
+                })
+              else structure?.onTableStructure?.({ type, paragraphId: '' })
+            },
+          })),
+        },
+        {
           label: 'Tables and pictures',
           commands: [
             {
