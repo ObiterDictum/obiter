@@ -91,5 +91,5 @@ export async function gotoOtherMode(page: Page) {
   await expect(workspaceNav(page)).toBeVisible()
   await page.getByRole('button', { name: 'Account menu' }).click()
   await page.getByRole('menuitem', { name: 'Account settings' }).click()
-  await expect(page).toHaveURL(/\/settings$/)
+  await expect(page).toHaveURL(/\/settings\?section=account$/)
 }

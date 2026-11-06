@@ -35,7 +35,7 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   await page.waitForLoadState('networkidle')
 
   await page.goto('/settings', { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: 'Organisation', exact: true }).click()
+  await page.getByRole('link', { name: 'Organisation', exact: true }).click()
   const orgInput = page.getByLabel('Organisation name')
   await expect(orgInput).toBeVisible({ timeout: 10_000 })
 
