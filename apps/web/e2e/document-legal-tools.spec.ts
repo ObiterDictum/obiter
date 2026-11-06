@@ -39,13 +39,25 @@ async function reviewCommand(page: Page, name: string) {
   if (!(await clickMenuItem(page, 'Review', name))) {
     throw new Error(`could not run the ${name} command`)
   }
+  if (name === 'Check defined terms' || name === 'Check cross-references') {
+    await expect(
+      page.getByRole('tab', { name: 'Checks', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true')
+    await expect(
+      checksPanel(page).getByRole('heading', {
+        name:
+          name === 'Check defined terms' ? 'Defined terms' : 'Cross-references',
+        exact: true,
+      }),
+    ).toBeInViewport()
+  }
 }
 const markedText = (page: Page) => page.locator('[data-defined-term]')
 const fieldMarkers = (page: Page) => page.locator('[data-field-marker]')
 const authoritiesPanel = (page: Page) =>
   page.getByRole('complementary', { name: 'Authorities' })
 const checksPanel = (page: Page) =>
-  page.getByRole('complementary', { name: 'Legal checks' })
+  page.getByRole('complementary', { name: 'Checks panel' })
 
 async function openReferences(page: Page) {
   await openMenu(page, 'Insert')
