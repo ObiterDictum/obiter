@@ -48,3 +48,16 @@ it('can omit all page metadata and acknowledges success', async () => {
   })
   cleanup()
 })
+it('focuses Kind on open and lets Escape close the dialog', async () => {
+  const close = vi.fn()
+  const view = render(<FeedbackDialog onClose={close} />)
+  await waitFor(() =>
+    expect(document.activeElement).toBe(view.getByLabelText('Kind')),
+  )
+  fireEvent.keyDown(view.getByLabelText('Kind'), {
+    key: 'Escape',
+    code: 'Escape',
+  })
+  await waitFor(() => expect(close).toHaveBeenCalledTimes(1))
+  cleanup()
+})
