@@ -474,6 +474,7 @@ function JudgmentPageText({
               <HighlightedText text={before} query={query} />
             </span>
             <span
+              data-page-marker
               id={`page-${page.page}`}
               tabIndex={-1}
               className="relative my-3 flex scroll-mt-6 items-center justify-between border-t border-line pt-1 font-sans text-caption text-paper-muted"

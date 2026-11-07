@@ -192,3 +192,29 @@ it('navigates to a PDF page from the input and a page hash', async () => {
   await waitFor(() => expect(document.activeElement?.id).toBe('page-47'))
   expect(window.location.hash).toBe('#page-47')
 })
+it('copies selected body text without page labels and reads the page at the selection start', () => {
+  const { container } = render(
+    <article>
+      <p data-court-paragraph="137">
+        <span data-source-text data-judgment-page="47">
+          First part
+        </span>
+        <span data-page-marker>Page 48 p. 48</span>
+        <span data-source-text data-judgment-page="48">
+          continued
+        </span>
+      </p>
+    </article>,
+  )
+  const first = container.querySelector('[data-source-text]')?.firstChild
+  const last = container.querySelector('[data-judgment-page="48"]')?.firstChild
+  if (!first || !last) throw new Error('Missing fixture')
+  const range = document.createRange()
+  range.setStart(first, 0)
+  range.setEnd(last, 9)
+  range.getBoundingClientRect = () => new DOMRect(10, 10, 100, 20)
+  window.getSelection()?.addRange(range)
+  const quote = readJudgmentSelection(container)
+  expect(quote?.page).toBe(47)
+  expect(quote?.text).toBe('First partcontinued')
+})
