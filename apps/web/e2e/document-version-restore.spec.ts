@@ -18,6 +18,12 @@ test('restoring version one creates version three and refreshes current content 
     `Restore ${crypto.randomUUID().slice(0, 6)}`,
     fixturePath(),
   )
+  const documentId = page.url().split('/').pop()
+  const original = await page.request.get(
+    `/api/documents/${documentId}/download`,
+  )
+  expect(original.ok()).toBe(true)
+  const originalBytes = await original.body()
   await focusParagraph(page, HEADING)
   await page.keyboard.press('Home')
   await page.keyboard.type('RESTOREMARK ')
@@ -54,8 +60,13 @@ test('restoring version one creates version three and refreshes current content 
     page.getByRole('button', { name: 'Back to current version' }),
   ).toHaveCount(0)
   await expect(
-    page.getByLabel('Paragraph text', { exact: true }).first(),
-  ).not.toContainText('RESTOREMARK')
+    page.locator('[data-paragraph-id]', { hasText: 'RESTOREMARK' }),
+  ).toHaveCount(0)
+  const restored = await page.request.get(
+    `/api/documents/${documentId}/download`,
+  )
+  expect(restored.ok()).toBe(true)
+  expect(await restored.body()).toEqual(originalBytes)
   await expect(
     page.locator('[data-paragraph-id]', { hasText: HEADING }).first(),
   ).toBeVisible()
