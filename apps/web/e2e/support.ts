@@ -52,19 +52,29 @@ export async function openMatter(page: Page, matterName: string) {
 export function verifyEmailInDb(databaseName: string, email: string) {
   const safe = email.replace(/'/g, "''")
   const sql = `update users set "emailVerified"=true where email='${safe}'`
-  execFileSync(
-    'docker',
-    [
-      'exec',
-      'obiter-postgres',
-      'psql',
-      '-U',
-      'obiter',
-      '-d',
-      databaseName,
-      '-c',
-      sql,
-    ],
-    { stdio: 'pipe' },
-  )
+  const url = new URL(process.env.OBITER_E2E_DATABASE_URL ?? '')
+  url.pathname = `/${databaseName}`
+  try {
+    execFileSync('psql', [url.href, '-v', 'ON_ERROR_STOP=1', '-c', sql], {
+      stdio: 'pipe',
+    })
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT'))
+      throw error
+    execFileSync(
+      'docker',
+      [
+        'exec',
+        'obiter-postgres',
+        'psql',
+        '-U',
+        'obiter',
+        '-d',
+        databaseName,
+        '-c',
+        sql,
+      ],
+      { stdio: 'pipe' },
+    )
+  }
 }
