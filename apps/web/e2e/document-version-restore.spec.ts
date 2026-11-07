@@ -78,3 +78,47 @@ test('restoring version one creates version three and refreshes current content 
     information.locator('li').filter({ hasText: /Version [123]/ }),
   ).toHaveCount(3)
 })
+
+test('unsaved work disables restore in History and remains editable after viewing a historical version', async ({
+  page,
+  request,
+}) => {
+  const { email, password } = await createAccount(request, 'RestoreDraft')
+  await openFixtureDocument(
+    page,
+    email,
+    password,
+    `Draft ${crypto.randomUUID().slice(0, 6)}`,
+    fixturePath(),
+  )
+  await focusParagraph(page, HEADING)
+  await page.keyboard.press('Home')
+  await page.keyboard.type('SAVEDMARK ')
+  const save = page.getByRole('button', { name: 'Save', exact: true })
+  await save.click()
+  await expect(save).toBeDisabled({ timeout: 30_000 })
+  await focusParagraph(page, HEADING)
+  await page.keyboard.press('End')
+  await page.keyboard.type(' UNSAVEDMARK')
+  await expect(save).toBeEnabled()
+  await runMenuCommand(page, 'View', 'Document information')
+  await page
+    .getByRole('complementary', { name: 'Document information' })
+    .locator('li', { hasText: 'Version 1' })
+    .first()
+    .getByRole('button', { name: 'View' })
+    .click()
+  const restore = page
+    .getByRole('button', { name: 'Restore this version' })
+    .first()
+  await expect(restore).toBeDisabled()
+  await expect(restore).toHaveAttribute(
+    'title',
+    'Save or discard your changes first.',
+  )
+  await page.getByRole('button', { name: 'Back to current version' }).click()
+  await expect(
+    page.locator('[data-paragraph-id]', { hasText: 'UNSAVEDMARK' }).first(),
+  ).toBeVisible()
+  await expect(save).toBeEnabled()
+})

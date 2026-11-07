@@ -207,7 +207,10 @@ function DocumentDetailBody({
             />
           </ContentFrame>
         ) : null}
-        <div className={viewingHistorical ? 'hidden' : 'h-full'}>
+        <div
+          className={viewingHistorical ? 'hidden' : 'h-full'}
+          inert={restore.isPending}
+        >
           <DocumentWorkspace
             key={restoredVersionId ?? documentId}
             documentId={documentId}
