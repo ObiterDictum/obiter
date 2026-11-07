@@ -1,3 +1,4 @@
+import { rememberReportingUser } from './error-reporting-user'
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
 import { useQueryClient } from '@tanstack/react-query'
@@ -190,6 +191,7 @@ export function useAuth(): UseAuthReturn {
   }
 
   async function signOut() {
+    rememberReportingUser(undefined)
     const userId = realSession.data?.user?.id
     const result = await authClient.signOut()
     if (result.error) {

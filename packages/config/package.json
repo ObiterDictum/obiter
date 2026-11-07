@@ -12,5 +12,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts"
+  },
+  "dependencies": {
+    "@sentry/core": "^11.11.0"
   }
 }

@@ -2,6 +2,7 @@ import { expect, it, mock } from 'bun:test'
 const init = mock(() => {})
 mock.module('@sentry/react', () => ({
   init,
+  breadcrumbsIntegration: () => ({ name: 'Breadcrumbs' }),
   globalHandlersIntegration: () => ({ name: 'GlobalHandlers' }),
 }))
 const { startErrorReporting } = await import('./error-reporting')

@@ -5,7 +5,13 @@ declare const __PACKAGED_API_ORIGIN_DEFAULT__: string
 interface Window {
   obiterDesktop?: {
     errorReporting?: { dsn?: string; release?: string; production?: boolean }
-    onMainError?(listener: () => void): () => void
+    onMainError?(
+      listener: (error: {
+        name: string
+        message: string
+        stack?: string
+      }) => void,
+    ): () => void
     platform: 'desktop'
     shellVersion: string
     apiOrigin: string | null

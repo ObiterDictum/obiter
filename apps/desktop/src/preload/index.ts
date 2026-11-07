@@ -8,8 +8,17 @@ contextBridge.exposeInMainWorld('obiterDesktop', {
   osPlatform: process.platform,
   shellVersion: 'phase-0.1',
   apiOrigin,
-  onMainError: (listener: () => void) => {
-    const announce = () => listener()
+  onMainError: (
+    listener: (error: {
+      name: string
+      message: string
+      stack?: string
+    }) => void,
+  ) => {
+    const announce = (
+      _event: Electron.IpcRendererEvent,
+      error: { name: string; message: string; stack?: string },
+    ) => listener(error)
     ipcRenderer.on('obiter:main-error', announce)
     return () => ipcRenderer.removeListener('obiter:main-error', announce)
   },

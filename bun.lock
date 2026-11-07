@@ -94,6 +94,9 @@
     "packages/config": {
       "name": "@obiter/config",
       "version": "0.0.0",
+      "dependencies": {
+        "@sentry/core": "^11.11.0",
+      },
     },
     "packages/contracts": {
       "name": "@obiter/contracts",

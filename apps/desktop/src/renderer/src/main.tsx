@@ -46,8 +46,11 @@ requestAnimationFrame(() => {
 })
 
 const desktop = window.obiterDesktop
-desktop?.onMainError?.(() => {
+desktop?.onMainError?.((details) => {
+  const error = new Error(details.message)
+  error.name = details.name
+  error.stack = details.stack
   window.dispatchEvent(
-    new ErrorEvent('error', { message: 'Desktop main process error' }),
+    new ErrorEvent('error', { message: details.message, error }),
   )
 })

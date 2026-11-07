@@ -21,9 +21,13 @@ import {
 import { startDesktopUpdates } from './updates'
 
 if (process.env.OBITER_SENTRY_DSN_WEB) {
-  process.on('uncaughtExceptionMonitor', () => {
+  process.on('uncaughtExceptionMonitor', (error) => {
     for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send('obiter:main-error')
+      window.webContents.send('obiter:main-error', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      })
     }
   })
 }

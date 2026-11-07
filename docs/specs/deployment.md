@@ -249,13 +249,24 @@ Set OBITER_SENTRY_DSN for the API or OBITER_SENTRY_DSN_WEB for the web service
 and desktop launch environment. Unset means no SDK initialization or reporting.
 Use free Developer error-only projects in the EU region. Web configuration is
 served at runtime after first paint; no DSN is compiled into the client.
-Sentry is a processor to list in the privacy notice before enabling reporting.
-Reports contain only stable SDK, event, release and environment metadata and
-a fixed message. All request data, URLs, query strings, user information,
-exception text, attachments, extra fields, contexts and breadcrumbs are dropped.
-This removes document text, filenames, matter names, search queries and redaction
-values wherever attached. It is stricter than truncation and route reduction,
-but loses error detail and user correlation. sendDefaultPii is false and tracing
-is zero. No replay, profiling or native crash dumps are enabled.
+List Sentry as a processor in the privacy notice before enabling it.
+
+Reports retain exception types, redacted messages, stack function/file/line/column,
+route patterns with recognised IDs, HTTP method/status, release/environment and
+pseudonymous user/organisation IDs. No local variables or source context are sent.
+Messages replace emails, quoted text, runs of six or more digits and words over
+forty characters, then truncate at 300 characters. The same rules apply to
+retained breadcrumb messages. Navigation/fetch breadcrumbs retain only route,
+method and status; console breadcrumbs are discarded. URLs lose origins, query
+strings and fragments; unknown path segments become :value. Stack files retain
+only JavaScript/TypeScript basenames without query strings or directory paths.
+
+Request bodies, cookies, headers, document text, filenames outside stack frames,
+matter names, search queries, redaction values and extra/context strings over
+200 characters are removed recursively. User email, name and IP are excluded.
+sendDefaultPii and includeLocalVariables are false; tracing is zero, with no
+replay or profiling. Pattern redaction cannot identify arbitrary unquoted legal
+prose: callers must continue to exclude matter content from error messages.
 Release uses OBITER_BUILD_COMMIT. Set it to the installed build commit for desktop.
-Environment is production or development. Deployment is a separate owner action.
+Desktop main errors use the renderer fallback and require a ready renderer.
+Deployment and live Sentry delivery verification remain separate owner actions.
