@@ -20,6 +20,22 @@ import {
 } from './navigation-guard'
 import { startDesktopUpdates } from './updates'
 
+if (process.env.OBITER_SENTRY_DSN_WEB) {
+  process.on('uncaughtExceptionMonitor', () => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('obiter:main-error')
+    }
+  })
+}
+
+ipcMain.on('obiter:get-error-reporting', (event) => {
+  event.returnValue = {
+    dsn: process.env.OBITER_SENTRY_DSN_WEB,
+    release: process.env.OBITER_BUILD_COMMIT,
+    production: app.isPackaged,
+  }
+})
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 protocol.registerSchemesAsPrivileged([

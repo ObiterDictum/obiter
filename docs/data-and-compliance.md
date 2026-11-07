@@ -178,3 +178,20 @@ It should not silently "learn" from client matter data. Retrieval over trusted l
 ## Risk Posture
 
 Obiter should make conservative claims. For example, citation treatment detection should be framed as citation context or possible treatment until the system has enough validation to make stronger assertions safely.
+
+## Optional Sentry error reporting
+
+Set OBITER_SENTRY_DSN for the API or OBITER_SENTRY_DSN_WEB for the web service
+and desktop launch environment. Unset means no SDK initialization or reporting.
+Use free Developer error-only projects in the EU region. Web configuration is
+served at runtime after first paint; no DSN is compiled into the client.
+Sentry is a processor to list in the privacy notice before enabling reporting.
+Reports contain only stable SDK, event, release and environment metadata and
+a fixed message. All request data, URLs, query strings, user information,
+exception text, attachments, extra fields, contexts and breadcrumbs are dropped.
+This removes document text, filenames, matter names, search queries and redaction
+values wherever attached. It is stricter than truncation and route reduction,
+but loses error detail and user correlation. sendDefaultPii is false and tracing
+is zero. No replay, profiling or native crash dumps are enabled.
+Release uses OBITER_BUILD_COMMIT. Set it to the installed build commit for desktop.
+Environment is production or development. Deployment is a separate owner action.

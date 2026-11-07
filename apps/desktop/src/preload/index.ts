@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld('obiterDesktop', {
   osPlatform: process.platform,
   shellVersion: 'phase-0.1',
   apiOrigin,
+  onMainError: (listener: () => void) => {
+    const announce = () => listener()
+    ipcRenderer.on('obiter:main-error', announce)
+    return () => ipcRenderer.removeListener('obiter:main-error', announce)
+  },
+  errorReporting: ipcRenderer.sendSync('obiter:get-error-reporting'),
   getAuthToken: () => ipcRenderer.invoke('obiter:get-auth-token'),
   setAuthToken: (token: string) =>
     ipcRenderer.invoke('obiter:set-auth-token', token),
