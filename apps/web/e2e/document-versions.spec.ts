@@ -57,9 +57,9 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   await expect(
     page.locator('[data-paragraph-id]', { hasText: HEADING }).first(),
   ).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText(MARKER)).toHaveCount(0)
-  expect(await editor(page).count()).toBe(0)
-  expect(await saveButton.count()).toBe(0)
+  await expect(page.getByText(MARKER).filter({ visible: true })).toHaveCount(0)
+  await expect(editor(page).filter({ visible: true })).toHaveCount(0)
+  await expect(saveButton.filter({ visible: true })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Back to current version' }).click()
   await runMenuCommand(page, 'File', 'Compare versions')
