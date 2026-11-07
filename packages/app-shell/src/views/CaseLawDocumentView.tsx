@@ -13,6 +13,8 @@ import {
 import { ArrowUpRight, MagnifyingGlass } from '@obiter/ui/icons'
 import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import { useState } from 'react'
+import { JudgmentParagraphActions } from './JudgmentParagraphActions'
+import { JudgmentReaderTools } from './JudgmentReaderTools'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { formatDate } from '../format'
@@ -175,79 +177,105 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
 
       <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
         <section className="flex min-w-0 flex-col gap-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <MagnifyingGlass aria-hidden size={14} className="text-subtle" />
-              <Input
-                aria-label="Search within case"
-                type="search"
-                name="case-search"
-                placeholder="Find text…"
-                value={caseQuery}
-                onChange={(event) => setCaseQuery(event.target.value)}
-                className="w-56"
-              />
-            </div>
-            {trimmedCaseQuery ? (
-              <span className="text-meta text-muted tabular-nums">
-                {visibleParagraphs.length}{' '}
-                {visibleParagraphs.length === 1 ? 'match' : 'matches'}
-              </span>
-            ) : null}
-          </div>
+          <JudgmentReaderTools
+            key={data.id}
+            name={data.title}
+            citation={data.neutralCitation}
+            clearSearch={() => setCaseQuery('')}
+            searchControl={
+              <>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <MagnifyingGlass
+                      aria-hidden
+                      size={14}
+                      className="text-subtle"
+                    />
+                    <Input
+                      aria-label="Search within case"
+                      type="search"
+                      name="case-search"
+                      placeholder="Find text…"
+                      value={caseQuery}
+                      onChange={(event) => setCaseQuery(event.target.value)}
+                      className="w-56"
+                    />
+                  </div>
+                  {trimmedCaseQuery ? (
+                    <span className="text-meta text-muted tabular-nums">
+                      {visibleParagraphs.length}{' '}
+                      {visibleParagraphs.length === 1 ? 'match' : 'matches'}
+                    </span>
+                  ) : null}
+                </div>
+              </>
+            }
+          >
+            {visibleParagraphs.length > 0 ? (
+              <article
+                role="document"
+                aria-label={data.title}
+                className="rounded-lg bg-paper px-8 py-10 font-serif text-paper-ink shadow-md md:px-12"
+              >
+                <div className="flex flex-col gap-2">
+                  {visibleParagraphs.map((paragraph) => {
+                    const label = showParagraphNumbers
+                      ? String(paragraph.paragraphNumber)
+                      : ''
+                    const anchor =
+                      label &&
+                      anchorOwners.get(paragraph.paragraphNumber) ===
+                        paragraph.id
+                        ? `para-${label}`
+                        : undefined
 
-          {visibleParagraphs.length > 0 ? (
-            <article
-              role="document"
-              aria-label={data.title}
-              className="rounded-lg bg-paper px-8 py-10 font-serif text-paper-ink shadow-md md:px-12"
-            >
-              <div className="flex flex-col gap-2">
-                {visibleParagraphs.map((paragraph) => {
-                  const label = showParagraphNumbers
-                    ? String(paragraph.paragraphNumber)
-                    : ''
-                  const anchor =
-                    label &&
-                    anchorOwners.get(paragraph.paragraphNumber) === paragraph.id
-                      ? `para-${label}`
-                      : undefined
-
-                  return (
-                    <p
-                      className="grid scroll-mt-6 grid-cols-[34px_minmax(0,1fr)] gap-3 text-[16px] leading-[1.8]"
-                      id={anchor}
-                      key={paragraph.id}
-                    >
-                      <span
-                        aria-label={label ? `Paragraph ${label}` : undefined}
-                        className="pt-1 text-right font-sans text-meta text-paper-muted tabular-nums"
+                    return (
+                      <p
+                        className="grid scroll-mt-6 grid-cols-[34px_minmax(0,1fr)] gap-3 text-[16px] leading-[1.8]"
+                        tabIndex={-1}
+                        data-court-paragraph={label || undefined}
+                        id={anchor}
+                        key={paragraph.id}
                       >
-                        {label}
-                      </span>
-                      <span>
-                        <HighlightedText
-                          text={paragraph.text.trim()}
-                          query={trimmedCaseQuery}
-                        />
-                      </span>
-                    </p>
-                  )
-                })}
-              </div>
-            </article>
-          ) : (
-            <EmptyState
-              title={
-                trimmedCaseQuery ? 'No matches found' : 'Full text unavailable'
-              }
-              body={
-                trimmedCaseQuery
-                  ? `No paragraphs match "${trimmedCaseQuery}".`
-                  : 'The authority metadata is cached, but no paragraph text is stored for this case yet.'
-              }
-            />
-          )}
+                        <span
+                          aria-label={label ? `Paragraph ${label}` : undefined}
+                          className="select-none pt-1 text-right font-sans text-meta text-paper-muted tabular-nums"
+                        >
+                          {label ? (
+                            <JudgmentParagraphActions
+                              number={paragraph.paragraphNumber}
+                              text={paragraph.text.trim()}
+                              name={data.title}
+                              citation={data.neutralCitation}
+                            />
+                          ) : null}
+                        </span>
+                        <span>
+                          <HighlightedText
+                            text={paragraph.text.trim()}
+                            query={trimmedCaseQuery}
+                          />
+                        </span>
+                      </p>
+                    )
+                  })}
+                </div>
+              </article>
+            ) : (
+              <EmptyState
+                title={
+                  trimmedCaseQuery
+                    ? 'No matches found'
+                    : 'Full text unavailable'
+                }
+                body={
+                  trimmedCaseQuery
+                    ? `No paragraphs match "${trimmedCaseQuery}".`
+                    : 'The authority metadata is cached, but no paragraph text is stored for this case yet.'
+                }
+              />
+            )}
+          </JudgmentReaderTools>
         </section>
 
         <aside aria-label="Judgment details" className="flex flex-col gap-6">
