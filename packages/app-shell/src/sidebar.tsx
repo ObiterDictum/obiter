@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
 import { ObiterMark } from '@obiter/ui'
-import { GearSix } from '@obiter/ui/icons'
+import { GearSix, ShieldCheck } from '@obiter/ui/icons'
 import { AccountMenu } from './account-menu'
 import {
   AgentRow,
@@ -14,12 +14,14 @@ import { MODULES, matterIdFromPath, resolveSection } from './navigation'
 import { ThemeToggle } from './theme-toggle'
 
 export function Sidebar({
+  isStaff = false,
   orgName,
   platform,
   rightSlotOpen,
   onToggleRightSlot,
   onCollapse,
 }: {
+  isStaff?: boolean
   orgName?: string | null
   platform: AppPlatform
   rightSlotOpen: boolean
@@ -101,6 +103,11 @@ export function Sidebar({
           <GearSix size={16} aria-hidden />
         </Link>
         <ThemeToggle />
+        {isStaff && (
+          <Link to="/staff" aria-label="Staff" aria-current={currentPath.startsWith('/staff') ? 'page' : undefined} className="grid size-8 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink">
+            <ShieldCheck size={16} aria-hidden />
+          </Link>
+        )}
         <SidebarCollapseToggle expanded onToggle={onCollapse} side="top" />
         <span className="ml-auto">
           <AccountMenu platform={platform} />

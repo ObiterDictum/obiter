@@ -86,6 +86,7 @@ export function AccountSetupForm({
       />
       <Input
         label="Email you confirmed"
+        readOnly={!!approvedEmail}
         type="email"
         autoComplete="email"
         required

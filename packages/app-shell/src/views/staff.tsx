@@ -76,7 +76,7 @@ function StaffAccessReview() {
           {queue.data.groups.map((group) => (
             <section
               key={group.domain}
-              className="min-w-0 border-b border-border pb-6"
+              className="min-w-0 border-b border-line pb-6"
             >
               <h2 className="text-section break-words">{group.domain}</h2>
               <p>{group.organisationNames.join(', ')}</p>
@@ -262,7 +262,7 @@ function DecisionDialog({
             <select
               value={organisationId}
               onChange={(event) => setOrganisationId(event.target.value)}
-              className="rounded border border-border bg-surface p-2"
+              className="rounded border border-line bg-raised p-2"
             >
               <option value="">No organisation link</option>
               {organisations.data.organisations.map((org) => (

@@ -8,7 +8,7 @@ import {
 import type { ReactNode } from 'react'
 
 export type ModuleId = 'home' | 'search' | 'matters' | 'verify' | 'redact'
-export type ShellSection = ModuleId | 'settings' | 'other'
+export type ShellSection = ModuleId | 'settings' | 'staff' | 'other'
 
 export interface ModuleItem {
   id: ModuleId
@@ -42,6 +42,7 @@ export function resolveSection(path: string): ShellSection {
   if (path === '/matters' || path.startsWith('/matters/')) return 'matters'
   if (path === '/verify' || path.startsWith('/verify/')) return 'verify'
   if (path === '/redact' || path.startsWith('/redact/')) return 'redact'
+  if (path === '/staff' || path.startsWith('/staff/')) return 'staff'
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings'
   return 'other'
 }
@@ -53,6 +54,7 @@ const SECTION_LABELS = {
   verify: 'Verify',
   redact: 'Redact',
   settings: 'Settings',
+  staff: 'Staff',
   other: 'Obiter',
 } satisfies Record<ShellSection, string>
 

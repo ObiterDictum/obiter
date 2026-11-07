@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Skeleton, cn } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import { matterIdFromPath, type ShellSection } from './navigation'
@@ -19,6 +20,7 @@ const SECTION_TITLES = {
   verify: 'Verify runs',
   redact: 'Redaction runs',
   settings: 'Settings',
+  staff: 'Staff',
   other: 'Contents',
 } satisfies Record<ShellSection, string>
 
@@ -71,6 +73,18 @@ function ContentsBody({
       return <RedactContents />
     case 'search':
       return <SearchContents />
+    case 'staff':
+      return (
+        <nav aria-label="Staff sections">
+          <Link
+            to="/staff/access"
+            aria-current="page"
+            className="block rounded-md px-3 py-2 text-body text-ink hover:bg-hover"
+          >
+            Access review
+          </Link>
+        </nav>
+      )
     case 'settings':
       return <SettingsContents />
     default:

@@ -1,4 +1,3 @@
-import { useCurrentUser } from './current-user'
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
 import {
@@ -8,7 +7,7 @@ import {
   TooltipTrigger,
   cn,
 } from '@obiter/ui'
-import { GearSix } from '@obiter/ui/icons'
+import { GearSix, ShieldCheck } from '@obiter/ui/icons'
 import { Robot } from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 import { AccountMenu } from './account-menu'
@@ -19,11 +18,14 @@ import { moduleShortcut } from './shell-shortcuts'
 import { ThemeToggle } from './theme-toggle'
 
 export function SidebarRail({
+  isStaff = false,
+  isStaff = false,
   platform,
   rightSlotOpen,
   onToggleRightSlot,
   onExpand,
 }: {
+  isStaff?: boolean
   platform: AppPlatform
   rightSlotOpen: boolean
   onToggleRightSlot: () => void
@@ -32,7 +34,6 @@ export function SidebarRail({
   const currentPath = useRouterState({
     select: (state) => state.location.pathname,
   })
-  const { data: me } = useCurrentUser()
   const section = resolveSection(currentPath)
   const { counts, verifyTone } = useSidebarData()
 
@@ -77,6 +78,9 @@ export function SidebarRail({
       <RailSlot>
         <ThemeToggle />
       </RailSlot>
+      {isStaff && (
+        <RailItem label="Staff" to="/staff" icon={ShieldCheck} current={currentPath.startsWith('/staff')} />
+      )}
       <RailSlot className="max-md:hidden">
         <SidebarCollapseToggle
           expanded={false}
