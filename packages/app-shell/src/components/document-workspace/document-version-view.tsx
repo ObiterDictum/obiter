@@ -1,3 +1,4 @@
+import { RestoreVersionButton } from './restore-version-button'
 import { useMemo, useState } from 'react'
 import { Badge, Button, EmptyState } from '@obiter/ui'
 import {
@@ -41,10 +42,14 @@ export function DocumentVersionView({
   documentId,
   version,
   onExit,
+  onRestore,
+  restoreDisabledReason,
 }: {
   documentId: string
   version: DocumentVersionRecord
   onExit: () => void
+  onRestore?: () => void
+  restoreDisabledReason?: string
 }) {
   const kind = workspaceKind(version.fileType)
   const [zoom, setZoom] = useState(100)
@@ -102,6 +107,13 @@ export function DocumentVersionView({
             icon={<FileArrowDown size={16} aria-hidden />}
           />
         </div>
+        {onRestore ? (
+          <RestoreVersionButton
+            versionNumber={version.versionNumber}
+            onRestore={onRestore}
+            disabledReason={restoreDisabledReason}
+          />
+        ) : null}
         <Button
           variant="secondary"
           size="sm"

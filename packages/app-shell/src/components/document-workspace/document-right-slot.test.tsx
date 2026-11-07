@@ -377,3 +377,25 @@ describe('Comments and Checks notice', () => {
     expect(screen.getByText('Comments need a Word document')).toBeTruthy()
   })
 })
+
+it('offers restore only for ready historical versions', () => {
+  render(
+    <DocumentHistoryTab
+      state={{
+        status: 'ready',
+        document: matterDocument,
+        versions: [
+          version(1),
+          version(2, { documentStatus: 'processing' }),
+          version(3),
+        ],
+      }}
+      viewingVersionId={undefined}
+      onSelect={vi.fn()}
+      onRestore={vi.fn()}
+    />,
+  )
+  expect(
+    screen.getAllByRole('button', { name: 'Restore this version' }),
+  ).toHaveLength(1)
+})
