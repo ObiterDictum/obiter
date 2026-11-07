@@ -74,6 +74,12 @@ export function OrganisationSection({
             />
           </dl>
 
+          {me.isStaff && (
+            <p className="text-body text-warning">
+              Everyone invited to this organisation gains staff access across
+              Obiter.
+            </p>
+          )}
           <OrganisationUpdates
             organisationId={organisation.id}
             role={me.user.role}
