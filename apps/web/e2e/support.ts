@@ -52,19 +52,27 @@ export async function openMatter(page: Page, matterName: string) {
 export function verifyEmailInDb(databaseName: string, email: string) {
   const safe = email.replace(/'/g, "''")
   const sql = `update users set "emailVerified"=true where email='${safe}'`
-  execFileSync(
-    'docker',
-    [
-      'exec',
-      'obiter-postgres',
+  try {
+    execFileSync(
       'psql',
-      '-U',
-      'obiter',
-      '-d',
-      databaseName,
-      '-c',
-      sql,
-    ],
-    { stdio: 'pipe' },
-  )
+      ['-v', 'ON_ERROR_STOP=1', '-d', databaseName, '-c', sql],
+      { stdio: 'pipe' },
+    )
+  } catch {
+    execFileSync(
+      'docker',
+      [
+        'exec',
+        'obiter-postgres',
+        'psql',
+        '-U',
+        'obiter',
+        '-d',
+        databaseName,
+        '-c',
+        sql,
+      ],
+      { stdio: 'pipe' },
+    )
+  }
 }
