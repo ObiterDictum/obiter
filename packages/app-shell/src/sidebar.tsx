@@ -104,7 +104,12 @@ export function Sidebar({
         </Link>
         <ThemeToggle />
         {isStaff && (
-          <Link to="/staff" aria-label="Staff" aria-current={currentPath.startsWith('/staff') ? 'page' : undefined} className="grid size-8 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink">
+          <Link
+            to="/staff"
+            aria-label="Staff"
+            aria-current={currentPath.startsWith('/staff') ? 'page' : undefined}
+            className="grid size-8 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink"
+          >
             <ShieldCheck size={16} aria-hidden />
           </Link>
         )}

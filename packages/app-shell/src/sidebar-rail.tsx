@@ -19,7 +19,6 @@ import { ThemeToggle } from './theme-toggle'
 
 export function SidebarRail({
   isStaff = false,
-  isStaff = false,
   platform,
   rightSlotOpen,
   onToggleRightSlot,
@@ -79,7 +78,14 @@ export function SidebarRail({
         <ThemeToggle />
       </RailSlot>
       {isStaff && (
-        <RailItem label="Staff" to="/staff" icon={ShieldCheck} current={currentPath.startsWith('/staff')} />
+        <Link
+          to="/staff"
+          aria-label="Staff"
+          aria-current={currentPath.startsWith('/staff') ? 'page' : undefined}
+          className="grid size-9 place-items-center rounded-lg text-muted hover:bg-hover hover:text-ink"
+        >
+          <ShieldCheck size={16} aria-hidden />
+        </Link>
       )}
       <RailSlot className="max-md:hidden">
         <SidebarCollapseToggle
