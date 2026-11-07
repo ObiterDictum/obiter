@@ -48,6 +48,7 @@ function DocumentDetailBody({
   const document = useDocument(documentId)
   const queryClient = useQueryClient()
   const draft = useDocumentDraftStatus()
+  const [restoredVersionId, setRestoredVersionId] = useState<string>()
   const [restoreNotice, setRestoreNotice] = useState<string>()
   const restore = useMutation({
     mutationFn: async (versionId: string) => {
@@ -65,8 +66,9 @@ function DocumentDetailBody({
         ),
       )
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       await queryClient.invalidateQueries()
+      setRestoredVersionId(result.versionId)
       setSelectedVersionId(undefined)
       setRestoreNotice('Version restored as a new current version.')
       onDocumentEdited?.()
@@ -207,6 +209,7 @@ function DocumentDetailBody({
         ) : null}
         <div className={viewingHistorical ? 'hidden' : 'h-full'}>
           <DocumentWorkspace
+            key={restoredVersionId ?? documentId}
             documentId={documentId}
             version={loaded.document.currentVersion}
             document={loaded.document}
