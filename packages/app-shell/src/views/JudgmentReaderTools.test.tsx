@@ -217,4 +217,11 @@ it('copies selected body text without page labels and reads the page at the sele
   const quote = readJudgmentSelection(container)
   expect(quote?.page).toBe(47)
   expect(quote?.text).toBe('First partcontinued')
+  container
+    .querySelector('[data-source-text]')
+    ?.setAttribute('data-page-anchor-only', 'true')
+  range.setStart(first, 1)
+  expect(readJudgmentSelection(container)?.page).toBeUndefined()
+  range.setStart(first, 0)
+  expect(readJudgmentSelection(container)?.page).toBe(47)
 })

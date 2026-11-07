@@ -37,9 +37,16 @@ export function readJudgmentSelection(article: HTMLElement) {
     range.startContainer instanceof Element
       ? range.startContainer
       : range.startContainer.parentElement
+  const source = startElement?.closest<HTMLElement>('[data-source-text]')
+  const prefix = range.cloneRange()
+  if (source) {
+    prefix.selectNodeContents(source)
+    prefix.setEnd(range.startContainer, range.startOffset)
+  }
   const page =
-    startElement?.closest<HTMLElement>('[data-source-text]')?.dataset
-      .judgmentPage
+    source?.dataset.pageAnchorOnly === 'true' && prefix.toString().length > 0
+      ? undefined
+      : source?.dataset.judgmentPage
   const bounds = range.getBoundingClientRect()
   return {
     text,

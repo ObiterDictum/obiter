@@ -1,3 +1,4 @@
+import { JudgmentPageText } from './JudgmentPageText'
 import { pageAtPosition } from './judgment-pages'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -268,14 +269,8 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                                 : paragraph.text.trim()
                             }
                             query={trimmedCaseQuery}
-                            initialPage={pageAtPosition(
-                              response.pages,
-                              paragraph.paragraphNumber,
-                            )}
-                            pages={response.pages?.filter(
-                              (p) =>
-                                p.paragraphNumber === paragraph.paragraphNumber,
-                            )}
+                            paragraphNumber={paragraph.paragraphNumber}
+                            pages={response.pages}
                           />
                         </span>
                       </p>
@@ -429,65 +424,4 @@ function isDisplayJudgmentParagraph(
   if (lower.length < 8) return false
 
   return true
-}
-
-function HighlightedText({ text, query }: { text: string; query: string }) {
-  if (!query) return text
-
-  const index = text.toLowerCase().indexOf(query.toLowerCase())
-  if (index < 0) return text
-
-  return (
-    <>
-      {text.slice(0, index)}
-      <mark className="rounded-sm bg-brand-soft px-0.5 text-paper-ink">
-        {text.slice(index, index + query.length)}
-      </mark>
-      {text.slice(index + query.length)}
-    </>
-  )
-}
-
-function JudgmentPageText({
-  text,
-  query,
-  pages = [],
-  initialPage,
-}: {
-  text: string
-  query: string
-  initialPage?: number
-  pages?: import('@obiter/contracts').JudgmentPage[]
-}) {
-  let offset = 0
-  let currentPage = initialPage
-  return (
-    <>
-      {pages.map((page) => {
-        const before = text.slice(offset, page.offset)
-        offset = page.offset
-        const beforePage = currentPage
-        currentPage = page.page
-        return (
-          <span key={page.page}>
-            <span data-source-text data-judgment-page={beforePage}>
-              <HighlightedText text={before} query={query} />
-            </span>
-            <span
-              data-page-marker
-              id={`page-${page.page}`}
-              tabIndex={-1}
-              className="relative my-3 flex scroll-mt-6 items-center justify-between border-t border-line pt-1 font-sans text-caption text-paper-muted"
-            >
-              <span>Page {page.page}</span>
-              <span>p. {page.page}</span>
-            </span>
-          </span>
-        )
-      })}
-      <span data-source-text data-judgment-page={currentPage}>
-        <HighlightedText text={text.slice(offset)} query={query} />
-      </span>
-    </>
-  )
 }
