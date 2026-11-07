@@ -1,6 +1,7 @@
 import { Skeleton, cn } from '@obiter/ui'
 import type { ReactNode } from 'react'
 import { matterIdFromPath, type ShellSection } from './navigation'
+import { PagePanelToggle } from './page-panel'
 import { useMatter } from './matters'
 import {
   MatterContents,
@@ -78,9 +79,31 @@ function ContentsBody({
 }
 
 function contentsLabel(section: ShellSection, pathname: string): string {
-  if (section === 'matters' && matterIdFromPath(pathname))
-    return 'Matter contents'
+  const name = contentsPanelName(section, pathname)
+  if (name) return name.charAt(0).toUpperCase() + name.slice(1)
   return SECTION_TITLES[section]
+}
+
+export function contentsPanelName(
+  section: ShellSection,
+  pathname: string,
+): string | null {
+  switch (section) {
+    case 'home':
+      return null
+    case 'matters':
+      return matterIdFromPath(pathname) ? 'matter contents' : 'matters list'
+    case 'search':
+      return 'recent searches'
+    case 'verify':
+      return 'verify runs'
+    case 'redact':
+      return 'redaction runs'
+    case 'settings':
+      return 'settings sections'
+    default:
+      return null
+  }
 }
 
 export function ContentsPanel({
@@ -109,6 +132,7 @@ export function ContentsPanel({
     >
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3 text-item text-ink">
         <ContentsTitle section={section} matterId={matterId} />
+        <PagePanelToggle site="panel" />
       </div>
       <div
         className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2"

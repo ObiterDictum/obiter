@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { matterInitials, type MatterRecord } from './matters'
 import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
-import { Robot } from '@obiter/ui/icons/shell'
+import { Robot, SidebarSimple } from '@obiter/ui/icons/shell'
 import type { ReactElement, ReactNode, Ref } from 'react'
 import { ShortcutHint, type ShellCommand } from './shell-shortcuts'
 
@@ -54,7 +54,7 @@ export function ModuleRow({
       aria-label={note ? `${label}, ${note}` : label}
       aria-current={current ? 'page' : undefined}
       className={cn(
-        'flex h-[30px] items-center gap-2.5 rounded-lg px-2 text-meta',
+        'flex h-8 items-center gap-2.5 rounded-lg px-2 text-meta',
         'transition-colors duration-150',
         current
           ? 'bg-fill font-medium text-ink'
@@ -106,7 +106,7 @@ export function RailItem({
   const note = countNote(label, count)
   const control = (
     <>
-      <Icon size={18} weight={current ? 'fill' : 'regular'} aria-hidden />
+      <Icon size={16} weight={current ? 'fill' : 'regular'} aria-hidden />
       {alertTone === 'danger' && count ? (
         <span
           aria-hidden
@@ -184,7 +184,7 @@ export function AgentRow({
         aria-controls="app-shell-right-slot"
         onClick={onClick}
         className={cn(
-          'flex h-[30px] items-center gap-2.5 rounded-lg px-2 text-meta',
+          'flex h-8 items-center gap-2.5 rounded-lg px-2 text-meta',
           'transition-colors duration-150',
           expanded
             ? 'bg-fill font-medium text-ink'
@@ -196,6 +196,48 @@ export function AgentRow({
         <ShortcutHint command="toggle-right-slot" />
       </button>
     </RailTooltip>
+  )
+}
+
+export function SidebarCollapseToggle({
+  expanded,
+  onToggle,
+  side,
+}: {
+  expanded: boolean
+  onToggle: () => void
+  side: 'top' | 'right'
+}) {
+  const label = expanded ? 'Collapse sidebar' : 'Expand sidebar'
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            aria-expanded={expanded}
+            onClick={onToggle}
+            className={cn(
+              'grid shrink-0 place-items-center text-muted transition-colors duration-150 hover:bg-hover hover:text-ink',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              side === 'right' ? 'size-9 rounded-lg' : 'size-8 rounded-md',
+            )}
+          >
+            <SidebarSimple size={16} aria-hidden />
+          </button>
+        }
+      />
+      <TooltipContent
+        side={side}
+        className={side === 'right' ? 'max-md:hidden' : undefined}
+      >
+        <span className="flex items-center gap-2">
+          {label}
+          <ShortcutHint command="toggle-nav" />
+        </span>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

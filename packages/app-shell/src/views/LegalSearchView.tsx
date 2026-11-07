@@ -2,6 +2,7 @@ import { Button, SidePanel, cn } from '@obiter/ui'
 import { useId, useState } from 'react'
 import { useSearch } from '@tanstack/react-router'
 import { ContentFrame } from '../content-frame'
+import { PagePanelToggle } from '../page-panel'
 import {
   SearchCommandBar,
   SearchFacets,
@@ -97,7 +98,10 @@ export function LegalSearchView() {
     <ContentFrame className="flex flex-col gap-6 py-14">
       <header className="flex flex-col gap-6">
         <div className="min-w-0">
-          <h1 className="text-page text-ink">Search</h1>
+          <div className="flex min-w-0 items-center gap-3">
+            <h1 className="min-w-0 text-page text-ink">Search</h1>
+            <PagePanelToggle />
+          </div>
           <p className="mt-2 max-w-[68ch] text-body text-muted">
             UK case law and legislation. Every result links to the source.
           </p>

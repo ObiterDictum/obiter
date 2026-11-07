@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -145,6 +146,7 @@ mock.module('./account-menu', () => ({
 }))
 
 const { ShellFrame } = await import('./frame')
+const { PagePanelToggle } = await import('./page-panel')
 
 function PathProbe() {
   const pathname = useRouterState({
@@ -157,6 +159,7 @@ function renderShell(path: string) {
   const rootRoute = createRootRoute()
   const page = () => (
     <ShellFrame platform="web">
+      <PagePanelToggle />
       <PathProbe />
       <input aria-label="Note" />
     </ShellFrame>
@@ -204,21 +207,10 @@ afterEach(() => {
 })
 
 describe('shell frame', () => {
-  it('shows the full sidebar on Home and the rail plus contents inside a matter', async () => {
-    renderShell('/')
-    const homeNav = await screen.findByRole('navigation', { name: 'Workspace' })
-    expect(homeNav.textContent).toContain('Matters')
-    expect(
-      screen.getByRole('link', { name: /^Matters/ }).textContent,
-    ).toContain('Matters')
-    expect(
-      screen.queryByRole('complementary', { name: 'Matter contents' }),
-    ).toBeNull()
-
-    cleanup()
+  it('keeps the full sidebar on a section route, with that section’s contents beside it', async () => {
     renderShell('/matters/mtr_1')
-    const railNav = await screen.findByRole('navigation', { name: 'Workspace' })
-    expect(railNav.textContent).not.toContain('Matters')
+    const nav = await screen.findByRole('navigation', { name: 'Workspace' })
+    expect(nav.textContent).toContain('Home')
     const contents = await screen.findByRole('complementary', {
       name: 'Matter contents',
     })
@@ -226,7 +218,63 @@ describe('shell frame', () => {
     expect(contents.textContent).toContain('Defence and Counterclaim.docx')
   })
 
-  it('collapses the sidebar on Home and remembers it', async () => {
+  it('shows no contents panel on Home, which has no section list', async () => {
+    renderShell('/')
+    const nav = await screen.findByRole('navigation', { name: 'Workspace' })
+    expect(nav.textContent).toContain('Home')
+    expect(document.querySelector('#app-shell-contents')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^(Hide|Show) / })).toBeNull()
+  })
+
+  it('hides only the contents panel from the toggle beside the page title', async () => {
+    renderShell('/matters/mtr_1')
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Hide matter contents' }),
+    )
+    expect(window.localStorage.getItem('obiter.contents.hidden')).toBe('true')
+    expect(
+      screen.queryByRole('complementary', { name: 'Matter contents' }),
+    ).toBeNull()
+    expect(
+      (await screen.findByRole('navigation', { name: 'Workspace' }))
+        .textContent,
+    ).toContain('Recent matters')
+    expect(
+      screen.getByRole('button', { name: 'Show matter contents' }),
+    ).toBeTruthy()
+
+    cleanup()
+    renderShell('/matters/mtr_1')
+    expect(
+      await screen.findByRole('button', { name: 'Show matter contents' }),
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('complementary', { name: 'Matter contents' }),
+    ).toBeNull()
+  })
+
+  it('leaves no app sidebar collapse control in the breadcrumb row', async () => {
+    renderShell('/matters/mtr_1')
+    await screen.findByRole('navigation', { name: 'Workspace' })
+    const titleBar = document.querySelector('header')
+    expect(
+      within(titleBar as HTMLElement).queryByRole('button', {
+        name: /^(Collapse|Expand) sidebar$/,
+      }),
+    ).toBeNull()
+    expect(
+      within(titleBar as HTMLElement).queryByRole('button', {
+        name: /^(Hide|Show) matter contents$/,
+      }),
+    ).toBeNull()
+    expect(
+      document
+        .querySelector('#app-shell-sidebar')
+        ?.contains(screen.getByRole('button', { name: 'Collapse sidebar' })),
+    ).toBe(true)
+  })
+
+  it('collapses the sidebar from the toggle beside Settings and remembers it', async () => {
     renderShell('/')
     fireEvent.click(
       await screen.findByRole('button', { name: 'Collapse sidebar' }),
@@ -246,30 +294,9 @@ describe('shell frame', () => {
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeTruthy()
   })
 
-  it('hides the contents panel inside a section and remembers it', async () => {
-    renderShell('/matters/mtr_1')
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Hide contents' }),
-    )
-    expect(window.localStorage.getItem('obiter.contents.hidden')).toBe('true')
-    expect(
-      screen.queryByRole('complementary', { name: 'Matter contents' }),
-    ).toBeNull()
-    expect(screen.getByRole('button', { name: 'Show contents' })).toBeTruthy()
-
-    cleanup()
-    renderShell('/matters/mtr_1')
-    expect(
-      await screen.findByRole('button', { name: 'Show contents' }),
-    ).toBeTruthy()
-    expect(
-      screen.queryByRole('complementary', { name: 'Matter contents' }),
-    ).toBeNull()
-  })
-
   it('toggles the right slot with Ctrl+J and only lists tabs with content', async () => {
     renderShell('/matters/mtr_1')
-    await screen.findByRole('button', { name: 'Hide contents' })
+    await screen.findByRole('button', { name: 'Hide matter contents' })
     fireEvent.keyDown(window, { key: 'j', ctrlKey: true })
     const slot = await screen.findByRole('complementary', {
       name: 'Agent panel',
@@ -353,7 +380,8 @@ describe('shell frame', () => {
   it('runs the sidebar to the top so the title bar starts at the content pane', async () => {
     renderShell('/matters/mtr_1')
     const nav = await screen.findByRole('navigation', { name: 'Workspace' })
-    const column = nav.parentElement?.children[1]
+    const column =
+      document.querySelector('#app-shell-sidebar')?.parentElement?.children[1]
     const pane = document.querySelector('#app-shell-pane')
     const titleBar = document.querySelector('header')
     expect(column?.contains(titleBar as Node)).toBe(true)
@@ -363,7 +391,7 @@ describe('shell frame', () => {
 
   it('makes the main pane the container the page layouts measure', async () => {
     renderShell('/matters/mtr_1')
-    await screen.findByRole('button', { name: 'Hide contents' })
+    await screen.findByRole('button', { name: 'Hide matter contents' })
     expect(document.querySelector('main')?.className).toContain('@container')
   })
 
@@ -378,9 +406,9 @@ describe('shell frame', () => {
     )
   })
 
-  it('fades the panes into focus mode and returns focus on Escape', async () => {
+  it('fades the panes into focus mode and returns focus to the panel toggle on Escape', async () => {
     renderShell('/matters/mtr_1')
-    const toggle = await screen.findByRole('button', { name: 'Hide contents' })
+    await screen.findByRole('button', { name: 'Hide matter contents' })
     fireEvent.keyDown(window, { key: '.', ctrlKey: true })
 
     expect(
@@ -396,9 +424,10 @@ describe('shell frame', () => {
     expect(
       await screen.findByRole('navigation', { name: 'Workspace' }),
     ).toBeTruthy()
-    expect(document.activeElement).toBe(
-      screen.getByRole('button', { name: 'Hide contents' }),
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Hide matter contents' }),
+      ),
     )
-    expect(toggle).toBeTruthy()
   })
 })

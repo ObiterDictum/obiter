@@ -58,11 +58,13 @@ export function workspaceNav(page: Page) {
   return page.getByRole('navigation', { name: 'Workspace' })
 }
 
-export async function gotoHome(page: Page) {
+export async function gotoMatters(page: Page) {
   await page.goto('/search')
   await expect(workspaceNav(page)).toBeVisible()
-  await workspaceNav(page).getByRole('link', { name: /^Home/ }).click()
-  await expect(page).toHaveURL(/\/$/)
+  await workspaceNav(page)
+    .getByRole('link', { name: /^Matters/ })
+    .click()
+  await expect(page).toHaveURL(/\/matters$/)
 }
 
 export function sidebar(page: Page) {
@@ -80,7 +82,7 @@ export async function asideWidth(aside: Locator) {
   return aside.evaluate((element) => element.getBoundingClientRect().width)
 }
 
-export async function sidebarToggle(page: Page) {
+export function sidebarToggle(page: Page) {
   return page.getByRole('button', {
     name: /(Collapse|Expand) sidebar/,
   })
