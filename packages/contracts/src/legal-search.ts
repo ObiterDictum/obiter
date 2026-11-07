@@ -59,9 +59,59 @@ export const judgmentPageSchema = z.object({
   page: z.number().int().positive(),
   paragraphNumber: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
+  paragraphId: z.string().min(1).optional(),
 })
 export type JudgmentPage = z.infer<typeof judgmentPageSchema>
 export const judgmentPaginationSchema = z.object({
   pages: z.array(judgmentPageSchema).optional(),
   pageCount: z.number().int().positive().optional(),
 })
+
+export const judgmentHeadingSchema = z.object({
+  kind: z.enum(['opinion', 'section']),
+  text: z.string().trim().min(1),
+})
+export type JudgmentHeading = z.infer<typeof judgmentHeadingSchema>
+
+export const judgmentParagraphSchema = z.object({
+  id: z.string().min(1),
+  paragraphNumber: z.number().int().positive(),
+  text: z.string(),
+  label: z.string().trim().min(1).optional(),
+  level: z.number().int().min(1).max(6).optional(),
+  style: z.enum(['quote', 'table']).optional(),
+  cells: z.array(z.array(z.string())).optional(),
+  headings: z.array(judgmentHeadingSchema).min(1).optional(),
+})
+export type JudgmentParagraph = z.infer<typeof judgmentParagraphSchema>
+
+export const judgmentCoverLineSchema = z.object({
+  kind: z.enum([
+    'term',
+    'citation',
+    'appeal',
+    'title',
+    'label',
+    'judge',
+    'date',
+    'heard',
+    'text',
+  ]),
+  text: z.string().trim().min(1),
+  parties: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1),
+        role: z.string().trim().min(1).optional(),
+      }),
+    )
+    .min(1)
+    .optional(),
+})
+export type JudgmentCoverLine = z.infer<typeof judgmentCoverLineSchema>
+
+export const judgmentCoverSchema = z.object({
+  lines: z.array(judgmentCoverLineSchema).min(1),
+  counsel: z.array(z.array(z.string())).min(1).optional(),
+})
+export type JudgmentCover = z.infer<typeof judgmentCoverSchema>

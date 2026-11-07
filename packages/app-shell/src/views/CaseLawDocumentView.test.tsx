@@ -5,6 +5,7 @@ import { vi } from '../../../../scripts/test/vitest-compat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -325,4 +326,241 @@ it('renders a PDF page marker at the exact stored offset and explains its source
       "Page numbers are from the court's PDF as published by Find Case Law.",
     ),
   ).toBeTruthy()
+})
+
+const STRUCTURED_PAYLOAD = {
+  ...DOCUMENT_PAYLOAD,
+  document: {
+    ...DOCUMENT_PAYLOAD.document,
+    title: 'Test Claimants v HMRC',
+    neutralCitation: '[2021] UKSC 31',
+    cover: {
+      lines: [
+        { kind: 'term', text: 'Trinity Term' },
+        { kind: 'citation', text: '[2021] UKSC 31' },
+        { kind: 'appeal', text: 'On appeals from: [2010] EWCA Civ 103' },
+        { kind: 'label', text: 'JUDGMENT' },
+        {
+          kind: 'title',
+          text: 'Test Claimants (Respondents) v HMRC (Appellant)',
+          parties: [
+            { name: 'Test Claimants', role: 'Respondents' },
+            { name: 'HMRC', role: 'Appellant' },
+          ],
+        },
+        { kind: 'label', text: 'before' },
+        { kind: 'judge', text: 'Lord Reed, President' },
+        { kind: 'judge', text: 'Lord Briggs' },
+        { kind: 'label', text: 'JUDGMENT GIVEN ON' },
+        { kind: 'date', text: '23 July 2021' },
+        { kind: 'heard', text: 'Heard on 7, 8, 9 and 10 December 2020' },
+      ],
+      counsel: [
+        ['HMRC', 'Test Claimants'],
+        ['David Ewart QC', 'Graham Aaronson QC'],
+      ],
+    },
+    paragraphs: [
+      {
+        id: 's1',
+        paragraphNumber: 1,
+        label: '1.',
+        level: 1,
+        text: 'This is the third occasion on which these questions arise.',
+        headings: [
+          {
+            kind: 'opinion',
+            text: 'LORD REED AND LORD HODGE: (with whom Lord Briggs, Lord Sales and Lord Hamblen agree)',
+          },
+        ],
+      },
+      {
+        id: 's2',
+        paragraphNumber: 2,
+        label: '2.',
+        level: 1,
+        text: 'The matters are dealt with in the following order:',
+      },
+      {
+        id: 's3',
+        paragraphNumber: 2,
+        label: '(1)',
+        level: 2,
+        text: 'General introduction (paras 3-9).',
+      },
+      {
+        id: 's4',
+        paragraphNumber: 2,
+        label: '(2)',
+        level: 2,
+        text: 'Overview of the tax provisions.',
+      },
+      {
+        id: 's5',
+        paragraphNumber: 2,
+        level: 1,
+        style: 'quote',
+        text: '“A passage quoted from the statute.”',
+      },
+      {
+        id: 's6',
+        paragraphNumber: 3,
+        label: '3.',
+        level: 1,
+        text: 'The group litigation was established in 2003.',
+        headings: [{ kind: 'section', text: '1. General Introduction' }],
+      },
+      {
+        id: 's7',
+        paragraphNumber: 4,
+        label: '4.',
+        level: 1,
+        text: 'I agree.',
+        headings: [{ kind: 'opinion', text: 'LORD BRIGGS:' }],
+      },
+    ],
+  },
+}
+
+function renderStructured(payload: unknown = STRUCTURED_PAYLOAD) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => jsonResponse(payload)),
+  )
+  return renderView()
+}
+
+describe('CaseLawDocumentView judgment structure', () => {
+  it('shows the court front page as centred text with counsel in a table', async () => {
+    renderStructured()
+    const cover = await screen.findByRole('banner', { name: 'Front page' })
+    const text = within(cover)
+    expect(text.getByText('Trinity Term')).toBeTruthy()
+    expect(text.getByText('On appeals from: [2010] EWCA Civ 103')).toBeTruthy()
+    expect(text.getAllByText('Test Claimants')).toHaveLength(2)
+    expect(text.getByText('(Respondents)')).toBeTruthy()
+    expect(text.getByText('(Appellant)')).toBeTruthy()
+    expect(text.getByText('Before')).toBeTruthy()
+    expect(text.getByText('Lord Reed, President')).toBeTruthy()
+    expect(text.getByText('Lord Briggs')).toBeTruthy()
+    expect(text.getByText('Judgment given on')).toBeTruthy()
+    expect(text.getByText('23 July 2021')).toBeTruthy()
+    expect(text.getByText('Heard on 7, 8, 9 and 10 December 2020')).toBeTruthy()
+    const counsel = text.getByRole('table', { name: 'Counsel' })
+    expect(
+      within(counsel).getByRole('columnheader', { name: 'HMRC' }),
+    ).toBeTruthy()
+    expect(within(counsel).getByText('Graham Aaronson QC')).toBeTruthy()
+    expect(cover.querySelector('img')).toBeNull()
+  })
+
+  it('divides the opinions and lists them with their paragraph ranges', async () => {
+    renderStructured()
+    await screen.findByRole('document')
+    const opinion = screen.getByRole('heading', {
+      level: 2,
+      name: 'Lord Reed and Lord Hodge',
+    })
+    expect(opinion.parentElement?.textContent).toContain(
+      'with whom Lord Briggs, Lord Sales and Lord Hamblen agree',
+    )
+    expect(
+      screen.getByRole('heading', {
+        level: 3,
+        name: '1. General Introduction',
+      }),
+    ).toBeTruthy()
+    const list = screen.getByRole('list')
+    const links = within(list).getAllByRole('link')
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Lord Reed and Lord Hodge[1]–[3]',
+      'Lord Briggs[4]',
+    ])
+    const target = links[0]?.getAttribute('href')?.slice(1) ?? ''
+    expect(document.getElementById(target)?.contains(opinion)).toBe(true)
+  })
+
+  it('indents labelled sub-items and keeps the court number on level-1 paragraphs only', async () => {
+    renderStructured()
+    await screen.findByRole('document')
+    const label = screen.getByText('(1)')
+    const item = label.closest('p')
+    expect(item?.className).toContain('ml-8')
+    expect(item?.getAttribute('data-court-paragraph')).toBe('2')
+    expect(item?.id).toBe('')
+    expect(
+      screen.getAllByLabelText(/^Paragraph \d+$/).map((n) => n.textContent),
+    ).toEqual(['1', '2', '3', '4'])
+    expect(document.querySelectorAll('[id="para-2"]')).toHaveLength(1)
+    expect(document.getElementById('para-2')?.textContent).toContain(
+      'The matters are dealt with',
+    )
+    expect(screen.getByLabelText('Paragraph 1').closest('p')?.id).toBe('para-1')
+  })
+
+  it('sets block quotes indented and smaller without a number or anchor', async () => {
+    renderStructured()
+    const quote = await screen.findByText(
+      '“A passage quoted from the statute.”',
+    )
+    expect(quote.closest('span.pl-6')?.className).toContain('text-[15px]')
+    expect(quote.closest('p')?.id).toBe('')
+  })
+
+  it('copies a court paragraph with its labelled sub-items and cites it as one paragraph', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+    renderStructured()
+    ;(
+      await screen.findByRole('button', { name: 'Paragraph 2 actions' })
+    ).click()
+    ;(
+      await screen.findByRole('menuitem', { name: 'Copy with citation' })
+    ).click()
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        'The matters are dealt with in the following order:\n(1) General introduction (paras 3-9).\n(2) Overview of the tax provisions.\n“A passage quoted from the statute.”\nTest Claimants v HMRC [2021] UKSC 31 [2]',
+      ),
+    )
+  })
+
+  it('leaves the cover, headings and Opinions list out while searching within the case', async () => {
+    renderStructured()
+    await screen.findByRole('document')
+    const search = screen.getByRole('searchbox', { name: 'Search within case' })
+    fireEvent.change(search, { target: { value: 'tax provisions' } })
+    await waitFor(() =>
+      expect(screen.queryByRole('banner', { name: 'Front page' })).toBeNull(),
+    )
+    expect(
+      screen.queryByRole('heading', { name: 'Lord Reed and Lord Hodge' }),
+    ).toBeNull()
+    expect(screen.queryByText('Opinions')).toBeNull()
+    expect(screen.getByText('(2)')).toBeTruthy()
+  })
+
+  it('renders an old-format document exactly as before', async () => {
+    mockFetch()
+    renderView()
+    const article = await screen.findByRole('document')
+    expect(screen.queryByRole('banner', { name: 'Front page' })).toBeNull()
+    expect(screen.queryByText('Opinions')).toBeNull()
+    expect(
+      Array.from(article.querySelectorAll('[data-court-paragraph]')).map(
+        (p) => [p.id, p.className],
+      ),
+    ).toEqual([
+      [
+        'para-10',
+        'grid scroll-mt-6 grid-cols-[34px_minmax(0,1fr)] gap-3 text-[16px] leading-[1.8] ',
+      ],
+      [
+        'para-11',
+        'grid scroll-mt-6 grid-cols-[34px_minmax(0,1fr)] gap-3 text-[16px] leading-[1.8] ',
+      ],
+    ])
+  })
 })

@@ -24,7 +24,13 @@ export function readJudgmentSelection(article: HTMLElement) {
   const fragment = range.cloneContents()
   fragment
     .querySelectorAll('[data-paragraph-gutter], [data-page-marker]')
-    .forEach((gutter) => gutter.remove())
+    .forEach((gutter) => {
+      const label = gutter
+        .querySelector<HTMLElement>('[data-quote-label]')
+        ?.getAttribute('data-quote-label')
+      if (label) gutter.replaceWith(`${label} `)
+      else gutter.remove()
+    })
   const selectedParagraphs = Array.from(
     fragment.querySelectorAll('[data-court-paragraph]'),
   )
