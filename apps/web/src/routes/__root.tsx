@@ -1,3 +1,4 @@
+import '../error-reporting'
 import {
   AppShellLayout,
   ShellError,

@@ -1,3 +1,4 @@
+import { rememberReportingUser } from './error-reporting-user'
 import {
   type MutationOptions,
   queryOptions,
@@ -24,11 +25,16 @@ export function currentUserQueryOptions() {
     queryFn: async () => {
       try {
         const me = await apiFetch<MeResponse>('/api/me')
+        rememberReportingUser({
+          id: me.user.id,
+          organisationId: me.organisation?.id,
+        })
         rememberDocumentDraftUser(me.user.id)
         resumeDocumentDraftWrites()
         return me
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
+          rememberReportingUser(undefined)
           suspendDocumentDraftWrites()
           clearStoredDocumentDrafts()
         }

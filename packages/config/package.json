@@ -6,10 +6,14 @@
   "exports": {
     ".": "./src/index.ts",
     "./env-keys": "./src/env-keys.mjs",
-    "./local-env": "./src/local-env.mjs"
+    "./local-env": "./src/local-env.mjs",
+    "./error-reporting": "./src/error-reporting.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts"
+  },
+  "dependencies": {
+    "@sentry/core": "^11.11.0"
   }
 }

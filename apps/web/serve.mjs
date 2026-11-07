@@ -160,6 +160,21 @@ export function createRequestHandler(
     }
 
     try {
+      if (url.pathname === '/.well-known/obiter-error-reporting') {
+        res.writeHead(200, {
+          'content-type': 'application/json',
+          'cache-control': 'no-store',
+        })
+        res.end(
+          JSON.stringify({
+            dsn: process.env.OBITER_SENTRY_DSN_WEB || undefined,
+            release: buildVersion || process.env.OBITER_BUILD_COMMIT,
+            production: process.env.NODE_ENV === 'production',
+          }),
+        )
+        return
+      }
+
       if (url.pathname === '/.well-known/obiter-build' && buildProvenance) {
         const body = JSON.stringify(buildProvenance)
         const provenanceRes = new Response(body, {
