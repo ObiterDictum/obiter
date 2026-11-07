@@ -54,6 +54,8 @@ test('staff approves an unknown domain and the applicant sets up an account', as
     .getByRole('dialog')
     .getByRole('button', { name: 'Confirm approval' })
     .click()
+  await expect(page.getByText('1 request(s) updated.')).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(group).toHaveCount(0)
   const messages = await request.get(
     `${apiOrigin}/__e2e/mailbox?email=${encodeURIComponent(email)}`,
