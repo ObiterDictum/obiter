@@ -1,4 +1,5 @@
 import '@obiter/test-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -8,6 +9,7 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
+  Outlet,
 } from '@tanstack/react-router'
 
 import type { DocumentDetailResponse } from './documents'
@@ -101,7 +103,16 @@ function successQuery(data: DocumentDetailResponse) {
 }
 
 function buildRouter(matterId: string, documentId: string) {
-  const rootRoute = createRootRoute()
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const rootRoute = createRootRoute({
+    component: () => (
+      <QueryClientProvider client={queryClient}>
+        <Outlet />
+      </QueryClientProvider>
+    ),
+  })
   const docRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/matters/$matterId/documents/$documentId',
