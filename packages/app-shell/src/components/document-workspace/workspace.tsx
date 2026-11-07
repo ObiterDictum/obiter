@@ -15,7 +15,10 @@ import type {
   DocumentVersionRecord,
   MatterDocumentRecord,
 } from '../../documents'
-import { DocumentDraftStatusProvider } from './document-draft-status'
+import {
+  DocumentDraftStatusProvider,
+  useDocumentDraftStatus,
+} from './document-draft-status'
 import { VerificationWorkspaceProvider } from '../verification/verification-context'
 import { VerificationDock } from '../verification/verification-dock'
 import { DocxWorkspace } from './docx-workspace'
@@ -45,6 +48,16 @@ type DocumentWorkspaceProps = {
 
 export function DocumentWorkspace(props: DocumentWorkspaceProps) {
   const kind = workspaceKind(props.version?.fileType)
+  const draftStatus = useDocumentDraftStatus()
+  if (draftStatus)
+    return (
+      <VerificationWorkspaceProvider
+        documentId={props.documentId}
+        mappable={kind === 'docx'}
+      >
+        <DocumentWorkspaceBody key={props.documentId} {...props} />
+      </VerificationWorkspaceProvider>
+    )
   return (
     <DocumentDraftStatusProvider
       key={props.documentId}

@@ -3415,6 +3415,20 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    POST /api/documents/:id/versions/:versionId/restore
+                  </td>
+                  <td class="id">document-version-restore.ts</td>
+                  <td>
+                    Requires edit access and expectedCurrentVersionId. Copies a
+                    historical stored file into a new immutable current version,
+                    preserving history. Stale or current-version restores return
+                    409. The pointer, version and document.version_restore audit
+                    commit together; restore provenance is recorded in the
+                    audit, with no edit lineage mapping.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">POST /api/documents/:id/edit</td>
                   <td class="id">document-edit.ts</td>
                   <td>

@@ -1,3 +1,4 @@
+import { RestoreVersionButton } from './restore-version-button'
 import { Badge, EmptyState, cn } from '@obiter/ui'
 import type {
   DocumentVersionRecord,
@@ -16,10 +17,14 @@ export function DocumentHistoryTab({
   state,
   viewingVersionId,
   onSelect,
+  onRestore,
+  restoreDisabledReason,
 }: {
   state: HistoryLoad
   viewingVersionId: string | undefined
   onSelect: (versionId: string | undefined) => void
+  onRestore?: (versionId: string) => void
+  restoreDisabledReason?: string
 }) {
   if (state.status === 'loading') {
     return <PanelLoading label="Loading versions…" />
@@ -82,6 +87,15 @@ export function DocumentHistoryTab({
                 </Badge>
               )}
             </button>
+            {version.id !== currentId &&
+            onRestore &&
+            version.documentStatus === 'ready' ? (
+              <RestoreVersionButton
+                versionNumber={version.versionNumber}
+                onRestore={() => onRestore(version.id)}
+                disabledReason={restoreDisabledReason}
+              />
+            ) : null}
           </li>
         ))}
       </ul>

@@ -1,6 +1,13 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { documentVersionRestoreResponseSchema } from '@obiter/contracts'
+import { apiFetch } from '../api'
+import {
+  DocumentDraftStatusProvider,
+  useDocumentDraftStatus,
+} from '../components/document-workspace/document-draft-status'
 import { useState, type ReactNode } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
-import { EmptyState, Skeleton } from '@obiter/ui'
+import { EmptyState, Skeleton, useToast } from '@obiter/ui'
 import { useDocument } from '../documents'
 import { useMatter } from '../matters'
 import { ContentFrame } from '../content-frame'
@@ -14,7 +21,20 @@ import {
 } from '../components/document-workspace/document-right-slot'
 import { workspaceKind } from '../document-kind'
 
-export function DocumentDetailLayoutView({
+export function DocumentDetailLayoutView(
+  props: Parameters<typeof DocumentDetailBody>[0],
+) {
+  return (
+    <DocumentDraftStatusProvider
+      key={props.documentId}
+      onDirtyChange={props.onDocumentEdited}
+    >
+      <DocumentDetailBody {...props} />
+    </DocumentDraftStatusProvider>
+  )
+}
+
+function DocumentDetailBody({
   matterId,
   documentId,
   redactionRunsRegion,
@@ -26,6 +46,49 @@ export function DocumentDetailLayoutView({
   onDocumentEdited?: () => void
 }) {
   const document = useDocument(documentId)
+  const queryClient = useQueryClient()
+  const draft = useDocumentDraftStatus()
+  const [restoredVersionId, setRestoredVersionId] = useState<string>()
+  const { toast } = useToast()
+  const restore = useMutation({
+    mutationFn: async (versionId: string) => {
+      if (draft?.dirty) throw new Error('Save or discard your changes first.')
+      return documentVersionRestoreResponseSchema.parse(
+        await apiFetch(
+          `/api/documents/${documentId}/versions/${versionId}/restore`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              expectedCurrentVersionId:
+                document.data?.document.currentVersionId,
+            }),
+          },
+        ),
+      )
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries()
+      setRestoredVersionId(result.versionId)
+      setSelectedVersionId(undefined)
+      toast({
+        title: 'Version restored as a new current version.',
+        tone: 'success',
+      })
+      onDocumentEdited?.()
+    },
+    onError: (error) => {
+      toast({
+        title: 'Version not restored',
+        description: error.message,
+        tone: 'danger',
+      })
+    },
+  })
+  const restoreDisabledReason = draft?.dirty
+    ? 'Save or discard your changes first.'
+    : restore.isPending
+      ? 'Restoring version…'
+      : undefined
   const matter = useMatter(matterId)
   const [selectedVersionId, setSelectedVersionId] = useState<string>()
   const selectedVersion = document.data?.versions.find(
@@ -73,6 +136,8 @@ export function DocumentDetailLayoutView({
         }
         viewingVersionId={viewingHistorical ? selectedVersionId : undefined}
         onSelect={setSelectedVersionId}
+        onRestore={(versionId) => restore.mutate(versionId)}
+        restoreDisabledReason={restoreDisabledReason}
       />
     </>
   )
@@ -145,10 +210,17 @@ export function DocumentDetailLayoutView({
               documentId={documentId}
               version={selectedVersion}
               onExit={() => setSelectedVersionId(undefined)}
+              onRestore={() => restore.mutate(selectedVersion.id)}
+              restoreDisabledReason={restoreDisabledReason}
             />
           </ContentFrame>
-        ) : (
+        ) : null}
+        <div
+          className={viewingHistorical ? 'hidden' : 'h-full'}
+          inert={restore.isPending}
+        >
           <DocumentWorkspace
+            key={restoredVersionId ?? documentId}
             documentId={documentId}
             version={loaded.document.currentVersion}
             document={loaded.document}
@@ -157,7 +229,7 @@ export function DocumentDetailLayoutView({
             onDocumentEdited={onDocumentEdited}
             headerLinks={{ matter: matterLink }}
           />
-        )}
+        </div>
       </div>
 
       <ContentFrame className="flex flex-col gap-4 py-8">
