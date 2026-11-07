@@ -2,6 +2,7 @@ import { formatDateTime } from './format'
 import type { ShellCommand } from './shell-shortcuts'
 
 export type PaletteActionId =
+  | 'send-feedback'
   | 'toggle-nav'
   | 'toggle-right-slot'
   | 'focus-mode'
