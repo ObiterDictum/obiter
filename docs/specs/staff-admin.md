@@ -13,9 +13,13 @@ but only what running the service needs.
 
 ## Who can open it
 
-- Staff are the active members of one organisation: the Obiter organisation.
-  The API reads its id from `OBITER_STAFF_ORGANISATION_ID`. When the variable is
-  unset, nobody is staff.
+- Staff are all active members of one organisation: the Obiter organisation.
+  The API reads its id from `OBITER_STAFF_ORGANISATION_ID`, which lives in the
+  production secret store. The id never appears in source, tests, docs or
+  responses. When the variable is unset, nobody is staff.
+- The match is by id, never by name, so an organisation someone else names
+  "Obiter" grants nothing. Knowing the id grants nothing either: being staff
+  needs real membership, which only the Obiter organisation's admins can give.
 - The API decides on every request. Every staff route checks the signed-in
   user's membership of that organisation and answers 404 to anyone else, so the
   area's existence is not revealed.
@@ -25,8 +29,9 @@ but only what running the service needs.
 - Membership of the Obiter organisation is managed like any other organisation,
   by its admins. Adding someone there makes them staff, so the organisation's
   invite screen says so.
-- Before testers outside Obiter arrive, staff accounts should need a second
-  factor. Until then, staff sessions last at most 12 hours.
+- Staff accounts need a second factor (an authenticator app) before testers
+  from outside Obiter arrive. Staff routes refuse a session that has not passed
+  it. Staff sessions last at most 12 hours.
 
 ## Privacy rules
 
@@ -198,7 +203,9 @@ All use the shared email layout.
    - the sidebar item and the `/staff` shell;
    - access review with approve, decline and approve one person;
    - the decisions list;
-   - the three emails and the staff alert.
+   - the three emails and the staff alert;
+   - an authenticator-app second factor for staff, required by every staff
+     route.
 2. **Insight:** the overview, usage and feedback screens.
 3. **Control:**
    - organisations and users, with suspend and restore, and domain revocation;
@@ -209,11 +216,11 @@ Each step ships as one API change and one app change, with tests written first
 and an end-to-end spec that signs in as staff and as a non-staff user. A
 non-staff user must get 404 from every staff route.
 
-## Open questions
+## Decisions
 
-1. Should every member of the Obiter organisation be staff, or only its admins?
-   The draft says every member.
-2. Should a second factor be required for staff before the first testers, or
-   before public launch? The draft says before testers from outside Obiter.
-3. Should suspending a user also suspend their organisation's shared matters?
-   The draft says no: suspension is per person.
+Recorded 7 November 2026:
+
+1. Every member of the Obiter organisation is staff, not only its admins.
+2. A second factor is required for staff before testers from outside Obiter
+   arrive.
+3. Suspension is per person; it never affects an organisation's matters.
