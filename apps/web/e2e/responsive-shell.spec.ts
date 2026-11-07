@@ -159,6 +159,7 @@ test('the account menu is opened and driven from the keyboard', async ({
   const trigger = page.getByRole('button', { name: 'Account menu' })
   const menu = page.getByRole('menu', { name: 'Account' })
   const settings = menu.getByRole('menuitem', { name: 'Account settings' })
+  const feedback = menu.getByRole('menuitem', { name: 'Send feedback' })
   const signOut = menu.getByRole('menuitem', { name: 'Sign out' })
 
   await trigger.focus()
@@ -166,6 +167,8 @@ test('the account menu is opened and driven from the keyboard', async ({
   await expect(menu).toBeVisible()
   await expect(settings).toBeFocused()
 
+  await page.keyboard.press('ArrowDown')
+  await expect(feedback).toBeFocused()
   await page.keyboard.press('ArrowDown')
   await expect(signOut).toBeFocused()
   await page.keyboard.press('Home')
