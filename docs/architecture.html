@@ -2208,10 +2208,12 @@
             root before first paint; auth routes follow the theme. The sidebar
             or rail spans the window's full height and the title bar is the top
             row of the right-hand column, so the title bar starts at the pane
-            edge without an offset. The main content pane is a CSS container and
-            pages lay themselves out with container queries, so a page responds
-            to the space the sidebar, contents panel and right slot actually
-            leave it rather than to the window width.
+            edge without an offset; the brand row starts 40px down, level with
+            the pane's first row, which also clears the window controls on
+            darwin. The main content pane is a CSS container and pages lay
+            themselves out with container queries, so a page responds to the
+            space the sidebar, contents panel and right slot actually leave it
+            rather than to the window width.
           </p>
           <div class="scroll">
             <table>
@@ -2225,41 +2227,40 @@
               <tbody>
                 <tr>
                   <td class="id">Sidebar</td>
-                  <td>Home</td>
+                  <td>Global</td>
                   <td>
-                    On Home only, one labelled column drawn straight on the
-                    canvas: the Obiter monogram with the organisation name level
-                    with the title bar, Home, Matters, Search, Verify and Redact
-                    with their counts and alert dots, an Agent row that toggles
-                    the right slot, recent matters, and settings, theme and
-                    account at the foot. Counts come from queries the frame
-                    already runs — active matters, findings waiting on a person
-                    across completed Verify runs, redaction runs awaiting a
-                    decision. It spans the window's full height and collapses to
-                    an icon rail (persisted in local storage), and every other
-                    section always shows that rail instead.
+                    One labelled column drawn straight on the canvas on every
+                    route above the mobile breakpoint: the Obiter monogram with
+                    the organisation name, Home, Matters, Search, Verify and
+                    Redact with their counts and alert dots, an Agent row that
+                    toggles the right slot, recent matters, and settings, theme,
+                    the collapse toggle and account at the foot. Counts come
+                    from queries the frame already runs — active matters,
+                    findings waiting on a person across completed Verify runs,
+                    redaction runs awaiting a decision. It spans the window's
+                    full height, becomes an icon rail only when a person
+                    collapses it from that foot toggle (persisted in local
+                    storage), and at 767px and under becomes the bottom bar.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">Title bar</td>
                   <td>Global</td>
                   <td>
-                    One 40px row, the top row of the right-hand column: the
-                    sidebar toggle, back and forward, the breadcrumb
-                    (organisation, module, current page) and the search trigger
-                    at the far right. Inside a matter the matter's crumb is a
-                    switcher button, not a link. Because the sidebar runs the
-                    full height, these controls start exactly at the pane's left
-                    edge and follow it when the sidebar collapses or expands,
-                    without hard-coded offsets. The toggle collapses the full
-                    sidebar on Home and hides or shows the contents panel
-                    elsewhere (persisted per person); the right slot has no
-                    title-bar toggle. The account menu is a disclosure with the
-                    full keyboard contract: arrows, Home/End, Escape returning
-                    focus to the avatar. On desktop the row is the window drag
-                    region with the controls no-drag, and on darwin the
-                    sidebar's top-left is padded so the monogram clears the
-                    traffic lights.
+                    One 40px row, the top row of the right-hand column: back and
+                    forward, the breadcrumb (organisation, module, current page)
+                    and the search trigger at the far right, plus a Leave focus
+                    mode button while focus mode runs. Inside a matter the
+                    matter's crumb is a switcher button, not a link. Because the
+                    sidebar runs the full height, these controls start exactly
+                    at the pane's left edge and follow it when the sidebar
+                    collapses or expands, without hard-coded offsets. No
+                    collapse control lives here: the sidebar and a section's own
+                    panel each carry their own toggle (persisted per person),
+                    and the right slot has none. The account menu is a
+                    disclosure with the full keyboard contract: arrows,
+                    Home/End, Escape returning focus to the avatar. On desktop
+                    the row is the window drag region with the controls no-drag.
                   </td>
                 </tr>
                 <tr>
@@ -2273,8 +2274,10 @@
                     and Redact runs; Verify and Redact group runs by status,
                     attention first; Search lists stored recent searches;
                     Settings carries the section nav, whose rows link to
-                    <code>/settings?section=…</code>. At 1023px and under it
-                    opens as an overlay from the same title-bar toggle.
+                    <code>/settings?section=…</code>. Its toggle sits beside the
+                    page title and names the panel (Hide matters list, Show
+                    matters list); at 1023px and under the panel opens as an
+                    overlay and its own header carries that toggle.
                   </td>
                 </tr>
                 <tr>

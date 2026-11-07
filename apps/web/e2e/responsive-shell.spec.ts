@@ -6,8 +6,8 @@ import {
   WIDTHS,
   asideWidth,
   documentWidths,
+  gotoMatters,
   gotoOtherMode,
-  gotoHome,
   mockSession,
   sidebar,
   sidebarToggle,
@@ -86,16 +86,15 @@ test('every module is announced as current when its route is active', async ({
   }
 })
 
-test('the Home sidebar collapses to an icon rail and remembers the choice', async ({
+test('the sidebar collapses to an icon rail from its own toggle and remembers the choice', async ({
   page,
 }) => {
   await mockSession(page)
   await page.setViewportSize({ width: 1440, height: 900 })
-  await gotoHome(page)
-  await expect(workspaceNav(page)).toBeVisible()
+  await gotoMatters(page)
 
   await expect(sidebar(page)).toHaveCSS('width', '236px')
-  await (await sidebarToggle(page)).click()
+  await sidebarToggle(page).click()
   await expect
     .poll(async () => asideWidth(sidebar(page)))
     .toBeLessThanOrEqual(64)
@@ -107,15 +106,76 @@ test('the Home sidebar collapses to an icon rail and remembers the choice', asyn
       }),
     ).toBeVisible()
   }
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem('obiter.sidebar.collapsed'),
+    ),
+    'the collapsed state is not remembered',
+  ).toBe('true')
 
-  await gotoHome(page)
-  await expect(workspaceNav(page)).toBeVisible()
+  await workspaceNav(page).getByRole('link', { name: /^Home/ }).click()
+  await expect(page).toHaveURL(/\/$/)
   await expect
     .poll(async () => asideWidth(sidebar(page)))
     .toBeLessThanOrEqual(64)
 
-  await (await sidebarToggle(page)).click()
+  await sidebarToggle(page).click()
   await expect.poll(async () => asideWidth(sidebar(page))).toBeGreaterThan(200)
+})
+
+test('the sidebar stays expanded when the viewport changes above the mobile breakpoint', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await gotoMatters(page)
+
+  for (const width of [1024, 768, 1440]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.waitForTimeout(150)
+    expect(
+      await asideWidth(sidebar(page)),
+      `sidebar collapsed by itself at ${width}px`,
+    ).toBeGreaterThan(200)
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect.poll(async () => asideWidth(sidebar(page))).toBeGreaterThan(300)
+})
+
+test('the panel toggle beside the title hides the section list and leaves the sidebar alone', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await gotoMatters(page)
+
+  const list = page.getByRole('complementary', { name: 'Matters list' })
+  await expect(list).toBeVisible()
+  await page.getByRole('button', { name: 'Hide matters list' }).click()
+  await expect(list).toHaveCount(0)
+  expect(await asideWidth(sidebar(page))).toBeGreaterThan(200)
+
+  await page.getByRole('button', { name: 'Show matters list' }).click()
+  await expect(list).toBeVisible()
+})
+
+test('no app sidebar collapse control sits in the breadcrumb row', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await gotoMatters(page)
+  await expect(
+    page.getByRole('navigation', { name: 'Breadcrumb' }),
+  ).toBeVisible()
+
+  await expect(
+    page.locator('header').getByRole('button', { name: /sidebar/ }),
+  ).toHaveCount(0)
+  await expect(
+    sidebar(page).getByRole('button', { name: 'Collapse sidebar' }),
+  ).toBeVisible()
 })
 
 test('the account menu opens inside a narrow viewport, closes on Escape and returns focus', async ({
@@ -192,9 +252,8 @@ test('the collapsed rail keeps accessible names and labels its icons', async ({
 }) => {
   await mockSession(page)
   await page.setViewportSize({ width: 1440, height: 900 })
-  await gotoHome(page)
-  await expect(workspaceNav(page)).toBeVisible()
-  await (await sidebarToggle(page)).click()
+  await gotoMatters(page)
+  await sidebarToggle(page).click()
   await expect
     .poll(async () => asideWidth(sidebar(page)))
     .toBeLessThanOrEqual(64)

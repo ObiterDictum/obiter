@@ -22,6 +22,8 @@ import type { ShellSection } from './navigation'
 import { Sidebar } from './sidebar'
 import { SidebarRail } from './sidebar-rail'
 import { TitleBar } from './title-bar'
+import { contentsPanelName } from './contents-panel'
+import { PagePanelProvider } from './page-panel'
 import type { RightSlotTabId } from './right-slot'
 import { ShellContentsProvider } from './shell-contents'
 import { MatterPreviewProvider } from './matter-preview'
@@ -123,7 +125,7 @@ export function ShellFrame({
   const narrow = useMediaQuery(NARROW_QUERY)
   const bottomBar = useMediaQuery(BOTTOM_BAR_QUERY)
   const navigate = useNavigate()
-  const navToggleRef = useRef<HTMLButtonElement>(null)
+  const panelToggleRef = useRef<HTMLButtonElement>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useStoredFlag(
     SHELL_STORAGE_KEY.sidebarCollapsed,
   )
@@ -140,29 +142,36 @@ export function ShellFrame({
   const [contentsOpen, setContentsOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
 
-  const rail = !home || sidebarCollapsed || bottomBar
+  const rail = bottomBar || sidebarCollapsed
   const contentsVisible =
     !home && !focusMode && (narrow ? contentsOpen : !contentsHidden)
+  const contentsExpanded = narrow ? contentsOpen : !contentsHidden
+  const panelName = contentsPanelName(section, pathname)
 
-  function toggleNav() {
-    if (focusMode) {
-      setFocusMode(false)
+  function toggleSidebar() {
+    setSidebarCollapsed(!sidebarCollapsed)
+  }
+
+  function toggleContents() {
+    if (!narrow) {
+      setContentsHidden(!contentsHidden)
       return
     }
-    if (home) {
-      setSidebarCollapsed(!sidebarCollapsed)
+    if (contentsOpen) {
+      closeContentsOverlay()
       return
     }
-    if (narrow) {
-      setContentsOpen(!contentsOpen)
-      return
-    }
-    setContentsHidden(!contentsHidden)
+    setContentsOpen(true)
   }
 
   function closeContentsOverlay() {
     setContentsOpen(false)
-    navToggleRef.current?.focus()
+    requestAnimationFrame(() => panelToggleRef.current?.focus())
+  }
+
+  function leaveFocusMode() {
+    setFocusMode(false)
+    requestAnimationFrame(() => panelToggleRef.current?.focus())
   }
 
   function toggleRightSlot() {
@@ -180,7 +189,7 @@ export function ShellFrame({
   }
 
   useShellShortcuts({
-    'toggle-nav': toggleNav,
+    'toggle-nav': toggleSidebar,
     'toggle-right-slot': toggleRightSlot,
     'focus-mode': () => setFocusMode(!focusMode),
     'go-home': () => void navigate({ to: '/' }),
@@ -195,101 +204,97 @@ export function ShellFrame({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       if (focusMode) {
-        setFocusMode(false)
-        navToggleRef.current?.focus()
+        leaveFocusMode()
         return
       }
-      setContentsOpen(false)
-      navToggleRef.current?.focus()
+      closeContentsOverlay()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [focusMode, contentsOpen])
 
-  const navLabel = focusMode
-    ? 'Leave focus mode'
-    : home
-      ? sidebarCollapsed
-        ? 'Expand sidebar'
-        : 'Collapse sidebar'
-      : narrow
-        ? contentsOpen
-          ? 'Hide contents'
-          : 'Show contents'
-        : contentsHidden
-          ? 'Show contents'
-          : 'Hide contents'
-  const navControls = home ? 'app-shell-sidebar' : 'app-shell-contents'
+  const pagePanel =
+    panelName && !focusMode
+      ? {
+          name: panelName,
+          expanded: contentsExpanded,
+          overlay: narrow,
+          controls: 'app-shell-contents',
+          toggle: toggleContents,
+          buttonRef: panelToggleRef,
+        }
+      : null
 
   return (
     <CommandPaletteProvider
-      onToggleNav={toggleNav}
+      onToggleNav={() => setSidebarCollapsed(!sidebarCollapsed)}
       onToggleRightSlot={toggleRightSlot}
       onToggleFocusMode={() => setFocusMode(!focusMode)}
     >
-      <RightSlotPortalProvider onShow={showRightSlotTab}>
-        <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
-          {focusMode ? null : rail ? (
-            <SidebarRail
-              platform={platform}
-              rightSlotOpen={rightSlotOpen}
-              onToggleRightSlot={toggleRightSlot}
-            />
-          ) : (
-            <Sidebar
-              orgName={me?.organisation?.name}
-              platform={platform}
-              rightSlotOpen={rightSlotOpen}
-              onToggleRightSlot={toggleRightSlot}
-            />
-          )}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <TitleBar
-              loadedBuild={loadedBuild}
-              platform={platform}
-              navLabel={navLabel}
-              navExpanded={home ? !sidebarCollapsed : contentsVisible}
-              navControls={navControls}
-              onToggleNav={toggleNav}
-              navRef={navToggleRef}
-            />
-            <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
-              <div
-                id="app-shell-pane"
-                className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
-              >
-                <MatterPreviewProvider>
-                  <ShellPane
-                    section={section}
-                    pathname={pathname}
-                    narrow={narrow}
-                    contentsVisible={contentsVisible}
-                    matterTabs={matterId !== null && me !== undefined}
-                    matterId={matterId}
-                    userId={me?.user.id ?? ''}
-                    platform={platform}
-                    compact={bottomBar}
-                    onCloseContents={closeContentsOverlay}
-                  >
-                    {children}
-                  </ShellPane>
-                </MatterPreviewProvider>
-              </div>
-              {rightSlotOpen && !focusMode ? (
-                <div id="app-shell-right-slot" className="contents">
-                  <Suspense fallback={null}>
-                    <RightSlotLazy
+      <PagePanelProvider panel={pagePanel}>
+        <RightSlotPortalProvider onShow={showRightSlotTab}>
+          <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
+            {focusMode ? null : rail ? (
+              <SidebarRail
+                platform={platform}
+                rightSlotOpen={rightSlotOpen}
+                onToggleRightSlot={toggleRightSlot}
+                onExpand={toggleSidebar}
+              />
+            ) : (
+              <Sidebar
+                orgName={me?.organisation?.name}
+                platform={platform}
+                rightSlotOpen={rightSlotOpen}
+                onToggleRightSlot={toggleRightSlot}
+                onCollapse={toggleSidebar}
+              />
+            )}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <TitleBar
+                loadedBuild={loadedBuild}
+                platform={platform}
+                focusMode={focusMode}
+                onExitFocusMode={leaveFocusMode}
+              />
+              <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
+                <div
+                  id="app-shell-pane"
+                  className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
+                >
+                  <MatterPreviewProvider>
+                    <ShellPane
+                      section={section}
                       pathname={pathname}
-                      tab={normaliseTab(rightSlotTab)}
-                      onTabChange={setRightSlotTab}
-                    />
-                  </Suspense>
+                      narrow={narrow}
+                      contentsVisible={contentsVisible}
+                      matterTabs={matterId !== null && me !== undefined}
+                      matterId={matterId}
+                      userId={me?.user.id ?? ''}
+                      platform={platform}
+                      compact={bottomBar}
+                      onCloseContents={closeContentsOverlay}
+                    >
+                      {children}
+                    </ShellPane>
+                  </MatterPreviewProvider>
                 </div>
-              ) : null}
+                {rightSlotOpen && !focusMode ? (
+                  <div id="app-shell-right-slot" className="contents">
+                    <Suspense fallback={null}>
+                      <RightSlotLazy
+                        pathname={pathname}
+                        tab={normaliseTab(rightSlotTab)}
+                        onTabChange={setRightSlotTab}
+                      />
+                    </Suspense>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
-      </RightSlotPortalProvider>
+        </RightSlotPortalProvider>
+      </PagePanelProvider>
     </CommandPaletteProvider>
   )
 }

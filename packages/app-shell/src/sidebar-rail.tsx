@@ -9,11 +9,11 @@ import {
 } from '@obiter/ui'
 import { GearSix } from '@obiter/ui/icons'
 import { Robot } from '@obiter/ui/icons/shell'
+import type { ReactNode } from 'react'
 import { AccountMenu } from './account-menu'
-import { hasDarwinWindowControls } from './lib/desktop-bridge'
 import { MODULES, resolveSection } from './navigation'
 import { moduleTone, useSidebarData } from './sidebar-counts'
-import { RailItem } from './sidebar-rows'
+import { RailItem, SidebarCollapseToggle } from './sidebar-rows'
 import { moduleShortcut } from './shell-shortcuts'
 import { ThemeToggle } from './theme-toggle'
 
@@ -21,10 +21,12 @@ export function SidebarRail({
   platform,
   rightSlotOpen,
   onToggleRightSlot,
+  onExpand,
 }: {
   platform: AppPlatform
   rightSlotOpen: boolean
   onToggleRightSlot: () => void
+  onExpand: () => void
 }) {
   const currentPath = useRouterState({
     select: (state) => state.location.pathname,
@@ -37,15 +39,14 @@ export function SidebarRail({
       id="app-shell-sidebar"
       aria-label="Workspace"
       className={cn(
-        'flex w-[46px] shrink-0 flex-col items-center gap-1 pr-2 pb-1',
-        hasDarwinWindowControls(platform) && 'pt-10',
-        'max-md:h-12 max-md:w-full max-md:flex-row max-md:justify-between max-md:px-1 max-md:py-0',
+        'flex w-12 shrink-0 flex-col items-center gap-1 pt-10 pb-1',
+        'max-md:h-12 max-md:w-full max-md:flex-row max-md:justify-between max-md:px-1 max-md:py-0 max-md:pt-0',
       )}
     >
       <Link
         to="/"
         aria-label="Obiter home"
-        className="grid h-10 w-7 shrink-0 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:h-7"
+        className="grid h-10 w-9 shrink-0 place-items-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:h-7 max-md:w-7"
       >
         <ObiterMark className="size-6" title="" />
       </Link>
@@ -71,9 +72,34 @@ export function SidebarRail({
         shortcut="toggle-right-slot"
       />
       <RailSettingsLink current={section === 'settings'} />
-      <ThemeToggle />
-      <AccountMenu platform={platform} />
+      <RailSlot>
+        <ThemeToggle />
+      </RailSlot>
+      <RailSlot className="max-md:hidden">
+        <SidebarCollapseToggle
+          expanded={false}
+          onToggle={onExpand}
+          side="right"
+        />
+      </RailSlot>
+      <RailSlot>
+        <AccountMenu platform={platform} />
+      </RailSlot>
     </nav>
+  )
+}
+
+function RailSlot({
+  className,
+  children,
+}: {
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <div className={cn('grid size-9 shrink-0 place-items-center', className)}>
+      {children}
+    </div>
   )
 }
 
@@ -85,7 +111,7 @@ function RailSettingsLink({ current }: { current: boolean }) {
       aria-current={current ? 'page' : undefined}
       className="relative grid size-9 place-items-center rounded-lg text-muted transition-colors duration-150 hover:bg-hover hover:text-ink"
     >
-      <GearSix size={18} aria-hidden />
+      <GearSix size={16} aria-hidden />
     </Link>
   )
   return (

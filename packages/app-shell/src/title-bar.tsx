@@ -13,8 +13,8 @@ import {
   ArrowRight,
   CaretRight,
   MagnifyingGlass,
-  SidebarSimple,
 } from '@obiter/ui/icons/shell'
+import { ArrowsInSimple } from '@obiter/ui/icons'
 import { Fragment, Suspense, lazy, type ReactNode, type Ref } from 'react'
 import type { AppPlatform } from '@obiter/contracts'
 import { useCommandPalette } from './command-palette'
@@ -28,25 +28,18 @@ const MatterSwitcherLazy = lazy(() =>
 import { useMattersList } from './matters'
 import { breadcrumbTrail, matterIdFromPath } from './navigation'
 import { useSourceTitle } from './source-title'
-import { ShortcutHint, type ShellCommand } from './shell-shortcuts'
 
 const iconButtonClass =
-  'app-no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40'
+  'app-no-drag grid size-8 shrink-0 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40'
 
 function TitleButton({
   label,
-  shortcut,
   onClick,
-  expanded,
-  controls,
   buttonRef,
   children,
 }: {
   label: string
-  shortcut?: ShellCommand
   onClick: () => void
-  expanded?: boolean
-  controls?: string
   buttonRef?: Ref<HTMLButtonElement>
   children: ReactNode
 }) {
@@ -55,8 +48,6 @@ function TitleButton({
       type="button"
       ref={buttonRef}
       aria-label={label}
-      aria-expanded={expanded}
-      aria-controls={controls}
       onClick={onClick}
       className={iconButtonClass}
     >
@@ -66,12 +57,7 @@ function TitleButton({
   return (
     <Tooltip>
       <TooltipTrigger render={button} />
-      <TooltipContent side="bottom">
-        <span className="flex items-center gap-2">
-          {label}
-          {shortcut ? <ShortcutHint command={shortcut} /> : null}
-        </span>
-      </TooltipContent>
+      <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
   )
 }
@@ -79,19 +65,13 @@ function TitleButton({
 export function TitleBar({
   platform,
   loadedBuild = null,
-  navLabel,
-  navExpanded,
-  navControls,
-  onToggleNav,
-  navRef,
+  focusMode,
+  onExitFocusMode,
 }: {
   platform: AppPlatform
   loadedBuild?: string | null
-  navLabel: string
-  navExpanded: boolean
-  navControls: string
-  onToggleNav: () => void
-  navRef?: Ref<HTMLButtonElement>
+  focusMode: boolean
+  onExitFocusMode: () => void
 }) {
   const router = useRouter()
   const { data: me } = useQuery(currentUserQueryOptions())
@@ -113,16 +93,11 @@ export function TitleBar({
       )}
     >
       <div className="app-no-drag flex shrink-0 items-center gap-0.5">
-        <TitleButton
-          label={navLabel}
-          shortcut="toggle-nav"
-          expanded={navExpanded}
-          controls={navControls}
-          onClick={onToggleNav}
-          buttonRef={navRef}
-        >
-          <SidebarSimple size={16} aria-hidden />
-        </TitleButton>
+        {focusMode ? (
+          <TitleButton label="Leave focus mode" onClick={onExitFocusMode}>
+            <ArrowsInSimple size={16} aria-hidden />
+          </TitleButton>
+        ) : null}
         <TitleButton label="Back" onClick={() => router.history.back()}>
           <ArrowLeft size={16} aria-hidden />
         </TitleButton>

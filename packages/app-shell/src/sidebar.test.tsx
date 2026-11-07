@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const toggleClicks: string[] = []
+const collapseClicks: string[] = []
 
 const mattersModule = { ...(await import('./matters')) }
 mock.module('./matters', () => ({
@@ -122,12 +123,14 @@ function renderSidebar(
         platform="web"
         rightSlotOpen={rightSlotOpen}
         onToggleRightSlot={() => toggleClicks.push('agent')}
+        onCollapse={() => collapseClicks.push('collapse')}
       />
     ) : (
       <SidebarRail
         platform="web"
         rightSlotOpen={rightSlotOpen}
         onToggleRightSlot={() => toggleClicks.push('agent')}
+        onExpand={() => collapseClicks.push('expand')}
       />
     )
   const routes = [
@@ -166,6 +169,7 @@ afterEach(() => {
   mocks.runs = []
   mocks.verificationRuns = []
   toggleClicks.length = 0
+  collapseClicks.length = 0
   window.localStorage.clear()
 })
 
@@ -315,6 +319,25 @@ describe('Sidebar', () => {
     expect(agent.getAttribute('aria-expanded')).toBe('true')
   })
 
+  it('collapses from the toggle beside Settings rather than a title bar button', async () => {
+    renderSidebar('/')
+    const toggle = await screen.findByRole('button', {
+      name: 'Collapse sidebar',
+    })
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    const footer = toggle.parentElement
+    expect(
+      footer?.contains(screen.getByRole('link', { name: 'Settings' })),
+    ).toBe(true)
+    expect(
+      footer?.contains(
+        screen.getByRole('button', { name: /^Switch to (light|dark) theme$/ }),
+      ),
+    ).toBe(true)
+    fireEvent.click(toggle)
+    expect(collapseClicks).toEqual(['collapse'])
+  })
+
   it('drops the search field from the sidebar now that it lives in the title bar', async () => {
     renderSidebar('/')
     await screen.findByRole('navigation', { name: 'Workspace' })
@@ -336,6 +359,15 @@ describe('SidebarRail', () => {
     expect(screen.getByRole('link', { name: 'Verify' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Redact' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Settings' })).toBeTruthy()
+  })
+
+  it('expands from the rail toggle, which stays centred with the other rail icons', async () => {
+    renderSidebar('/matters', 'rail')
+    const toggle = await screen.findByRole('button', { name: 'Expand sidebar' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.className).toContain('size-9')
+    fireEvent.click(toggle)
+    expect(collapseClicks).toEqual(['expand'])
   })
 
   it('toggles the agent panel from the rail', async () => {

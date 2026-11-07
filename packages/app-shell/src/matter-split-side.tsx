@@ -137,17 +137,17 @@ function SplitPaneHeader({
           aria-label="Swap sides"
           title="Make this the document you edit"
           onClick={onSwap}
-          className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          <ArrowsLeftRight size={14} aria-hidden />
+          <ArrowsLeftRight size={16} aria-hidden />
         </button>
         <button
           type="button"
           aria-label="Close split view"
           onClick={onClose}
-          className="grid size-6 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          <X size={12} aria-hidden />
+          <X size={16} aria-hidden />
         </button>
       </div>
     </header>
