@@ -1,3 +1,4 @@
+import { useCurrentUser } from './current-user'
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
 import {
@@ -31,6 +32,7 @@ export function SidebarRail({
   const currentPath = useRouterState({
     select: (state) => state.location.pathname,
   })
+  const { data: me } = useCurrentUser()
   const section = resolveSection(currentPath)
   const { counts, verifyTone } = useSidebarData()
 

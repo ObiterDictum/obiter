@@ -499,3 +499,5 @@ export const documentVersionRestoreResponseSchema = z.object({
 export type DocumentVersionRestoreResponse = z.infer<
   typeof documentVersionRestoreResponseSchema
 >
+
+export * from './staff'

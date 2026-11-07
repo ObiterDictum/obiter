@@ -22,6 +22,7 @@ export const currentOrganisationSchema = z.object({
 export type CurrentOrganisation = z.infer<typeof currentOrganisationSchema>
 
 export const meResponseSchema = z.object({
+  isStaff: z.boolean().optional(),
   user: currentUserSchema,
   organisation: currentOrganisationSchema.nullable(),
 })
