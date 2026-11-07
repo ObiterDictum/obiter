@@ -1,4 +1,4 @@
-import { pageAtPosition } from './judgment-pages'
+import { pageAtPosition, type PlacedPage } from './judgment-pages'
 
 function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query) return text
@@ -21,21 +21,19 @@ export function JudgmentPageText({
   text,
   query,
   pages = [],
-  paragraphNumber,
+  at,
 }: {
   text: string
   query: string
-  paragraphNumber: number
-  pages?: import('@obiter/contracts').JudgmentPage[]
+  at: number
+  pages?: PlacedPage[]
 }) {
   let offset = 0
   const sourceText = (value: string, start: number) => (
     <span
       data-source-text
-      data-judgment-page={pageAtPosition(pages, paragraphNumber, start)}
-      data-page-anchor-only={
-        pageAtPosition(pages, paragraphNumber, start + 1) === undefined
-      }
+      data-judgment-page={pageAtPosition(pages, at, start)}
+      data-page-anchor-only={pageAtPosition(pages, at, start + 1) === undefined}
     >
       <HighlightedText text={value} query={query} />
     </span>
@@ -43,7 +41,7 @@ export function JudgmentPageText({
   return (
     <>
       {pages
-        .filter((page) => page.paragraphNumber === paragraphNumber)
+        .filter((page) => page.at === at)
         .map((page) => {
           const before = text.slice(offset, page.offset)
           const beforeOffset = offset

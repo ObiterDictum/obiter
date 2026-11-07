@@ -225,3 +225,34 @@ it('copies selected body text without page labels and reads the page at the sele
   range.setStart(first, 0)
   expect(readJudgmentSelection(container)?.page).toBe(47)
 })
+
+it('keeps a sub-item label in a copied quote and cites the court paragraph it belongs to', () => {
+  const { container } = render(
+    <article>
+      <p data-court-paragraph="2">
+        <span data-paragraph-gutter>
+          <button>2</button>
+        </span>
+        <span data-body>In the following order:</span>
+      </p>
+      <p data-court-paragraph="2">
+        <span data-paragraph-gutter>
+          <span data-quote-label="(1)">(1)</span>
+        </span>
+        <span data-body>General introduction.</span>
+      </p>
+    </article>,
+  )
+  const bodies = container.querySelectorAll('[data-body]')
+  const first = bodies[0]?.firstChild
+  const last = bodies[1]?.firstChild
+  if (!first || !last) throw new Error('Missing fixture')
+  const range = document.createRange()
+  range.setStart(first, 7)
+  range.setEnd(last, 7)
+  range.getBoundingClientRect = () => new DOMRect(10, 10, 100, 20)
+  window.getSelection()?.addRange(range)
+  const quote = readJudgmentSelection(container)
+  expect(quote?.text).toBe('following order:\n\n(1) General')
+  expect([quote?.first, quote?.last]).toEqual([2, 2])
+})

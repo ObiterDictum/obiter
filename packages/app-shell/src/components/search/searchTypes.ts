@@ -1,4 +1,5 @@
 import type {
+  JudgmentParagraph,
   LegalSearchCitation,
   LegalSearchCitationMatch,
   LegalSearchCitationStatus,
@@ -7,11 +8,7 @@ import type {
 
 export type { LegislationScheduleGuidance }
 
-export interface CaseLawParagraph {
-  id: string
-  paragraphNumber: number
-  text: string
-}
+export type CaseLawParagraph = JudgmentParagraph
 
 export interface CaseLawSnippet {
   evidenceId?: string

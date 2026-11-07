@@ -1,5 +1,11 @@
-import { JudgmentPageText } from './JudgmentPageText'
-import { pageAtPosition } from './judgment-pages'
+import { placePages } from './judgment-pages'
+import {
+  anchorOwners,
+  courtParagraphText,
+  isStructured,
+  opinionsOf,
+} from './judgment-structure'
+import { JudgmentCover, JudgmentEntry, OpinionsCard } from './JudgmentStructure'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -15,7 +21,6 @@ import {
 import { ArrowUpRight, MagnifyingGlass } from '@obiter/ui/icons'
 import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import { useState } from 'react'
-import { JudgmentParagraphActions } from './JudgmentParagraphActions'
 import { JudgmentReaderTools } from './JudgmentReaderTools'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
@@ -87,20 +92,24 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   const data = response.document
   const withdrawn = response.withdrawn
   const showParagraphNumbers = response.courtParagraphNumbers === true
-  const paragraphs = selectJudgmentParagraphs(data).filter((paragraph) =>
-    isDisplayJudgmentParagraph(paragraph, data),
-  )
+  const stored = selectJudgmentParagraphs(data)
+  const structured = isStructured(stored)
+  const paragraphs = structured
+    ? stored
+    : stored.filter((paragraph) => isDisplayJudgmentParagraph(paragraph, data))
   const trimmedCaseQuery = caseQuery.trim()
+  const entries = paragraphs.map((paragraph, at) => ({ paragraph, at }))
   const visibleParagraphs = trimmedCaseQuery
-    ? paragraphs.filter((paragraph) =>
+    ? entries.filter(({ paragraph }) =>
         paragraph.text.toLowerCase().includes(trimmedCaseQuery.toLowerCase()),
       )
-    : paragraphs
-  const anchorOwners = new Map<number, string>()
-  for (const paragraph of paragraphs) {
-    if (!anchorOwners.has(paragraph.paragraphNumber))
-      anchorOwners.set(paragraph.paragraphNumber, paragraph.id)
-  }
+    : entries
+  const pages = placePages(response.pages, paragraphs)
+  const owners = anchorOwners(paragraphs)
+  const opinions = opinionsOf(paragraphs)
+  const opinionIds = new Map(
+    opinions.map((opinion) => [opinion.at, opinion.id]),
+  )
   const courtLabel = getReadableCourtLabel(data.court)
   const sourceName = sourceNameForUrl(data.sourceUrl)
   const judges = response.judges ?? []
@@ -219,63 +228,29 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                 aria-label={data.title}
                 className="rounded-lg bg-paper px-8 py-10 font-serif text-paper-ink shadow-md md:px-12"
               >
+                {data.cover && !trimmedCaseQuery ? (
+                  <JudgmentCover cover={data.cover} />
+                ) : null}
                 <div className="flex flex-col gap-2">
-                  {visibleParagraphs.map((paragraph) => {
-                    const label = showParagraphNumbers
-                      ? String(paragraph.paragraphNumber)
-                      : ''
-                    const anchor =
-                      label &&
-                      anchorOwners.get(paragraph.paragraphNumber) ===
-                        paragraph.id
-                        ? `para-${label}`
-                        : undefined
-
-                    return (
-                      <p
-                        className="grid scroll-mt-6 grid-cols-[34px_minmax(0,1fr)] gap-3 text-[16px] leading-[1.8]"
-                        tabIndex={-1}
-                        data-court-paragraph={label || undefined}
-                        data-judgment-page={pageAtPosition(
-                          response.pages,
-                          paragraph.paragraphNumber,
-                        )}
-                        id={anchor}
-                        key={paragraph.id}
-                      >
-                        <span
-                          data-paragraph-gutter
-                          aria-label={label ? `Paragraph ${label}` : undefined}
-                          className="select-none pt-1 text-right font-sans text-meta text-paper-muted tabular-nums"
-                        >
-                          {label ? (
-                            <JudgmentParagraphActions
-                              page={pageAtPosition(
-                                response.pages,
-                                paragraph.paragraphNumber,
-                              )}
-                              number={paragraph.paragraphNumber}
-                              text={paragraph.text.trim()}
-                              name={data.title}
-                              citation={data.neutralCitation}
-                            />
-                          ) : null}
-                        </span>
-                        <span>
-                          <JudgmentPageText
-                            text={
-                              response.pages
-                                ? paragraph.text
-                                : paragraph.text.trim()
-                            }
-                            query={trimmedCaseQuery}
-                            paragraphNumber={paragraph.paragraphNumber}
-                            pages={response.pages}
-                          />
-                        </span>
-                      </p>
-                    )
-                  })}
+                  {visibleParagraphs.map(({ paragraph, at }) => (
+                    <JudgmentEntry
+                      key={paragraph.id}
+                      paragraph={paragraph}
+                      previous={paragraphs[at - 1]}
+                      at={at}
+                      owner={
+                        owners.get(paragraph.paragraphNumber) === paragraph.id
+                      }
+                      showNumbers={showParagraphNumbers}
+                      showHeadings={!trimmedCaseQuery}
+                      opinionId={opinionIds.get(at)}
+                      courtText={courtParagraphText(paragraphs, at)}
+                      pages={pages}
+                      query={trimmedCaseQuery}
+                      name={data.title}
+                      citation={data.neutralCitation}
+                    />
+                  ))}
                 </div>
               </article>
             ) : (
@@ -337,6 +312,10 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
               </dl>
             </CardBody>
           </Card>
+
+          {opinions.length > 0 && !trimmedCaseQuery ? (
+            <OpinionsCard opinions={opinions} />
+          ) : null}
 
           {response.pages ? (
             <p className="text-caption text-subtle">

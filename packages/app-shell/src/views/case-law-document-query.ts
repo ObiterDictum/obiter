@@ -1,12 +1,13 @@
 import { queryOptions } from '@tanstack/react-query'
-import type { CaseLawSummaryResponse, JudgmentPage } from '@obiter/contracts'
+import type {
+  CaseLawSummaryResponse,
+  JudgmentCover,
+  JudgmentPage,
+  JudgmentParagraph,
+} from '@obiter/contracts'
 import { apiUrl } from '../lib/api-url'
 
-export interface CaseLawParagraph {
-  id: string
-  paragraphNumber: number
-  text: string
-}
+export type CaseLawParagraph = JudgmentParagraph
 
 export interface CaseLawDocument {
   id: string
@@ -16,6 +17,7 @@ export interface CaseLawDocument {
   dateDecided: string
   sourceUrl: string
   paragraphs?: CaseLawParagraph[]
+  cover?: JudgmentCover
 }
 
 export interface CaseLawWithdrawnNotice {

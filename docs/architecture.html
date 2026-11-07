@@ -3816,14 +3816,27 @@
                   <td>
                     Public judgment, stored or hydrated. No session required.
                     Optional
-                    <code>pages: { page, paragraphNumber, offset }[]</code> and
-                    <code>pageCount</code> carry court PDF page starts; offsets
-                    address the original stored paragraph text. Must not expose
-                    matter or client data. Serves <code>judges</code> (names)
-                    and <code>summary</code> (the court's published press
-                    summary, quoted) from the stored row; an empty list and a
-                    null summary are the honest "the source publishes none",
-                    never a placeholder.
+                    <code
+                      >pages: { page, paragraphNumber, offset, paragraphId?
+                      }[]</code
+                    >
+                    and <code>pageCount</code> carry court PDF page starts;
+                    offsets address the stored text of the entry
+                    <code>paragraphId</code> names. Paragraph entries may carry
+                    the printed <code>label</code>, a <code>level</code> (1 is
+                    the court's numbered paragraph, 2 and deeper are sub-items
+                    that keep their court paragraph's number), a
+                    <code>style</code> of <code>quote</code> or
+                    <code>table</code> with <code>cells</code>, and the opinion
+                    and section <code>headings</code> that precede them; the
+                    document may carry the court's front page as
+                    <code>cover</code> text lines and counsel rows. Records
+                    without these fields render as flat paragraphs. Must not
+                    expose matter or client data. Serves
+                    <code>judges</code> (names) and <code>summary</code> (the
+                    court's published press summary, quoted) from the stored
+                    row; an empty list and a null summary are the honest "the
+                    source publishes none", never a placeholder.
                   </td>
                 </tr>
                 <tr>
