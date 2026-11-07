@@ -20,6 +20,7 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   async function submit(event: FormEvent) {
     event.preventDefault()
+    if (state === 'sending') return
     setState('sending')
     setError(null)
     const bridge = readDesktopBridge()
@@ -32,22 +33,22 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
           : /Linux/u.test(navigator.platform)
             ? 'Linux'
             : 'other')
-    const payload = feedbackRequestSchema.parse({
-      kind,
-      message,
-      ...(includePage
-        ? {
-            path: window.location.pathname,
-            appVersion:
-              bridge?.shellVersion ??
-              (typeof __OBITER_BUILD_COMMIT__ === 'string'
-                ? __OBITER_BUILD_COMMIT__
-                : 'development'),
-            platform: `${bridge ? 'desktop' : 'web'} / ${os}`,
-          }
-        : {}),
-    })
     try {
+      const payload = feedbackRequestSchema.parse({
+        kind,
+        message,
+        ...(includePage
+          ? {
+              path: window.location.pathname,
+              appVersion:
+                bridge?.shellVersion ??
+                (typeof __OBITER_BUILD_COMMIT__ === 'string'
+                  ? __OBITER_BUILD_COMMIT__
+                  : 'development'),
+              platform: `${bridge ? 'desktop' : 'web'} / ${os}`,
+            }
+          : {}),
+      })
       await apiFetch('/api/feedback', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -88,7 +89,7 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
                 aria-label="Kind"
                 value={kind}
                 onChange={(event) => setKind(event.target.value)}
-                className="mt-1 block w-full rounded-md border border-line bg-surface p-2"
+                className="mt-1 block w-full rounded-md border border-line bg-raised p-2 text-ink focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <option value="problem">Problem</option>
                 <option value="idea">Idea</option>
@@ -104,7 +105,7 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
                 aria-describedby="feedback-count"
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                className="mt-1 block min-h-36 w-full rounded-md border border-line bg-surface p-3"
+                className="mt-1 block min-h-36 w-full rounded-md border border-line bg-raised p-3 text-ink focus-visible:outline-2 focus-visible:outline-ring"
               />
             </label>
             <p
