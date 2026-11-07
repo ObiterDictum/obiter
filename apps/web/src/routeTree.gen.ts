@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as VerifyRouteImport } from './routes/verify'
+import { Route as StaffRouteImport } from './routes/staff'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -21,6 +22,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RequestAccessIndexRouteImport } from './routes/request-access/index'
 import { Route as RedactIndexRouteImport } from './routes/redact/index'
 import { Route as MattersIndexRouteImport } from './routes/matters/index'
+import { Route as StaffAccessRouteImport } from './routes/staff_.access'
+import { Route as RequestAccessSetupRouteImport } from './routes/request-access/setup'
 import { Route as RequestAccessConfirmRouteImport } from './routes/request-access/confirm'
 import { Route as RedactRunIdRouteImport } from './routes/redact/$runId'
 import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
@@ -43,6 +46,11 @@ const VerifyRoute = VerifyRouteImport.update({
   path: '/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StaffRoute = StaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/staff.lazy').then((d) => d.Route))
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
   path: '/sign-up',
@@ -91,6 +99,16 @@ const RedactIndexRoute = RedactIndexRouteImport.update({
 const MattersIndexRoute = MattersIndexRouteImport.update({
   id: '/matters/',
   path: '/matters/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffAccessRoute = StaffAccessRouteImport.update({
+  id: '/staff_/access',
+  path: '/staff/access',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/staff_.access.lazy').then((d) => d.Route))
+const RequestAccessSetupRoute = RequestAccessSetupRouteImport.update({
+  id: '/request-access/setup',
+  path: '/request-access/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RequestAccessConfirmRoute = RequestAccessConfirmRouteImport.update({
@@ -159,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/staff': typeof StaffRoute
   '/verify': typeof VerifyRoute
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
@@ -168,6 +187,8 @@ export interface FileRoutesByFullPath {
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
   '/request-access/confirm': typeof RequestAccessConfirmRoute
+  '/request-access/setup': typeof RequestAccessSetupRoute
+  '/staff/access': typeof StaffAccessRoute
   '/matters/': typeof MattersIndexRoute
   '/redact/': typeof RedactIndexRoute
   '/request-access/': typeof RequestAccessIndexRoute
@@ -184,6 +205,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/staff': typeof StaffRoute
   '/verify': typeof VerifyRoute
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
@@ -192,6 +214,8 @@ export interface FileRoutesByTo {
   '/ln/$': typeof LnSplatRoute
   '/redact/$runId': typeof RedactRunIdRoute
   '/request-access/confirm': typeof RequestAccessConfirmRoute
+  '/request-access/setup': typeof RequestAccessSetupRoute
+  '/staff/access': typeof StaffAccessRoute
   '/matters': typeof MattersIndexRoute
   '/redact': typeof RedactIndexRoute
   '/request-access': typeof RequestAccessIndexRoute
@@ -209,6 +233,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/staff': typeof StaffRoute
   '/verify': typeof VerifyRoute
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
@@ -218,6 +243,8 @@ export interface FileRoutesById {
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
   '/request-access/confirm': typeof RequestAccessConfirmRoute
+  '/request-access/setup': typeof RequestAccessSetupRoute
+  '/staff_/access': typeof StaffAccessRoute
   '/matters/': typeof MattersIndexRoute
   '/redact/': typeof RedactIndexRoute
   '/request-access/': typeof RequestAccessIndexRoute
@@ -236,6 +263,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/sign-up'
+    | '/staff'
     | '/verify'
     | '/workspace'
     | '/case/$caseSlug'
@@ -245,6 +273,8 @@ export interface FileRouteTypes {
     | '/matters/$matterId'
     | '/redact/$runId'
     | '/request-access/confirm'
+    | '/request-access/setup'
+    | '/staff/access'
     | '/matters/'
     | '/redact/'
     | '/request-access/'
@@ -261,6 +291,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/sign-up'
+    | '/staff'
     | '/verify'
     | '/workspace'
     | '/case/$caseSlug'
@@ -269,6 +300,8 @@ export interface FileRouteTypes {
     | '/ln/$'
     | '/redact/$runId'
     | '/request-access/confirm'
+    | '/request-access/setup'
+    | '/staff/access'
     | '/matters'
     | '/redact'
     | '/request-access'
@@ -285,6 +318,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/sign-up'
+    | '/staff'
     | '/verify'
     | '/workspace'
     | '/case/$caseSlug'
@@ -294,6 +328,8 @@ export interface FileRouteTypes {
     | '/matters/$matterId'
     | '/redact/$runId'
     | '/request-access/confirm'
+    | '/request-access/setup'
+    | '/staff_/access'
     | '/matters/'
     | '/redact/'
     | '/request-access/'
@@ -311,6 +347,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
+  StaffRoute: typeof StaffRoute
   VerifyRoute: typeof VerifyRoute
   WorkspaceRoute: typeof WorkspaceRoute
   CaseCaseSlugRoute: typeof CaseCaseSlugRoute
@@ -320,6 +357,8 @@ export interface RootRouteChildren {
   MattersMatterIdRoute: typeof MattersMatterIdRouteWithChildren
   RedactRunIdRoute: typeof RedactRunIdRoute
   RequestAccessConfirmRoute: typeof RequestAccessConfirmRoute
+  RequestAccessSetupRoute: typeof RequestAccessSetupRoute
+  StaffAccessRoute: typeof StaffAccessRoute
   MattersIndexRoute: typeof MattersIndexRoute
   RedactIndexRoute: typeof RedactIndexRoute
   RequestAccessIndexRoute: typeof RequestAccessIndexRoute
@@ -339,6 +378,13 @@ declare module '@tanstack/react-router' {
       path: '/verify'
       fullPath: '/verify'
       preLoaderRoute: typeof VerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff': {
+      id: '/staff'
+      path: '/staff'
+      fullPath: '/staff'
+      preLoaderRoute: typeof StaffRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-up': {
@@ -409,6 +455,20 @@ declare module '@tanstack/react-router' {
       path: '/matters'
       fullPath: '/matters/'
       preLoaderRoute: typeof MattersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff_/access': {
+      id: '/staff_/access'
+      path: '/staff/access'
+      fullPath: '/staff/access'
+      preLoaderRoute: typeof StaffAccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/request-access/setup': {
+      id: '/request-access/setup'
+      path: '/request-access/setup'
+      fullPath: '/request-access/setup'
+      preLoaderRoute: typeof RequestAccessSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/request-access/confirm': {
@@ -518,6 +578,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
+  StaffRoute: StaffRoute,
   VerifyRoute: VerifyRoute,
   WorkspaceRoute: WorkspaceRoute,
   CaseCaseSlugRoute: CaseCaseSlugRoute,
@@ -527,6 +588,8 @@ const rootRouteChildren: RootRouteChildren = {
   MattersMatterIdRoute: MattersMatterIdRouteWithChildren,
   RedactRunIdRoute: RedactRunIdRoute,
   RequestAccessConfirmRoute: RequestAccessConfirmRoute,
+  RequestAccessSetupRoute: RequestAccessSetupRoute,
+  StaffAccessRoute: StaffAccessRoute,
   MattersIndexRoute: MattersIndexRoute,
   RedactIndexRoute: RedactIndexRoute,
   RequestAccessIndexRoute: RequestAccessIndexRoute,

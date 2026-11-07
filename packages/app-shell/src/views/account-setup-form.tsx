@@ -16,10 +16,12 @@ function passwordProblem(password: string, confirm: string): string | null {
   return null
 }
 
-export function AccountSetupForm() {
+export function AccountSetupForm({
+  approvedEmail,
+}: { approvedEmail?: string } = {}) {
   const { signUpWithEmail } = useAuth()
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(approvedEmail ?? '')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -84,6 +86,7 @@ export function AccountSetupForm() {
       />
       <Input
         label="Email you confirmed"
+        readOnly={!!approvedEmail}
         type="email"
         autoComplete="email"
         required

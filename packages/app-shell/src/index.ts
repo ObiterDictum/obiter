@@ -142,3 +142,5 @@ export {
   getRecentLegalSearches,
   writeRecentLegalSearch,
 } from './legal-search-recents'
+
+export { AccessSetupRouteView } from './views/access-setup'

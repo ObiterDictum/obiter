@@ -236,6 +236,7 @@ export function ShellFrame({
           <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
             {focusMode ? null : rail ? (
               <SidebarRail
+                isStaff={me?.isStaff}
                 platform={platform}
                 rightSlotOpen={rightSlotOpen}
                 onToggleRightSlot={toggleRightSlot}
@@ -243,6 +244,7 @@ export function ShellFrame({
               />
             ) : (
               <Sidebar
+                isStaff={me?.isStaff}
                 orgName={me?.organisation?.name}
                 platform={platform}
                 rightSlotOpen={rightSlotOpen}

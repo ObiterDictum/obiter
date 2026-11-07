@@ -114,11 +114,13 @@ function renderSidebar(
   path = '/',
   variant: 'full' | 'rail' = 'full',
   rightSlotOpen = false,
+  isStaff = false,
 ) {
   const rootRoute = createRootRoute()
   const sidebar = () =>
     variant === 'full' ? (
       <Sidebar
+        isStaff={isStaff}
         orgName="Harrington Vale LLP"
         platform="web"
         rightSlotOpen={rightSlotOpen}
@@ -127,6 +129,7 @@ function renderSidebar(
       />
     ) : (
       <SidebarRail
+        isStaff={isStaff}
         platform="web"
         rightSlotOpen={rightSlotOpen}
         onToggleRightSlot={() => toggleClicks.push('agent')}
@@ -379,3 +382,15 @@ describe('SidebarRail', () => {
     expect(toggleClicks).toEqual(['agent'])
   })
 })
+
+for (const variant of ['full', 'rail'] as const) {
+  it(`hides Staff from non-staff in the ${variant} sidebar`, async () => {
+    renderSidebar('/', variant)
+    await screen.findByRole('link', { name: 'Settings' })
+    expect(screen.queryByRole('link', { name: 'Staff' })).toBeNull()
+  })
+  it(`shows Staff to staff in the ${variant} sidebar`, async () => {
+    renderSidebar('/', variant, false, true)
+    expect(await screen.findByRole('link', { name: 'Staff' })).toBeTruthy()
+  })
+}

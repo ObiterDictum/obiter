@@ -1,4 +1,5 @@
 import {
+  AccessSetupRouteView,
   AppShellLayout,
   ForgotPasswordRouteView,
   HomeRouteView,
@@ -134,6 +135,9 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/redact',
   '/redact/$runId',
   '/search',
+  '/staff',
+  '/staff/access',
+  '/request-access/setup',
   '/settings',
   '/verify',
   '/cases/$caseId',
@@ -324,6 +328,46 @@ const verifyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'verify',
   component: DesktopVerifyRoute,
+})
+
+const StaffRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/staff')).StaffRouteView,
+}))
+const staffRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'staff',
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
+  },
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <StaffRouteView />
+    </Suspense>
+  ),
+})
+const staffAccessRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'staff/access',
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
+  },
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <StaffRouteView />
+    </Suspense>
+  ),
+})
+const accessSetupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'request-access/setup',
+  validateSearch: (search: Record<string, unknown>) => ({
+    token: typeof search.token === 'string' ? search.token : '',
+  }),
+  component: AccessSetupRouteView,
 })
 
 const settingsRoute = createRoute({
@@ -609,6 +653,9 @@ const routeTree = rootRoute.addChildren([
   redactReviewRoute,
   searchRoute,
   verifyRoute,
+  staffRoute,
+  staffAccessRoute,
+  accessSetupRoute,
   settingsRoute,
   casesRoute,
   caseSlugRoute,

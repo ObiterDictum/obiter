@@ -2141,6 +2141,13 @@
 
         <section id="clients">
           <h2>Clients</h2>
+          <p>
+            Staff members have a sidebar entry opening the lazy
+            <code>/staff</code> and <code>/staff/access</code> shared review
+            screen, with an Access review section and a Decisions view. Approval
+            emails open <code>/request-access/setup</code>, reusing the account
+            setup form.
+          </p>
           <p class="lede">
             Both clients are deliberately thin. Product screens live in
             <code>@obiter/app-shell</code> so web and desktop share one
@@ -3076,6 +3083,14 @@
 
         <section id="http">
           <h2>HTTP surface</h2>
+          <p>
+            <code>GET /api/me</code> includes <code>isStaff</code>. Staff-only
+            routes are <code>GET /api/staff/access</code>,
+            <code>GET /api/staff/organisations</code> and
+            <code>GET|POST /api/staff/access/decisions</code>. Non-staff receive
+            404. <code>POST /api/access-requests/setup</code> consumes a
+            hash-only, seven-day setup token.
+          </p>
           <p class="lede">
             Every route is served by <code>services/api</code> in the private
             <code>ObiterDictum/backend</code> repository. The table is the
@@ -4464,6 +4479,11 @@
 
         <section id="data">
           <h2>Data model</h2>
+          <p>
+            Migration 0049 adds setup token hashes and expiry to access
+            requests, plus a persistent per-domain staff alert throttle. Staff
+            decisions and audit records commit together; emails follow commit.
+          </p>
           <p class="lede">
             PostgreSQL 16 is the system of record. Everything else, including
             the Meilisearch index, is derived and rebuildable.
@@ -5348,6 +5368,12 @@
 
         <section id="config">
           <h2>Configuration</h2>
+          <p>
+            <code>OBITER_STAFF_ORGANISATION_ID</code> is an optional secret
+            selecting the staff membership boundary. Unset grants no staff
+            access. <code>OBITER_STAFF_ALERT_TO</code> is an optional clear
+            email address; unset logs a startup notice.
+          </p>
           <p class="lede">
             The public clients read a small set of variables. The web dev server
             resolves one API origin through
@@ -7461,6 +7487,22 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    Staff second factor is deferred from the staff admin
+                    specification.
+                  </td>
+                  <td>
+                    Current persisted organisation membership gates staff
+                    routes. A single admission function owns the later
+                    second-factor check. External tester rollout requires that
+                    follow-up.
+                  </td>
+                  <td>
+                    Staff admin build step 1; second factor scheduled
+                    separately.
+                  </td>
+                </tr>
                 <tr>
                   <td>
                     Open self-service sign-up is closed in the clients before

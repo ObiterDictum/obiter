@@ -297,3 +297,14 @@ describe('SettingsRouteView — organisation creation for an org-less user', () 
     refetchSpy.mockRestore()
   })
 })
+
+it('warns staff that inviting a member grants staff access', async () => {
+  signedIn({ ...OWNER_ME, isStaff: true })
+  renderSettings()
+  const section = await openSection('Organisation')
+  expect(
+    within(section).getByText(
+      'Everyone invited to this organisation gains staff access across Obiter.',
+    ),
+  ).toBeTruthy()
+})

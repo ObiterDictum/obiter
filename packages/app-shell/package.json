@@ -15,7 +15,8 @@
     "./views/matter-detail": "./src/views/matter-detail.tsx",
     "./views/matters": "./src/views/matters.tsx",
     "./views/settings": "./src/views/settings.tsx",
-    "./views/verify": "./src/views/verify.tsx"
+    "./views/verify": "./src/views/verify.tsx",
+    "./views/staff": "./src/views/staff.tsx"
   },
   "dependencies": {
     "@obiter/contracts": "workspace:*",
