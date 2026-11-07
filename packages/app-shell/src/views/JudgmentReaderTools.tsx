@@ -29,7 +29,9 @@ export function JudgmentReaderTools({
       `[id="${judgmentTarget(value)}"]`,
     )
     if (!paragraph) {
-      setError(`No destination ${value}`)
+      setError(
+        `No ${value.startsWith('p.') ? 'page' : 'paragraph'} ${value.replace(/^p\.\s*/, '')}`,
+      )
       return
     }
     setError('')

@@ -22,9 +22,8 @@ export function pageAtPosition(
   const next = pages?.[index + 1]
   if (
     !current ||
-    (next &&
-      next.page !== current.page + 1 &&
-      paragraph !== current.paragraphNumber)
+    ((!next || next.page !== current.page + 1) &&
+      (paragraph !== current.paragraphNumber || offset !== current.offset))
   )
     return undefined
   return current.page

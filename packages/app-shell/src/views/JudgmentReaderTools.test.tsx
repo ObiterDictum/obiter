@@ -39,6 +39,9 @@ function setup() {
             />
             <span>First paragraph</span>
           </p>
+          <span id="page-47" tabIndex={-1}>
+            Page 47
+          </span>
           <p id="para-137" data-court-paragraph="137" tabIndex={-1}>
             Last paragraph
           </p>
@@ -50,7 +53,7 @@ function setup() {
 it('focuses a known paragraph and reports an unknown paragraph', async () => {
   HTMLElement.prototype.scrollIntoView = mock(() => {})
   setup()
-  const input = screen.getByRole('spinbutton')
+  const input = screen.getByRole('textbox', { name: 'Go to paragraph' })
   fireEvent.change(input, { target: { value: '137' } })
   fireEvent.submit(input.closest('form') ?? input)
   await waitFor(() => expect(document.activeElement?.id).toBe('para-137'))
@@ -178,4 +181,14 @@ it('excludes gutter numbers and action labels from a cross-paragraph quote', () 
   expect(readJudgmentSelection(article)?.text).toBe(
     'First paragraph.\n\nSecond',
   )
+})
+
+it('navigates to a PDF page from the input and a page hash', async () => {
+  HTMLElement.prototype.scrollIntoView = mock(() => {})
+  setup()
+  const input = screen.getByRole('textbox', { name: 'Go to paragraph' })
+  fireEvent.change(input, { target: { value: 'p. 47' } })
+  fireEvent.submit(input.closest('form') ?? input)
+  await waitFor(() => expect(document.activeElement?.id).toBe('page-47'))
+  expect(window.location.hash).toBe('#page-47')
 })
