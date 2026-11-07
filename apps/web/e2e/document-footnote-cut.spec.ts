@@ -130,7 +130,7 @@ test('cut warns about the removed footnote and Undo restores it before save and 
   await download.saveAs(exported)
   execFileSync('python3', [
     '-c',
-    'import sys; from docx import Document; d=Document(sys.argv[1]); p=next(p for p in d.part.package.parts if str(p.partname)=="/word/footnotes.xml"); assert p.blob.decode().count("E7BNOTE")==1',
+    'import sys, zipfile; assert zipfile.ZipFile(sys.argv[1]).read("word/footnotes.xml").decode().count("E7BNOTE")==1',
     exported,
   ])
 })
