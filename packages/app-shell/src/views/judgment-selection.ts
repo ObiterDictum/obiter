@@ -23,7 +23,7 @@ export function readJudgmentSelection(article: HTMLElement) {
   if (!first || !last) return null
   const fragment = range.cloneContents()
   fragment
-    .querySelectorAll('[data-paragraph-gutter]')
+    .querySelectorAll('[data-paragraph-gutter], [data-page-marker]')
     .forEach((gutter) => gutter.remove())
   const selectedParagraphs = Array.from(
     fragment.querySelectorAll('[data-court-paragraph]'),
@@ -33,11 +33,26 @@ export function readJudgmentSelection(article: HTMLElement) {
         .map((paragraph) => paragraph.textContent ?? '')
         .join('\n\n')
     : (fragment.textContent ?? '')
+  const startElement =
+    range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer.parentElement
+  const source = startElement?.closest<HTMLElement>('[data-source-text]')
+  const prefix = range.cloneRange()
+  if (source) {
+    prefix.selectNodeContents(source)
+    prefix.setEnd(range.startContainer, range.startOffset)
+  }
+  const page =
+    source?.dataset.pageAnchorOnly === 'true' && prefix.toString().length > 0
+      ? undefined
+      : source?.dataset.judgmentPage
   const bounds = range.getBoundingClientRect()
   return {
     text,
     first: Number(first.dataset.courtParagraph),
     last: Number(last.dataset.courtParagraph),
+    page: page ? Number(page) : undefined,
     left: Math.max(8, Math.min(bounds.left, window.innerWidth - 240)),
     top: Math.max(8, Math.min(bounds.bottom + 8, window.innerHeight - 48)),
   }
@@ -46,13 +61,14 @@ export function readJudgmentSelection(article: HTMLElement) {
 export async function copyJudgmentSelection(
   name: string,
   citation: string | null,
-  selection: { text: string; first: number; last: number },
+  selection: { text: string; first: number; last: number; page?: number },
 ) {
   const formatted = formatJudgmentCitation(
     name,
     citation,
     selection.first,
     selection.last,
+    selection.page,
   )
   await navigator.clipboard.write([
     new ClipboardItem({

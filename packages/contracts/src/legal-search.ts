@@ -54,3 +54,14 @@ export const caseLawSummaryResponseSchema = z.object({
 export type CaseLawSummaryResponse = z.infer<
   typeof caseLawSummaryResponseSchema
 >
+
+export const judgmentPageSchema = z.object({
+  page: z.number().int().positive(),
+  paragraphNumber: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+})
+export type JudgmentPage = z.infer<typeof judgmentPageSchema>
+export const judgmentPaginationSchema = z.object({
+  pages: z.array(judgmentPageSchema).optional(),
+  pageCount: z.number().int().positive().optional(),
+})

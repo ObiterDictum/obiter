@@ -3815,11 +3815,15 @@
                   <td class="id">legal-search/</td>
                   <td>
                     Public judgment, stored or hydrated. No session required.
-                    Must not expose matter or client data. Serves
-                    <code>judges</code> (names) and <code>summary</code> (the
-                    court's published press summary, quoted) from the stored
-                    row; an empty list and a null summary are the honest "the
-                    source publishes none", never a placeholder.
+                    Optional
+                    <code>pages: { page, paragraphNumber, offset }[]</code> and
+                    <code>pageCount</code> carry court PDF page starts; offsets
+                    address the original stored paragraph text. Must not expose
+                    matter or client data. Serves <code>judges</code> (names)
+                    and <code>summary</code> (the court's published press
+                    summary, quoted) from the stored row; an empty list and a
+                    null summary are the honest "the source publishes none",
+                    never a placeholder.
                   </td>
                 </tr>
                 <tr>

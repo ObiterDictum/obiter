@@ -1,3 +1,5 @@
+import { JudgmentPageText } from './JudgmentPageText'
+import { pageAtPosition } from './judgment-pages'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -234,6 +236,10 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                         className="grid scroll-mt-6 grid-cols-[34px_minmax(0,1fr)] gap-3 text-[16px] leading-[1.8]"
                         tabIndex={-1}
                         data-court-paragraph={label || undefined}
+                        data-judgment-page={pageAtPosition(
+                          response.pages,
+                          paragraph.paragraphNumber,
+                        )}
                         id={anchor}
                         key={paragraph.id}
                       >
@@ -244,6 +250,10 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                         >
                           {label ? (
                             <JudgmentParagraphActions
+                              page={pageAtPosition(
+                                response.pages,
+                                paragraph.paragraphNumber,
+                              )}
                               number={paragraph.paragraphNumber}
                               text={paragraph.text.trim()}
                               name={data.title}
@@ -252,9 +262,15 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                           ) : null}
                         </span>
                         <span>
-                          <HighlightedText
-                            text={paragraph.text.trim()}
+                          <JudgmentPageText
+                            text={
+                              response.pages
+                                ? paragraph.text
+                                : paragraph.text.trim()
+                            }
                             query={trimmedCaseQuery}
+                            paragraphNumber={paragraph.paragraphNumber}
+                            pages={response.pages}
                           />
                         </span>
                       </p>
@@ -322,6 +338,12 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
             </CardBody>
           </Card>
 
+          {response.pages ? (
+            <p className="text-caption text-subtle">
+              Page numbers are from the court's PDF as published by Find Case
+              Law.
+            </p>
+          ) : null}
           <p className="text-caption text-subtle">
             The text is the stored source. Paragraph numbers and anchors are the
             court’s own where the record carries them; judges and the summary
@@ -402,21 +424,4 @@ function isDisplayJudgmentParagraph(
   if (lower.length < 8) return false
 
   return true
-}
-
-function HighlightedText({ text, query }: { text: string; query: string }) {
-  if (!query) return text
-
-  const index = text.toLowerCase().indexOf(query.toLowerCase())
-  if (index < 0) return text
-
-  return (
-    <>
-      {text.slice(0, index)}
-      <mark className="rounded-sm bg-brand-soft px-0.5 text-paper-ink">
-        {text.slice(index, index + query.length)}
-      </mark>
-      {text.slice(index + query.length)}
-    </>
-  )
 }

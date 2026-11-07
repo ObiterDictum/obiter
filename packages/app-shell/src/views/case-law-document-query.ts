@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import type { CaseLawSummaryResponse } from '@obiter/contracts'
+import type { CaseLawSummaryResponse, JudgmentPage } from '@obiter/contracts'
 import { apiUrl } from '../lib/api-url'
 
 export interface CaseLawParagraph {
@@ -27,6 +27,8 @@ export interface CaseLawWithdrawnNotice {
 
 export interface CaseLawDocumentResponse {
   document: CaseLawDocument
+  pages?: JudgmentPage[]
+  pageCount?: number
   courtParagraphNumbers?: boolean
   acquiredAt?: string | null
   judges?: string[]

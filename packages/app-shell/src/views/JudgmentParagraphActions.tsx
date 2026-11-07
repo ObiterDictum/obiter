@@ -15,7 +15,9 @@ export function JudgmentParagraphActions({
   text,
   name,
   citation,
+  page,
 }: {
+  page?: number
   number: number
   text: string
   name: string
@@ -23,7 +25,13 @@ export function JudgmentParagraphActions({
 }) {
   const { toast } = useToast()
   async function copy(kind: 'quote' | 'citation' | 'link') {
-    const formatted = formatJudgmentCitation(name, citation, number).text
+    const formatted = formatJudgmentCitation(
+      name,
+      citation,
+      number,
+      number,
+      page,
+    ).text
     const url = new URL(window.location.href)
     url.hash = `para-${number}`
     try {
