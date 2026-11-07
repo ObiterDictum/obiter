@@ -1,3 +1,4 @@
+import { judgmentTarget } from './judgment-pages'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Input, useToast } from '@obiter/ui'
 import type { ReactNode } from 'react'
@@ -25,10 +26,10 @@ export function JudgmentReaderTools({
   const { toast } = useToast()
   function go(value: string) {
     const paragraph = root.current?.querySelector<HTMLElement>(
-      `[id="para-${Number(value)}"]`,
+      `[id="${judgmentTarget(value)}"]`,
     )
     if (!paragraph) {
-      setError(`No paragraph ${value}`)
+      setError(`No destination ${value}`)
       return
     }
     setError('')
@@ -44,8 +45,8 @@ export function JudgmentReaderTools({
   }
   useEffect(() => {
     const hash = () => {
-      const match = /^#para-(\d+)$/.exec(window.location.hash)
-      if (match) go(match[1] ?? '')
+      const match = /^#(para|page)-(\d+)$/.exec(window.location.hash)
+      if (match) go(`${match[1] === 'page' ? 'p. ' : ''}${match[2]}`)
     }
     hash()
     window.addEventListener('hashchange', hash)
@@ -92,8 +93,14 @@ export function JudgmentReaderTools({
             clearSearch()
             requestAnimationFrame(() => {
               go(number)
-              if (root.current?.querySelector(`[id="para-${Number(number)}"]`))
-                window.history.replaceState(null, '', `#para-${Number(number)}`)
+              if (
+                root.current?.querySelector(`[id="${judgmentTarget(number)}"]`)
+              )
+                window.history.replaceState(
+                  null,
+                  '',
+                  `#${judgmentTarget(number)}`,
+                )
             })
           }}
         >
@@ -103,9 +110,7 @@ export function JudgmentReaderTools({
           <Input
             id="judgment-paragraph"
             aria-label="Go to paragraph"
-            type="number"
-            min="1"
-            step="1"
+            type="text"
             value={number}
             onChange={(event) => setNumber(event.target.value)}
             className="w-24"

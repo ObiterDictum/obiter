@@ -1,3 +1,4 @@
+import { pageAtPosition } from './judgment-pages'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -234,6 +235,10 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                         className="grid scroll-mt-6 grid-cols-[34px_minmax(0,1fr)] gap-3 text-[16px] leading-[1.8]"
                         tabIndex={-1}
                         data-court-paragraph={label || undefined}
+                        data-judgment-page={pageAtPosition(
+                          response.pages,
+                          paragraph.paragraphNumber,
+                        )}
                         id={anchor}
                         key={paragraph.id}
                       >
@@ -244,6 +249,10 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                         >
                           {label ? (
                             <JudgmentParagraphActions
+                              page={pageAtPosition(
+                                response.pages,
+                                paragraph.paragraphNumber,
+                              )}
                               number={paragraph.paragraphNumber}
                               text={paragraph.text.trim()}
                               name={data.title}
@@ -252,9 +261,21 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                           ) : null}
                         </span>
                         <span>
-                          <HighlightedText
-                            text={paragraph.text.trim()}
+                          <JudgmentPageText
+                            text={
+                              response.pages
+                                ? paragraph.text
+                                : paragraph.text.trim()
+                            }
                             query={trimmedCaseQuery}
+                            initialPage={pageAtPosition(
+                              response.pages,
+                              paragraph.paragraphNumber,
+                            )}
+                            pages={response.pages?.filter(
+                              (p) =>
+                                p.paragraphNumber === paragraph.paragraphNumber,
+                            )}
                           />
                         </span>
                       </p>
@@ -322,6 +343,12 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
             </CardBody>
           </Card>
 
+          {response.pages ? (
+            <p className="text-caption text-subtle">
+              Page numbers are from the court's PDF as published by Find Case
+              Law.
+            </p>
+          ) : null}
           <p className="text-caption text-subtle">
             The text is the stored source. Paragraph numbers and anchors are the
             court’s own where the record carries them; judges and the summary
@@ -417,6 +444,49 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
         {text.slice(index, index + query.length)}
       </mark>
       {text.slice(index + query.length)}
+    </>
+  )
+}
+
+function JudgmentPageText({
+  text,
+  query,
+  pages = [],
+  initialPage,
+}: {
+  text: string
+  query: string
+  initialPage?: number
+  pages?: import('@obiter/contracts').JudgmentPage[]
+}) {
+  let offset = 0
+  let currentPage = initialPage
+  return (
+    <>
+      {pages.map((page) => {
+        const before = text.slice(offset, page.offset)
+        offset = page.offset
+        const beforePage = currentPage
+        currentPage = page.page
+        return (
+          <span key={page.page}>
+            <span data-source-text data-judgment-page={beforePage}>
+              <HighlightedText text={before} query={query} />
+            </span>
+            <span
+              id={`page-${page.page}`}
+              tabIndex={-1}
+              className="relative my-3 flex scroll-mt-6 items-center justify-between border-t border-line pt-1 font-sans text-caption text-paper-muted"
+            >
+              <span>Page {page.page}</span>
+              <span>p. {page.page}</span>
+            </span>
+          </span>
+        )
+      })}
+      <span data-source-text data-judgment-page={currentPage}>
+        <HighlightedText text={text.slice(offset)} query={query} />
+      </span>
     </>
   )
 }

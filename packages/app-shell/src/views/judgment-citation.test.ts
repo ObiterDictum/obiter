@@ -18,3 +18,8 @@ it('escapes and italicises the HTML case name', () => {
     '<i>A &amp; B</i> [1]',
   )
 })
+it('places a known PDF page after the paragraph pinpoint', () => {
+  expect(
+    formatJudgmentCitation('A v B', '[2012] UKSC 19', 137, 137, 47).text,
+  ).toBe('A v B [2012] UKSC 19 [137] (p. 47 of the judgment as handed down)')
+})

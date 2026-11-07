@@ -501,3 +501,8 @@ export type DocumentVersionRestoreResponse = z.infer<
 >
 
 export * from './staff'
+export {
+  judgmentPageSchema,
+  judgmentPaginationSchema,
+  type JudgmentPage,
+} from './legal-search'

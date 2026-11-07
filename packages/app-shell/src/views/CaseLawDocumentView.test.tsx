@@ -301,3 +301,28 @@ describe('CaseLawDocumentView', () => {
     ).toBeTruthy()
   })
 })
+
+it('renders a PDF page marker at the exact stored offset and explains its source', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      jsonResponse({
+        ...DOCUMENT_PAYLOAD,
+        pages: [{ page: 47, paragraphNumber: 10, offset: 14 }],
+        pageCount: 101,
+      }),
+    ),
+  )
+  renderView()
+  const marker = await screen.findByText('Page 47')
+  expect(marker.parentElement?.id).toBe('page-47')
+  expect(marker.parentElement?.previousSibling?.textContent).toBe(
+    'The appellant ',
+  )
+  expect(screen.getByText('p. 47')).toBeTruthy()
+  expect(
+    screen.getByText(
+      "Page numbers are from the court's PDF as published by Find Case Law.",
+    ),
+  ).toBeTruthy()
+})

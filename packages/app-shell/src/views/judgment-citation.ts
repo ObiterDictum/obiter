@@ -13,9 +13,10 @@ export function formatJudgmentCitation(
   citation: string | null,
   first: number,
   last = first,
+  page?: number,
 ) {
   const pinpoint = first === last ? `[${first}]` : `[${first}]–[${last}]`
-  const suffix = `${citation?.trim() ? ` ${citation.trim()}` : ''} ${pinpoint}`
+  const suffix = `${citation?.trim() ? ` ${citation.trim()}` : ''} ${pinpoint}${page ? ` (p. ${page} of the judgment as handed down)` : ''}`
   return {
     text: `${name}${suffix}`,
     html: `<i>${escapeCitationHtml(name)}</i>${escapeCitationHtml(suffix)}`,
