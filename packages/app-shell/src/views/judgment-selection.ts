@@ -21,9 +21,21 @@ export function readJudgmentSelection(article: HTMLElement) {
   const first = paragraphs[0]
   const last = paragraphs.at(-1)
   if (!first || !last) return null
+  const fragment = range.cloneContents()
+  fragment
+    .querySelectorAll('[data-paragraph-gutter]')
+    .forEach((gutter) => gutter.remove())
+  const selectedParagraphs = Array.from(
+    fragment.querySelectorAll('[data-court-paragraph]'),
+  )
+  const text = selectedParagraphs.length
+    ? selectedParagraphs
+        .map((paragraph) => paragraph.textContent ?? '')
+        .join('\n\n')
+    : (fragment.textContent ?? '')
   const bounds = range.getBoundingClientRect()
   return {
-    text: selection.toString(),
+    text,
     first: Number(first.dataset.courtParagraph),
     last: Number(last.dataset.courtParagraph),
     left: Math.max(8, Math.min(bounds.left, window.innerWidth - 240)),

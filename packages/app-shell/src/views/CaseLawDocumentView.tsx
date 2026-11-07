@@ -238,6 +238,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                         key={paragraph.id}
                       >
                         <span
+                          data-paragraph-gutter
                           aria-label={label ? `Paragraph ${label}` : undefined}
                           className="select-none pt-1 text-right font-sans text-meta text-paper-muted tabular-nums"
                         >

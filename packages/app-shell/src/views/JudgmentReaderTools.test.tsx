@@ -149,3 +149,33 @@ it('copies the selected paragraph range as plain text and italic HTML', async ()
     '<i>A v B</i>',
   )
 })
+
+it('excludes gutter numbers and action labels from a cross-paragraph quote', () => {
+  const { container } = render(
+    <article>
+      <p data-court-paragraph="1">
+        <span data-paragraph-gutter>1</span>
+        <span data-body>First paragraph.</span>
+      </p>
+      <p data-court-paragraph="2">
+        <span data-paragraph-gutter>
+          <button>2</button>Paragraph actions
+        </span>
+        <span data-body>Second paragraph.</span>
+      </p>
+    </article>,
+  )
+  const article = container.querySelector('article')
+  const bodies = container.querySelectorAll('[data-body]')
+  const first = bodies[0]?.firstChild
+  const last = bodies[1]?.firstChild
+  if (!article || !first || !last) throw new Error('Missing quote fixture')
+  const range = document.createRange()
+  range.setStart(first, 0)
+  range.setEnd(last, 6)
+  range.getBoundingClientRect = () => new DOMRect(10, 10, 100, 20)
+  window.getSelection()?.addRange(range)
+  expect(readJudgmentSelection(article)?.text).toBe(
+    'First paragraph.\n\nSecond',
+  )
+})
