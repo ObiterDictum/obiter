@@ -7,7 +7,7 @@ import {
 } from '../components/document-workspace/document-draft-status'
 import { useState, type ReactNode } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
-import { EmptyState, Skeleton } from '@obiter/ui'
+import { EmptyState, Skeleton, useToast } from '@obiter/ui'
 import { useDocument } from '../documents'
 import { useMatter } from '../matters'
 import { ContentFrame } from '../content-frame'
@@ -49,7 +49,7 @@ function DocumentDetailBody({
   const queryClient = useQueryClient()
   const draft = useDocumentDraftStatus()
   const [restoredVersionId, setRestoredVersionId] = useState<string>()
-  const [restoreNotice, setRestoreNotice] = useState<string>()
+  const { toast } = useToast()
   const restore = useMutation({
     mutationFn: async (versionId: string) => {
       if (draft?.dirty) throw new Error('Save or discard your changes first.')
@@ -70,8 +70,18 @@ function DocumentDetailBody({
       await queryClient.invalidateQueries()
       setRestoredVersionId(result.versionId)
       setSelectedVersionId(undefined)
-      setRestoreNotice('Version restored as a new current version.')
+      toast({
+        title: 'Version restored as a new current version.',
+        tone: 'success',
+      })
       onDocumentEdited?.()
+    },
+    onError: (error) => {
+      toast({
+        title: 'Version not restored',
+        description: error.message,
+        tone: 'danger',
+      })
     },
   })
   const restoreDisabledReason = draft?.dirty
@@ -193,8 +203,6 @@ function DocumentDetailBody({
   return (
     <div className="flex flex-col">
       {rightSlotPanels}
-      {restoreNotice ? <p role="status">{restoreNotice}</p> : null}
-      {restore.isError ? <p role="alert">{restore.error.message}</p> : null}
       <div className="h-[calc(100dvh-5.5rem)] min-h-[34rem] shrink-0">
         {viewingHistorical && selectedVersion ? (
           <ContentFrame className="flex h-full flex-col py-8">

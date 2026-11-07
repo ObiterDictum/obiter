@@ -1,5 +1,6 @@
 import '@obiter/test-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ToastProvider } from '@obiter/ui'
 import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -109,7 +110,9 @@ function buildRouter(matterId: string, documentId: string) {
   const rootRoute = createRootRoute({
     component: () => (
       <QueryClientProvider client={queryClient}>
-        <Outlet />
+        <ToastProvider>
+          <Outlet />
+        </ToastProvider>
       </QueryClientProvider>
     ),
   })
