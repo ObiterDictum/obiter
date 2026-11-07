@@ -154,6 +154,12 @@ The suite runs from a `backend` checkout, whose root Playwright config starts
 the API, the renderer and the web dev server together and executes
 `obiter/apps/web/e2e`. Postgres and Meilisearch must already be running there.
 
+Journeys mark their test account's email verified with `psql -d <run database>`.
+`psql` takes the server from the standard `PGHOST`, `PGPORT`, `PGUSER` and
+`PGPASSWORD` variables, so a local run sets those for its Postgres. Without
+them, the helper falls back to `docker exec obiter-postgres psql`, which is
+what CI uses.
+
 `apps/web/playwright.config.ts` stays here as the web half of that config: it
 starts the renderer and the web dev server and expects an API already running
 at the `OBITER_API_ORIGIN` its lane resolves, so a web change can be exercised
