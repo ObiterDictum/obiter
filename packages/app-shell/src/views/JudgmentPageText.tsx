@@ -102,7 +102,7 @@ export function JudgmentPageText({
                 >
                   <summary
                     aria-label={`Footnote ${f.marker}`}
-                    className="cursor-pointer text-brand"
+                    className="cursor-pointer list-none text-brand [&::-webkit-details-marker]:hidden"
                   >
                     {f.marker}
                   </summary>
