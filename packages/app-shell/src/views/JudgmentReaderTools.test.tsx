@@ -200,6 +200,9 @@ it('copies selected body text without page labels and reads the page at the sele
           First part
         </span>
         <span data-page-marker>Page 48 p. 48</span>
+        <details data-judgment-note open>
+          <summary>1</summary>Separate footnote
+        </details>
         <span data-source-text data-judgment-page="48">
           continued
         </span>
@@ -255,4 +258,26 @@ it('keeps a sub-item label in a copied quote and cites the court paragraph it be
   const quote = readJudgmentSelection(container)
   expect(quote?.text).toBe('following order:\n\n(1) General')
   expect([quote?.first, quote?.last]).toEqual([2, 2])
+})
+
+it('does not offer a quote when the selection starts inside a footnote', () => {
+  const { container } = render(
+    <article>
+      <div data-court-paragraph="1">
+        <details data-judgment-note open>
+          <summary>1</summary>
+          <span>Separate note</span>
+        </details>
+        <span data-source-text>Judgment text</span>
+      </div>
+    </article>,
+  )
+  const note = container.querySelector('details span')?.firstChild
+  const source = container.querySelector('[data-source-text]')?.firstChild
+  if (!note || !source) throw new Error('Missing fixture')
+  const range = document.createRange()
+  range.setStart(note, 0)
+  range.setEnd(source, 8)
+  window.getSelection()?.addRange(range)
+  expect(readJudgmentSelection(container)).toBeNull()
 })

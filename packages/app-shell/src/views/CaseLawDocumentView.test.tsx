@@ -317,9 +317,9 @@ it('renders a PDF page marker at the exact stored offset and explains its source
   renderView()
   const marker = await screen.findByText('Page 47')
   expect(marker.parentElement?.id).toBe('page-47')
-  expect(marker.parentElement?.previousSibling?.textContent).toBe(
-    'The appellant ',
-  )
+  expect(
+    marker.parentElement?.parentElement?.previousSibling?.textContent,
+  ).toBe('The appellant ')
   expect(screen.getByText('p. 47')).toBeTruthy()
   expect(
     screen.getByText(

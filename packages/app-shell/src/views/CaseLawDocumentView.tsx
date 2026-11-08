@@ -236,6 +236,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                     <JudgmentEntry
                       key={paragraph.id}
                       paragraph={paragraph}
+                      sourceUrl={data.sourceUrl}
                       previous={paragraphs[at - 1]}
                       at={at}
                       owner={

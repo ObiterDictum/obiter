@@ -3817,11 +3817,19 @@
                     Public judgment, stored or hydrated. No session required.
                     Optional
                     <code
-                      >pages: { page, paragraphNumber, offset, paragraphId?
-                      }[]</code
+                      >pages: { page, pdfPage?, paragraphNumber, offset,
+                      paragraphId? }[]</code
                     >
                     and <code>pageCount</code> carry court PDF page starts;
-                    offsets address the stored text of the entry
+                    <code>page</code> labels the printed page while optional
+                    <code>pdfPage</code> identifies its physical PDF position.
+                    Paragraphs may include offset-based footnotes, images and
+                    citation spans. Notes are excluded from quote extraction;
+                    images load only from the National Archives asset host. Web
+                    and desktop restrict remote images to
+                    <code>https://assets.caselaw.nationalarchives.gov.uk</code>
+                    through an image Content-Security-Policy. offsets address
+                    the stored text of the entry
                     <code>paragraphId</code> names. Paragraph entries may carry
                     the printed <code>label</code>, a <code>level</code> (1 is
                     the court's numbered paragraph, 2 and deeper are sub-items

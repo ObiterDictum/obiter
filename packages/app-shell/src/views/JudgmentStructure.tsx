@@ -72,7 +72,7 @@ export function JudgmentCover({ cover }: { cover: Cover }) {
       {head ? (
         <table
           aria-label="Counsel"
-          className="mt-8 w-full max-w-xl table-fixed text-center font-sans text-meta"
+          className="mt-8 w-full table-fixed text-center font-sans text-meta wrap-anywhere"
         >
           <thead>
             <tr>
@@ -164,7 +164,9 @@ export function JudgmentEntry({
   query,
   name,
   citation,
+  sourceUrl,
 }: {
+  sourceUrl?: string
   paragraph: JudgmentParagraph
   previous: JudgmentParagraph | undefined
   at: number
@@ -185,7 +187,12 @@ export function JudgmentEntry({
   const opinionHeading = paragraph.headings
     ?.filter((heading) => heading.kind === 'opinion')
     .at(-1)
-  const Element = paragraph.style === 'table' ? 'div' : 'p'
+  const Element =
+    paragraph.style === 'table' ||
+    paragraph.footnotes?.length ||
+    paragraph.images?.length
+      ? 'div'
+      : 'p'
   return (
     <>
       {showHeadings
@@ -246,7 +253,9 @@ export function JudgmentEntry({
             }
           >
             <JudgmentPageText
-              text={pages ? paragraph.text : paragraph.text.trim()}
+              text={paragraph.text}
+              paragraph={paragraph}
+              sourceUrl={sourceUrl}
               query={query}
               at={at}
               pages={pages}

@@ -4,6 +4,11 @@ export function readJudgmentSelection(article: HTMLElement) {
   const selection = window.getSelection()
   if (!selection || selection.isCollapsed || !selection.rangeCount) return null
   const range = selection.getRangeAt(0)
+  const inNote = (node: Node) =>
+    (node instanceof Element ? node : node.parentElement)?.closest(
+      '[data-judgment-note]',
+    )
+  if (inNote(range.startContainer) || inNote(range.endContainer)) return null
   const document = article.querySelector('article') ?? article
   if (
     !document.contains(range.startContainer) ||
@@ -23,7 +28,9 @@ export function readJudgmentSelection(article: HTMLElement) {
   if (!first || !last) return null
   const fragment = range.cloneContents()
   fragment
-    .querySelectorAll('[data-paragraph-gutter], [data-page-marker]')
+    .querySelectorAll(
+      '[data-paragraph-gutter], [data-page-marker], [data-judgment-note], [data-judgment-image]',
+    )
     .forEach((gutter) => {
       const label = gutter
         .querySelector<HTMLElement>('[data-quote-label]')
