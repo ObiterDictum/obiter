@@ -27,6 +27,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       {
+        httpEquiv: 'Content-Security-Policy',
+        content:
+          "img-src 'self' data: blob: https://assets.caselaw.nationalarchives.gov.uk",
+      },
+      {
         charSet: 'utf-8',
       },
       {

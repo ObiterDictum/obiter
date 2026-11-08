@@ -56,6 +56,7 @@ export type CaseLawSummaryResponse = z.infer<
 >
 
 export const judgmentPageSchema = z.object({
+  pdfPage: z.number().int().positive().optional(),
   page: z.number().int().positive(),
   paragraphNumber: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
@@ -82,6 +83,43 @@ export const judgmentParagraphSchema = z.object({
   style: z.enum(['quote', 'table']).optional(),
   cells: z.array(z.array(z.string())).optional(),
   headings: z.array(judgmentHeadingSchema).min(1).optional(),
+  footnotes: z
+    .array(
+      z.object({
+        marker: z.string().trim().min(1),
+        text: z.string().trim().min(1),
+        offset: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1)
+    .optional(),
+  images: z
+    .array(
+      z.object({
+        src: z.string().regex(/^[\w-]+(?:\.[\w-]+)*$/),
+        offset: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1)
+    .optional(),
+  citations: z
+    .array(
+      z.object({
+        offset: z.number().int().nonnegative(),
+        length: z.number().int().positive(),
+        type: z.enum(['case', 'legislation']),
+        canonical: z.string().optional(),
+        href: z
+          .string()
+          .url()
+          .regex(
+            /^https:\/\/(?:caselaw\.nationalarchives\.gov\.uk|(?:www\.)?legislation\.gov\.uk)\//,
+          )
+          .optional(),
+      }),
+    )
+    .min(1)
+    .optional(),
 })
 export type JudgmentParagraph = z.infer<typeof judgmentParagraphSchema>
 

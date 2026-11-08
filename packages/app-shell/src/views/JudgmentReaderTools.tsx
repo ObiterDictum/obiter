@@ -2,7 +2,7 @@ import { judgmentTarget } from './judgment-pages'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Input, useToast } from '@obiter/ui'
 import type { ReactNode } from 'react'
-import type { readJudgmentSelection } from './judgment-selection'
+import { readJudgmentSelection } from './judgment-selection'
 
 type Quote = ReturnType<typeof readJudgmentSelection>
 
@@ -85,7 +85,25 @@ export function JudgmentReaderTools({
     }
   }
   return (
-    <div ref={root} className="flex min-w-0 flex-col gap-4">
+    <div
+      ref={root}
+      className="flex min-w-0 flex-col gap-4"
+      onCopy={(event) => {
+        const clipboard = event.clipboardData
+        const selection = window.getSelection()
+        if (!selection?.rangeCount || !root.current) return
+        const range = selection.getRangeAt(0)
+        if (
+          !Array.from(
+            root.current.querySelectorAll('[data-judgment-note]'),
+          ).some((note) => range.intersectsNode(note))
+        )
+          return
+        event.preventDefault()
+        const selected = readJudgmentSelection(root.current)
+        if (selected) clipboard.setData('text/plain', selected.text)
+      }}
+    >
       <div className="flex flex-wrap items-center gap-3">
         {searchControl}
         <form

@@ -200,6 +200,9 @@ it('copies selected body text without page labels and reads the page at the sele
           First part
         </span>
         <span data-page-marker>Page 48 p. 48</span>
+        <details data-judgment-note open>
+          <summary>1</summary>Separate footnote
+        </details>
         <span data-source-text data-judgment-page="48">
           continued
         </span>

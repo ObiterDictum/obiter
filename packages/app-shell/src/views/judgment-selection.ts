@@ -23,7 +23,9 @@ export function readJudgmentSelection(article: HTMLElement) {
   if (!first || !last) return null
   const fragment = range.cloneContents()
   fragment
-    .querySelectorAll('[data-paragraph-gutter], [data-page-marker]')
+    .querySelectorAll(
+      '[data-paragraph-gutter], [data-page-marker], [data-judgment-note], [data-judgment-image]',
+    )
     .forEach((gutter) => {
       const label = gutter
         .querySelector<HTMLElement>('[data-quote-label]')
