@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   useUpdateProfile: vi.fn(),
   useAuth: vi.fn(),
   navigate: vi.fn(),
+  createInvite: vi.fn(),
 }))
 
 const organisationMembershipModuleKeys = Object.fromEntries(
@@ -28,7 +29,7 @@ mock.module('../organisation-membership', () =>
       useOrganisationMembers: () => ({ data: [] }),
       useOrganisationInvites: () => ({ data: [] }),
       useCreateOrganisationInvite: () => ({
-        mutateAsync: vi.fn(),
+        mutateAsync: mocks.createInvite,
         isPending: false,
       }),
       useRevokeOrganisationInvite: () => ({
@@ -146,6 +147,33 @@ describe('SettingsRouteView — organisation', () => {
     const role = within(organisation).getByRole('combobox', { name: 'Role' })
     expect(role.tagName).toBe('BUTTON')
     expect(organisation.querySelector('select')).toBeNull()
+  })
+
+  it('sends an invite only after the admin attests the invitee works in a legal role', async () => {
+    renderSettings()
+    const organisation = await openSection('Organisation')
+    fireEvent.change(within(organisation).getByLabelText('Email'), {
+      target: { value: 'colleague@ashcombe.example' },
+    })
+    const send = within(organisation).getByRole('button', {
+      name: 'Send invite',
+    })
+    expect(send).toHaveProperty('disabled', true)
+
+    fireEvent.click(
+      within(organisation).getByRole('checkbox', {
+        name: /works in a legal role here/,
+      }),
+    )
+    fireEvent.click(send)
+
+    await waitFor(() =>
+      expect(mocks.createInvite).toHaveBeenCalledWith({
+        email: 'colleague@ashcombe.example',
+        role: 'member',
+        legalRoleAttested: true,
+      }),
+    )
   })
 
   it('states the role once, under Organisation and not under Account', async () => {

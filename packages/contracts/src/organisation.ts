@@ -80,6 +80,7 @@ export function parseOrganisationName(
 export const createOrganisationInviteInputSchema = z.object({
   email: z.string().trim().email().max(320),
   role: userRoleSchema,
+  legalRoleAttested: z.literal(true),
 })
 export type CreateOrganisationInviteInput = z.infer<
   typeof createOrganisationInviteInputSchema
