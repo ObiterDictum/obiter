@@ -10,6 +10,7 @@ import {
 } from './SearchSnippet'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
+import { legislationStatusDisplay } from '../../legislation-status'
 
 export function SearchPreview({
   row,
@@ -109,7 +110,11 @@ function LegislationPreview({
   embedded: boolean
 }) {
   const hit = row.hit
-  const withheld = hit.legislationStatus === 'amended_not_held'
+  const withheld = hit.legislationStatus !== 'current'
+  const status = legislationStatusDisplay(
+    hit.legislationStatus,
+    hit.repealedFrom,
+  )
   const extract = hit.snippets?.[0]?.text ?? hit.text
   return (
     <Card aria-label="Result preview">
@@ -124,12 +129,16 @@ function LegislationPreview({
         <div className="flex flex-wrap items-center gap-2 text-meta text-subtle">
           <span>{hit.extent ? hit.extent : 'Extent not recorded'}</span>
           <span aria-hidden>·</span>
-          <StatusDot tone={withheld ? 'warning' : 'success'}>
-            {withheld ? 'Amended wording withheld' : 'No unapplied amendments'}
-          </StatusDot>
+          <StatusDot tone={status.tone}>{status.label}</StatusDot>
         </div>
         {withheld ? (
-          <div className="rounded-md bg-warning-soft p-4 text-meta text-ink">
+          <div
+            className={
+              hit.legislationStatus === 'repealed'
+                ? 'rounded-md bg-fill p-4 text-meta text-ink'
+                : 'rounded-md bg-warning-soft p-4 text-meta text-ink'
+            }
+          >
             {hit.notice}
           </div>
         ) : extract ? (

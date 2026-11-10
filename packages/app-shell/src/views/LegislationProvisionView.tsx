@@ -17,8 +17,11 @@ import { sourceNameForUrl } from '../components/search/provenance'
 import { SourceActions } from '../components/sources/SourceActions'
 import { formatDate } from '../format'
 import { provisionResultLocation } from '../legislation-navigation'
+import { legislationStatusDisplay } from '../legislation-status'
 import {
   legislationProvisionQueryOptions,
+  type LegislationAmendment,
+  type LegislationAmendmentHistory,
   type LegislationProvisionSubsection,
 } from './legislation-document-query'
 
@@ -62,6 +65,11 @@ export function LegislationProvisionView({
 
   const provision = query.data.provision
   const withheld = provision.legislationStatus === 'amended_not_held'
+  const repealed = provision.legislationStatus === 'repealed'
+  const status = legislationStatusDisplay(
+    provision.legislationStatus,
+    provision.repealedFrom,
+  )
   const sourceName = sourceNameForUrl(provision.sourceUrl)
 
   return (
@@ -74,9 +82,7 @@ export function LegislationProvisionView({
             {provision.extent ? provision.extent : 'Extent not recorded'}
           </span>
           <span aria-hidden>·</span>
-          <StatusDot tone={withheld ? 'warning' : 'success'}>
-            {withheld ? 'Amended wording withheld' : 'No unapplied amendments'}
-          </StatusDot>
+          <StatusDot tone={status.tone}>{status.label}</StatusDot>
           <span aria-hidden>·</span>
           <span>Point-in-time date not recorded</span>
         </span>
@@ -112,7 +118,24 @@ export function LegislationProvisionView({
     >
       <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
         <section className="flex min-w-0 flex-col gap-4">
-          {withheld ? (
+          {repealed ? (
+            <div
+              className="rounded-lg bg-fill px-6 py-4"
+              role="status"
+              data-legislation-status="repealed"
+            >
+              <p className="text-item text-ink">{status.label}</p>
+              <p className="mt-1 text-meta text-muted">{provision.notice}</p>
+              <a
+                className="mt-2 inline-block text-meta text-ink underline"
+                href={provision.officialUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                Read the official record
+              </a>
+            </div>
+          ) : withheld ? (
             <div
               className="rounded-lg bg-warning-soft px-6 py-4"
               role="alert"
@@ -176,6 +199,13 @@ export function LegislationProvisionView({
             {provision.title}, {provision.provisionLabel} · source: {sourceName}{' '}
             · point-in-time date not recorded.
           </p>
+          {provision.amendments ? (
+            <AmendmentHistory
+              history={provision.amendments}
+              provisionLabel={provision.provisionLabel}
+              officialUrl={provision.officialUrl}
+            />
+          ) : null}
         </section>
 
         <aside aria-label="Provision details">
@@ -193,13 +223,8 @@ export function LegislationProvisionView({
                 </dd>
                 <dt className="text-subtle">Status</dt>
                 <dd className="text-ink">
-                  <StatusDot
-                    tone={withheld ? 'warning' : 'success'}
-                    className="whitespace-nowrap"
-                  >
-                    {withheld
-                      ? 'Amended wording withheld'
-                      : 'No unapplied amendments'}
+                  <StatusDot tone={status.tone} className="whitespace-nowrap">
+                    {status.label}
                   </StatusDot>
                 </dd>
                 <dt className="text-subtle">Source</dt>
@@ -260,6 +285,7 @@ function SubsectionNode({
     ? node.label.slice(parentLabel.length).trim()
     : node.label
   const withheld = node.legislationStatus === 'amended_not_held'
+  const repealed = node.legislationStatus === 'repealed'
   return (
     <div className={depth > 0 ? 'ml-6 border-l border-line pl-4' : undefined}>
       <p className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 py-1 text-[16px] leading-[1.85]">
@@ -275,7 +301,11 @@ function SubsectionNode({
         >
           {label}
         </Link>
-        {withheld ? (
+        {repealed ? (
+          <span className="text-meta text-paper-muted">
+            {legislationStatusDisplay('repealed', node.repealedFrom).label}.
+          </span>
+        ) : withheld ? (
           <span className="text-meta text-paper-muted">
             Wording withheld: amendments are recorded but not applied.{' '}
             <a
@@ -303,5 +333,120 @@ function SubsectionNode({
         />
       ))}
     </div>
+  )
+}
+
+function amendmentTiming(amendment: LegislationAmendment): string | null {
+  if (amendment.prospective) return 'Prospective'
+  if (amendment.inForceDate) {
+    const date = formatDate(amendment.inForceDate)
+    return amendment.applied === false
+      ? `In force ${date}, not yet applied to the text`
+      : `In force ${date}`
+  }
+  return amendment.applied === false ? 'Not yet applied to the text' : null
+}
+
+function AmendmentHistory({
+  history,
+  provisionLabel,
+  officialUrl,
+}: {
+  history: LegislationAmendmentHistory
+  provisionLabel: string
+  officialUrl: string
+}) {
+  return (
+    <Card aria-label="History of this provision">
+      <CardHead title="History">
+        <span className="text-meta text-subtle">
+          {history.items.length === 0
+            ? 'No changes recorded'
+            : `${history.items.length}${history.truncated ? '+' : ''} ${
+                history.items.length === 1 ? 'change' : 'changes'
+              } recorded`}
+        </span>
+      </CardHead>
+      <CardBody>
+        {history.items.length === 0 ? (
+          <p className="text-meta text-muted">
+            No amendments, repeals or commencements of this provision are
+            recorded.
+          </p>
+        ) : (
+          <ol className="flex flex-col divide-y divide-line">
+            {history.items.map((amendment) => {
+              const timing = amendmentTiming(amendment)
+              const changed =
+                amendment.changedProvision &&
+                amendment.changedProvision !== provisionLabel
+                  ? amendment.changedProvision
+                  : null
+              const by = [
+                amendment.affecting.citation,
+                amendment.affecting.provision,
+              ]
+                .filter(Boolean)
+                .join(' ')
+              return (
+                <li
+                  key={amendment.id}
+                  className="flex flex-col gap-0.5 py-3"
+                  data-amendment-effect={amendment.effect}
+                >
+                  <p className="text-item text-ink">
+                    {amendment.effect}
+                    {changed ? (
+                      <span className="text-muted"> · {changed}</span>
+                    ) : null}
+                  </p>
+                  <p className="text-meta text-muted">
+                    By{' '}
+                    {amendment.affecting.href ? (
+                      <Link
+                        {...provisionResultLocation({
+                          documentIdentity: amendment.affecting.href.replace(
+                            /^\/ln\//,
+                            '',
+                          ),
+                          labelPath: '',
+                          canonicalUrl: amendment.affecting.href,
+                        })}
+                        className="text-ink underline-offset-2 hover:underline"
+                      >
+                        {by}
+                      </Link>
+                    ) : (
+                      <a
+                        href={amendment.affecting.officialUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-ink underline-offset-2 hover:underline"
+                      >
+                        {by}
+                      </a>
+                    )}
+                    {timing ? <span> · {timing}</span> : null}
+                  </p>
+                </li>
+              )
+            })}
+          </ol>
+        )}
+        {history.truncated ? (
+          <p className="mt-3 text-caption text-subtle">
+            Showing the most recent changes.{' '}
+            <a
+              href={officialUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-ink underline-offset-2 hover:underline"
+            >
+              See the full record on legislation.gov.uk
+            </a>
+          </p>
+        ) : null}
+      </CardBody>
+    </Card>
   )
 }

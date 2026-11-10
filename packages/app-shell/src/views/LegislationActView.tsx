@@ -15,6 +15,7 @@ import { PageScaffold } from '../page-scaffold'
 import { provisionResultLocation } from '../legislation-navigation'
 import { sourceNameForUrl } from '../components/search/provenance'
 import { formatDate } from '../format'
+import { legislationStatusDisplay } from '../legislation-status'
 import {
   legislationActQueryOptions,
   type LegislationActContentsKind,
@@ -77,11 +78,19 @@ function ActContentsItem({
           labelPath: node.labelPath,
           canonicalUrl: node.href,
         })}
-        data-legislation-status={node.withheld ? 'amended_not_held' : 'current'}
+        data-legislation-status={
+          node.repealed
+            ? 'repealed'
+            : node.withheld
+              ? 'amended_not_held'
+              : 'current'
+        }
         className={
-          node.withheld
-            ? 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-ink hover:bg-warning-soft'
-            : 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-ink hover:bg-hover'
+          node.repealed
+            ? 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-muted hover:bg-hover'
+            : node.withheld
+              ? 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-ink hover:bg-warning-soft'
+              : 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-ink hover:bg-hover'
         }
       >
         <span className="flex min-w-0 items-baseline gap-2">
@@ -92,7 +101,11 @@ function ActContentsItem({
             </span>
           ) : null}
         </span>
-        {node.withheld ? (
+        {node.repealed ? (
+          <StatusDot tone="neutral">
+            {legislationStatusDisplay('repealed', node.repealedFrom).label}
+          </StatusDot>
+        ) : node.withheld ? (
           <StatusDot tone="warning">Amended wording withheld</StatusDot>
         ) : null}
       </Link>
@@ -134,6 +147,8 @@ export function LegislationActView({ identity }: { identity: string }) {
   const act = query.data.act
   const sourceName = sourceNameForUrl(act.sourceUrl)
   const withheld = act.withheldCount > 0
+  const repealedAct = act.status === 'repealed'
+  const repealedCount = act.repealedCount ?? 0
 
   return (
     <PageScaffold
@@ -145,11 +160,17 @@ export function LegislationActView({ identity }: { identity: string }) {
           <span aria-hidden>·</span>
           <span>{act.extent ? act.extent : 'Extent not recorded'}</span>
           <span aria-hidden>·</span>
-          <StatusDot tone={withheld ? 'warning' : 'success'}>
-            {withheld
-              ? `${act.withheldCount} provisions not shown`
-              : 'No unapplied amendments'}
-          </StatusDot>
+          {repealedAct ? (
+            <StatusDot tone="neutral">
+              {legislationStatusDisplay('repealed', act.repealedFrom).label}
+            </StatusDot>
+          ) : (
+            <StatusDot tone={withheld ? 'warning' : 'success'}>
+              {withheld
+                ? `${act.withheldCount} provisions not shown`
+                : 'No unapplied amendments'}
+            </StatusDot>
+          )}
           <span aria-hidden>·</span>
           <span>Point-in-time date not recorded</span>
         </span>
@@ -182,6 +203,13 @@ export function LegislationActView({ identity }: { identity: string }) {
             </span>
           </CardHead>
           <CardBody>
+            {repealedCount > 0 ? (
+              <p className="mb-4 text-meta text-muted">
+                {repealedCount} of {countLabel(act.totalCount)}{' '}
+                {repealedCount === 1 ? 'has' : 'have'} been repealed. They stay
+                listed, marked Repealed, and each one shows what repealed it.
+              </p>
+            ) : null}
             {act.withheldCount > 0 ? (
               <div
                 className="mb-4 rounded-md bg-warning-soft px-4 py-3"
@@ -219,6 +247,25 @@ export function LegislationActView({ identity }: { identity: string }) {
                 <dd className="text-ink">{act.chapter}</dd>
                 <dt className="text-subtle">Year</dt>
                 <dd className="text-ink tabular-nums">{act.year}</dd>
+                {act.enactmentDate ? (
+                  <>
+                    <dt className="text-subtle">Royal Assent</dt>
+                    <dd className="text-ink">
+                      {formatDate(act.enactmentDate)}
+                    </dd>
+                  </>
+                ) : null}
+                {repealedAct ? (
+                  <>
+                    <dt className="text-subtle">Status</dt>
+                    <dd className="text-ink">
+                      {
+                        legislationStatusDisplay('repealed', act.repealedFrom)
+                          .label
+                      }
+                    </dd>
+                  </>
+                ) : null}
                 <dt className="text-subtle">Extent</dt>
                 <dd className="text-ink">
                   {act.extent ? act.extent : 'Extent not recorded'}

@@ -68,6 +68,60 @@ const WITHHELD_PAYLOAD = {
   },
 }
 
+const REPEALED_PAYLOAD = {
+  provision: {
+    ...CURRENT_PAYLOAD.provision,
+    id: 'ukpga/2010/15/section/40',
+    provisionLabel: 's. 40',
+    labelPath: 'section/40',
+    legislationStatus: 'repealed' as const,
+    repealedFrom: '2013-10-01',
+    text: undefined,
+    officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/40',
+    notice:
+      'This provision has been repealed with effect from 2013-10-01, so it has no current wording.',
+    canonicalUrl: '/ln/ukpga/2010/15/section/40',
+    amendments: {
+      truncated: false,
+      items: [
+        {
+          id: 'lex:1',
+          effect: 'Repealed',
+          changedProvision: 's. 40(2)-(4)',
+          changedLabelPath: 'section/40/2',
+          affecting: {
+            identity: 'ukpga/2013/24',
+            citation: 'Enterprise and Regulatory Reform Act 2013',
+            provision: 's. 65',
+            href: '/ln/ukpga/2013/24/section/65',
+            officialUrl:
+              'https://www.legislation.gov.uk/ukpga/2013/24/section/65',
+          },
+          inForceDate: '2013-10-01',
+          applied: true,
+          prospective: false,
+        },
+        {
+          id: 'lex:2',
+          effect: 'Coming into force',
+          changedProvision: 's. 40',
+          changedLabelPath: 'section/40',
+          affecting: {
+            identity: 'uksi/2010/2317',
+            citation: 'SI 2010/2317',
+            provision: 'art. 2',
+            href: null,
+            officialUrl: 'https://www.legislation.gov.uk/uksi/2010/2317',
+          },
+          inForceDate: null,
+          applied: null,
+          prospective: null,
+        },
+      ],
+    },
+  },
+}
+
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
   return {
     ok,
@@ -98,6 +152,7 @@ describe('LegislationProvisionView', () => {
       vi.fn(async (url: string) => {
         if (url.includes('/section/13')) return jsonResponse(CURRENT_PAYLOAD)
         if (url.includes('/section/80')) return jsonResponse(WITHHELD_PAYLOAD)
+        if (url.includes('/section/40')) return jsonResponse(REPEALED_PAYLOAD)
         return jsonResponse({}, false, 404)
       }),
     )
@@ -137,6 +192,26 @@ describe('LegislationProvisionView', () => {
     })
     expect(screen.getByText(/amendments that have been recorded/)).toBeTruthy()
     expect(screen.queryByText('Direct discrimination applies here.')).toBeNull()
+  })
+
+  it('marks a repealed provision and lists what changed it', async () => {
+    renderView('ukpga/2010/15/section/40')
+    await waitFor(() => {
+      expect(
+        screen.getAllByText('Repealed from 1 Oct 2013').length,
+      ).toBeGreaterThan(0)
+    })
+    expect(screen.queryByText('Amended wording withheld')).toBeNull()
+    expect(screen.getByText('2 changes recorded')).toBeTruthy()
+    const held = screen.getByRole('link', {
+      name: 'Enterprise and Regulatory Reform Act 2013 s. 65',
+    })
+    expect(held.getAttribute('href')).toBe('/ln/ukpga/2013/24/section/65')
+    const unheld = screen.getByRole('link', { name: 'SI 2010/2317 art. 2' })
+    expect(unheld.getAttribute('href')).toBe(
+      'https://www.legislation.gov.uk/uksi/2010/2317',
+    )
+    expect(screen.getByText(/s\. 40\(2\)-\(4\)/)).toBeTruthy()
   })
 
   it('renders a section heading and its subsections nested, each citable', async () => {

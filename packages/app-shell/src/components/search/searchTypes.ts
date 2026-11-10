@@ -1,3 +1,4 @@
+import type { LegislationStatus } from '../../legislation-status'
 import type {
   JudgmentParagraph,
   LegalSearchCitation,
@@ -60,7 +61,8 @@ export interface LegalSearchResult {
 export interface LegislationSearchResultHit {
   id: string
   resultGroup: 'legislation'
-  legislationStatus: 'current' | 'amended_not_held'
+  legislationStatus: LegislationStatus
+  repealedFrom?: string
   title: string
   year?: number
   provisionLabel: string
