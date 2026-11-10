@@ -9,6 +9,28 @@ import {
 } from './legislation-paths'
 
 describe('legislation provision paths', () => {
+  it('parses Acts before 1963, which legislation.gov.uk addresses by regnal year', () => {
+    expect(parseLegislationActPath('/ln/ukpga/Geo5/15-16/20')).toEqual({
+      documentIdentity: 'ukpga/Geo5/15-16/20',
+    })
+    expect(parseLegislationActPath('ukpga/Edw8and1Geo6/1/6')).toEqual({
+      documentIdentity: 'ukpga/Edw8and1Geo6/1/6',
+    })
+    expect(
+      parseLegislationProvisionPath('/ln/ukpga/Vict/56-57/71/section/14'),
+    ).toEqual({
+      documentIdentity: 'ukpga/Vict/56-57/71',
+      labelPath: 'section/14',
+      provisionId: 'ukpga/Vict/56-57/71/section/14',
+    })
+    expect(parseLegislationProvisionPath('/ln/ukpga/Geo5/15-16/20')).toBeNull()
+    expect(
+      parseLegislationActPath('/ln/ukpga/Geo5/15-16/20/section/1'),
+    ).toBeNull()
+    expect(parseLegislationActPath('/ln/ukpga/geo5/15-16/20')).toBeNull()
+    expect(parseLegislationActPath('/ln/ukpga/Geo5/c.20/20')).toBeNull()
+  })
+
   it('builds a stable identity path a solicitor can paste', () => {
     expect(createCanonicalProvisionPath('ukpga/2010/15', 'section/40')).toBe(
       '/ln/ukpga/2010/15/section/40',
