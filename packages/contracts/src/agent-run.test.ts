@@ -4,6 +4,12 @@ import {
   agentRunStreamMessageSchema,
 } from './agent-api'
 import { agentRunSchema, isAgentRunLive, type AgentRun } from './agent-run'
+import {
+  agentRunSchema as exportedAgentRunSchema,
+  agentSessionRunSchema as exportedAgentSessionRunSchema,
+  isAgentRunLive as exportedIsAgentRunLive,
+} from './index'
+import { agentSessionRunSchema } from './agent-run'
 import { agentTraceEventSchema } from './agent-trace'
 
 const base = {
@@ -62,6 +68,21 @@ const answer = {
   ],
   droppedSentenceCount: 0,
 }
+
+describe('agent run module exports', () => {
+  it('keeps legacy and session contracts available from their public entry points', () => {
+    expect(exportedAgentRunSchema).toBe(agentRunSchema)
+    expect(exportedAgentSessionRunSchema).toBe(agentSessionRunSchema)
+    expect(exportedIsAgentRunLive).toBe(isAgentRunLive)
+    expect(
+      exportedAgentRunSchema.safeParse({
+        ...base,
+        status: 'queued',
+        stopReason: null,
+      }).success,
+    ).toBe(true)
+  })
+})
 
 describe('agent run status', () => {
   it('a completed run carries an answer whose every sentence has an evidence id', () => {

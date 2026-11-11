@@ -1,9 +1,17 @@
 import { z } from 'zod'
+import { secureHttpsUrlSchema } from './agent-secure-url'
 
 const id = z.string().min(1)
 const timestamp = z.string().datetime({ offset: true })
 const slug = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-const endpoint = z.url({ protocol: /^https$/ })
+const endpoint = secureHttpsUrlSchema
+const secret = z
+  .string()
+  .min(1)
+  .max(4096)
+  .regex(
+    /^[\x21-\x7e\x80-\xff](?:[\x20-\x7e\x80-\xff\t]*[\x21-\x7e\x80-\xff])?$/u,
+  )
 const header = z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/)
 
 export const mcpAuthKindSchema = z.enum(['none', 'bearer', 'custom_header'])
@@ -52,10 +60,14 @@ export type OrganisationMcpServer = z.infer<typeof organisationMcpServerSchema>
 export const organisationMcpServerCreateRequestSchema = z
   .object({
     ...serverFields,
-    secret: z.string().min(1).max(4096).optional(),
+    secret: secret.optional(),
   })
   .strict()
   .refine(validServer, 'Transport and authentication settings must match.')
+  .refine(
+    (value) => value.authKind !== 'none' || value.secret === undefined,
+    'Unauthenticated servers cannot have a secret.',
+  )
 export type OrganisationMcpServerCreateRequest = z.infer<
   typeof organisationMcpServerCreateRequestSchema
 >
@@ -63,11 +75,33 @@ export type OrganisationMcpServerCreateRequest = z.infer<
 export const organisationMcpServerUpdateRequestSchema = z
   .object({
     ...serverFields,
-    secret: z.string().min(1).max(4096).nullable(),
+    secret: secret.nullable(),
   })
   .partial()
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'Nothing to change.')
+  .refine(
+    (value) =>
+      value.transport === undefined ||
+      value.endpointUrl === undefined ||
+      (value.transport === 'http'
+        ? value.endpointUrl !== null
+        : value.endpointUrl === null),
+    'Transport and endpoint must match.',
+  )
+  .refine(
+    (value) =>
+      value.authKind === undefined ||
+      value.authHeaderName === undefined ||
+      (value.authKind === 'custom_header'
+        ? value.authHeaderName !== null
+        : value.authHeaderName === null),
+    'Authentication and header must match.',
+  )
+  .refine(
+    (value) => value.authKind !== 'none' || value.secret == null,
+    'Unauthenticated servers cannot have a secret.',
+  )
 export type OrganisationMcpServerUpdateRequest = z.infer<
   typeof organisationMcpServerUpdateRequestSchema
 >
