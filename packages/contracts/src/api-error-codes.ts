@@ -1,4 +1,7 @@
 export const API_ERROR_CODES = [
+  'org_monthly_cap',
+  'approval_stale',
+  'strict_lockdown_conflict',
   'unauthenticated',
   'forbidden',
   'validation_failed',

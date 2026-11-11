@@ -80,3 +80,143 @@ export const organisationAgentSettingsUpdateSchema = z
 export type OrganisationAgentSettingsUpdate = z.infer<
   typeof organisationAgentSettingsUpdateSchema
 >
+
+export const agentAccessModeSchema = z.enum(['managed_eu', 'byok', 'disabled'])
+export type AgentAccessMode = z.infer<typeof agentAccessModeSchema>
+export const agentSessionProviderSchema = z.enum([
+  'obiter_eu',
+  'anthropic',
+  'openai',
+  'gemini',
+  'openai_compatible',
+])
+export type AgentSessionProvider = z.infer<typeof agentSessionProviderSchema>
+export const AGENT_SESSION_PROVIDERS = {
+  ...AGENT_PROVIDERS,
+  obiter_eu: {
+    label: 'Managed EU',
+    modelIdPattern: /^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/,
+    modelIdExample: 'managed-model',
+  },
+  openai: {
+    label: 'OpenAI',
+    modelIdPattern: /^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/,
+    modelIdExample: 'gpt-model',
+  },
+  gemini: {
+    label: 'Gemini',
+    modelIdPattern: /^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/,
+    modelIdExample: 'gemini-model',
+  },
+  openai_compatible: {
+    label: 'OpenAI compatible',
+    modelIdPattern: /^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/,
+    modelIdExample: 'model-name',
+  },
+} as const satisfies Record<
+  AgentSessionProvider,
+  { label: string; modelIdPattern: RegExp; modelIdExample: string }
+>
+
+export const agentSessionModelChoiceSchema = z
+  .object({
+    provider: agentSessionProviderSchema,
+    modelId: modelIdSchema,
+    snapshot: modelIdSchema.nullable(),
+  })
+  .strict()
+  .superRefine((choice, context) => {
+    const { modelIdPattern, modelIdExample, label } =
+      AGENT_SESSION_PROVIDERS[choice.provider]
+    for (const field of ['modelId', 'snapshot'] as const) {
+      const value = choice[field]
+      if (value !== null && !modelIdPattern.test(value))
+        context.addIssue({
+          code: 'custom',
+          path: [field],
+          message: `${label} model ids look like ${modelIdExample}.`,
+        })
+    }
+  })
+export type AgentSessionModelChoice = z.infer<
+  typeof agentSessionModelChoiceSchema
+>
+const sessionSettingsFields = {
+  accessMode: agentAccessModeSchema,
+  matterTextToModel: z.boolean(),
+  model: agentSessionModelChoiceSchema.nullable(),
+  keyLastFour: z.string().length(4).nullable(),
+  keySetAt: z.string().datetime({ offset: true }).nullable(),
+  baseUrl: z.url({ protocol: /^https$/ }).nullable(),
+  fastModel: agentSessionModelChoiceSchema.nullable(),
+  monthlyUsage: z
+    .object({
+      periodYm: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+      reservedMicros: z.number().int().nonnegative(),
+      usedMicros: z.number().int().nonnegative(),
+      capMicros: z.number().int().nonnegative(),
+    })
+    .strict()
+    .nullable(),
+  managedMatterOptOut: z.boolean(),
+  effectiveMatterTextAllowed: z.boolean(),
+}
+export const agentSessionSettingsSchema = z
+  .object(sessionSettingsFields)
+  .strict()
+  .superRefine((settings, context) => {
+    if ((settings.keyLastFour === null) !== (settings.keySetAt === null))
+      context.addIssue({
+        code: 'custom',
+        path: ['keySetAt'],
+        message: 'A stored key has a set date.',
+      })
+    if (
+      settings.fastModel &&
+      (!settings.model ||
+        settings.fastModel.provider !== settings.model.provider)
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['fastModel'],
+        message: 'Fast model must use the same provider.',
+      })
+    if (
+      settings.accessMode === 'managed_eu' &&
+      settings.model &&
+      settings.model.provider !== 'obiter_eu'
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['model'],
+        message: 'Managed access requires a managed model.',
+      })
+    if (
+      settings.accessMode === 'byok' &&
+      settings.model?.provider === 'obiter_eu'
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['model'],
+        message: 'BYOK requires an external provider.',
+      })
+  })
+export type AgentSessionSettings = z.infer<typeof agentSessionSettingsSchema>
+export const agentSessionSettingsUpdateSchema = z
+  .object({
+    matterTextToModel: z.boolean().optional(),
+    model: agentSessionModelChoiceSchema.optional(),
+    key: agentKeyChangeSchema.optional(),
+    accessMode: agentAccessModeSchema.optional(),
+    baseUrl: z
+      .url({ protocol: /^https$/ })
+      .nullable()
+      .optional(),
+    fastModel: agentSessionModelChoiceSchema.nullable().optional(),
+    managedMatterOptOut: z.boolean().optional(),
+  })
+  .strict()
+  .refine((update) => Object.keys(update).length > 0, 'Nothing to change.')
+export type AgentSessionSettingsUpdate = z.infer<
+  typeof agentSessionSettingsUpdateSchema
+>

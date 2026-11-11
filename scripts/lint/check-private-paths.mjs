@@ -2,9 +2,12 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const PRIVATE_PATHS = [
+  'harness/',
+  'services/harness-worker/',
+  'services/egress-proxy/',
   'services/api/',
   'services/legal-ingestor/',
   'services/atlas-ingestor/',
@@ -34,6 +37,7 @@ export const PRIVATE_PATHS = [
 ]
 
 export const PRIVATE_PACKAGES = [
+  '@obiter/harness',
   '@obiter/api',
   '@obiter/legal-ingestor',
   '@obiter/legal-source-provider',
@@ -109,7 +113,7 @@ function trackedFiles(root) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const root = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
+    path.dirname(fileURLToPath(import.meta.url)),
     '../..',
   )
   const violations = checkPrivatePaths({ root, files: trackedFiles(root) })
