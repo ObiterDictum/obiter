@@ -1459,6 +1459,17 @@ currently invisible in the audit log — the highest-value low-risk follow-up.
 It is reported, not fixed, to keep this change to the escalation decision; the
 decision to leave it is explicit rather than silent.
 
+### Invites are tied to verified domains and a legal-role attestation (10 November 2026)
+
+The case-law licence admits only verified UK legal professionals, academic
+researchers and law students, so an invite cannot be a route around
+verification. `createOrganisationInviteInputSchema` requires
+`legalRoleAttested: true`: the inviting admin confirms that the invitee works
+in a legal role there. The API accepts an invite only for an address on a
+verified organisation domain that belongs to the inviter's organisation, or for
+an address that already has a verified access request. Webmail and unknown
+domains are refused, and those people request access themselves.
+
 ### Account and organisation settings — session-scoped mutations, retained drafts (15 September 2026)
 
 Context: Settings rendered a read-only profile (name, email, role) and an

@@ -46,14 +46,20 @@ export function OrganisationPeople({
   const [removing, setRemoving] = useState<OrganisationMember | null>(null)
   const [email, setEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<UserRole>('member')
+  const [legalRoleAttested, setLegalRoleAttested] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
   async function handleInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setActionError(null)
     try {
-      await invite.mutateAsync({ email: email.trim(), role: inviteRole })
+      await invite.mutateAsync({
+        email: email.trim(),
+        role: inviteRole,
+        legalRoleAttested: true,
+      })
       setEmail('')
+      setLegalRoleAttested(false)
     } catch (cause) {
       setActionError(
         cause instanceof ApiError
@@ -176,11 +182,34 @@ export function OrganisationPeople({
             if (parsed.success) setInviteRole(parsed.data)
           }}
         />
+        <p className="text-caption text-muted">
+          Use their address on your organisation's verified email domain. Anyone
+          else can request access themselves.
+        </p>
+        <label className="flex items-start gap-3 text-meta text-ink">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 shrink-0 accent-brand"
+            checked={legalRoleAttested}
+            onChange={(event) => {
+              setLegalRoleAttested(event.target.checked)
+              setActionError(null)
+            }}
+          />
+          <span>
+            I confirm this person works in a legal role here: a legal
+            professional, trainee, pupil, paralegal or other legal staff.
+          </span>
+        </label>
         <div>
           <Button
             type="submit"
             loading={invite.isPending}
-            disabled={email.trim().length === 0 || invite.isPending}
+            disabled={
+              email.trim().length === 0 ||
+              !legalRoleAttested ||
+              invite.isPending
+            }
             iconStart={<Plus size={16} aria-hidden />}
           >
             Send invite
