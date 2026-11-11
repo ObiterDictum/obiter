@@ -251,13 +251,17 @@ export const agentSessionSettingsUpdateSchema = z
   )
   .refine(
     (update) =>
-      !update.model ||
-      update.accessMode === undefined ||
-      update.accessMode === 'disabled' ||
-      (update.accessMode === 'managed_eu'
-        ? update.model.provider === 'obiter_eu'
-        : update.model.provider !== 'obiter_eu'),
-    'Model provider must match the access mode.',
+      [update.model, update.fastModel].every(
+        (model) =>
+          !model ||
+          ((update.strictLockdown !== true || model.provider === 'obiter_eu') &&
+            (update.accessMode === undefined ||
+              update.accessMode === 'disabled' ||
+              (update.accessMode === 'managed_eu'
+                ? model.provider === 'obiter_eu'
+                : model.provider !== 'obiter_eu'))),
+      ),
+    'Model providers must match the access mode and lockdown.',
   )
 export type AgentSessionSettingsUpdate = z.infer<
   typeof agentSessionSettingsUpdateSchema
