@@ -1,13 +1,37 @@
 import { queryOptions } from '@tanstack/react-query'
 import { apiUrl } from '../lib/api-url'
+import type { LegislationStatus } from '../legislation-status'
 
 export interface LegislationProvisionSubsection {
   label: string
   labelPath: string
   href: string
-  legislationStatus: 'current' | 'amended_not_held'
+  legislationStatus: LegislationStatus
+  repealedFrom?: string
   text?: string
   children: LegislationProvisionSubsection[]
+}
+
+export interface LegislationAmendment {
+  id: string
+  effect: string
+  changedProvision: string
+  changedLabelPath: string | null
+  affecting: {
+    identity: string
+    citation: string
+    provision: string
+    href: string | null
+    officialUrl: string
+  }
+  inForceDate: string | null
+  applied: boolean | null
+  prospective: boolean | null
+}
+
+export interface LegislationAmendmentHistory {
+  items: LegislationAmendment[]
+  truncated: boolean
 }
 
 interface LegislationProvisionDocument {
@@ -19,7 +43,8 @@ interface LegislationProvisionDocument {
   labelPath: string
   heading?: string
   extent: string
-  legislationStatus: 'current' | 'amended_not_held'
+  legislationStatus: LegislationStatus
+  repealedFrom?: string
   text?: string
   subsections?: LegislationProvisionSubsection[]
   officialUrl: string
@@ -27,6 +52,7 @@ interface LegislationProvisionDocument {
   acquiredAt?: string
   notice?: string
   canonicalUrl: string
+  amendments?: LegislationAmendmentHistory
 }
 
 export interface LegislationProvisionResponse {
@@ -72,6 +98,8 @@ export interface LegislationActContentsNode {
   href: string
   extent: string
   withheld: boolean
+  repealed?: boolean
+  repealedFrom?: string
   kind: LegislationActContentsKind
   text?: string
   heading?: string
@@ -89,8 +117,12 @@ interface LegislationActDocument {
   sourceUrl: string
   acquiredAt?: string
   canonicalUrl: string
+  status?: 'in_force' | 'repealed'
+  repealedFrom?: string
+  enactmentDate?: string
   totalCount: number
   withheldCount: number
+  repealedCount?: number
   contents: LegislationActContentsNode[]
 }
 

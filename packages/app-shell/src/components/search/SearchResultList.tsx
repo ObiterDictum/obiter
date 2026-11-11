@@ -10,6 +10,7 @@ import {
 } from './SearchSnippet'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
+import { legislationStatusDisplay } from '../../legislation-status'
 
 export function SearchResultList({
   rows,
@@ -138,7 +139,10 @@ function LegislationResult({
   onPreview: () => void
 }) {
   const hit = row.hit
-  const withheld = hit.legislationStatus === 'amended_not_held'
+  const status = legislationStatusDisplay(
+    hit.legislationStatus,
+    hit.repealedFrom,
+  )
   const extract = hit.snippets?.[0]?.text ?? hit.text
   return (
     <article
@@ -170,9 +174,7 @@ function LegislationResult({
       <div className="mt-1 flex flex-wrap items-center gap-2 text-meta text-subtle">
         <span>{hit.extent ? hit.extent : 'Extent not recorded'}</span>
         <span aria-hidden>·</span>
-        <StatusDot tone={withheld ? 'warning' : 'success'}>
-          {withheld ? 'Amended wording withheld' : 'No unapplied amendments'}
-        </StatusDot>
+        <StatusDot tone={status.tone}>{status.label}</StatusDot>
       </div>
       {extract ? (
         <>

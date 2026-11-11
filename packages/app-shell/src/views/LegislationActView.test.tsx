@@ -156,6 +156,28 @@ const CLEAN_ACT_PAYLOAD = {
   },
 }
 
+const REPEALED_ACT_PAYLOAD = {
+  act: {
+    ...CLEAN_ACT_PAYLOAD.act,
+    identity: 'ukpga/1975/65',
+    title: 'Sex Discrimination Act 1975',
+    chapter: '1975 c. 65',
+    status: 'repealed' as const,
+    repealedFrom: '2010-10-01',
+    enactmentDate: '1975-11-12',
+    totalCount: 1,
+    repealedCount: 1,
+    contents: [
+      {
+        ...CLEAN_ACT_PAYLOAD.act.contents[0]!,
+        href: '/ln/ukpga/1975/65/section/1',
+        repealed: true,
+        repealedFrom: '2010-10-01',
+      },
+    ],
+  },
+}
+
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
   return {
     ok,
@@ -185,6 +207,8 @@ describe('LegislationActView', () => {
       'fetch',
       vi.fn(async (url: string) => {
         if (url.includes('ukpga/2020/1')) return jsonResponse(CLEAN_ACT_PAYLOAD)
+        if (url.includes('ukpga/1975/65'))
+          return jsonResponse(REPEALED_ACT_PAYLOAD)
         if (url.includes('ukpga/2010/15')) return jsonResponse(ACT_PAYLOAD)
         return jsonResponse({}, false, 404)
       }),
@@ -251,6 +275,25 @@ describe('LegislationActView', () => {
       '/ln/ukpga/2020/1/section/1',
     )
     expect(screen.getByText('1 provision in document order')).toBeTruthy()
+  })
+
+  it('marks a repealed Act and its repealed sections', async () => {
+    renderView('ukpga/1975/65')
+    await waitFor(() => {
+      expect(screen.getByText('Sex Discrimination Act 1975')).toBeTruthy()
+    })
+    expect(
+      screen.getAllByText('Repealed from 1 Oct 2010').length,
+    ).toBeGreaterThanOrEqual(3)
+    expect(screen.getByText('12 Nov 1975')).toBeTruthy()
+    expect(screen.getByText(/1 of 1 provision has been repealed/)).toBeTruthy()
+    expect(
+      screen
+        .getByText('s. 1')
+        .closest('a')
+        ?.getAttribute('data-legislation-status'),
+    ).toBe('repealed')
+    expect(screen.queryByText('No unapplied amendments')).toBeNull()
   })
 
   it('shows a source failure with a retry instead of an empty Act', async () => {
