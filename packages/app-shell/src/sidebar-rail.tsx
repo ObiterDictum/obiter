@@ -11,6 +11,7 @@ import { GearSix, ShieldCheck } from '@obiter/ui/icons'
 import { Robot } from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 import { AccountMenu } from './account-menu'
+import { useIsMacPlatform } from './keyboard-platform'
 import { MODULES, resolveSection } from './navigation'
 import { moduleTone, useSidebarData } from './sidebar-counts'
 import { RailItem, SidebarCollapseToggle } from './sidebar-rows'
@@ -35,13 +36,15 @@ export function SidebarRail({
   })
   const section = resolveSection(currentPath)
   const { counts, verifyTone } = useSidebarData()
+  const clearsTrafficLights = platform === 'desktop' && useIsMacPlatform()
 
   return (
     <nav
       id="app-shell-sidebar"
       aria-label="Workspace"
       className={cn(
-        'flex w-12 shrink-0 flex-col items-center gap-1 pt-10 pb-1',
+        'flex w-12 shrink-0 flex-col items-center gap-1 pb-1',
+        clearsTrafficLights && 'pt-10',
         'max-md:h-12 max-md:w-full max-md:flex-row max-md:justify-between max-md:px-1 max-md:py-0 max-md:pt-0',
       )}
     >

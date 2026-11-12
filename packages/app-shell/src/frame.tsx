@@ -258,6 +258,7 @@ export function ShellFrame({
                 platform={platform}
                 focusMode={focusMode}
                 onExitFocusMode={leaveFocusMode}
+                showSearch={rail || focusMode}
               />
               <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
                 <div
