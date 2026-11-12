@@ -4,12 +4,14 @@ import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  choose,
   clickMenuItem,
   closeMenu,
   menuItem,
   openFormatting,
   openMenu,
   runMenuCommand,
+  selectedValue,
 } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -110,8 +112,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
 
   await expect(menuItem(page, 'Mark defined term')).toBeDisabled()
 
-  await menuItem(page, 'Citation style: House style').click()
-  await closeMenu(page)
+  await choose(page, 'Citation style', 'House style')
 
   const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
   await caretParagraph.click()
@@ -175,10 +176,7 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
     timeout: 30_000,
   })
   await openReferences(page)
-  await expect(menuItem(page, 'Citation style: House style')).toHaveAttribute(
-    'aria-checked',
-    'true',
-  )
+  await expect(selectedValue(page, 'Citation style')).toHaveText('House style')
   await reviewCommand(page, 'Check defined terms')
   await expect(checksPanel(page)).toContainText('in the', {
     timeout: 30_000,

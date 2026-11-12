@@ -1,4 +1,15 @@
 import type { ReactNode } from 'react'
+import {
+  ListBullets,
+  ListNumbers,
+  TextAlignCenter,
+  TextAlignJustify,
+  TextAlignLeft,
+  TextAlignRight,
+  TextB,
+  TextItalic,
+  TextUnderline,
+} from '@obiter/ui/icons'
 
 import type { CitationStyle } from '../../document-preferences'
 import type { LegalChecksFocus } from './ribbon-types'
@@ -13,7 +24,10 @@ import type { InsertRibbonProps } from './use-insert-ribbon'
 import type { PictureSizeControl } from './picture-size-toolbar'
 import { revealDocumentRedactionRuns } from './document-actions'
 
-type EditorMenuId = 'file' | 'edit' | 'insert' | 'format' | 'review' | 'view'
+export type EditorMenuId =
+  'file' | 'edit' | 'insert' | 'format' | 'review' | 'view'
+
+export type EditorCommandHost = 'quick-access' | 'font-panel'
 
 export type EditorCommand = {
   id: string
@@ -29,13 +43,20 @@ export type EditorCommand = {
   soon?: boolean | string
   stayOpen?: boolean
   opensSurface?: boolean
+  host?: EditorCommandHost
   run?: () => void
+}
+
+export type EditorMenuGroup = {
+  label: string
+  commands: EditorCommand[]
+  select?: { label?: string; placeholder?: string }
 }
 
 export type EditorMenu = {
   id: EditorMenuId
   label: string
-  groups: ReadonlyArray<{ label: string; commands: EditorCommand[] }>
+  groups: readonly EditorMenuGroup[]
 }
 
 export type EditorChromeProps = InsertRibbonProps & {
@@ -120,6 +141,12 @@ export function editorMenus(
 ): EditorMenu[] {
   const { format, clipboard, review, structure, find } = props
   const editing = props.canEdit && Boolean(format)
+  const styles = format?.paragraphStyles ?? []
+  const stylesReason =
+    styles.length === 0
+      ? 'This document has no paragraph styles.'
+      : EDITING_HINT
+  const stylesUnavailable = !editing || styles.length === 0
   const reviewAbsent = 'Change review is not available for this document.'
   const story = structure?.editingStoryKind
   const citationStyles: Array<{ value: CitationStyle; label: string }> = [
@@ -206,6 +233,7 @@ export function editorMenus(
               id: 'undo',
               label: 'Undo',
               shortcut: ['primary', 'Z'],
+              host: 'quick-access',
               disabled: !props.canEdit || !props.canUndo,
               run: props.onUndo,
             },
@@ -213,6 +241,7 @@ export function editorMenus(
               id: 'redo',
               label: 'Redo',
               shortcut: ['primary', 'shift', 'Z'],
+              host: 'quick-access',
               disabled: !props.canEdit || !props.canRedo,
               run: props.onRedo,
             },
@@ -492,19 +521,19 @@ export function editorMenus(
               disabledReason: structure?.definedTermUnavailable,
               run: structure?.onMarkDefinedTerm,
             },
-            ...citationStyles.map((style) => ({
-              id: `citation-style-${style.value}`,
-              label: `Citation style: ${style.label}`,
-              checked:
-                props.onCitationStyle !== undefined
-                  ? props.citationStyle === style.value
-                  : undefined,
-              disabled: props.onCitationStyle === undefined,
-              disabledReason: 'Citation style is not available here.',
-              stayOpen: true,
-              run: () => props.onCitationStyle?.(style.value),
-            })),
           ],
+        },
+        {
+          label: 'Citation style',
+          select: { label: 'Citation style' },
+          commands: citationStyles.map((style) => ({
+            id: `citation-style-${style.value}`,
+            label: style.label,
+            checked: props.citationStyle === style.value,
+            disabled: props.onCitationStyle === undefined,
+            disabledReason: 'Citation style is not available here.',
+            run: () => props.onCitationStyle?.(style.value),
+          })),
         },
       ],
     },
@@ -513,31 +542,33 @@ export function editorMenus(
       label: 'Format',
       groups: [
         {
-          label: 'Formatting',
+          label: 'Styles',
+          select: {
+            label: 'Paragraph style',
+            placeholder: format?.paragraphStyleMixed
+              ? 'Mixed styles'
+              : undefined,
+          },
           commands: [
+            ...styles.map((style) => ({
+              id: `style-${style.styleId}`,
+              label: styleDisplayName(style.name, style.styleId),
+              checked:
+                !format?.paragraphStyleMixed &&
+                format?.paragraphStyleId === style.styleId,
+              disabled: stylesUnavailable,
+              disabledReason: stylesReason,
+              run: () => format?.onParagraphStyle(style.styleId),
+            })),
             {
-              id: 'formatting-panel',
-              label: 'Font, paragraph and page settings',
-              opensSurface: true,
-              disabled: !editing,
-              disabledReason: EDITING_HINT,
-              run: actions.openFormatting,
+              id: 'style-none',
+              label: 'No direct style',
+              checked: !format?.paragraphStyleId,
+              disabled: stylesUnavailable,
+              disabledReason: stylesReason,
+              run: () => format?.onParagraphStyle(null),
             },
           ],
-        },
-        {
-          label: 'Styles',
-          commands: (format?.paragraphStyles ?? []).map((style) => ({
-            id: `style-${style.styleId}`,
-            label: styleDisplayName(style.name, style.styleId),
-            checked: !format?.paragraphStyleMixed
-              ? format?.paragraphStyleId === style.styleId
-              : false,
-            disabled: !editing,
-            disabledReason: EDITING_HINT,
-            stayOpen: true,
-            run: () => format?.onParagraphStyle(style.styleId),
-          })),
         },
         {
           label: 'Character',
@@ -545,74 +576,75 @@ export function editorMenus(
             {
               id: 'bold',
               label: 'Bold',
+              icon: <TextB size={16} aria-hidden />,
               shortcut: ['primary', 'B'],
               pressed: Boolean(format?.bold),
               disabled: !editing || Boolean(format?.emphasisUnavailable),
               disabledReason: format?.emphasisUnavailable,
-              stayOpen: true,
               run: format?.onToggleBold,
             },
             {
               id: 'italic',
               label: 'Italic',
+              icon: <TextItalic size={16} aria-hidden />,
               shortcut: ['primary', 'I'],
               pressed: Boolean(format?.italic),
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
-              stayOpen: true,
               run: format?.onToggleItalic,
             },
             {
               id: 'underline',
               label: 'Underline',
+              icon: <TextUnderline size={16} aria-hidden />,
               shortcut: ['primary', 'U'],
               pressed: Boolean(format?.underline),
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
-              stayOpen: true,
               run: format?.onToggleUnderline,
             },
             {
               id: 'strikethrough',
               label: 'Strikethrough',
+              host: 'font-panel',
               pressed: Boolean(format?.strikethrough),
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
-              stayOpen: true,
               run: format?.onToggleStrikethrough,
             },
             {
               id: 'highlight',
               label: 'Highlight',
+              host: 'font-panel',
               pressed: Boolean(
                 format?.highlight && format.highlight !== 'none',
               ),
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
-              stayOpen: true,
               run: format?.onToggleHighlight,
             },
             {
               id: 'superscript',
               label: 'Superscript',
+              host: 'font-panel',
               pressed: format?.vertAlign === 'superscript',
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
-              stayOpen: true,
               run: format?.onToggleSuperscript,
             },
             {
               id: 'subscript',
               label: 'Subscript',
+              host: 'font-panel',
               pressed: format?.vertAlign === 'subscript',
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
-              stayOpen: true,
               run: format?.onToggleSubscript,
             },
             {
               id: 'clear-formatting',
               label: 'Clear formatting',
+              host: 'font-panel',
               disabled: !editing,
               disabledReason: format?.emphasisUnavailable,
               run: format?.onClearFormatting,
@@ -620,55 +652,61 @@ export function editorMenus(
           ],
         },
         {
+          label: 'Paragraph',
+          commands: alignmentCommands(format, editing),
+        },
+        {
           label: 'Lists',
           commands: [
             {
               id: 'bullets',
               label: 'Bullets',
+              icon: <ListBullets size={16} aria-hidden />,
               pressed: format?.listKind === 'bullet',
               disabled: !editing || !format?.canApplyBullet,
-              stayOpen: true,
               run: () => format?.onToggleList('bullet'),
             },
             {
               id: 'numbering',
               label: 'Numbering',
+              icon: <ListNumbers size={16} aria-hidden />,
               pressed: format?.listKind === 'number',
               disabled: !editing || !format?.canApplyNumber,
-              stayOpen: true,
               run: () => format?.onToggleList('number'),
             },
             {
               id: 'multilevel',
               label: 'Multilevel numbering',
+              host: 'font-panel',
               pressed: format?.listKind === 'multilevel',
               disabled: !editing || !format?.canApplyMultilevel,
-              stayOpen: true,
               run: () => format?.onToggleList('multilevel'),
             },
             {
               id: 'increase-indent',
               label: 'Increase list indent',
+              host: 'font-panel',
               disabled: !editing || !format?.canIndent,
-              stayOpen: true,
               run: format?.onIndent,
             },
             {
               id: 'decrease-indent',
               label: 'Decrease list indent',
+              host: 'font-panel',
               disabled: !editing || !format?.canOutdent,
-              stayOpen: true,
               run: format?.onOutdent,
             },
             {
               id: 'continue-list',
               label: 'Continue list',
+              host: 'font-panel',
               disabled: !editing || !format?.canContinue,
               run: format?.onContinueList,
             },
             {
               id: 'restart-numbering',
               label: 'Restart numbering',
+              host: 'font-panel',
               pressed: format?.listRestarted,
               disabled: !editing || !format?.canRestart,
               run: format?.onRestartList,
@@ -676,8 +714,21 @@ export function editorMenus(
           ],
         },
         {
-          label: 'Classification',
+          label: 'Markings',
           commands: markingsCommands(props.markings),
+        },
+        {
+          label: 'Formatting',
+          commands: [
+            {
+              id: 'formatting-panel',
+              label: 'Font, paragraph and page',
+              opensSurface: true,
+              disabled: !editing,
+              disabledReason: EDITING_HINT,
+              run: actions.openFormatting,
+            },
+          ],
         },
       ],
     },
@@ -733,17 +784,24 @@ export function editorMenus(
           label: 'Review panels',
           commands: [
             {
+              id: 'comments',
+              label:
+                props.commentCount > 0
+                  ? `Comments (${String(props.commentCount)})`
+                  : 'Comments',
+              pressed: props.commentsOpen,
+              run: props.onToggleComments,
+            },
+            {
               id: 'changes',
               label: changeLabel(props.changeCount),
               pressed: props.changesOpen,
-              stayOpen: true,
               run: props.onToggleChanges,
             },
             {
               id: 'previous-change',
               label: 'Previous change',
               shortcut: ['K'],
-              stayOpen: true,
               disabled: !review || !review.canPrevious,
               disabledReason: review
                 ? 'There is no earlier change.'
@@ -754,7 +812,6 @@ export function editorMenus(
               id: 'next-change',
               label: 'Next change',
               shortcut: ['J'],
-              stayOpen: true,
               disabled: !review || !review.canNext,
               disabledReason: review
                 ? 'There is no later change.'
@@ -926,6 +983,27 @@ function capitalise(word: string) {
   return word.charAt(0).toUpperCase() + word.slice(1)
 }
 
+function alignmentCommands(
+  format: DocumentFormatToolbar | undefined,
+  editing: boolean,
+): EditorCommand[] {
+  const alignments = [
+    { value: 'left', label: 'Align left', icon: TextAlignLeft },
+    { value: 'center', label: 'Align centre', icon: TextAlignCenter },
+    { value: 'right', label: 'Align right', icon: TextAlignRight },
+    { value: 'both', label: 'Justify', icon: TextAlignJustify },
+  ] as const
+  return alignments.map(({ value, label, icon: Icon }) => ({
+    id: `align-${value}`,
+    label,
+    icon: <Icon size={16} aria-hidden />,
+    pressed: format?.alignment === value,
+    disabled: !editing,
+    disabledReason: EDITING_HINT,
+    run: () => format?.onAlignment(value),
+  }))
+}
+
 function changeLabel(count: number) {
   return count > 0 ? `Changes (${String(count)})` : 'Changes'
 }
@@ -947,7 +1025,7 @@ function markingsCommands(
   const base = {
     disabled,
     disabledReason: markings?.unavailable,
-    stayOpen: true,
+    host: 'font-panel' as const,
   }
   const stored = markings?.markings.documentKind
   const kinds: ReadonlyArray<{ value: string; label: string }> =

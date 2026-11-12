@@ -1,4 +1,8 @@
-import { command, openRibbonTab } from './editor-test-commands'
+import {
+  chooseRibbonOption,
+  command,
+  openRibbonTab,
+} from './editor-test-commands'
 
 import '@obiter/test-dom'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
@@ -28,7 +32,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
       target: { value: 'Draft insight' },
     })
-    fireEvent.click(command('Heading 1'))
+    await chooseRibbonOption('Paragraph style', 'Heading 1')
     fireEvent.click(command('Save'))
 
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
@@ -294,7 +298,7 @@ describe('E45 a rejected save must not poison later saves', () => {
     mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
-    fireEvent.click(command('Heading 1'))
+    await chooseRibbonOption('Paragraph style', 'Heading 1')
     openReviewTab()
     fireEvent.click(command('Save'))
     await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))

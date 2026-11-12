@@ -24,7 +24,7 @@ function shot(page: Page, name: string) {
 const save = (page: Page) =>
   page.getByRole('button', { name: 'Save', exact: true })
 const tocButton = (page: Page) =>
-  page.getByRole('menuitem', { name: 'Table of contents', exact: true })
+  page.getByRole('button', { name: 'Table of contents', exact: true })
 const headingParagraphs = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: HEADING })
 

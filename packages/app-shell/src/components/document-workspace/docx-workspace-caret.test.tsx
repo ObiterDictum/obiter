@@ -1,7 +1,7 @@
 import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
-import { openRibbonTab } from './editor-test-commands'
+import { openFindBar } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -37,7 +37,7 @@ describe('DocxWorkspace vertical caret delivery', () => {
     fireEvent.keyDown(editor, { key: 'ArrowDown' })
     expect(screen.getByLabelText('Pending paragraph text')).toBeTruthy()
 
-    openRibbonTab('Review')
+    openFindBar()
     fireEvent.change(screen.getByLabelText('Find in document'), {
       target: { value: marker },
     })

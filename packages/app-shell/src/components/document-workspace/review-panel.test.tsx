@@ -3,11 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentChangeWire, DocumentComment } from '@obiter/contracts'
-import {
-  commandDisabled,
-  menuItem,
-  openRibbonTab,
-} from './editor-test-commands'
+import { commandDisabled, openRibbonTab } from './editor-test-commands'
 import {
   mountWorkspace,
   selectBodyParagraph,
@@ -96,7 +92,7 @@ const moveNote =
 
 function openReviewPanel() {
   openRibbonTab('Review')
-  fireEvent.click(menuItem(/^Changes/))
+  fireEvent.click(command(/^Changes/))
   fireEvent.keyDown(document, { key: 'Escape' })
   return screen.getByRole('complementary', { name: 'Changes and comments' })
 }

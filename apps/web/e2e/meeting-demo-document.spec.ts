@@ -56,7 +56,7 @@ test('the ribbon entries reveal the one real document action', async ({
   await seedDocument(page, request)
 
   await openMenu(page, 'Review')
-  const verifyCitations = page.getByRole('menuitem', {
+  const verifyCitations = page.getByRole('button', {
     name: 'Verify citations',
     exact: true,
   })

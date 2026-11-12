@@ -4,9 +4,11 @@ import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
 import { ApiError } from '../../api'
 import {
+  chooseRibbonOption,
   commandDisabled,
+  openFindBar,
   commandReason,
-  menuItem,
+  openFormattingPanel,
   openRibbonTab,
   setTrackChanges,
   trackChangesState,
@@ -56,16 +58,16 @@ describe('DocxWorkspace chrome', () => {
     expect(document.querySelector('[data-save-state]')?.textContent).toBe('')
   })
 
-  it('keeps the chrome outside the scrolling document desk', () => {
+  it('keeps the ribbon outside the scrolling document desk', () => {
     mountWorkspace({})
     const desk = document.querySelector('[data-document-desk]')
-    expect(desk?.querySelector('[role="tab"]')).toBeNull()
-    expect(document.querySelector('[role="tab"]')).toBeNull()
-    const menu = screen.getByRole('navigation', { name: 'Document menu' })
-    for (const name of ['File', 'Edit', 'Insert', 'Format', 'Review', 'View']) {
-      expect(within(menu).getByRole('button', { name })).toBeTruthy()
+    const tabs = screen.getByRole('tablist', { name: 'Ribbon tabs' })
+    for (const name of ['Edit', 'Insert', 'Format', 'Review', 'View']) {
+      expect(within(tabs).getByRole('tab', { name })).toBeTruthy()
     }
-    expect(desk?.contains(menu)).toBe(false)
+    expect(screen.getByRole('button', { name: 'File' })).toBeTruthy()
+    expect(desk?.querySelector('[role="tablist"]')).toBeNull()
+    expect(desk?.contains(tabs)).toBe(false)
   })
 
   it('wires the font commands and keeps the rest unavailable', () => {
@@ -87,7 +89,7 @@ describe('DocxWorkspace chrome', () => {
     expect(command('Multilevel numbering')).toHaveProperty('disabled', true)
     openRibbonTab('Insert')
     for (const name of ['Insert table', 'Picture']) {
-      const row = menuItem(name)
+      const row = command(name)
       expect(commandDisabled(row)).toBe(true)
       expect(commandReason(row)).toBe(
         'Place the cursor in a paragraph to insert',
@@ -132,7 +134,7 @@ describe('DocxWorkspace chrome', () => {
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'See [2024] UKSC 3' },
     })
-    openRibbonTab('Review')
+    openFindBar()
     fireEvent.change(screen.getByLabelText('Find in document'), {
       target: { value: 'See' },
     })
@@ -393,7 +395,7 @@ describe('DocxWorkspace save', () => {
 describe('DocxWorkspace find and undo', () => {
   it('counts matches and restores the previous draft on undo', () => {
     mountWorkspace({})
-    openRibbonTab('Review')
+    openFindBar()
 
     fireEvent.change(screen.getByLabelText('Find in document'), {
       target: { value: 'hello' },
@@ -483,9 +485,11 @@ describe('DocxWorkspace footnote shortcut', () => {
     await waitFor(() => expect(command('Close footnotes')).toBeTruthy())
   })
 
-  it('shows the shortcut on the Insert footnote command', () => {
+  it('binds the Insert footnote shortcut to its ribbon command', () => {
     mountWorkspace({})
-    expect(command('Footnote').textContent).toContain('Ctrl+Alt+F')
+    expect(command('Footnote').getAttribute('aria-keyshortcuts')).toBe(
+      'Control+Alt+F',
+    )
   })
 
   it('does not insert a footnote with Ctrl+Alt+F while tracking changes', () => {
@@ -574,9 +578,11 @@ describe('DocxWorkspace markings', () => {
         },
       },
     })
-    fireEvent.click(screen.getByRole('button', { name: /^Format$/ }))
-    expect(menuItem('externally-authored-kind')).toBeTruthy()
-    fireEvent.click(command('Letter before action'))
+    openFormattingPanel()
+    expect(
+      screen.getByRole('combobox', { name: 'Document type' }).textContent,
+    ).toContain('externally-authored-kind')
+    await chooseRibbonOption('Document type', 'Letter before action')
 
     await waitFor(() => expect(markingsAsync).toHaveBeenCalledTimes(1))
     expect(markingsAsync.mock.calls[0]?.[0]).toEqual({

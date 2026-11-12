@@ -30,6 +30,7 @@ export type EditorControl = {
   soon?: boolean | string
   disabledReason?: string
   hint?: string
+  keyshortcuts?: string
   onClick?: () => void
 }
 
@@ -40,6 +41,7 @@ export function EditorIconButton({
   soon,
   disabledReason,
   hint,
+  keyshortcuts,
   onClick,
   icon,
 }: EditorControl & { icon: ReactNode }) {
@@ -62,6 +64,7 @@ export function EditorIconButton({
           className="h-7 w-7 rounded-sm px-0 text-muted pointer-coarse:h-11 pointer-coarse:w-11"
           aria-label={label}
           aria-pressed={pressed}
+          aria-keyshortcuts={keyshortcuts}
           disabled={disabled || unavailable}
           title={reason}
           onClick={unavailable ? undefined : onClick}
@@ -75,28 +78,49 @@ export function EditorIconButton({
 
 export function EditorTextButton({
   label,
+  status,
   pressed,
   disabled,
   soon,
   disabledReason,
+  hint,
+  keyshortcuts,
   onClick,
-}: EditorControl) {
+  className,
+}: EditorControl & { className?: string }) {
   const unavailable = Boolean(soon)
-  const tooltip = controlReason(soon, disabled, disabledReason) ?? label
+  const reason = controlReason(soon, disabled, disabledReason)
+  const tooltip = reason ?? hint ?? label
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" />}>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex"
+            onMouseDown={(event) => event.preventDefault()}
+          />
+        }
+      >
         <Button
           variant={pressed ? 'secondary' : 'ghost'}
           size="sm"
-          className="h-7 max-w-40 rounded-sm px-2 text-caption pointer-coarse:h-11"
+          className={cn(
+            'h-7 max-w-40 rounded-sm px-2 text-caption pointer-coarse:h-11',
+            className,
+          )}
           aria-label={label}
           aria-pressed={pressed}
+          aria-keyshortcuts={keyshortcuts}
           disabled={disabled || unavailable}
-          title={tooltip === label ? undefined : tooltip}
+          title={reason}
           onClick={unavailable ? undefined : onClick}
         >
           {label}
+          {status ? (
+            <span aria-hidden className="ms-1 text-subtle">
+              {status}
+            </span>
+          ) : null}
         </Button>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>

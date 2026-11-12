@@ -53,8 +53,7 @@ await instrument(
   'paragraph',
   (props) => String((props.paragraph as { id: string }).id),
 )
-await instrument('./editor-toolbar', 'EditorToolbar', 'EditorToolbar')
-await instrument('./editor-menu-bar', 'EditorMenuBar', 'EditorMenuBar')
+await instrument('./editor-ribbon', 'EditorRibbon', 'EditorRibbon')
 await instrument(
   './editor-command-palette',
   'EditorCommandPalette',
@@ -104,7 +103,7 @@ it('typing a character re-renders only the edited paragraph', () => {
   expect(rendersOf('paragraph:p5')).toBe(0)
 })
 
-it('typing a character does not re-render the toolbar, palette, menu bar or sidebar', () => {
+it('typing a character does not re-render the ribbon, palette or sidebar', () => {
   mountWorkspace({ models: { doc_1: bodyModel() } })
   fireEvent.click(screen.getByText('Paragraph 0 text'))
   fireEvent.change(bodyField(), { target: { value: 'Paragraph 0 textX' } })
@@ -112,14 +111,13 @@ it('typing a character does not re-render the toolbar, palette, menu bar or side
 
   fireEvent.change(bodyField(), { target: { value: 'Paragraph 0 textXY' } })
 
-  expect(rendersOf('EditorToolbar')).toBe(0)
+  expect(rendersOf('EditorRibbon')).toBe(0)
   expect(rendersOf('EditorCommandPalette')).toBe(0)
-  expect(rendersOf('EditorMenuBar')).toBe(0)
   expect(rendersOf('WorkspaceSidePanels')).toBe(0)
   expect(rendersOf('DocxWorkspaceChrome')).toBe(0)
 })
 
-it('the first keystroke marks the document unsaved and re-renders the toolbar and undo', () => {
+it('the first keystroke marks the document unsaved and re-renders the ribbon and undo', () => {
   mountWorkspace({ models: { doc_1: bodyModel() } })
   fireEvent.click(screen.getByText('Paragraph 0 text'))
   renders.clear()
@@ -131,7 +129,7 @@ it('the first keystroke marks the document unsaved and re-renders the toolbar an
       .querySelector('[data-save-state]')
       ?.getAttribute('data-save-state'),
   ).toBe('unsaved')
-  expect(rendersOf('EditorToolbar')).toBe(1)
+  expect(rendersOf('EditorRibbon')).toBe(1)
   expect(rendersOf('EditorCommandPalette')).toBe(0)
   expect(rendersOf('WorkspaceSidePanels')).toBe(0)
   expect(screen.getByRole('button', { name: 'Undo' })).toHaveProperty(
@@ -140,7 +138,7 @@ it('the first keystroke marks the document unsaved and re-renders the toolbar an
   )
 })
 
-it('moving the caret into bold text re-renders the toolbar with bold pressed', () => {
+it('moving the caret into bold text re-renders the ribbon with bold pressed', () => {
   mountWorkspace({
     models: {
       doc_1: multiParagraphModel([
@@ -167,5 +165,5 @@ it('moving the caret into bold text re-renders the toolbar with bold pressed', (
   expect(
     screen.getByRole('button', { name: 'Bold' }).getAttribute('aria-pressed'),
   ).toBe('true')
-  expect(rendersOf('EditorToolbar')).toBeGreaterThan(0)
+  expect(rendersOf('EditorRibbon')).toBeGreaterThan(0)
 })

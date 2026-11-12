@@ -5,6 +5,7 @@ import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
   commandDisabled,
   commandReason,
+  openFindBar,
   openRibbonTab,
 } from './editor-test-commands'
 import {
@@ -305,7 +306,7 @@ describe('the character-formatting keyboard layer', () => {
     fireEvent.keyDown(bodyField(), { key: 'b', ctrlKey: true })
     expect(pressed('Bold')).toBe('false')
 
-    openRibbonTab('Review')
+    openFindBar()
     const find = screen.getByLabelText('Find in document')
     fireEvent.keyDown(find, { key: 'b', ctrlKey: true })
     openRibbonTab('Home')

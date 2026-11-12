@@ -243,6 +243,7 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
       .evaluate((element) => element.textContent),
   ).toBe('@page{size:8.2708in 11.6979in;margin:0}')
 
+  await openMenu(page, 'Review')
   await page.getByRole('button', { name: 'Comments', exact: true }).click()
 
   await page.emulateMedia({ media: 'print' })

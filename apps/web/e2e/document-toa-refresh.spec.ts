@@ -42,9 +42,9 @@ async function createAccount(request: APIRequestContext) {
 }
 
 const toaButton = (page: Page) =>
-  page.getByRole('menuitem', { name: 'Table of authorities', exact: true })
+  page.getByRole('button', { name: 'Table of authorities', exact: true })
 const updateButton = (page: Page) =>
-  page.getByRole('menuitem', {
+  page.getByRole('button', {
     name: 'Update table of authorities',
     exact: true,
   })
@@ -126,7 +126,7 @@ test('table of authorities paints, saves, updates and exports', async ({
 
   await focusParagraph(page, 'Table of Cases')
   await openMenu(page, 'Edit')
-  const deleteParagraph = page.getByRole('menuitem', {
+  const deleteParagraph = page.getByRole('button', {
     name: 'Delete paragraph',
     exact: true,
   })
@@ -136,7 +136,7 @@ test('table of authorities paints, saves, updates and exports', async ({
   await focusParagraph(page, 'IN THE HIGH COURT OF JUSTICE')
   await openReferences(page)
   await page
-    .getByRole('menuitem', { name: 'Insert authority', exact: true })
+    .getByRole('button', { name: 'Insert authority', exact: true })
     .click()
   await page.getByRole('textbox', { name: 'Citation' }).fill(ADDED_CITATION)
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()

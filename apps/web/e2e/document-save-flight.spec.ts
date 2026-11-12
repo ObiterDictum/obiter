@@ -408,7 +408,7 @@ test('typing through the save flight beside a stored table of contents and page 
   await openRibbon(page, 'References')
   await openRibbon(page, 'Insert')
   await page
-    .getByRole('menuitem', { name: 'Table of contents', exact: true })
+    .getByRole('button', { name: 'Table of contents', exact: true })
     .click()
   await expect(headingParagraphs(page)).toHaveCount(2)
   await saveAndWait(page)

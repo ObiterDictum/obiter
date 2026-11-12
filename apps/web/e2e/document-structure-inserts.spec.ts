@@ -95,9 +95,7 @@ test('table and picture insertions paint, save and reload', async ({
 
   await focusHeading(page)
   await openRibbon(page, 'Insert')
-  await page
-    .getByRole('menuitem', { name: 'Insert table', exact: true })
-    .click()
+  await page.getByRole('button', { name: 'Insert table', exact: true }).click()
   await page.getByLabel('Rows', { exact: true }).fill('3')
   await page.getByLabel('Columns', { exact: true }).fill('4')
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()

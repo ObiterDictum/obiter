@@ -9,6 +9,7 @@ import {
   paragraph,
   command,
 } from './docx-workspace-harness'
+import { chooseRibbonOption } from './editor-test-commands'
 import { clickParagraph } from './paragraph-selection-harness'
 
 const PARAGRAPH_STYLE = (styleId: string, name: string) =>
@@ -73,19 +74,20 @@ describe('the Styles gallery and list restart controls', () => {
     expect(select.closest('[title]')?.getAttribute('title')).toBe(
       'This document has no paragraph styles.',
     )
+    expect(select.textContent).toBe('No direct style')
     expect(screen.queryByRole('button', { name: /Heading 1/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Quote/ })).toBeNull()
   })
 
-  it('applies a real style from a chip and saves it', async () => {
+  it('applies a real style from the ribbon style control and saves it', async () => {
     const editAsync = vi.fn().mockResolvedValue({ versionId: 'ver_2' })
     mountWorkspace({ models: { doc_1: styledModel() }, editAsync })
     clickParagraph('p1')
 
-    const quote = command('Quote')
-    fireEvent.click(quote)
-    expect(quote.getAttribute('aria-checked')).toBe('true')
-    expect(command('Heading 1').getAttribute('aria-checked')).toBe('false')
+    await chooseRibbonOption('Paragraph style', 'Quote')
+    expect(
+      screen.getByRole('combobox', { name: 'Paragraph style' }).textContent,
+    ).toBe('Quote')
 
     await save(editAsync)
     expect(operations(editAsync)).toContainEqual({

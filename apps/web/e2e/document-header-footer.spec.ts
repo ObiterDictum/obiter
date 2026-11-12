@@ -96,12 +96,8 @@ test('header text and page number survive save, reload and export', async ({
   await shot(page, '01-header-painted-readonly')
 
   await openRibbon(page, 'Insert')
-  await page
-    .getByRole('menuitemcheckbox', { name: 'Header', exact: true })
-    .click()
-  await expect(
-    page.getByRole('menuitemcheckbox', { name: 'Close header' }),
-  ).toBeVisible()
+  await page.getByRole('button', { name: 'Header', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Close header' })).toBeVisible()
 
   await headerParagraph(page).click()
   await expect(editor(page)).toBeFocused()
@@ -113,7 +109,7 @@ test('header text and page number survive save, reload and export', async ({
   await shot(page, '02-header-typed')
 
   await openRibbon(page, 'Insert')
-  await page.getByRole('menuitem', { name: 'Page number', exact: true }).click()
+  await page.getByRole('button', { name: 'Page number', exact: true }).click()
   await expect(editor(page)).toHaveValue(new RegExp(`${MARKER}$`))
   await shot(page, '03-page-number-inserted')
 
@@ -131,16 +127,12 @@ test('header text and page number survive save, reload and export', async ({
       timeout: 30_000,
     })
     await openRibbon(reloaded, 'Insert')
-    await reloaded
-      .getByRole('menuitemcheckbox', { name: 'Header', exact: true })
-      .click()
+    await reloaded.getByRole('button', { name: 'Header', exact: true }).click()
     await headerParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(MARKER))
 
     await openRibbon(reloaded, 'Insert')
-    await reloaded
-      .getByRole('menuitemcheckbox', { name: 'Close header' })
-      .click()
+    await reloaded.getByRole('button', { name: 'Close header' }).click()
     await bodyParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(BODY_TEXT))
     await shot(reloaded, '05-reloaded-body-editable')

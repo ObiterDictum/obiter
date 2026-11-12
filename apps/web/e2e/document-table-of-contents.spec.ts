@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { openRibbonTab } from './editor-chrome'
-import { closeMenu, openMenu } from './editor-chrome'
+import { choose, openMenu, selectedValue } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
@@ -17,7 +17,7 @@ function shot(page: Page, name: string) {
 }
 
 const tocButton = (page: Page) =>
-  page.getByRole('menuitem', { name: 'Table of contents', exact: true })
+  page.getByRole('button', { name: 'Table of contents', exact: true })
 const headingParagraphs = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: HEADING })
 
@@ -63,10 +63,8 @@ test('table of contents refuses without headings, then paints, saves and reloads
 
   await focusParagraph(page, HEADING)
   await openMenu(page, 'Format')
-  const headingStyle = page.getByRole('menuitemradio', { name: 'Heading 1' })
-  await headingStyle.click()
-  await expect(headingStyle).toHaveAttribute('aria-checked', 'true')
-  await closeMenu(page)
+  await choose(page, 'Paragraph style', 'Heading 1')
+  await expect(selectedValue(page, 'Paragraph style')).toHaveText('Heading 1')
 
   await focusParagraph(page, 'Alpha item')
   await openRibbon(page, 'References')

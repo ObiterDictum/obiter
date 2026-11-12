@@ -21,6 +21,7 @@ const COMMAND_HOME = {
   'Update table of authorities': 'Insert',
   'Insert authority': 'Insert',
   'Mark defined term': 'Insert',
+  'Citation style': 'Insert',
   'Find and replace': 'Edit',
   'All commands': 'Edit',
   Cut: 'Edit',
@@ -29,6 +30,7 @@ const COMMAND_HOME = {
   'Insert paragraph': 'Edit',
   'Delete paragraph': 'Edit',
   Print: 'File',
+  Save: 'File',
   Export: 'File',
   'Share-safe export': 'File',
   'Compare versions': 'File',
@@ -37,6 +39,8 @@ const COMMAND_HOME = {
   'Verify citations': 'Review',
   'Check citations': 'Review',
   'Track changes': 'Review',
+  Comments: 'Review',
+  Changes: 'Review',
   'List of authorities': 'Review',
   'Check defined terms': 'Review',
   'Check cross-references': 'Review',
@@ -80,13 +84,45 @@ const COMMAND_ROLES = [
   'menuitemradio',
 ] as const satisfies readonly ByRoleMatcher[]
 
+const FORMATTING_PANEL = 'Font, paragraph and page'
+
 function queryCommands(name: string | RegExp) {
   return COMMAND_ROLES.flatMap((role) => screen.queryAllByRole(role, { name }))
 }
 
+function visibleCommand(name: string | RegExp) {
+  return queryCommands(name).find((element) => !element.closest('[hidden]'))
+}
+
+function selectTab(label: string) {
+  const tab = screen.queryByRole('tab', { name: label })
+  if (!tab) return
+  if (tab.getAttribute('aria-selected') !== 'true') fireEvent.click(tab)
+}
+
+function openFileMenu() {
+  if (screen.queryByRole('menu', { name: 'File' })) return
+  fireEvent.click(screen.getByRole('button', { name: 'File' }))
+}
+
+export function formattingPanelOpen() {
+  return screen.queryByRole('dialog', { name: FORMATTING_PANEL }) !== null
+}
+
+export function openFormattingPanel() {
+  if (formattingPanelOpen()) return
+  selectTab('Format')
+  fireEvent.click(screen.getByRole('button', { name: FORMATTING_PANEL }))
+}
+
+function openSurface(surface: CommandHome) {
+  if (surface === 'formatting') openFormattingPanel()
+  else if (surface === 'File') openFileMenu()
+  else selectTab(surface)
+}
+
 export function command(name: string | RegExp): HTMLElement {
-  const matches = queryCommands(name)
-  const visible = matches.find((element) => !element.closest('[hidden]'))
+  const visible = visibleCommand(name)
   if (visible) return visible
   const matched =
     typeof name === 'string'
@@ -96,17 +132,8 @@ export function command(name: string | RegExp): HTMLElement {
   const home = matched
     ? COMMAND_HOME[matched as keyof typeof COMMAND_HOME]
     : undefined
-  const open = (surface: string) => {
-    const trigger = screen.getByRole('button', {
-      name: new RegExp(`^${surface}$`),
-    })
-    if (trigger.getAttribute('aria-expanded') === 'true') return
-    fireEvent.click(trigger)
-  }
-  if (home === 'formatting') {
-    open('Font, paragraph and page')
-  } else if (home) {
-    open(home)
+  if (home) {
+    openSurface(home)
   } else {
     for (const surface of [
       'File',
@@ -115,16 +142,14 @@ export function command(name: string | RegExp): HTMLElement {
       'Format',
       'Review',
       'View',
-    ]) {
-      open(surface)
-      if (queryCommands(name).some((element) => !element.closest('[hidden]'))) {
-        break
-      }
+    ] as const) {
+      openSurface(surface)
+      if (visibleCommand(name)) break
     }
   }
-  const found = queryCommands(name)
-  if (!found[0]) throw new Error(`no command ${String(name)}`)
-  return found[0]
+  const found = visibleCommand(name) ?? queryCommands(name)[0]
+  if (!found) throw new Error(`no command ${String(name)}`)
+  return found
 }
 
 export function commandPrefix(prefix: string): HTMLElement {
@@ -135,18 +160,8 @@ export function commandPrefix(prefix: string): HTMLElement {
   const home = Object.keys(COMMAND_HOME).find((key) => key.startsWith(prefix))
   if (home) {
     // SAFETY: `home` came from Object.keys(COMMAND_HOME), so indexing with it
-    const target = COMMAND_HOME[home as keyof typeof COMMAND_HOME]
-    if (target === 'formatting') {
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Font, paragraph and page' }),
-      )
-    } else {
-      fireEvent.click(
-        screen.getByRole('button', { name: new RegExp(`^${target}$`) }),
-      )
-    }
+    openSurface(COMMAND_HOME[home as keyof typeof COMMAND_HOME])
   }
-  // SAFETY: `home` is one of the literal COMMAND_HOME values, each of which
   const found = COMMAND_ROLES.flatMap((role) =>
     screen.queryAllByRole(role),
   ).find((element) => element.getAttribute('aria-label')?.startsWith(prefix))
@@ -155,8 +170,7 @@ export function commandPrefix(prefix: string): HTMLElement {
 }
 
 export function commandOrNull(name: string | RegExp): HTMLElement | null {
-  const matches = queryCommands(name)
-  const visible = matches.find((element) => !element.closest('[hidden]'))
+  const visible = visibleCommand(name)
   if (visible) return visible
   try {
     return command(name)
@@ -165,37 +179,52 @@ export function commandOrNull(name: string | RegExp): HTMLElement | null {
   }
 }
 
-const MENU_OF_TAB = {
+const TAB_OF_NAME = {
   Home: 'Format',
-  Insert: 'Insert',
   Layout: 'Format',
+  Format: 'Format',
+  Insert: 'Insert',
   References: 'Insert',
   Review: 'Review',
   View: 'View',
   Edit: 'Edit',
-  File: 'File',
 } as const
 
-export function openRibbonTab(name: keyof typeof MENU_OF_TAB) {
-  const workspace = document.getElementById('document-workspace')
-  if (workspace) fireEvent.keyDown(workspace, { key: 'f', ctrlKey: true })
-  if (name === 'Home' || name === 'Layout') {
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Font, paragraph and page' }),
-    )
+export function openRibbonTab(name: keyof typeof TAB_OF_NAME | 'File') {
+  if (name === 'File') {
+    openFileMenu()
     return
   }
-  fireEvent.click(
-    screen.getByRole('button', { name: new RegExp(`^${MENU_OF_TAB[name]}$`) }),
-  )
+  if (name === 'Home' || name === 'Layout') {
+    openFormattingPanel()
+    return
+  }
+  selectTab(TAB_OF_NAME[name])
+}
+
+export function openFindBar() {
+  if (screen.queryByLabelText('Find in document')) return
+  fireEvent.click(command('Find and replace'))
+}
+
+export async function chooseRibbonOption(label: string, option: string) {
+  if (!screen.queryByRole('combobox', { name: label })) {
+    selectTab('Format')
+    if (!screen.queryByRole('combobox', { name: label })) openFormattingPanel()
+  }
+  fireEvent.click(screen.getByRole('combobox', { name: label }))
+  const row = await screen.findByRole('option', { name: option })
+  fireEvent.focus(row)
+  fireEvent.click(row)
 }
 
 export function commandReason(element: HTMLElement) {
-  return (element.getAttribute('aria-describedby') ?? '')
+  const described = (element.getAttribute('aria-describedby') ?? '')
     .split(/\s+/u)
     .filter(Boolean)
     .map((id) => document.getElementById(id)?.textContent ?? '')
     .join(' ')
+  return described || element.getAttribute('title') || ''
 }
 
 export function commandDisabled(element: HTMLElement) {
@@ -211,21 +240,13 @@ function closeRibbonMenu(name: string) {
 }
 
 export function trackChangesState() {
-  return command('Track changes').getAttribute('aria-checked')
+  return command('Track changes').getAttribute('aria-pressed')
 }
 
 export function setTrackChanges(on: boolean) {
   const toggle = command('Track changes')
-  if ((toggle.getAttribute('aria-checked') === 'true') !== on) {
+  if ((toggle.getAttribute('aria-pressed') === 'true') !== on) {
     fireEvent.click(toggle)
   }
   closeRibbonMenu('Review')
-}
-
-export function menuItem(name: string | RegExp) {
-  const match = queryCommands(name).find(
-    (element) => element.getAttribute('role')?.startsWith('menuitem') === true,
-  )
-  if (!match) throw new Error(`no menu row ${String(name)}`)
-  return match
 }

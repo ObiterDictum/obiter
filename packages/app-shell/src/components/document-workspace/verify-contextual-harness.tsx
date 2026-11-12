@@ -459,8 +459,8 @@ export function mount(
     findings,
   })
   const result = render(workspaceElement(documentId), { wrapper })
-  fireEvent.click(screen.getByRole('button', { name: /^Review$/ }))
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Verify citations' }))
+  fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Verify citations' }))
   return result
 }
 

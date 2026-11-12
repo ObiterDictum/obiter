@@ -154,7 +154,7 @@ async function openChangesPanel(page: Page) {
       .then(() => true)
       .catch(() => false)
     if (!opened) continue
-    const row = page.getByRole('menuitemcheckbox', { name: /^Changes/u })
+    const row = page.getByRole('button', { name: /^Changes/u })
     const clicked = await row
       .click({ timeout: 5_000 })
       .then(() => true)
