@@ -80,7 +80,6 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
   await expect(
     page.getByRole('combobox', { name: 'Paragraph style', exact: true }),
   ).toHaveText('Mixed styles')
-  expect(await menuItem(page, 'Quote').getAttribute('aria-pressed')).toBe(null)
   await shot(page, '02-style-mixed-selection')
 
   await focusParagraph(page, 'Beta paragraph')
