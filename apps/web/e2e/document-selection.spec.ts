@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openMatter } from './support'
 import path from 'node:path'
-import { closeMenu, menuItem, openMenu, setTrackChanges } from './editor-chrome'
+import { menuItem, openMenu, setTrackChanges } from './editor-chrome'
 
 /*
  * Browser-only coverage for the cross-paragraph selection. Real selection,
@@ -210,11 +210,11 @@ test.describe('the document selection in a browser', () => {
     await openMenu(page, 'Insert')
     const link = menuItem(page, 'Link')
     await expect(link).toBeDisabled()
-    await expect(link).toContainText(
+    await expect(link).toHaveAttribute(
+      'title',
       'A link is not recorded as a tracked change',
     )
     await shot(page, '06-unsupported-action-disabled')
-    await closeMenu(page)
   })
 
   test('declines to cross an unsaved inserted paragraph', async ({ page }) => {

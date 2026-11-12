@@ -105,7 +105,7 @@ export function EditorTextButton({
           variant={pressed ? 'secondary' : 'ghost'}
           size="sm"
           className={cn(
-            'h-7 max-w-40 rounded-sm px-2 text-caption pointer-coarse:h-11',
+            'h-7 max-w-40 rounded-sm px-2 text-caption pointer-coarse:h-11 pointer-coarse:min-w-11',
             className,
           )}
           aria-label={label}
