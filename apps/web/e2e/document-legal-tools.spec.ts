@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url'
 import {
   choose,
   documentPanelTab,
+  fieldValue,
   openFormatting,
   ribbonCommand,
   runCommand,
   saveButton,
-  selectedValue,
 } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -157,7 +157,9 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  await expect(selectedValue(page, 'Citation style')).toHaveText('House style')
+  await expect(await fieldValue(page, 'Citation style')).toHaveText(
+    'House style',
+  )
   await reviewCommand(page, 'Check defined terms')
   await expect(checksPanel(page)).toContainText('in the', {
     timeout: 30_000,

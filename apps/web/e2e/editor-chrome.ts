@@ -26,6 +26,7 @@ const TAB_OF_NAME: Record<string, string> = {
 
 const SURFACE_OF_COMMAND: Record<string, CommandSurface> = {
   Save: { tab: 'Quick access' },
+  'Citation style': { tab: 'Insert' },
   Undo: { tab: 'Quick access' },
   Redo: { tab: 'Quick access' },
   'Document information': { tab: 'View' },
@@ -312,7 +313,7 @@ function popupItem(page: Page, menu: string, name: string) {
 }
 
 export async function choose(page: Page, controlName: string, option: string) {
-  const target = await formatField(page, controlName)
+  const target = await fieldValue(page, controlName)
   await target.click()
   await page.getByRole('option', { name: option, exact: true }).click()
 }
@@ -329,10 +330,12 @@ export function selectedValue(page: Page, controlName: string) {
   return page.getByRole('combobox', { name: controlName, exact: true })
 }
 
-async function formatField(page: Page, controlName: string) {
+export async function fieldValue(page: Page, controlName: string) {
   const target = selectedValue(page, controlName)
   if (!(await target.isVisible().catch(() => false))) {
-    await openFormatting(page)
+    const surface = SURFACE_OF_COMMAND[controlName]
+    if (surface) await openSurface(page, surface)
+    else await openFormatting(page)
   }
   return selectedValue(page, controlName)
 }
