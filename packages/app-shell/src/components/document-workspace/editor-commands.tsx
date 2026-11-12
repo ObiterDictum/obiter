@@ -563,7 +563,8 @@ export function editorMenus(
             {
               id: 'style-none',
               label: 'No direct style',
-              checked: !format?.paragraphStyleId,
+              checked:
+                !format?.paragraphStyleMixed && !format?.paragraphStyleId,
               disabled: stylesUnavailable,
               disabledReason: stylesReason,
               run: () => format?.onParagraphStyle(null),
