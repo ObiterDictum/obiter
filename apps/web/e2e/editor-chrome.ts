@@ -61,7 +61,9 @@ export async function openRibbonTab(page: Page, name: string) {
 
 export async function toggleCommand(page: Page, menu: string, command: string) {
   await openMenu(page, menu)
-  await menuItem(page, command).click()
+  const target =
+    menu === 'File' ? popupItem(page, menu, command) : menuItem(page, command)
+  await target.click()
   await closeMenu(page)
 }
 
@@ -71,6 +73,15 @@ export function menuItem(page: Page, name: string) {
     .or(page.getByRole('menuitemcheckbox', { name, exact: true }))
     .or(page.getByRole('menuitemradio', { name, exact: true }))
     .or(page.getByRole('button', { name, exact: true }))
+    .first()
+}
+
+function popupItem(page: Page, menu: string, name: string) {
+  const popup = page.getByRole('menu', { name: menu })
+  return popup
+    .getByRole('menuitem', { name, exact: true })
+    .or(popup.getByRole('menuitemcheckbox', { name, exact: true }))
+    .or(popup.getByRole('menuitemradio', { name, exact: true }))
     .first()
 }
 
@@ -92,7 +103,9 @@ export async function runMenuCommand(
 export async function clickMenuItem(page: Page, menu: string, command: string) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await openMenu(page, menu)
-    const clicked = await menuItem(page, command)
+    const target =
+      menu === 'File' ? popupItem(page, menu, command) : menuItem(page, command)
+    const clicked = await target
       .click({ timeout: 5_000 })
       .then(() => true)
       .catch(() => false)
