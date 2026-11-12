@@ -135,10 +135,10 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
     await openMenu(reloaded, 'Format')
     await expect(selectedValue(reloaded, 'Paragraph style')).toHaveText('Quote')
     await focusParagraph(reloaded, 'Alpha item')
-    await expect(menuItem(reloaded, 'Restart numbering')).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    await openFormatting(reloaded)
+    await expect(
+      reloaded.getByRole('button', { name: 'Restart numbering', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
     await shot(reloaded, '06-reopened')
   } finally {
     await fresh.close()
