@@ -4,6 +4,7 @@ import { ObiterMark, cn } from '@obiter/ui'
 import { GearSix, ShieldCheck } from '@obiter/ui/icons'
 import { AccountMenu } from './account-menu'
 import { useIsMacPlatform } from './keyboard-platform'
+import { PaletteTrigger } from './palette-trigger'
 import {
   AgentRow,
   MatterRow,
@@ -55,6 +56,8 @@ export function Sidebar({
           ) : null}
         </div>
       </div>
+
+      <PaletteTrigger variant="sidebar" />
 
       <nav
         aria-label="Workspace"

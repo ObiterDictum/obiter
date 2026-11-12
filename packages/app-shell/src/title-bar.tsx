@@ -1,25 +1,13 @@
 import { AppUpdateNotice } from './update-notice'
 import { Link, useRouter, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import {
-  KeyboardHint,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  cn,
-} from '@obiter/ui'
-import {
-  ArrowLeft,
-  ArrowRight,
-  CaretRight,
-  MagnifyingGlass,
-} from '@obiter/ui/icons/shell'
+import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
+import { ArrowLeft, ArrowRight, CaretRight } from '@obiter/ui/icons/shell'
 import { ArrowsInSimple } from '@obiter/ui/icons'
 import { Fragment, Suspense, lazy, type ReactNode, type Ref } from 'react'
 import type { AppPlatform } from '@obiter/contracts'
-import { useCommandPalette } from './command-palette'
 import { currentUserQueryOptions } from './current-user'
-import { formatShortcut, useIsMacPlatform } from './keyboard-platform'
+import { PaletteTrigger } from './palette-trigger'
 const MatterSwitcherLazy = lazy(() =>
   import('./matter-switcher').then((module) => ({
     default: module.MatterSwitcher,
@@ -67,11 +55,13 @@ export function TitleBar({
   loadedBuild = null,
   focusMode,
   onExitFocusMode,
+  showSearch,
 }: {
   platform: AppPlatform
   loadedBuild?: string | null
   focusMode: boolean
   onExitFocusMode: () => void
+  showSearch: boolean
 }) {
   const router = useRouter()
   const { data: me } = useQuery(currentUserQueryOptions())
@@ -158,34 +148,8 @@ export function TitleBar({
         loadedBuild={loadedBuild}
         organisationId={me?.organisation?.id ?? null}
       />
-      <PaletteTrigger />
+      {showSearch ? <PaletteTrigger variant="title-bar" /> : null}
     </header>
-  )
-}
-
-function PaletteTrigger() {
-  const openPalette = useCommandPalette()
-  const isMac = useIsMacPlatform()
-  return (
-    <button
-      type="button"
-      aria-label="Search Obiter"
-      onClick={(event) => openPalette(event.currentTarget)}
-      className={cn(
-        'app-no-drag ml-auto flex h-[30px] w-[min(300px,32vw)] shrink-0 items-center gap-2 rounded-md border border-line bg-surface pr-1 pl-3 text-left',
-        'transition-colors duration-150 hover:border-line-strong',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-        'max-compact:w-8 max-compact:justify-center max-compact:border-0 max-compact:bg-transparent max-compact:p-0',
-      )}
-    >
-      <MagnifyingGlass size={16} className="shrink-0 text-subtle" aria-hidden />
-      <span className="min-w-0 flex-1 truncate text-meta text-subtle max-compact:hidden">
-        Search Obiter
-      </span>
-      <KeyboardHint className="max-compact:hidden">
-        {formatShortcut(['primary', 'K'], isMac)}
-      </KeyboardHint>
-    </button>
   )
 }
 
