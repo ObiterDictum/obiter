@@ -133,7 +133,7 @@ export function handleDocumentWorkspaceKeys(
     return
   }
   if (key === 'f' && run(handlers.focusFind)) return
-  if (key === 'k' && !event.shiftKey && run(handlers.openPalette)) return
+  if (key === 'p' && event.shiftKey && run(handlers.openPalette)) return
   if (!event.shiftKey) {
     run(
       key === 'b'

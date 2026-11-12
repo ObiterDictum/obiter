@@ -15,6 +15,7 @@ import type { SaveState } from './components/document-workspace/use-document-sav
 
 export interface DocumentTabStatus {
   save: SaveStateLabel
+  trackChanges: boolean
   participants: readonly DocumentPresence[]
   presenceNames: ReadonlyMap<string, string>
   currentUserId?: string
@@ -82,6 +83,7 @@ export function usePublishDocumentTabStatus({
   versionLabel,
   offline,
   remoteChange,
+  trackChanges,
   participants,
   presenceNames,
   currentUserId,
@@ -91,6 +93,7 @@ export function usePublishDocumentTabStatus({
   versionLabel: string
   offline: boolean
   remoteChange: boolean
+  trackChanges: boolean
   participants: readonly DocumentPresence[]
   presenceNames: ReadonlyMap<string, string>
   currentUserId?: string
@@ -101,8 +104,8 @@ export function usePublishDocumentTabStatus({
     [status, versionLabel, offline, remoteChange],
   )
   const value = useMemo(
-    () => ({ save, participants, presenceNames, currentUserId }),
-    [save, participants, presenceNames, currentUserId],
+    () => ({ save, trackChanges, participants, presenceNames, currentUserId }),
+    [save, trackChanges, participants, presenceNames, currentUserId],
   )
   useEffect(() => {
     if (!publish) return

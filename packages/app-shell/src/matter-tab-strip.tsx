@@ -18,7 +18,10 @@ import {
   TabIcon,
   tabAccessibleName,
 } from './matter-tab-button'
-import { SaveStateMark } from './document-tab-save-indicator'
+import {
+  SaveStateMark,
+  DocumentTrackChangesMark,
+} from './document-tab-save-indicator'
 import {
   useDocumentTabStatuses,
   type DocumentTabStatus,
@@ -95,6 +98,9 @@ export function MatterTabStrip({
         </div>
       )}
       {compact ? <MatterNewItemMenu /> : null}
+      {activeStatus ? (
+        <DocumentTrackChangesMark trackChanges={activeStatus.trackChanges} />
+      ) : null}
       {activeStatus ? (
         <span className="flex shrink-0 items-center self-center">
           <PresenceAvatars

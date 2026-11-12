@@ -214,16 +214,30 @@ describe('document workspace keys', () => {
     expect(print).toHaveBeenCalledTimes(2)
   })
 
-  it('leaves Ctrl+Shift+P and Alt+P to the platform', () => {
+  it('routes Ctrl+Shift+P to the command palette and leaves Alt+P to the platform', () => {
     const print = vi.fn()
+    const openPalette = vi.fn()
     const shiftP = event('p', { shiftKey: true })
-    handleDocumentWorkspaceKeys(shiftP, { save: vi.fn(), print })
+    handleDocumentWorkspaceKeys(shiftP, {
+      save: vi.fn(),
+      print,
+      openPalette,
+    })
     handleDocumentWorkspaceKeys(event('p', { altKey: true }), {
       save: vi.fn(),
       print,
     })
-    expect(shiftP.preventDefault).not.toHaveBeenCalled()
+    expect(shiftP.preventDefault).toHaveBeenCalled()
+    expect(openPalette).toHaveBeenCalledTimes(1)
     expect(print).not.toHaveBeenCalled()
+  })
+
+  it('leaves Ctrl+K to the shell so it opens app search, not the editor palette', () => {
+    const openPalette = vi.fn()
+    const kEvent = event('k')
+    handleDocumentWorkspaceKeys(kEvent, { save: vi.fn(), openPalette })
+    expect(kEvent.preventDefault).not.toHaveBeenCalled()
+    expect(openPalette).not.toHaveBeenCalled()
   })
 
   it('still routes undo from a paragraph editor field', () => {

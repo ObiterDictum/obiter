@@ -162,6 +162,7 @@ export function DocxWorkspace({
     versionLabel: `version ${String(modelQuery.data?.versionNumber ?? versionNumber ?? 1)}`,
     offline,
     remoteChange,
+    trackChanges,
     participants: presence,
     presenceNames,
     currentUserId: me?.user.id,

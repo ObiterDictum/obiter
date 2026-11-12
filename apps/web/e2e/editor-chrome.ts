@@ -247,6 +247,18 @@ export function documentToolbar(page: Page) {
   return page.getByRole('toolbar', { name: 'Document toolbar' })
 }
 
+export function allCommandsButton(page: Page) {
+  return page.getByRole('button', { name: 'All commands', exact: true })
+}
+
+export function editorCommandPalette(page: Page) {
+  return page.getByRole('dialog', { name: 'Editor commands' })
+}
+
+export function appSearchDialog(page: Page) {
+  return page.getByRole('dialog', { name: 'Search Obiter' })
+}
+
 export function popupMenus(page: Page) {
   return page.getByRole('menu')
 }

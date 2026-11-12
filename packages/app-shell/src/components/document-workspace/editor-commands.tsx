@@ -11,7 +11,6 @@ import {
   CaretRight,
   Check,
   CheckCircle,
-  Columns,
   FileDoc,
   GridNine,
   Hash,
@@ -27,11 +26,12 @@ import {
   MagnifyingGlassPlus,
   NotePencil,
   PencilSimple,
+  RectangleDashed,
   Ruler,
   Scales,
-  Scissors,
   ShieldCheck,
   SidebarSimple,
+  SplitVertical,
   Table,
   Tag,
   TextAa,
@@ -83,6 +83,8 @@ export type EditorCommand = {
   host?: EditorCommandHost
   run?: () => void
 }
+
+export const ALL_COMMANDS_SHORTCUT = ['primary', 'shift', 'P'] as const
 
 export type EditorMenuGroup = {
   label: string
@@ -348,7 +350,7 @@ export function editorMenus(
             {
               id: 'commands',
               label: 'All commands',
-              shortcut: ['primary', 'K'],
+              shortcut: ALL_COMMANDS_SHORTCUT,
               opensSurface: true,
               run: actions.openPalette,
             },
@@ -367,7 +369,7 @@ export function editorMenus(
               id: 'page-break',
               stayOpen: true,
               label: 'Page break',
-              icon: <Scissors size={16} aria-hidden />,
+              icon: <SplitVertical size={16} aria-hidden />,
               disabled: Boolean(props.breakUnavailable),
               disabledReason: props.breakUnavailable,
               run: props.onPageBreak,
@@ -376,7 +378,7 @@ export function editorMenus(
               id: 'section-break',
               stayOpen: true,
               label: 'Section break',
-              icon: <Columns size={16} aria-hidden />,
+              icon: <RectangleDashed size={16} aria-hidden />,
               disabled: Boolean(props.breakUnavailable),
               disabledReason: props.breakUnavailable,
               run: props.onSectionBreak,
