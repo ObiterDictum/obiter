@@ -76,6 +76,10 @@ export function menuItem(page: Page, name: string) {
     .first()
 }
 
+export function fileMenuItem(page: Page, name: string) {
+  return popupItem(page, 'File', name)
+}
+
 function popupItem(page: Page, menu: string, name: string) {
   const popup = page.getByRole('menu', { name: menu })
   return popup

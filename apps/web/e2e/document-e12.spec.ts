@@ -1,6 +1,7 @@
 import { signIn } from './e13-support'
 import {
   choose,
+  fileMenuItem,
   openMenu,
   openRibbonTab,
   runMenuCommand,
@@ -300,10 +301,7 @@ test('a document redaction run returns its finalized copy as a new version', asy
   await page.getByRole('button', { name: 'Open document' }).click()
   await expect(page).toHaveURL(/\/documents\/doc_/, { timeout: 20_000 })
   await openMenu(page, 'File')
-  await page
-    .getByRole('menu', { name: 'File' })
-    .getByRole('menuitem', { name: 'Document information', exact: true })
-    .click()
+  await fileMenuItem(page, 'Document information').click()
   const versionsPanel = page.getByRole('complementary', {
     name: 'Document information',
   })
