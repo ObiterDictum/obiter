@@ -1,7 +1,40 @@
 import type { ReactNode } from 'react'
 import {
+  AlignBottom,
+  AlignTop,
+  ArrowsClockwise,
+  ArrowsInSimple,
+  Bookmarks,
+  BookOpen,
+  Browser,
+  CaretLeft,
+  CaretRight,
+  Check,
+  CheckCircle,
+  Columns,
+  FileDoc,
+  GridNine,
+  Hash,
+  Image,
+  Info,
+  Link,
   ListBullets,
+  ListChecks,
+  ListDashes,
   ListNumbers,
+  MagnifyingGlass,
+  MagnifyingGlassMinus,
+  MagnifyingGlassPlus,
+  NotePencil,
+  PencilSimple,
+  Ruler,
+  Scales,
+  Scissors,
+  ShieldCheck,
+  SidebarSimple,
+  Table,
+  Tag,
+  TextAa,
   TextAlignCenter,
   TextAlignJustify,
   TextAlignLeft,
@@ -9,6 +42,9 @@ import {
   TextB,
   TextItalic,
   TextUnderline,
+  TreeStructure,
+  X,
+  XCircle,
 } from '@obiter/ui/icons'
 
 import type { CitationStyle } from '../../document-preferences'
@@ -43,6 +79,7 @@ export type EditorCommand = {
   soon?: boolean | string
   stayOpen?: boolean
   opensSurface?: boolean
+  menuOnly?: boolean
   host?: EditorCommandHost
   run?: () => void
 }
@@ -51,6 +88,7 @@ export type EditorMenuGroup = {
   label: string
   commands: EditorCommand[]
   select?: { label?: string; placeholder?: string }
+  dropdown?: { label: string; icon: ReactNode }
 }
 
 export type EditorMenu = {
@@ -329,6 +367,7 @@ export function editorMenus(
               id: 'page-break',
               stayOpen: true,
               label: 'Page break',
+              icon: <Scissors size={16} aria-hidden />,
               disabled: Boolean(props.breakUnavailable),
               disabledReason: props.breakUnavailable,
               run: props.onPageBreak,
@@ -337,6 +376,7 @@ export function editorMenus(
               id: 'section-break',
               stayOpen: true,
               label: 'Section break',
+              icon: <Columns size={16} aria-hidden />,
               disabled: Boolean(props.breakUnavailable),
               disabledReason: props.breakUnavailable,
               run: props.onSectionBreak,
@@ -344,41 +384,16 @@ export function editorMenus(
           ],
         },
         {
-          label: 'Table tools',
-          commands: (
-            [
-              ['Insert row above', 'insert_table_row', 'before'],
-              ['Insert row below', 'insert_table_row', 'after'],
-              ['Insert column left', 'insert_table_column', 'before'],
-              ['Insert column right', 'insert_table_column', 'after'],
-              ['Delete row', 'delete_table_row'],
-              ['Delete column', 'delete_table_column'],
-              ['Delete table', 'delete_table'],
-            ] as const
-          ).map(([label, type, position]) => ({
-            id: type + (position ?? ''),
-            label,
-            disabled:
-              !structure?.onTableStructure ||
-              Boolean(structure.tableStructureUnavailable),
-            disabledReason: structure?.tableStructureUnavailable,
-            run: () => {
-              if (type === 'insert_table_row' || type === 'insert_table_column')
-                structure?.onTableStructure?.({
-                  type,
-                  position: position ?? 'after',
-                  paragraphId: '',
-                })
-              else structure?.onTableStructure?.({ type, paragraphId: '' })
-            },
-          })),
-        },
-        {
           label: 'Tables and pictures',
+          dropdown: {
+            label: 'Table tools',
+            icon: <GridNine size={16} aria-hidden />,
+          },
           commands: [
             {
               id: 'table',
               label: 'Insert table',
+              icon: <Table size={16} aria-hidden />,
               opensSurface: true,
               disabled: !structure || Boolean(structure.tableUnavailable),
               disabledReason: structure?.tableUnavailable,
@@ -388,10 +403,42 @@ export function editorMenus(
               id: 'picture',
               stayOpen: true,
               label: 'Picture',
+              icon: <Image size={16} aria-hidden />,
               disabled: !structure || Boolean(structure.pictureUnavailable),
               disabledReason: structure?.pictureUnavailable,
               run: structure?.onInsertPicture,
             },
+            ...(
+              [
+                ['Insert row above', 'insert_table_row', 'before'],
+                ['Insert row below', 'insert_table_row', 'after'],
+                ['Insert column left', 'insert_table_column', 'before'],
+                ['Insert column right', 'insert_table_column', 'after'],
+                ['Delete row', 'delete_table_row'],
+                ['Delete column', 'delete_table_column'],
+                ['Delete table', 'delete_table'],
+              ] as const
+            ).map(([label, type, position]) => ({
+              id: type + (position ?? ''),
+              label,
+              menuOnly: true,
+              disabled:
+                !structure?.onTableStructure ||
+                Boolean(structure.tableStructureUnavailable),
+              disabledReason: structure?.tableStructureUnavailable,
+              run: () => {
+                if (
+                  type === 'insert_table_row' ||
+                  type === 'insert_table_column'
+                )
+                  structure?.onTableStructure?.({
+                    type,
+                    position: position ?? 'after',
+                    paragraphId: '',
+                  })
+                else structure?.onTableStructure?.({ type, paragraphId: '' })
+              },
+            })),
           ],
         },
         {
@@ -400,6 +447,7 @@ export function editorMenus(
             {
               id: 'link',
               label: 'Link',
+              icon: <Link size={16} aria-hidden />,
               opensSurface: true,
               disabled: !structure || Boolean(structure.linkUnavailable),
               disabledReason: structure?.linkUnavailable,
@@ -408,6 +456,7 @@ export function editorMenus(
             {
               id: 'cross-reference',
               label: 'Cross-reference',
+              icon: <Bookmarks size={16} aria-hidden />,
               opensSurface: true,
               disabled:
                 !structure || Boolean(structure.crossReferenceUnavailable),
@@ -422,6 +471,7 @@ export function editorMenus(
             {
               id: 'footnote',
               label: story === 'footnotes' ? 'Close footnotes' : 'Footnote',
+              icon: <NotePencil size={16} aria-hidden />,
               shortcut:
                 story === 'footnotes' ? undefined : ['primary', 'alt', 'F'],
               pressed: story === 'footnotes',
@@ -439,6 +489,7 @@ export function editorMenus(
               id: 'table-of-contents',
               stayOpen: true,
               label: 'Table of contents',
+              icon: <ListDashes size={16} aria-hidden />,
               disabled:
                 !structure || Boolean(structure.tableOfContentsUnavailable),
               disabledReason: structure?.tableOfContentsUnavailable,
@@ -453,6 +504,7 @@ export function editorMenus(
               id: 'header',
               stayOpen: true,
               label: story === 'header' ? 'Close header' : 'Header',
+              icon: <AlignTop size={16} aria-hidden />,
               pressed: story === 'header',
               disabled:
                 !structure ||
@@ -467,6 +519,7 @@ export function editorMenus(
               id: 'footer',
               stayOpen: true,
               label: story === 'footer' ? 'Close footer' : 'Footer',
+              icon: <AlignBottom size={16} aria-hidden />,
               pressed: story === 'footer',
               disabled:
                 !structure ||
@@ -481,6 +534,7 @@ export function editorMenus(
               id: 'page-number',
               stayOpen: true,
               label: 'Page number',
+              icon: <Hash size={16} aria-hidden />,
               disabled: !structure || Boolean(structure.pageNumberUnavailable),
               disabledReason: structure?.pageNumberUnavailable,
               run: structure?.onInsertPageNumber,
@@ -489,17 +543,25 @@ export function editorMenus(
         },
         {
           label: 'Authorities',
+          dropdown: {
+            label: 'Authorities',
+            icon: <Scales size={16} aria-hidden />,
+          },
           commands: [
             {
               id: 'insert-authority',
               stayOpen: true,
               opensSurface: true,
+              menuOnly: true,
               label: 'Insert authority',
+              icon: <Scales size={16} aria-hidden />,
               run: actions.openAuthority,
             },
             {
               id: 'table-of-authorities',
               label: 'Table of authorities',
+              icon: <BookOpen size={16} aria-hidden />,
+              menuOnly: true,
               disabled:
                 !structure || Boolean(structure.tableOfAuthoritiesUnavailable),
               disabledReason: structure?.tableOfAuthoritiesUnavailable,
@@ -508,6 +570,8 @@ export function editorMenus(
             {
               id: 'update-authorities',
               label: 'Update table of authorities',
+              icon: <ArrowsClockwise size={16} aria-hidden />,
+              menuOnly: true,
               disabled:
                 !structure ||
                 Boolean(structure.tableOfAuthoritiesUpdateUnavailable),
@@ -517,6 +581,8 @@ export function editorMenus(
             {
               id: 'mark-defined-term',
               label: 'Mark defined term',
+              icon: <Tag size={16} aria-hidden />,
+              menuOnly: true,
               disabled: !structure || Boolean(structure.definedTermUnavailable),
               disabledReason: structure?.definedTermUnavailable,
               run: structure?.onMarkDefinedTerm,
@@ -743,6 +809,7 @@ export function editorMenus(
             {
               id: 'track-changes',
               label: 'Track changes',
+              icon: <PencilSimple size={16} aria-hidden />,
               pressed: props.trackChanges,
               disabled: !props.canEdit,
               disabledReason: EDITING_HINT,
@@ -752,6 +819,7 @@ export function editorMenus(
             {
               id: 'accept-change',
               label: 'Accept change',
+              icon: <Check size={16} aria-hidden />,
               shortcut: ['A'],
               disabled: !review || Boolean(review.targetUnavailable),
               disabledReason: review?.targetUnavailable ?? reviewAbsent,
@@ -760,6 +828,7 @@ export function editorMenus(
             {
               id: 'reject-change',
               label: 'Reject change',
+              icon: <X size={16} aria-hidden />,
               shortcut: ['R'],
               disabled: !review || Boolean(review.targetUnavailable),
               disabledReason: review?.targetUnavailable ?? reviewAbsent,
@@ -768,6 +837,7 @@ export function editorMenus(
             {
               id: 'accept-all',
               label: reviewAllLabel('Accept', review),
+              icon: <CheckCircle size={16} aria-hidden />,
               disabled: !review || Boolean(review.bulkUnavailable),
               disabledReason: review?.bulkUnavailable ?? reviewAbsent,
               run: review?.onAcceptAll,
@@ -775,6 +845,7 @@ export function editorMenus(
             {
               id: 'reject-all',
               label: reviewAllLabel('Reject', review),
+              icon: <XCircle size={16} aria-hidden />,
               disabled: !review || Boolean(review.bulkUnavailable),
               disabledReason: review?.bulkUnavailable ?? reviewAbsent,
               run: review?.onRejectAll,
@@ -802,6 +873,7 @@ export function editorMenus(
             {
               id: 'previous-change',
               label: 'Previous change',
+              icon: <CaretLeft size={16} aria-hidden />,
               shortcut: ['K'],
               disabled: !review || !review.canPrevious,
               disabledReason: review
@@ -812,6 +884,7 @@ export function editorMenus(
             {
               id: 'next-change',
               label: 'Next change',
+              icon: <CaretRight size={16} aria-hidden />,
               shortcut: ['J'],
               disabled: !review || !review.canNext,
               disabledReason: review
@@ -827,6 +900,7 @@ export function editorMenus(
             {
               id: 'verify',
               label: 'Verify citations',
+              icon: <ShieldCheck size={16} aria-hidden />,
               opensSurface: true,
               status: props.verify?.label,
               disabled: props.verify === undefined,
@@ -837,6 +911,7 @@ export function editorMenus(
             {
               id: 'check-citations',
               label: 'Check citations',
+              icon: <MagnifyingGlass size={16} aria-hidden />,
               hint: props.verify?.detail,
               disabled: props.verify
                 ? props.verify.pending ||
@@ -849,6 +924,7 @@ export function editorMenus(
             {
               id: 'authorities',
               label: 'List of authorities',
+              icon: <BookOpen size={16} aria-hidden />,
               pressed: props.authoritiesOpen,
               stayOpen: true,
               run: props.onToggleAuthorities,
@@ -856,6 +932,7 @@ export function editorMenus(
             {
               id: 'check-terms',
               label: 'Check defined terms',
+              icon: <ListChecks size={16} aria-hidden />,
               pressed: props.legalChecks?.open === 'terms',
               disabled: !props.legalChecks,
               stayOpen: true,
@@ -864,6 +941,7 @@ export function editorMenus(
             {
               id: 'check-cross-references',
               label: 'Check cross-references',
+              icon: <TreeStructure size={16} aria-hidden />,
               pressed: props.legalChecks?.open === 'references',
               disabled: !props.legalChecks,
               stayOpen: true,
@@ -877,6 +955,7 @@ export function editorMenus(
             {
               id: 'spelling',
               label: 'Spelling',
+              icon: <TextAa size={16} aria-hidden />,
               pressed: props.spelling,
               hint: "Underlines words the browser's dictionary flags. No document text leaves this device, and it is not a legal correctness check.",
               stayOpen: true,
@@ -896,6 +975,7 @@ export function editorMenus(
             {
               id: 'print-layout',
               label: 'Print layout',
+              icon: <FileDoc size={16} aria-hidden />,
               pressed: props.view === 'print',
               stayOpen: true,
               run: () => props.onView('print'),
@@ -903,6 +983,7 @@ export function editorMenus(
             {
               id: 'web-layout',
               label: 'Web layout',
+              icon: <Browser size={16} aria-hidden />,
               pressed: props.view === 'web',
               stayOpen: true,
               run: () => props.onView('web'),
@@ -915,6 +996,7 @@ export function editorMenus(
             {
               id: 'ruler',
               label: 'Ruler',
+              icon: <Ruler size={16} aria-hidden />,
               pressed: props.rulerOn,
               stayOpen: true,
               run: props.onToggleRuler,
@@ -922,6 +1004,7 @@ export function editorMenus(
             {
               id: 'navigation-pane',
               label: 'Navigation pane',
+              icon: <SidebarSimple size={16} aria-hidden />,
               pressed: props.navOpen,
               stayOpen: true,
               run: props.onToggleNavPane,
@@ -929,6 +1012,7 @@ export function editorMenus(
             {
               id: 'info',
               label: 'Document information',
+              icon: <Info size={16} aria-hidden />,
               pressed: props.infoOpen,
               disabled: props.onToggleInfo === undefined,
               stayOpen: true,
@@ -942,16 +1026,19 @@ export function editorMenus(
             {
               id: 'zoom-in',
               label: 'Zoom in',
+              icon: <MagnifyingGlassPlus size={16} aria-hidden />,
               run: () => props.onZoom(Math.min(140, props.zoom + 10)),
             },
             {
               id: 'zoom-out',
               label: 'Zoom out',
+              icon: <MagnifyingGlassMinus size={16} aria-hidden />,
               run: () => props.onZoom(Math.max(75, props.zoom - 10)),
             },
             {
               id: 'zoom-reset',
               label: 'Actual size',
+              icon: <ArrowsInSimple size={16} aria-hidden />,
               hint: `${String(props.zoom)}% now`,
               run: () => props.onZoom(100),
             },
