@@ -149,6 +149,12 @@ async function decideSelection(page: Page, action: 'Accept' | 'Reject') {
 }
 
 async function openChangesPanel(page: Page) {
+  if (
+    await panel(page)
+      .isVisible()
+      .catch(() => false)
+  )
+    return
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const opened = await openMenu(page, 'Review')
       .then(() => true)
