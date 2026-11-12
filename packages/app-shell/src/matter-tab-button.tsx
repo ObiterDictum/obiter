@@ -69,7 +69,7 @@ export function MatterTabButton({
   onDelete?: () => void
 }) {
   const { close, goToTab, openToSide, promote } = useMatterTabs()
-  const iconOnly = tab.kind === 'overview'
+  const pinned = tab.kind === 'overview'
   const labelButton = (
     <button
       type="button"
@@ -78,12 +78,12 @@ export function MatterTabButton({
       onClick={() => goToTab(tab)}
       onDoubleClick={() => promote(tab.id)}
       className={cn(
-        'flex min-w-0 items-center gap-2 py-1.5 text-meta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-        iconOnly ? 'px-2' : 'pr-1 pl-2.5',
+        'flex min-w-0 items-center text-meta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        pinned ? 'px-2.5' : 'gap-2 py-1.5 pr-1 pl-2.5',
       )}
     >
       <TabIcon kind={tab.kind} />
-      {iconOnly ? null : (
+      {pinned ? null : (
         <span className={cn('max-w-[11rem] truncate', tab.preview && 'italic')}>
           {tab.title}
         </span>
@@ -122,7 +122,7 @@ export function MatterTabButton({
                 : 'text-muted hover:bg-hover hover:text-ink',
             )}
           >
-            {iconOnly ? (
+            {pinned ? (
               <Tooltip>
                 <TooltipTrigger render={labelButton} />
                 <TooltipContent side="bottom">{tab.title}</TooltipContent>
@@ -131,26 +131,28 @@ export function MatterTabButton({
               labelButton
             )}
             <DocumentTabSaveIndicator state={status?.save ?? null} />
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label={`Close ${tab.title}`}
-                    onClick={() => close(tab.id)}
-                    className="mr-1 grid size-5 shrink-0 place-items-center rounded-sm text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:bg-fill hover:text-ink focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                  >
-                    <X size={11} aria-hidden />
-                  </button>
-                }
-              />
-              <TooltipContent side="bottom">
-                <span className="flex items-center gap-2">
-                  Close tab
-                  {platform === 'desktop' ? <CloseShortcutHint /> : null}
-                </span>
-              </TooltipContent>
-            </Tooltip>
+            {pinned ? null : (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label={`Close ${tab.title}`}
+                      onClick={() => close(tab.id)}
+                      className="mr-1 grid size-5 shrink-0 place-items-center rounded-sm text-subtle opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:bg-fill hover:text-ink focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                    >
+                      <X size={11} aria-hidden />
+                    </button>
+                  }
+                />
+                <TooltipContent side="bottom">
+                  <span className="flex items-center gap-2">
+                    Close tab
+                    {platform === 'desktop' ? <CloseShortcutHint /> : null}
+                  </span>
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
         }
       />
@@ -161,9 +163,11 @@ export function MatterTabButton({
         >
           Open to the side
         </ContextMenuItem>
-        <ContextMenuItem onClick={() => close(tab.id)}>
-          Close tab
-        </ContextMenuItem>
+        {pinned ? null : (
+          <ContextMenuItem onClick={() => close(tab.id)}>
+            Close tab
+          </ContextMenuItem>
+        )}
         {onDelete ? (
           <>
             <ContextMenuSeparator />

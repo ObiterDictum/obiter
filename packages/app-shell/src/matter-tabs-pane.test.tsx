@@ -302,13 +302,24 @@ describe('matter tab strip', () => {
       await screen.findByRole('button', { name: 'Close Defence.docx' }),
     )
     await waitFor(() => expect(pagePath()).toBe('/matters/mtr_1'))
-    fireEvent.click(
-      await screen.findByRole('button', {
+    expect(openTabs()).toHaveLength(1)
+  })
+
+  it('pins the overview tab, so it offers no close control at all', async () => {
+    renderPane('/matters/mtr_1/documents/doc_1')
+    await waitFor(() => expect(openTabs()).toHaveLength(2))
+    expect(
+      screen.queryByRole('button', {
         name: 'Close Smith v Jones Lettings Ltd',
       }),
+    ).toBeNull()
+    fireEvent.contextMenu(
+      await screen.findByRole('button', { name: 'Smith v Jones Lettings Ltd' }),
     )
-    await waitFor(() => expect(pagePath()).toBe('/matters/mtr_1'))
-    expect(openTabs()).toHaveLength(1)
+    expect(
+      await screen.findByRole('menuitem', { name: 'Open to the side' }),
+    ).toBeDefined()
+    expect(screen.queryByRole('menuitem', { name: 'Close tab' })).toBeNull()
   })
 
   it('restores the tab set after a reload', async () => {

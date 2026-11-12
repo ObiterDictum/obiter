@@ -346,6 +346,14 @@ describe('Sidebar', () => {
     await screen.findByRole('navigation', { name: 'Workspace' })
     expect(screen.queryByRole('textbox', { name: 'Search Obiter' })).toBeNull()
   })
+
+  it('puts the monogram on the title bar row rather than a padded strip below it', async () => {
+    renderSidebar('/')
+    const sidebar = await screen.findByRole('complementary', {
+      name: 'Workspace',
+    })
+    expect(sidebar.className).not.toContain('pt-10')
+  })
 })
 
 describe('SidebarRail', () => {
@@ -371,6 +379,12 @@ describe('SidebarRail', () => {
     expect(toggle.className).toContain('size-9')
     fireEvent.click(toggle)
     expect(collapseClicks).toEqual(['expand'])
+  })
+
+  it('puts the rail mark on the title bar row rather than a padded strip below it', async () => {
+    renderSidebar('/matters', 'rail')
+    const rail = await screen.findByRole('navigation', { name: 'Workspace' })
+    expect(rail.className).not.toContain('pt-10')
   })
 
   it('toggles the agent panel from the rail', async () => {
