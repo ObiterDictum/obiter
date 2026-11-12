@@ -1,8 +1,9 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
-import { ObiterMark } from '@obiter/ui'
+import { ObiterMark, cn } from '@obiter/ui'
 import { GearSix, ShieldCheck } from '@obiter/ui/icons'
 import { AccountMenu } from './account-menu'
+import { useIsMacPlatform } from './keyboard-platform'
 import {
   AgentRow,
   MatterRow,
@@ -34,12 +35,16 @@ export function Sidebar({
   const section = resolveSection(currentPath)
   const currentMatterId = matterIdFromPath(currentPath)
   const { counts, verifyTone, recent } = useSidebarData()
+  const clearsTrafficLights = platform === 'desktop' && useIsMacPlatform()
 
   return (
     <aside
       id="app-shell-sidebar"
       aria-label="Workspace"
-      className="flex w-[236px] shrink-0 flex-col gap-2 pt-10 pr-2 pb-1 pl-1"
+      className={cn(
+        'flex w-[236px] shrink-0 flex-col gap-2 pr-2 pb-1 pl-1',
+        clearsTrafficLights && 'pt-10',
+      )}
     >
       <div className="flex h-10 items-center gap-2.5 px-1.5">
         <ObiterMark className="size-7 shrink-0" title="" />
