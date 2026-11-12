@@ -10,8 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import {
-  closeMenu,
-  menuItem,
+  choose,
   openMenu,
   openRibbonTab,
   runMenuCommand,
@@ -397,8 +396,7 @@ test('typing through the save flight beside a stored table of contents and page 
   for (const text of [HEADING, 'Beta paragraph']) {
     await focusParagraph(page, text)
     await openMenu(page, 'Format')
-    await menuItem(page, 'Heading 1').click()
-    await closeMenu(page)
+    await choose(page, 'Paragraph style', 'Heading 1')
   }
   await focusParagraph(page, BODY)
   await openRibbon(page, 'Insert')
@@ -408,7 +406,7 @@ test('typing through the save flight beside a stored table of contents and page 
   await openRibbon(page, 'References')
   await openRibbon(page, 'Insert')
   await page
-    .getByRole('menuitem', { name: 'Table of contents', exact: true })
+    .getByRole('button', { name: 'Table of contents', exact: true })
     .click()
   await expect(headingParagraphs(page)).toHaveCount(2)
   await saveAndWait(page)

@@ -25,6 +25,7 @@ export interface ButtonProps {
   'aria-label'?: string
   'aria-pressed'?: boolean
   'aria-describedby'?: string
+  'aria-keyshortcuts'?: string
   title?: string
   'data-testid'?: string
 }

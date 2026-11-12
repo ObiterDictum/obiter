@@ -16,8 +16,7 @@ import type { documentExportHandlers } from './document-workspace-export'
 import { documentClipboardToolbar } from './use-workspace-clipboard'
 import { changeReviewToolbar } from './change-review-toolbar'
 import { editorMenus } from './editor-commands'
-import { EditorMenuBar } from './editor-menu-bar'
-import { EditorToolbar } from './editor-toolbar'
+import { EditorRibbon } from './editor-ribbon'
 import { EditorFindBar } from './editor-find-bar'
 import { EditorCommandPalette } from './editor-command-palette'
 import { EditorFormattingPanel } from './editor-formatting-panel'
@@ -133,8 +132,13 @@ function DocxWorkspaceChromeInner({
         },
       }
     : props.verify
+  const openToolbarFormatting = useLatestCallback(() =>
+    openFormatting(
+      document.querySelector<HTMLElement>('[data-editor-toolbar]'),
+    ),
+  )
   const actions = {
-    openFormatting: () => openFormatting(formattingAnchor),
+    openFormatting: openToolbarFormatting,
     openFind: () => setFindOpen(true),
     openPalette: () => setPaletteOpen(true),
     openTable: () => setTableOpen(true),
@@ -154,22 +158,10 @@ function DocxWorkspaceChromeInner({
       : props.onOpenVerify,
   }
   const menus = editorMenus(menued, actions)
-  const openToolbarFormatting = useLatestCallback(() =>
-    openFormatting(
-      document.querySelector<HTMLElement>('[data-editor-toolbar]'),
-    ),
-  )
   const openPalette = useLatestCallback(() => setPaletteOpen(true))
   return (
     <WorkspaceRibbon>
-      <div className="flex items-stretch border-b border-line px-3">
-        <EditorMenuBar menus={menus} />
-      </div>
-      <EditorToolbar
-        props={props}
-        onOpenFormatting={openToolbarFormatting}
-        onOpenPalette={openPalette}
-      />
+      <EditorRibbon menus={menus} props={menued} onOpenPalette={openPalette} />
       {citation.text === null ? null : (
         <PendingCitationBar
           citation={citation.text}

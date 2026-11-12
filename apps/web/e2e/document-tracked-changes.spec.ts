@@ -149,12 +149,18 @@ async function decideSelection(page: Page, action: 'Accept' | 'Reject') {
 }
 
 async function openChangesPanel(page: Page) {
+  if (
+    await panel(page)
+      .isVisible()
+      .catch(() => false)
+  )
+    return
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const opened = await openMenu(page, 'Review')
       .then(() => true)
       .catch(() => false)
     if (!opened) continue
-    const row = page.getByRole('menuitemcheckbox', { name: /^Changes/u })
+    const row = page.getByRole('button', { name: /^Changes/u })
     const clicked = await row
       .click({ timeout: 5_000 })
       .then(() => true)
@@ -217,15 +223,10 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   await openMenu(page, 'Review')
   const acceptChange = menuItem(page, 'Accept change')
   await expect(acceptChange).toBeDisabled()
-  await expect(acceptChange).toHaveAttribute('aria-describedby', /.+/)
-  await expect(
-    page
-      .getByText(
-        'Go to a change first — use Previous, Next or the Changes list.',
-      )
-      .first(),
-  ).toBeVisible()
-  await closeMenu(page)
+  await expect(acceptChange).toHaveAttribute(
+    'title',
+    'Go to a change first — use Previous, Next or the Changes list.',
+  )
 
   await list.getByRole('button', { name: 'Show this change' }).first().click()
   await expect(panel(page)).toContainText('2 of 6')
@@ -393,6 +394,7 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   await setTrackChanges(page, true)
 
   await selectFirst(page, PLAIN, SELECTED.length)
+  await openMenu(page, 'Format')
   await page.getByRole('button', { name: 'Bold', exact: true }).click()
 
   const saveResponse = page.waitForResponse(

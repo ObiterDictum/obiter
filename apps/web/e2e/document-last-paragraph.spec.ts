@@ -4,7 +4,7 @@ import { signIn } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 
 import { createSyntheticDocx } from '../../../packages/ooxml/src/index'
-import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
+import { menuItem, openMenu, runMenuCommand } from './editor-chrome'
 
 const FIRST = 'E0 sole paragraph of the synthetic fixture.'
 const SECOND = 'E0 second paragraph after insertion.'
@@ -46,14 +46,7 @@ async function openSyntheticDocument(
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 async function deleteButton(page: Page) {
-  if (
-    !(await page
-      .getByRole('menu', { name: 'Edit' })
-      .isVisible()
-      .catch(() => false))
-  ) {
-    await openMenu(page, 'Edit')
-  }
+  await openMenu(page, 'Edit')
   return menuItem(page, 'Delete paragraph')
 }
 const saveButton = (page: Page) =>
@@ -130,10 +123,10 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   await expect(page.locator('[data-paragraph-id]').first()).toContainText(FIRST)
   const unavailable = await deleteButton(page)
   await expect(unavailable).toBeDisabled()
-  await expect(
-    page.getByText('A document must contain at least one paragraph.'),
-  ).toBeVisible()
-  await closeMenu(page)
+  await expect(unavailable).toHaveAttribute(
+    'title',
+    'A document must contain at least one paragraph.',
+  )
 
   await page.locator('[data-paragraph-id]').first().click()
   await expect(editor(page)).toHaveValue(FIRST)

@@ -11,7 +11,12 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import { openMenu, runMenuCommand } from './editor-chrome'
+import {
+  menuItem,
+  openMenu,
+  openRibbonGroup,
+  runMenuCommand,
+} from './editor-chrome'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -41,18 +46,15 @@ async function createAccount(request: APIRequestContext) {
   return { email, password }
 }
 
-const toaButton = (page: Page) =>
-  page.getByRole('menuitem', { name: 'Table of authorities', exact: true })
+const toaButton = (page: Page) => menuItem(page, 'Table of authorities')
 const updateButton = (page: Page) =>
-  page.getByRole('menuitem', {
-    name: 'Update table of authorities',
-    exact: true,
-  })
+  menuItem(page, 'Update table of authorities')
 const toaHeading = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: 'Table of Cases' })
 
 async function openReferences(page: Page) {
   await openMenu(page, 'Insert')
+  await openRibbonGroup(page, 'Authorities')
 }
 
 type EditBody = { operations?: Array<Record<string, unknown>> }
@@ -126,7 +128,7 @@ test('table of authorities paints, saves, updates and exports', async ({
 
   await focusParagraph(page, 'Table of Cases')
   await openMenu(page, 'Edit')
-  const deleteParagraph = page.getByRole('menuitem', {
+  const deleteParagraph = page.getByRole('button', {
     name: 'Delete paragraph',
     exact: true,
   })
@@ -135,9 +137,7 @@ test('table of authorities paints, saves, updates and exports', async ({
 
   await focusParagraph(page, 'IN THE HIGH COURT OF JUSTICE')
   await openReferences(page)
-  await page
-    .getByRole('menuitem', { name: 'Insert authority', exact: true })
-    .click()
+  await menuItem(page, 'Insert authority').click()
   await page.getByRole('textbox', { name: 'Citation' }).fill(ADDED_CITATION)
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
   await focusParagraph(page, 'Table of Cases')

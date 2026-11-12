@@ -86,7 +86,7 @@ test('hyperlink and cross-reference paint, save and reload', async ({
     await page.keyboard.press('Shift+ArrowRight')
   }
   await openRibbon(page, 'Insert')
-  await page.getByRole('menuitem', { name: 'Link', exact: true }).click()
+  await page.getByRole('button', { name: 'Link', exact: true }).click()
   await page.getByLabel('Address').fill(LINK_TARGET)
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
   await expect(linkedText(page)).toBeVisible()
@@ -97,7 +97,7 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   await caretParagraph.click()
   await openRibbon(page, 'Insert')
   await page
-    .getByRole('menuitem', { name: 'Cross-reference', exact: true })
+    .getByRole('button', { name: 'Cross-reference', exact: true })
     .click()
   const target = page
     .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })

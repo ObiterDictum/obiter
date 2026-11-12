@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runMenuCommand } from './editor-chrome'
+import { openMenu, runMenuCommand } from './editor-chrome'
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -69,6 +69,7 @@ async function openCommentsPanel(page: Page) {
   const panel = page.getByRole('complementary', { name: 'Comments' })
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (!(await panel.isVisible())) {
+      await openMenu(page, 'Review').catch(() => undefined)
       await page
         .getByRole('button', { name: /^Comments( \(\d+\))?$/u })
         .first()

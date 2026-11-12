@@ -8,7 +8,7 @@ import {
   openReviewTab,
   openTab,
 } from './docx-workspace-save-harness'
-import { command, menuItem } from './editor-test-commands'
+import { command } from './editor-test-commands'
 
 function openViewTab() {
   openTab('View')
@@ -42,13 +42,13 @@ describe('E13 review and view controls', () => {
     expect(
       document.querySelectorAll('[data-document-sheet].bg-white').length,
     ).toBeGreaterThan(0)
-    fireEvent.click(menuItem('Web layout'))
+    fireEvent.click(command('Web layout'))
     const sheets = document.querySelectorAll('[data-document-sheet]')
     expect(sheets.length).toBe(1)
     expect(sheets[0]?.className).toContain('bg-transparent')
-    expect(menuItem('Web layout').getAttribute('aria-checked')).toBe('true')
+    expect(command('Web layout').getAttribute('aria-pressed')).toBe('true')
 
-    fireEvent.click(menuItem('Print layout'))
+    fireEvent.click(command('Print layout'))
     expect(
       document.querySelectorAll('[data-document-sheet].bg-white').length,
     ).toBeGreaterThan(0)
@@ -58,7 +58,7 @@ describe('E13 review and view controls', () => {
     mountSaveWorkspace({ editAsync: vi.fn() })
     openViewTab()
     expect(document.querySelector('[data-document-ruler]')).toBeNull()
-    fireEvent.click(menuItem('Ruler'))
+    fireEvent.click(command('Ruler'))
     const ruler = document.querySelector('[data-document-ruler]')
     expect(ruler).not.toBeNull()
     expect(ruler?.getAttribute('aria-label')).toContain('Page width')
@@ -71,7 +71,7 @@ describe('E13 review and view controls', () => {
       styleIds: ['Heading1', undefined, 'Heading1'],
     })
     openViewTab()
-    fireEvent.click(menuItem('Navigation pane'))
+    fireEvent.click(command('Navigation pane'))
 
     const items = document.querySelectorAll('[data-outline-item]')
     expect(items).toHaveLength(2)
@@ -86,7 +86,7 @@ describe('E13 review and view controls', () => {
   it('says when the document has no headings', () => {
     mountSaveWorkspace({ editAsync: vi.fn() })
     openViewTab()
-    fireEvent.click(menuItem('Navigation pane'))
+    fireEvent.click(command('Navigation pane'))
     expect(document.querySelector('[data-navigation-pane]')).not.toBeNull()
     expect(screen.getByText(/no headings/i)).toBeTruthy()
   })

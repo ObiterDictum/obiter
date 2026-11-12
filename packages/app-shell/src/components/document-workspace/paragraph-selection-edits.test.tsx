@@ -6,7 +6,11 @@ import {
   insertParagraphRuns,
   type DocumentEditOperation,
 } from '@obiter/contracts'
-import { openRibbonTab, setTrackChanges } from './editor-test-commands'
+import {
+  chooseRibbonOption,
+  openRibbonTab,
+  setTrackChanges,
+} from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -271,7 +275,7 @@ describe('formatting a cross-paragraph selection', () => {
     ])
   })
 
-  it('applies a paragraph style to every selected paragraph', () => {
+  it('applies a paragraph style to every selected paragraph', async () => {
     const model = threeParagraphs()
     model.styles = [
       {
@@ -282,7 +286,7 @@ describe('formatting a cross-paragraph selection', () => {
     ]
     const { editAsync } = mount(model)
     selectAcrossBoundary()
-    fireEvent.click(command('Quote'))
+    await chooseRibbonOption('Paragraph style', 'Quote')
     save()
     const operations = saveOperations(editAsync)
     expect(operations).toEqual(

@@ -51,6 +51,15 @@ mock.module('./account-menu', () => ({
   AccountMenu: () => null,
 }))
 
+const paletteOpens: HTMLElement[] = []
+const commandPaletteModule = { ...(await import('./command-palette')) }
+mock.module('./command-palette', () => ({
+  ...commandPaletteModule,
+  useCommandPalette: () => (trigger?: HTMLElement | null) => {
+    if (trigger) paletteOpens.push(trigger)
+  },
+}))
+
 function matter(overrides: Partial<MatterRecord> = {}): MatterRecord {
   return {
     id: 'mtr_1',
@@ -173,6 +182,7 @@ afterEach(() => {
   mocks.verificationRuns = []
   toggleClicks.length = 0
   collapseClicks.length = 0
+  paletteOpens.length = 0
   window.localStorage.clear()
 })
 
@@ -341,10 +351,32 @@ describe('Sidebar', () => {
     expect(collapseClicks).toEqual(['collapse'])
   })
 
-  it('drops the search field from the sidebar now that it lives in the title bar', async () => {
+  it('offers the command palette from a search field above the modules', async () => {
     renderSidebar('/')
-    await screen.findByRole('navigation', { name: 'Workspace' })
-    expect(screen.queryByRole('textbox', { name: 'Search Obiter' })).toBeNull()
+    const field = await screen.findByRole('button', { name: 'Search Obiter' })
+
+    expect(field.textContent).toContain('Search Obiter')
+    expect(field.textContent).toContain('Ctrl+K')
+
+    fireEvent.click(field)
+    expect(paletteOpens).toEqual([field])
+  })
+
+  it('puts the search field below the organisation row so the monogram keeps the title-bar line', async () => {
+    renderSidebar('/')
+    const field = await screen.findByRole('button', { name: 'Search Obiter' })
+    const brand = field.previousElementSibling
+
+    expect(brand?.textContent).toContain('Obiter')
+    expect(brand?.textContent).toContain('Harrington Vale LLP')
+  })
+
+  it('puts the monogram on the title bar row rather than a padded strip below it', async () => {
+    renderSidebar('/')
+    const sidebar = await screen.findByRole('complementary', {
+      name: 'Workspace',
+    })
+    expect(sidebar.className).not.toContain('pt-10')
   })
 })
 
@@ -371,6 +403,12 @@ describe('SidebarRail', () => {
     expect(toggle.className).toContain('size-9')
     fireEvent.click(toggle)
     expect(collapseClicks).toEqual(['expand'])
+  })
+
+  it('puts the rail mark on the title bar row rather than a padded strip below it', async () => {
+    renderSidebar('/matters', 'rail')
+    const rail = await screen.findByRole('navigation', { name: 'Workspace' })
+    expect(rail.className).not.toContain('pt-10')
   })
 
   it('toggles the agent panel from the rail', async () => {

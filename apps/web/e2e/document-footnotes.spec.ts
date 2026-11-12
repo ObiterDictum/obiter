@@ -103,9 +103,7 @@ test('a footnote typed into its opened story survives save, reload and export', 
   await page.keyboard.press('End')
 
   await openRibbon(page, 'Insert')
-  await page
-    .getByRole('menuitemcheckbox', { name: 'Footnote', exact: true })
-    .click()
+  await page.getByRole('button', { name: 'Footnote', exact: true }).click()
   await expect(page.getByRole('menu')).toHaveCount(0)
   await expect(editor(page)).toBeVisible()
   await expect(editor(page)).toHaveValue('')
@@ -123,7 +121,7 @@ test('a footnote typed into its opened story survives save, reload and export', 
   await shot(page, '03-saved')
 
   await openRibbon(page, 'Insert')
-  await page.getByRole('menuitemcheckbox', { name: 'Close footnotes' }).click()
+  await page.getByRole('button', { name: 'Close footnotes' }).click()
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await bodyParagraph(page).click()
     const focused = await expect(editor(page))
@@ -151,14 +149,12 @@ test('a footnote typed into its opened story survives save, reload and export', 
     await noteParagraph(reloaded).click()
     await openRibbon(reloaded, 'Insert')
     await expect(
-      reloaded.getByRole('menuitemcheckbox', { name: 'Close footnotes' }),
+      reloaded.getByRole('button', { name: 'Close footnotes' }),
     ).toBeVisible()
     await expect(editor(reloaded)).toHaveValue(new RegExp(MARKER))
 
     await openRibbon(reloaded, 'Insert')
-    await reloaded
-      .getByRole('menuitemcheckbox', { name: 'Close footnotes' })
-      .click()
+    await reloaded.getByRole('button', { name: 'Close footnotes' }).click()
     await bodyParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(BODY_TEXT))
     await shot(reloaded, '04-reloaded-note-editable')
@@ -206,13 +202,11 @@ async function focusParagraphEnd(page: Page, text: string) {
 async function insertCitedFootnote(page: Page, anchor: string, note: string) {
   await focusParagraphEnd(page, anchor)
   await openRibbon(page, 'Insert')
-  await page
-    .getByRole('menuitemcheckbox', { name: 'Footnote', exact: true })
-    .click()
+  await page.getByRole('button', { name: 'Footnote', exact: true }).click()
   await expect(editor(page)).toBeFocused()
   await page.keyboard.type(note)
   await openRibbon(page, 'Insert')
-  await page.getByRole('menuitemcheckbox', { name: 'Close footnotes' }).click()
+  await page.getByRole('button', { name: 'Close footnotes' }).click()
 }
 
 async function numbering(page: Page) {

@@ -414,9 +414,15 @@ afterEach(() => {
 })
 
 export function openTab(
-  name: 'Review' | 'Insert' | 'View' | 'Home' | 'Layout',
+  name: 'Review' | 'Insert' | 'View' | 'Home' | 'Layout' | 'Format',
 ) {
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}$`) }))
+  if (name === 'Home' || name === 'Layout') {
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Font, paragraph and page' }),
+    )
+    return
+  }
+  fireEvent.click(screen.getByRole('tab', { name }))
 }
 
 export function openReviewTab() {

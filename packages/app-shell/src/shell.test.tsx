@@ -332,7 +332,7 @@ describe('shell frame', () => {
     ).toBeNull()
   })
 
-  it('opens the command palette from the title bar field and returns focus to it on Escape', async () => {
+  it('opens the command palette from the sidebar field and returns focus to it on Escape', async () => {
     renderShell('/')
     const trigger = await screen.findByRole('button', { name: 'Search Obiter' })
     expect(trigger.textContent).toContain('Ctrl+K')
@@ -366,15 +366,36 @@ describe('shell frame', () => {
     )
   })
 
-  it('keeps the search field in the title bar rather than the sidebar', async () => {
+  it('puts the search field at the top of the sidebar rather than the title bar', async () => {
     renderShell('/')
-    const nav = await screen.findByRole('navigation', { name: 'Workspace' })
-    expect(nav.querySelector('[aria-label="Search Obiter"]')).toBeNull()
+    await screen.findByRole('navigation', { name: 'Workspace' })
+    expect(
+      document
+        .querySelector('#app-shell-sidebar')
+        ?.querySelector('[aria-label="Search Obiter"]'),
+    ).not.toBeNull()
+    expect(
+      document
+        .querySelector('header')
+        ?.querySelector('[aria-label="Search Obiter"]'),
+    ).toBeNull()
+  })
+
+  it('moves the search field to the title bar when the sidebar is a rail', async () => {
+    window.localStorage.setItem('obiter.sidebar.collapsed', 'true')
+    renderShell('/')
+    await screen.findByRole('navigation', { name: 'Workspace' })
+
     expect(
       document
         .querySelector('header')
         ?.querySelector('[aria-label="Search Obiter"]'),
     ).not.toBeNull()
+    expect(
+      document
+        .querySelector('#app-shell-sidebar')
+        ?.querySelector('[aria-label="Search Obiter"]'),
+    ).toBeNull()
   })
 
   it('runs the sidebar to the top so the title bar starts at the content pane', async () => {

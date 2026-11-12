@@ -98,9 +98,7 @@ async function clipboardRow(page: Page, name: 'Copy' | 'Cut' | 'Paste') {
 
 async function clipboardDescription(page: Page, name: 'Copy' | 'Cut') {
   const row = await clipboardRow(page, name)
-  const id = await row.getAttribute('aria-describedby')
-  if (!id) return ''
-  return (await page.locator(`[id="${id}"]`).textContent()) ?? ''
+  return (await row.getAttribute('title')) ?? ''
 }
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()

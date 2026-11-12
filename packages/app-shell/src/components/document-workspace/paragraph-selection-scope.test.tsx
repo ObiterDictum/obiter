@@ -2,7 +2,7 @@ import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
-import { openRibbonTab } from './editor-test-commands'
+import { openFindBar } from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -85,7 +85,7 @@ describe('selection scope', () => {
   it('clears the selection when a find hit moves the caret', () => {
     mountWorkspace({ models: { doc_1: model() }, editAsync: vi.fn() })
     selectAcrossBoundary()
-    openRibbonTab('Review')
+    openFindBar()
     fireEvent.change(screen.getByLabelText('Find in document'), {
       target: { value: 'Charlie' },
     })

@@ -4,11 +4,12 @@ import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  closeMenu,
+  choose,
   menuItem,
   openFormatting,
   openMenu,
   runMenuCommand,
+  selectedValue,
 } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -66,10 +67,8 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
 
   await focusParagraph(page, 'E4 Heading')
   await openMenu(page, 'Format')
-  const quote = menuItem(page, 'Quote')
-  await quote.click()
-  await expect(quote).toHaveAttribute('aria-checked', 'true')
-  await closeMenu(page)
+  await choose(page, 'Paragraph style', 'Quote')
+  await expect(selectedValue(page, 'Paragraph style')).toHaveText('Quote')
   await shot(page, '01-style-applied')
 
   await focusParagraph(page, 'E4 Heading')
@@ -78,8 +77,6 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
     'paragraphs selected',
   )
   await openMenu(page, 'Format')
-  await expect(menuItem(page, 'Quote')).toHaveAttribute('aria-checked', 'false')
-  await closeMenu(page)
   await expect(
     page.getByRole('combobox', { name: 'Paragraph style', exact: true }),
   ).toHaveText('Mixed styles')
@@ -102,10 +99,9 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
   await runMenuCommand(page, 'Format', 'Restart numbering')
   await openMenu(page, 'Format')
   await expect(menuItem(page, 'Restart numbering')).toHaveAttribute(
-    'aria-checked',
+    'aria-pressed',
     'true',
   )
-  await closeMenu(page)
   await shot(page, '04-list-restart')
 
   await saveAndWait(page)
@@ -137,18 +133,12 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
     await openFixtureDocument(reloaded, email, password, matter, STYLED_FIXTURE)
     await focusParagraph(reloaded, 'E4 Heading')
     await openMenu(reloaded, 'Format')
-    await expect(menuItem(reloaded, 'Quote')).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
-    await closeMenu(reloaded)
+    await expect(selectedValue(reloaded, 'Paragraph style')).toHaveText('Quote')
     await focusParagraph(reloaded, 'Alpha item')
-    await openMenu(reloaded, 'Format')
-    await expect(menuItem(reloaded, 'Restart numbering')).toHaveAttribute(
-      'aria-checked',
-      'true',
-    )
-    await closeMenu(reloaded)
+    await openFormatting(reloaded)
+    await expect(
+      reloaded.getByRole('button', { name: 'Restart numbering', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
     await shot(reloaded, '06-reopened')
   } finally {
     await fresh.close()

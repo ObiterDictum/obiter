@@ -60,7 +60,7 @@ export function MatterTabStrip({
       ? () => setDeletingId(activeDocumentId)
       : undefined
   return (
-    <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-line bg-surface px-2">
+    <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-line bg-surface px-3">
       {compact ? (
         <CompactTabs
           tabs={named}

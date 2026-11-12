@@ -73,16 +73,16 @@ describe('Review commands open the right panel', () => {
 
     fireEvent.click(command('Check defined terms'))
     expect(rightSlot()?.getAttribute('data-tab')).toBe('checks')
-    expect(command('Check defined terms').getAttribute('aria-checked')).toBe(
+    expect(command('Check defined terms').getAttribute('aria-pressed')).toBe(
       'true',
     )
 
     fireEvent.click(command('Check cross-references'))
     expect(rightSlot()?.getAttribute('data-tab')).toBe('checks')
-    expect(command('Check cross-references').getAttribute('aria-checked')).toBe(
+    expect(command('Check cross-references').getAttribute('aria-pressed')).toBe(
       'true',
     )
-    expect(command('Check defined terms').getAttribute('aria-checked')).toBe(
+    expect(command('Check defined terms').getAttribute('aria-pressed')).toBe(
       'false',
     )
     expect(document.querySelector('[data-docked-panel]')).toBeNull()

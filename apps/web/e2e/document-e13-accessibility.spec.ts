@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { createAccount, openDocx, openRibbonTab } from './e13-support'
-import { closeMenu, menuItem } from './editor-chrome'
+import { menuItem } from './editor-chrome'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -22,10 +22,9 @@ test('reduced-motion and forced-colours keep the ribbon usable', async ({
   await expect(page.locator('[data-navigation-pane]')).toBeVisible()
   await menuItem(page, 'Ruler').click()
   await expect(page.locator('[data-document-ruler]')).toBeVisible()
-  await closeMenu(page)
-  const menuTrigger = page.getByRole('button', { name: 'Review', exact: true })
-  await menuTrigger.focus()
-  const outlineWidth = await menuTrigger.evaluate(
+  const reviewTab = page.getByRole('tab', { name: 'Review', exact: true })
+  await reviewTab.focus()
+  const outlineWidth = await reviewTab.evaluate(
     (node) => getComputedStyle(node).outlineWidth,
   )
   expect(Number.parseFloat(outlineWidth)).toBeGreaterThan(0)
@@ -89,7 +88,6 @@ test.describe('coarse pointer and zoomed viewport', () => {
         expect(box?.height ?? 0, `${name} height`).toBeGreaterThanOrEqual(44)
         expect(box?.width ?? 0, `${name} width`).toBeGreaterThanOrEqual(44)
       }
-      await closeMenu(page)
     }
 
     await assertTargets()

@@ -17,6 +17,7 @@ import {
   rerenderWorkspace,
   command,
 } from './docx-workspace-harness'
+import { chooseRibbonOption } from './editor-test-commands'
 
 function field(): HTMLTextAreaElement {
   const editor = screen.getByLabelText('Paragraph text')
@@ -153,7 +154,7 @@ describe('vertical moves follow the lines the pending format paints', () => {
     }
   }
 
-  it('resolves ArrowUp against the painted last line, not the stored one', () => {
+  it('resolves ArrowUp against the painted last line, not the stored one', async () => {
     const model = styledModel()
     const painted = formattedModel(model, formatDrafts('p1'))
     const storedP1 = paragraph('p1', LONG)
@@ -179,7 +180,7 @@ describe('vertical moves follow the lines the pending format paints', () => {
       throw new Error('expected the first paragraph')
     }
     fireEvent.click(paragraphEl)
-    fireEvent.click(command('Small'))
+    await chooseRibbonOption('Paragraph style', 'Small')
 
     field().setSelectionRange(LONG.length, LONG.length)
     fireEvent.keyDown(field(), { key: 'ArrowRight' })

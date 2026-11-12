@@ -61,6 +61,18 @@ export function formatShortcut(
   return shortcutLabels(keys, isMac).join(isMac ? '' : '+')
 }
 
+export function shortcutAttribute(
+  keys: readonly string[],
+  isMac = isMacPlatform(),
+): string {
+  const modifiers = {
+    primary: isMac ? 'Meta' : 'Control',
+    shift: 'Shift',
+    alt: 'Alt',
+  } as const
+  return keys.map((key) => (isModifier(key) ? modifiers[key] : key)).join('+')
+}
+
 export function isPrimaryModifier(event: {
   metaKey: boolean
   ctrlKey: boolean
