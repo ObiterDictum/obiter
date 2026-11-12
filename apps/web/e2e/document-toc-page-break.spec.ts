@@ -4,8 +4,7 @@ import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  closeMenu,
-  menuItem,
+  choose,
   openMenu,
   openRibbonTab,
   runMenuCommand,
@@ -46,8 +45,7 @@ test('a typed edit beside a stored table of contents and page break saves and re
   for (const text of [HEADING, 'Beta paragraph']) {
     await focusParagraph(page, text)
     await openMenu(page, 'Format')
-    await menuItem(page, 'Heading 1').click()
-    await closeMenu(page)
+    await choose(page, 'Paragraph style', 'Heading 1')
   }
   await focusParagraph(page, 'Delta paragraph')
   await openRibbon(page, 'Insert')
