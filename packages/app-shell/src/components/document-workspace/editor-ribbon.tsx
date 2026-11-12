@@ -68,9 +68,10 @@ export function EditorRibbon({
   const tabRefs = useRef(new Map<EditorMenuId, HTMLButtonElement>())
   const active = tabs.find((menu) => menu.id === selectedId) ?? tabs[0]
 
-  const selectTab = (id: EditorMenuId) => {
+  const selectTab = (id: EditorMenuId, keepTabFocus: boolean) => {
     setSelectedId(id)
-    tabRefs.current.get(id)?.focus()
+    if (keepTabFocus) tabRefs.current.get(id)?.focus()
+    else refocusCaret()
   }
 
   const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -81,7 +82,7 @@ export function EditorRibbon({
     const target = tabs[next]
     if (!target) return
     event.preventDefault()
-    selectTab(target.id)
+    selectTab(target.id, true)
   }
 
   return (
@@ -110,7 +111,7 @@ export function EditorRibbon({
                 aria-controls={panelId(menu.id)}
                 tabIndex={selected ? 0 : -1}
                 className={tabClassName(selected)}
-                onClick={() => selectTab(menu.id)}
+                onClick={(event) => selectTab(menu.id, event.detail === 0)}
               >
                 {menu.label}
               </button>
@@ -131,7 +132,7 @@ export function EditorRibbon({
             role="tabpanel"
             id={panelId(active.id)}
             aria-labelledby={tabId(active.id)}
-            className="flex min-w-0 items-stretch gap-1"
+            className="flex shrink-0 items-stretch gap-1"
           >
             {active.groups.map((group) => (
               <RibbonGroup key={group.label} group={group} />
