@@ -54,11 +54,10 @@ test('table of contents refuses without headings, then paints, saves and reloads
   await openRibbon(page, 'References')
   const refused = tocButton(page)
   await expect(refused).toBeDisabled()
-  await expect(
-    page.getByText(
-      'The document has no headings a table of contents can list.',
-    ),
-  ).toBeVisible()
+  await expect(refused).toHaveAttribute(
+    'title',
+    'The document has no headings a table of contents can list.',
+  )
   await shot(page, '01-no-headings-refusal')
 
   await focusParagraph(page, HEADING)
