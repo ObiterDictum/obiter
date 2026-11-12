@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { createAccount, openDocx, openRibbonTab } from './e13-support'
-import { menuItem } from './editor-chrome'
+import { createAccount, openDocx } from './e13-support'
+import { ribbonCommand, ribbonTab, runCommand } from './editor-chrome'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -17,12 +17,11 @@ test('reduced-motion and forced-colours keep the ribbon usable', async ({
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  await openRibbonTab(page, 'View')
-  await menuItem(page, 'Navigation pane').click()
+  await runCommand(page, 'Navigation pane')
   await expect(page.locator('[data-navigation-pane]')).toBeVisible()
-  await menuItem(page, 'Ruler').click()
+  await runCommand(page, 'Ruler')
   await expect(page.locator('[data-document-ruler]')).toBeVisible()
-  const reviewTab = page.getByRole('tab', { name: 'Review', exact: true })
+  const reviewTab = ribbonTab(page, 'Review')
   await reviewTab.focus()
   const outlineWidth = await reviewTab.evaluate(
     (node) => getComputedStyle(node).outlineWidth,
@@ -46,8 +45,7 @@ test('the workspace holds together at tablet width with no horizontal overflow',
       document.documentElement.clientWidth,
   )
   expect(overflow).toBeLessThanOrEqual(4)
-  await openRibbonTab(page, 'View')
-  await expect(menuItem(page, 'Navigation pane')).toBeVisible()
+  await expect(await ribbonCommand(page, 'Navigation pane')).toBeVisible()
 })
 
 test.describe('coarse pointer and zoomed viewport', () => {
@@ -72,7 +70,6 @@ test.describe('coarse pointer and zoomed viewport', () => {
     ).toBe(true)
 
     const assertTargets = async () => {
-      await openRibbonTab(page, 'View')
       for (const name of [
         'Zoom out',
         'Zoom in',
@@ -81,7 +78,7 @@ test.describe('coarse pointer and zoomed viewport', () => {
         'Print layout',
         'Web layout',
       ]) {
-        const control = menuItem(page, name)
+        const control = await ribbonCommand(page, name)
         await expect(control).toBeVisible()
         const box = await control.boundingBox()
         expect(box, `${name} has no box`).not.toBeNull()

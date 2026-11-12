@@ -6,8 +6,7 @@ import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { openRibbonTab } from './editor-chrome'
-import { runMenuCommand } from './editor-chrome'
+import { ribbonCommand, runCommand } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
@@ -64,10 +63,6 @@ const headerParagraph = (page: Page) =>
 const bodyParagraph = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: BODY_TEXT }).first()
 
-async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Review') {
-  await openRibbonTab(page, name)
-}
-
 function expectExportedDocx(docxPath: string) {
   const script = [
     'import sys, zipfile',
@@ -95,9 +90,8 @@ test('header text and page number survive save, reload and export', async ({
   await expect(paintedHeader(page)).toBeVisible()
   await shot(page, '01-header-painted-readonly')
 
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Header', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Close header' })).toBeVisible()
+  await runCommand(page, 'Header')
+  await expect(await ribbonCommand(page, 'Close header')).toBeVisible()
 
   await headerParagraph(page).click()
   await expect(editor(page)).toBeFocused()
@@ -108,8 +102,7 @@ test('header text and page number survive save, reload and export', async ({
   await expect(editor(page)).toHaveValue(new RegExp(`${MARKER}$`))
   await shot(page, '02-header-typed')
 
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Page number', exact: true }).click()
+  await runCommand(page, 'Page number')
   await expect(editor(page)).toHaveValue(new RegExp(`${MARKER}$`))
   await shot(page, '03-page-number-inserted')
 
@@ -126,13 +119,11 @@ test('header text and page number survive save, reload and export', async ({
     await expect(reloaded.getByText(MARKER).first()).toBeVisible({
       timeout: 30_000,
     })
-    await openRibbon(reloaded, 'Insert')
-    await reloaded.getByRole('button', { name: 'Header', exact: true }).click()
+    await runCommand(reloaded, 'Header')
     await headerParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(MARKER))
 
-    await openRibbon(reloaded, 'Insert')
-    await reloaded.getByRole('button', { name: 'Close header' }).click()
+    await runCommand(reloaded, 'Close header')
     await bodyParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(BODY_TEXT))
     await shot(reloaded, '05-reloaded-body-editable')
@@ -140,9 +131,8 @@ test('header text and page number survive save, reload and export', async ({
     await fresh.close()
   }
 
-  await openRibbon(page, 'Review')
   const downloadPromise = page.waitForEvent('download', { timeout: 20_000 })
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const download = await downloadPromise
   expect(download.suggestedFilename()).toMatch(/\.docx$/)
   const savedPath = path.join(os.tmpdir(), `e7a-export-${Date.now()}.docx`)

@@ -150,6 +150,14 @@ the existing ones, never in the API checkout. A UI change that alters what a
 spec looks for updates the spec in the same PR, and says in the PR whether the
 suite was run.
 
+Every editor-chrome interaction — ribbon tabs, ribbon and File-menu commands,
+Save/Undo/Redo, refusals, the paragraph style control — goes through a named
+helper in `apps/web/e2e/editor-chrome.ts`. That file is the only place that
+knows which tab, ribbon-group menu or dialog hosts a command, so reshaping the
+chrome edits it and leaves the specs alone. `eslint.config.mjs` refuses `getByRole('menu'…)`,
+`getByRole('menuitem'…)` and `getByRole('tablist'…)` queries in specs;
+non-editor surfaces (the account menu, redaction review) keep their own.
+
 The suite runs from a `backend` checkout, whose root Playwright config starts
 the API, the renderer and the web dev server together and executes
 `obiter/apps/web/e2e`. Postgres and Meilisearch must already be running there.

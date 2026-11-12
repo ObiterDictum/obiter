@@ -11,10 +11,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import {
-  closeMenu,
-  menuItem,
-  openMenu,
-  runMenuCommand,
+  commandRefusal,
+  openReviewPanel,
+  ribbonCommand,
+  runCommand,
+  saveButton,
   setTrackChanges,
   trackChangesIndicator,
 } from './editor-chrome'
@@ -156,17 +157,7 @@ async function openChangesPanel(page: Page) {
   )
     return
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const opened = await openMenu(page, 'Review')
-      .then(() => true)
-      .catch(() => false)
-    if (!opened) continue
-    const row = page.getByRole('button', { name: /^Changes/u })
-    const clicked = await row
-      .click({ timeout: 5_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (!clicked) continue
-    await closeMenu(page).catch(() => undefined)
+    await openReviewPanel(page, 'Changes')
     const shown = await expect(panel(page))
       .toBeVisible({ timeout: 5_000 })
       .then(() => true)
@@ -220,13 +211,10 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   await expect(list).toContainText('Formatting')
   await expect(panel(page)).toContainText('4 changes · 1 move · 1 comment')
 
-  await openMenu(page, 'Review')
-  const acceptChange = menuItem(page, 'Accept change')
-  await expect(acceptChange).toBeDisabled()
-  await expect(acceptChange).toHaveAttribute(
-    'title',
-    'Go to a change first — use Previous, Next or the Changes list.',
-  )
+  await expect(await ribbonCommand(page, 'Accept change')).toBeDisabled()
+  await expect
+    .poll(() => commandRefusal(page, 'Accept change'))
+    .toBe('Go to a change first — use Previous, Next or the Changes list.')
 
   await list.getByRole('button', { name: 'Show this change' }).first().click()
   await expect(panel(page)).toContainText('2 of 6')
@@ -240,7 +228,7 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
         incoming.url(),
       ) && incoming.request().method() === 'POST',
   )
-  await runMenuCommand(page, 'Review', 'Reject change')
+  await runCommand(page, 'Reject change')
   const rejected = await rejectResponse
   expect(rejected.status(), await rejected.text()).toBe(201)
   await expect(list.getByRole('listitem')).toHaveCount(5, { timeout: 15_000 })
@@ -258,7 +246,7 @@ test('imported revisions navigate, decide singly and in bulk, and export', async
   await expect(panel(page)).toContainText('0 changes', { timeout: 15_000 })
 
   const downloadPromise = page.waitForEvent('download')
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const download = await downloadPromise
   const documentXml = zipPart(await download.path(), 'word/document.xml')
   expect(documentXml).not.toContain('<w:ins')
@@ -323,9 +311,7 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   await expect(undecidableRow.getByText("Move · can't be paired")).toBeVisible()
   await undecidableRow.getByRole('button', { name: 'Show this change' }).click()
   await expect(panel(page)).toContainText('7 of 7')
-  await openMenu(page, 'Review')
-  const acceptChange = menuItem(page, 'Accept change')
-  await expect(acceptChange).toBeDisabled()
+  await expect(await ribbonCommand(page, 'Accept change')).toBeDisabled()
   await expect(
     page
       .getByText(
@@ -333,7 +319,6 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
       )
       .first(),
   ).toBeVisible()
-  await closeMenu(page)
 
   await expect(undecidableRow.getByRole('checkbox')).toHaveCount(0)
   const bulkResponse = page.waitForResponse(
@@ -357,7 +342,7 @@ test('lists an undecidable move honestly and bulk-decides only supported changes
   )
 
   const downloadPromise = page.waitForEvent('download')
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const xml = zipPart(await (await downloadPromise).path(), 'word/document.xml')
   expect(xml).toContain('w:name="orphanMove"')
   expect(xml).toContain('<w:moveFrom ')
@@ -394,15 +379,14 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   await setTrackChanges(page, true)
 
   await selectFirst(page, PLAIN, SELECTED.length)
-  await openMenu(page, 'Format')
-  await page.getByRole('button', { name: 'Bold', exact: true }).click()
+  await runCommand(page, 'Bold')
 
   const saveResponse = page.waitForResponse(
     (incoming) =>
       /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
       incoming.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await saveButton(page).click()
   const saved = await saveResponse
   expect(saved.status(), await saved.text()).toBe(201)
 
@@ -414,7 +398,7 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   await expect(recorded).toContainText('Formatting')
 
   const pendingDownload = page.waitForEvent('download')
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const pendingXml = zipPart(
     await (await pendingDownload).path(),
     'word/document.xml',
@@ -435,7 +419,7 @@ test('mid-run formatting tracks as a property change that rejects cleanly', asyn
   await expect(panel(page)).toContainText('0 changes', { timeout: 15_000 })
 
   const decidedDownload = page.waitForEvent('download')
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const decidedXml = zipPart(
     await (await decidedDownload).path(),
     'word/document.xml',
@@ -475,12 +459,12 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
       /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
       incoming.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: 'Save', exact: true }).first().click()
+  await saveButton(page).click()
   const saved = await saveResponse
   expect(saved.status(), await saved.text()).toBe(201)
 
   const downloadPromise = page.waitForEvent('download')
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const docxPath = await (await downloadPromise).path()
   const documentXml = zipPart(docxPath, 'word/document.xml')
   const settingsXml = zipPart(docxPath, 'word/settings.xml')
@@ -502,10 +486,7 @@ test('a tracked mid-sentence edit records only the changed token and the toggle 
         /\/api\/documents\/[^/]+\/edit$/u.test(incoming.url()) &&
         incoming.request().method() === 'POST',
     )
-    await reloaded
-      .getByRole('button', { name: 'Save', exact: true })
-      .first()
-      .click()
+    await saveButton(reloaded).click()
     const flipped = await settingsSave
     expect(flipped.status(), await flipped.text()).toBe(201)
     expect(
@@ -562,7 +543,7 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
       /\/api\/documents\/[^/]+\/edit$/u.test(response.url()) &&
       response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: 'Save', exact: true }).first().click()
+  await saveButton(page).click()
   expect((await saving).status()).toBe(201)
   await page.reload()
   const deletion = page
@@ -594,7 +575,7 @@ test('saved tracked text stays visible inline after reload and ordinary typing e
       /\/api\/documents\/[^/]+\/edit$/u.test(response.url()) &&
       response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: 'Save', exact: true }).first().click()
+  await saveButton(page).click()
   const tail = await savingTail
   expect(tail.status(), await tail.text()).toBe(201)
   const payload = documentEditRequestSchema.parse(tail.request().postDataJSON())

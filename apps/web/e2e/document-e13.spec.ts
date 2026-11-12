@@ -6,10 +6,9 @@ import {
   HEADING,
   openDocx,
   openMatterDocument,
-  openRibbonTab,
   signIn,
 } from './e13-support'
-import { choose, closeMenu, menuItem, toggleCommand } from './editor-chrome'
+import { chooseStyle, runCommand } from './editor-chrome'
 
 function escapePdfText(value: string) {
   return value
@@ -66,11 +65,9 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
   await openDocx(page, email, password, `E13 view ${Date.now()}`)
 
   await focusParagraph(page, HEADING)
-  await choose(page, 'Paragraph style', 'Heading 1')
+  await chooseStyle(page, 'Heading 1')
 
-  await openRibbonTab(page, 'View')
-  await menuItem(page, 'Web layout').click()
-  await closeMenu(page)
+  await runCommand(page, 'Web layout')
   const sheets = page.locator('[data-document-sheet]')
   await expect(sheets.first()).toBeVisible({ timeout: 10_000 })
   await expect(sheets.first()).toHaveClass(/bg-transparent/)
@@ -79,14 +76,12 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
     await expect(sheets.nth(index)).toHaveClass(/bg-transparent/)
   }
 
-  await openRibbonTab(page, 'View')
-  await menuItem(page, 'Ruler').click()
-  await closeMenu(page)
+  await runCommand(page, 'Ruler')
   const ruler = page.locator('[data-document-ruler]')
   await expect(ruler).toBeVisible()
   await expect(ruler).toHaveAttribute('aria-label', /Page width [\d.]+ cm/)
 
-  await toggleCommand(page, 'View', 'Navigation pane')
+  await runCommand(page, 'Navigation pane')
   const outline = page.locator('[data-outline-item]')
   await expect(outline.first()).toBeVisible()
   const target = page
@@ -102,32 +97,22 @@ test('the View ribbon drives a real web flow, ruler, navigation pane, spelling a
   const pageZoom = async () =>
     Number(await sheetFrame.getAttribute('data-page-zoom'))
   const zoomedOutFrom = await pageZoom()
-  await openRibbonTab(page, 'View')
-  await menuItem(page, 'Zoom out').click()
-  await closeMenu(page)
+  await runCommand(page, 'Zoom out')
   await expect.poll(pageZoom).toBeLessThan(zoomedOutFrom)
   const zoomedOut = await pageZoom()
-  await openRibbonTab(page, 'View')
-  await menuItem(page, 'Zoom in').click()
-  await closeMenu(page)
+  await runCommand(page, 'Zoom in')
   await expect.poll(pageZoom).toBeGreaterThan(zoomedOut)
   await expect(sheet).toBeVisible()
 
-  await openRibbonTab(page, 'View')
-  await menuItem(page, 'Print layout').click()
-  await closeMenu(page)
+  await runCommand(page, 'Print layout')
   await expect(sheets.first()).toHaveClass(/ring-black/)
 
-  await openRibbonTab(page, 'Review')
   const column = page.locator('[data-document-desk] [spellcheck]')
   await expect(column).toHaveAttribute('spellcheck', 'false')
-  await menuItem(page, 'Spelling').click()
-  await closeMenu(page)
+  await runCommand(page, 'Spelling')
   await expect(column).toHaveAttribute('spellcheck', 'true')
   await expect(page.getByText(/not a legal correctness check/i)).toBeVisible()
-  await openRibbonTab(page, 'Review')
-  await menuItem(page, 'Spelling').click()
-  await closeMenu(page)
+  await runCommand(page, 'Spelling')
   await expect(column).toHaveAttribute('spellcheck', 'false')
 })
 

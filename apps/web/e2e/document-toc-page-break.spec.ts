@@ -3,12 +3,7 @@ import { focusParagraph, saveAndWait } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
-  choose,
-  openMenu,
-  openRibbonTab,
-  runMenuCommand,
-} from './editor-chrome'
+import { chooseStyle, runCommand, saveButton } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
@@ -20,16 +15,9 @@ function shot(page: Page, name: string) {
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
 }
 
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
-const tocButton = (page: Page) =>
-  page.getByRole('button', { name: 'Table of contents', exact: true })
+const save = (page: Page) => saveButton(page)
 const headingParagraphs = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: HEADING })
-
-async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'References') {
-  await openRibbonTab(page, name)
-}
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -44,16 +32,13 @@ test('a typed edit beside a stored table of contents and page break saves and re
 
   for (const text of [HEADING, 'Beta paragraph']) {
     await focusParagraph(page, text)
-    await openMenu(page, 'Format')
-    await choose(page, 'Paragraph style', 'Heading 1')
+    await chooseStyle(page, 'Heading 1')
   }
   await focusParagraph(page, 'Delta paragraph')
-  await openRibbon(page, 'Insert')
-  await runMenuCommand(page, 'Insert', 'Page break')
+  await runCommand(page, 'Page break')
 
   await focusParagraph(page, 'Alpha item')
-  await openRibbon(page, 'References')
-  await tocButton(page).click()
+  await runCommand(page, 'Table of contents')
   await expect(headingParagraphs(page)).toHaveCount(2)
   await saveAndWait(page)
   const sheets = await page.getByLabel('Document page').count()

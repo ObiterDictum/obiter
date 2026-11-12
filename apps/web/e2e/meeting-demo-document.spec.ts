@@ -7,7 +7,7 @@ import {
 } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { fixturePath, openMatter, verifyEmailInDb } from './support'
-import { openMenu, runMenuCommand } from './editor-chrome'
+import { ribbonCommand, runCommand } from './editor-chrome'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 
@@ -55,22 +55,14 @@ test('the ribbon entries reveal the one real document action', async ({
 }) => {
   await seedDocument(page, request)
 
-  await openMenu(page, 'Review')
-  const verifyCitations = page.getByRole('button', {
-    name: 'Verify citations',
-    exact: true,
+  await expect(await ribbonCommand(page, 'Verify citations')).toBeEnabled({
+    timeout: 15_000,
   })
-  await expect(verifyCitations).toBeEnabled({ timeout: 15_000 })
-  await verifyCitations.click()
+  await runCommand(page, 'Verify citations')
   await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
 
-  await openMenu(page, 'File')
-  const ribbonRedact = page.getByRole('menuitem', {
-    name: 'Redact this document',
-    exact: true,
-  })
-  await expect(ribbonRedact).toBeEnabled()
-  await ribbonRedact.click()
+  await expect(await ribbonCommand(page, 'Redact this document')).toBeEnabled()
+  await runCommand(page, 'Redact this document')
   await expect(page.locator('#document-redaction-runs')).toBeFocused()
 
   const createRedact = page
@@ -158,7 +150,7 @@ test('opening a finding brings its marker inside a 390px viewport', async ({
 }) => {
   await seedDocument(page, request)
 
-  await runMenuCommand(page, 'Review', 'Check citations')
+  await runCommand(page, 'Check citations')
   await expect(page.getByText('2 need review').first()).toBeVisible({
     timeout: 60_000,
   })

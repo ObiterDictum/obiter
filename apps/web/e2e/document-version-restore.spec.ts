@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createAccount, openFixtureDocument } from './document-journey'
 import { focusParagraph } from './e13-support'
-import { runMenuCommand } from './editor-chrome'
+import { runCommand, saveButton } from './editor-chrome'
 import { fixturePath } from './support'
 
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
@@ -27,11 +27,11 @@ test('restoring version one creates version three and refreshes current content 
   await focusParagraph(page, HEADING)
   await page.keyboard.press('Home')
   await page.keyboard.type('RESTOREMARK ')
-  const save = page.getByRole('button', { name: 'Save', exact: true })
+  const save = saveButton(page)
   await expect(save).toBeEnabled()
   await save.click()
   await expect(save).toBeDisabled({ timeout: 30_000 })
-  await runMenuCommand(page, 'View', 'Document information')
+  await runCommand(page, 'Document information')
   const information = page.getByRole('complementary', {
     name: 'Document information',
   })
@@ -70,7 +70,7 @@ test('restoring version one creates version three and refreshes current content 
   await expect(
     page.locator('[data-paragraph-id]', { hasText: HEADING }).first(),
   ).toBeVisible()
-  await runMenuCommand(page, 'View', 'Document information')
+  await runCommand(page, 'Document information')
   await expect(
     information.getByText('Version 3', { exact: true }),
   ).toBeVisible()
@@ -94,14 +94,14 @@ test('unsaved work disables restore in History and remains editable after viewin
   await focusParagraph(page, HEADING)
   await page.keyboard.press('Home')
   await page.keyboard.type('SAVEDMARK ')
-  const save = page.getByRole('button', { name: 'Save', exact: true })
+  const save = saveButton(page)
   await save.click()
   await expect(save).toBeDisabled({ timeout: 30_000 })
   await focusParagraph(page, HEADING)
   await page.keyboard.press('End')
   await page.keyboard.type(' UNSAVEDMARK')
   await expect(save).toBeEnabled()
-  await runMenuCommand(page, 'View', 'Document information')
+  await runCommand(page, 'Document information')
   await page
     .getByRole('complementary', { name: 'Document information' })
     .locator('li', { hasText: 'Version 1' })

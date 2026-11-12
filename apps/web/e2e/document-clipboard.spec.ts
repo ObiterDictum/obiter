@@ -6,7 +6,12 @@ import {
 } from '@playwright/test'
 import path from 'node:path'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
+import {
+  commandRefusal,
+  ribbonCommand,
+  runCommand,
+  undoButton,
+} from './editor-chrome'
 import { fixturePath, openMatter, verifyEmailInDb } from './support'
 import { saveAndWait } from './e13-support'
 
@@ -92,13 +97,11 @@ async function openFixtureDocument(
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 async function clipboardRow(page: Page, name: 'Copy' | 'Cut' | 'Paste') {
-  await openMenu(page, 'Edit')
-  return menuItem(page, name)
+  return ribbonCommand(page, name)
 }
 
 async function clipboardDescription(page: Page, name: 'Copy' | 'Cut') {
-  const row = await clipboardRow(page, name)
-  return (await row.getAttribute('title')) ?? ''
+  return commandRefusal(page, name)
 }
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
@@ -136,25 +139,21 @@ test('enables the clipboard controls from the document selection', async ({
   const matter = `E1 clipboard ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter)
 
-  await openMenu(page, 'Edit')
-  await expect(menuItem(page, 'Copy')).toBeDisabled()
-  await expect(menuItem(page, 'Cut')).toBeDisabled()
-  await expect(menuItem(page, 'Paste')).toBeEnabled()
+  await expect(await clipboardRow(page, 'Copy')).toBeDisabled()
+  await expect(await clipboardRow(page, 'Cut')).toBeDisabled()
+  await expect(await clipboardRow(page, 'Paste')).toBeEnabled()
   expect(await clipboardDescription(page, 'Copy')).toBe('Select text to copy')
   expect(await clipboardDescription(page, 'Cut')).toBe('Select text to cut')
-  await closeMenu(page)
   await shot(page, '01-clipboard-disabled-without-a-selection')
 
   await focusParagraph(page, HEADING)
   await selectFirst(page, 6)
-  await openMenu(page, 'Edit')
-  await expect(menuItem(page, 'Copy')).toBeEnabled()
-  await expect(menuItem(page, 'Cut')).toBeEnabled()
-  await closeMenu(page)
+  await expect(await clipboardRow(page, 'Copy')).toBeEnabled()
+  await expect(await clipboardRow(page, 'Cut')).toBeEnabled()
   await shot(page, '02-clipboard-enabled-with-a-selection')
 
   const before = await page.locator('[data-paragraph-id]').count()
-  await runMenuCommand(page, 'Edit', 'Copy')
+  await runCommand(page, 'Copy')
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before)
   await shot(page, '03-copied-without-mutating')
 })
@@ -174,11 +173,11 @@ test('pastes multiple paragraphs and undoes it in one step', async ({
   await page.evaluate(() =>
     navigator.clipboard.writeText('Alpha paragraph\nBeta paragraph'),
   )
-  await runMenuCommand(page, 'Edit', 'Paste')
+  await runCommand(page, 'Paste')
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before + 1)
   await shot(page, '04-multi-paragraph-paste')
 
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await undoButton(page).click()
   await expect(page.locator('[data-paragraph-id]')).toHaveCount(before)
   await shot(page, '05-paste-undone-in-one-step')
 })
@@ -237,14 +236,16 @@ test('toggles bold from the keyboard and saves it', async ({
   await selectFirst(page, 6)
 
   await page.keyboard.press('Control+b')
-  await expect(
-    page.getByRole('button', { name: 'Bold', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(await ribbonCommand(page, 'Bold')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await shot(page, '09-keyboard-bold-applied')
   await page.keyboard.press('Control+b')
-  await expect(
-    page.getByRole('button', { name: 'Bold', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'false')
+  await expect(await ribbonCommand(page, 'Bold')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
 
   await page.keyboard.press('Control+b')
   await saveAndWait(page)
@@ -256,9 +257,10 @@ test('toggles bold from the keyboard and saves it', async ({
     await openFixtureDocument(reloaded, email, password, matter)
     await focusParagraph(reloaded, HEADING)
     await selectFirst(reloaded, 6)
-    await expect(
-      reloaded.getByRole('button', { name: 'Bold', exact: true }),
-    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(await ribbonCommand(reloaded, 'Bold')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     await shot(reloaded, '11-keyboard-bold-after-reload')
   } finally {
     await fresh.close()

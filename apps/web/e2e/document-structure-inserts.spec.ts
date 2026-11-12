@@ -3,7 +3,7 @@ import { createAccount, openFixtureDocument } from './document-journey'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { openRibbonTab } from './editor-chrome'
+import { runCommand, saveButton } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
@@ -25,12 +25,7 @@ function shot(page: Page, name: string) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
-
-async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Layout') {
-  await openRibbonTab(page, name)
-}
+const save = (page: Page) => saveButton(page)
 
 async function focusHeading(page: Page) {
   const target = page
@@ -94,8 +89,7 @@ test('table and picture insertions paint, save and reload', async ({
   })
 
   await focusHeading(page)
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Insert table', exact: true }).click()
+  await runCommand(page, 'Insert table')
   await page.getByLabel('Rows', { exact: true }).fill('3')
   await page.getByLabel('Columns', { exact: true }).fill('4')
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()

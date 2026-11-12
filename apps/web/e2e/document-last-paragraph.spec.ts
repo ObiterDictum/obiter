@@ -4,7 +4,14 @@ import { signIn } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 
 import { createSyntheticDocx } from '../../../packages/ooxml/src/index'
-import { menuItem, openMenu, runMenuCommand } from './editor-chrome'
+import {
+  commandRefusal,
+  redoButton,
+  ribbonCommand,
+  runCommand,
+  saveButton,
+  undoButton,
+} from './editor-chrome'
 
 const FIRST = 'E0 sole paragraph of the synthetic fixture.'
 const SECOND = 'E0 second paragraph after insertion.'
@@ -46,15 +53,8 @@ async function openSyntheticDocument(
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
 async function deleteButton(page: Page) {
-  await openMenu(page, 'Edit')
-  return menuItem(page, 'Delete paragraph')
+  return ribbonCommand(page, 'Delete paragraph')
 }
-const saveButton = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
-const undoButton = (page: Page) =>
-  page.getByRole('button', { name: 'Undo', exact: true })
-const redoButton = (page: Page) =>
-  page.getByRole('button', { name: 'Redo', exact: true })
 
 function uniqueParagraphCount(page: Page) {
   return page.$$eval(
@@ -123,10 +123,9 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   await expect(page.locator('[data-paragraph-id]').first()).toContainText(FIRST)
   const unavailable = await deleteButton(page)
   await expect(unavailable).toBeDisabled()
-  await expect(unavailable).toHaveAttribute(
-    'title',
-    'A document must contain at least one paragraph.',
-  )
+  await expect
+    .poll(() => commandRefusal(page, 'Delete paragraph'))
+    .toBe('A document must contain at least one paragraph.')
 
   await page.locator('[data-paragraph-id]').first().click()
   await expect(editor(page)).toHaveValue(FIRST)
@@ -140,7 +139,7 @@ test('final-paragraph deletion is refused, valid deletion saves and reopens', as
   expect(await saveState(page)).not.toBe('unsaved')
   await expect(saveButton(page)).toBeDisabled()
 
-  await runMenuCommand(page, 'Edit', 'Insert paragraph')
+  await runCommand(page, 'Insert paragraph')
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
   await pending.fill(SECOND)

@@ -6,7 +6,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { mockSession } from './shell-harness'
-import { openFormatting, setTrackChanges } from './editor-chrome'
+import {
+  openFormatting,
+  ribbonCommand,
+  runCommand,
+  setTrackChanges,
+  undoButton,
+} from './editor-chrome'
 
 const FIXTURE_REL = '../../../data/evals/redact/demo-fixture.docx'
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
@@ -50,7 +56,7 @@ async function paintedStyle(page: Page, text: string) {
 async function expectPressedAgreesWithPaint(page: Page, text: string) {
   const style = await paintedStyle(page, text)
   const pressed = async (name: string) =>
-    (await page.getByRole('button', { name }).getAttribute('aria-pressed')) ===
+    (await (await ribbonCommand(page, name)).getAttribute('aria-pressed')) ===
     'true'
   expect(await pressed('Strikethrough')).toBe(
     style?.textDecoration.includes('line-through') ?? false,
@@ -95,21 +101,23 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
   await selectFirst(page, HEADING, SELECTED.length)
 
   await openFormatting(page)
-  await page.getByRole('button', { name: 'Strikethrough' }).click()
-  await page.getByRole('button', { name: 'Highlight' }).click()
-  await page.getByRole('button', { name: 'Superscript' }).click()
+  await runCommand(page, 'Strikethrough')
+  await runCommand(page, 'Highlight')
+  await runCommand(page, 'Superscript')
 
-  await expect(
-    page.getByRole('button', { name: 'Strikethrough' }),
-  ).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Highlight' })).toHaveAttribute(
+  await expect(await ribbonCommand(page, 'Strikethrough')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
-  await expect(
-    page.getByRole('button', { name: 'Superscript' }),
-  ).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Subscript' })).toHaveAttribute(
+  await expect(await ribbonCommand(page, 'Highlight')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(await ribbonCommand(page, 'Superscript')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(await ribbonCommand(page, 'Subscript')).toHaveAttribute(
     'aria-pressed',
     'false',
   )
@@ -122,16 +130,17 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
   expect((await paintedStyle(page, SELECTED))?.backgroundColor).not.toBe('')
   await expectPressedAgreesWithPaint(page, SELECTED)
 
-  await page.getByRole('button', { name: 'Subscript' }).click()
-  await expect(
-    page.getByRole('button', { name: 'Superscript' }),
-  ).toHaveAttribute('aria-pressed', 'false')
-  await expect(page.getByRole('button', { name: 'Subscript' })).toHaveAttribute(
+  await runCommand(page, 'Subscript')
+  await expect(await ribbonCommand(page, 'Superscript')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+  await expect(await ribbonCommand(page, 'Subscript')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
   expect((await paintedStyle(page, SELECTED))?.verticalAlign).toBe('sub')
-  await page.getByRole('button', { name: 'Superscript' }).click()
+  await runCommand(page, 'Superscript')
   await expectPressedAgreesWithPaint(page, SELECTED)
   await shot(page, '01-character-formatting-applied')
 
@@ -155,17 +164,20 @@ test('character formatting paints, saves, and reloads from a fresh context', asy
     await openFormatting(reloaded)
     await selectFirst(reloaded, HEADING, SELECTED.length)
     await expect(
-      reloaded.getByRole('button', { name: 'Strikethrough' }),
+      await ribbonCommand(reloaded, 'Strikethrough'),
     ).toHaveAttribute('aria-pressed', 'true')
-    await expect(
-      reloaded.getByRole('button', { name: 'Highlight' }),
-    ).toHaveAttribute('aria-pressed', 'true')
-    await expect(
-      reloaded.getByRole('button', { name: 'Superscript' }),
-    ).toHaveAttribute('aria-pressed', 'true')
-    await expect(
-      reloaded.getByRole('button', { name: 'Subscript' }),
-    ).toHaveAttribute('aria-pressed', 'false')
+    await expect(await ribbonCommand(reloaded, 'Highlight')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect(await ribbonCommand(reloaded, 'Superscript')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect(await ribbonCommand(reloaded, 'Subscript')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     const reloadedStyle = await paintedStyle(reloaded, SELECTED)
     expect(reloadedStyle?.verticalAlign).toBe('super')
     expect(reloadedStyle?.textDecoration).toContain('line-through')
@@ -203,19 +215,19 @@ test('queues partial character formatting under track changes and saves it', asy
     'Superscript',
     'Subscript',
   ]) {
-    await expect(
-      page.getByRole('button', { name: label, exact: true }),
-    ).toBeEnabled()
+    await expect(await ribbonCommand(page, label)).toBeEnabled()
   }
 
-  await page.getByRole('button', { name: 'Strikethrough' }).click()
-  await page.getByRole('button', { name: 'Superscript' }).click()
-  await expect(
-    page.getByRole('button', { name: 'Strikethrough' }),
-  ).toHaveAttribute('aria-pressed', 'true')
-  await expect(
-    page.getByRole('button', { name: 'Superscript' }),
-  ).toHaveAttribute('aria-pressed', 'true')
+  await runCommand(page, 'Strikethrough')
+  await runCommand(page, 'Superscript')
+  await expect(await ribbonCommand(page, 'Strikethrough')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(await ribbonCommand(page, 'Superscript')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   const trackedStyle = await paintedStyle(page, SELECTED)
   expect(trackedStyle?.textDecoration).toContain('line-through')
   expect(trackedStyle?.verticalAlign).toBe('super')
@@ -501,29 +513,32 @@ test('tracked property history never paints, presses or saves as current', async
     'Superscript',
     'Subscript',
   ]) {
-    await expect(
-      page.getByRole('button', { name: label, exact: true }),
-    ).toHaveAttribute('aria-pressed', 'false')
+    await expect(await ribbonCommand(page, label)).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   }
 
-  await page.getByRole('button', { name: 'Strikethrough' }).click()
-  await expect(
-    page.getByRole('button', { name: 'Strikethrough' }),
-  ).toHaveAttribute('aria-pressed', 'true')
+  await runCommand(page, 'Strikethrough')
+  await expect(await ribbonCommand(page, 'Strikethrough')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   expect(
     (await paintedStyle(page, TRACKED_SELECTED))?.textDecoration,
   ).toContain('line-through')
 
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
-  await expect(
-    page.getByRole('button', { name: 'Strikethrough' }),
-  ).toHaveAttribute('aria-pressed', 'false')
+  await undoButton(page).click()
+  await expect(await ribbonCommand(page, 'Strikethrough')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
   expect(
     (await paintedStyle(page, TRACKED_TEXT))?.textDecoration ?? '',
   ).not.toContain('line-through')
 
   await selectFirst(page, TRACKED_TEXT, TRACKED_SELECTED.length)
-  await page.getByRole('button', { name: 'Strikethrough' }).click()
+  await runCommand(page, 'Strikethrough')
   await saveAndWait(page)
   await expect
     .poll(() =>
@@ -552,14 +567,16 @@ test('tracked property history never paints, presses or saves as current', async
   const reopened = await paintedStyle(page, TRACKED_SELECTED)
   expect(reopened?.textDecoration).toContain('line-through')
   expect(reopened?.fontWeight).toBe('700')
-  await expect(
-    page.getByRole('button', { name: 'Strikethrough' }),
-  ).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute(
+  await expect(await ribbonCommand(page, 'Strikethrough')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
-  await expect(
-    page.getByRole('button', { name: 'Subscript', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'false')
+  await expect(await ribbonCommand(page, 'Bold')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(await ribbonCommand(page, 'Subscript')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
 })

@@ -32,16 +32,22 @@ const iconPackRule = {
   ],
 }
 
+const noHexStylesSelector = {
+  selector:
+    "JSXAttribute[name.name='style'] Literal[value=/^#[0-9a-fA-F]{3,8}$/]",
+  message:
+    'Do not use raw hex colors in inline styles — use an --obiter-* design token (via a Tailwind utility) instead.',
+}
+
 const noHexInStylesRule = {
-  'no-restricted-syntax': [
-    'error',
-    {
-      selector:
-        "JSXAttribute[name.name='style'] Literal[value=/^#[0-9a-fA-F]{3,8}$/]",
-      message:
-        'Do not use raw hex colors in inline styles — use an --obiter-* design token (via a Tailwind utility) instead.',
-    },
-  ],
+  'no-restricted-syntax': ['error', noHexStylesSelector],
+}
+
+const editorChromeRoleSelector = {
+  selector:
+    "CallExpression[callee.property.name='getByRole'] > Literal.arguments:first-child[value=/^(menu|menuitem|menuitemcheckbox|menuitemradio|tablist|tabpanel)$/]",
+  message:
+    'Reach the document chrome through apps/web/e2e/editor-chrome.ts instead of querying its roles.',
 }
 
 export default [
@@ -63,5 +69,16 @@ export default [
   {
     files: ['**/*.{js,jsx,mjs,cjs}'],
     rules: { ...iconPackRule, ...noHexInStylesRule },
+  },
+  {
+    files: ['apps/web/e2e/*.spec.ts'],
+    ignores: ['apps/web/e2e/responsive-shell.spec.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        noHexStylesSelector,
+        editorChromeRoleSelector,
+      ],
+    },
   },
 ]

@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test, expect, type Page } from '@playwright/test'
 import { mockSession } from './shell-harness'
-import { closeMenu, menuItem, openMenu, runMenuCommand } from './editor-chrome'
+import { documentToolbar, runCommand, saveButton } from './editor-chrome'
 
 const MATTER = {
   id: 'mtr_print',
@@ -226,7 +226,7 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
   await expect(desk).toContainText('Paragraph 1 of the print fixture.')
 
   await page.getByText('Paragraph 1 of the print fixture.').first().click()
-  await page.getByRole('button', { name: 'Bold' }).click()
+  await runCommand(page, 'Bold')
   const editor = page.getByLabel('Paragraph text')
   await editor.fill('Edited paragraph one')
 
@@ -234,7 +234,7 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
   await page.getByLabel('Pending paragraph text').fill('Inserted paragraph')
 
   await page.getByText('Paragraph 2 of the print fixture.').first().click()
-  await runMenuCommand(page, 'Edit', 'Delete paragraph')
+  await runCommand(page, 'Delete paragraph')
   await expect(desk).not.toContainText('Paragraph 2 of the print fixture.')
 
   expect(
@@ -243,14 +243,11 @@ test('Print renders the on-screen state, including unsaved edits and tables', as
       .evaluate((element) => element.textContent),
   ).toBe('@page{size:8.2708in 11.6979in;margin:0}')
 
-  await openMenu(page, 'Review')
-  await page.getByRole('button', { name: 'Comments', exact: true }).click()
+  await runCommand(page, 'Comments')
 
   await page.emulateMedia({ media: 'print' })
-  await expect(
-    page.getByRole('toolbar', { name: 'Document toolbar' }),
-  ).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Save' })).toBeHidden()
+  await expect(documentToolbar(page)).toBeHidden()
+  await expect(saveButton(page)).toBeHidden()
   await expect(page.locator('[data-print-hide]')).toBeHidden()
   await expect(desk).toContainText('Edited paragraph one')
   await expect(desk).toContainText('Inserted paragraph')
@@ -286,9 +283,7 @@ test('printing from the web layout paginates onto the stored paper size', async 
   await mockWorkspace(page)
   await openWorkspace(page)
 
-  await openMenu(page, 'View')
-  await menuItem(page, 'Web layout').click()
-  await closeMenu(page)
+  await runCommand(page, 'Web layout')
   await expect(page.locator('[data-document-sheet]')).toHaveCount(1)
   expect(
     await page
@@ -328,7 +323,7 @@ test('the Print control reports an absent print capability', async ({
     })
   })
   await openWorkspace(page)
-  await runMenuCommand(page, 'File', 'Print')
+  await runCommand(page, 'Print')
   await expect(
     page.getByText('Printing is not available in this environment.'),
   ).toBeVisible()

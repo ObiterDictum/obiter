@@ -4,7 +4,13 @@ import { expect, test, type Page } from '@playwright/test'
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runMenuCommand, setTrackChanges } from './editor-chrome'
+import {
+  redoButton,
+  runCommand,
+  saveButton,
+  setTrackChanges,
+  undoButton,
+} from './editor-chrome'
 
 const FIXTURE_REL = '../../../data/evals/redact/demo-fixture.docx'
 const HEADING = 'IN THE HIGH COURT OF JUSTICE'
@@ -22,10 +28,8 @@ function fixturePath() {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
-const undo = (page: Page) =>
-  page.getByRole('button', { name: 'Undo', exact: true })
+const save = (page: Page) => saveButton(page)
+const undo = (page: Page) => undoButton(page)
 const saveState = (page: Page) =>
   page.locator('[data-save-state]').getAttribute('data-save-state')
 
@@ -123,7 +127,7 @@ test('undo of a saved insert does not persist a duplicate paragraph', async ({
   await focusParagraph(page, HEADING)
   const before = await settledParagraphCount(page)
 
-  await runMenuCommand(page, 'Edit', 'Insert paragraph')
+  await runCommand(page, 'Insert paragraph')
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
   await pending.pressSequentially('X')
@@ -205,7 +209,7 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
   await focusParagraph(page, HEADING)
   const before = await settledParagraphCount(page)
 
-  await runMenuCommand(page, 'Edit', 'Insert paragraph')
+  await runCommand(page, 'Insert paragraph')
   const pending = page.getByLabel('Pending paragraph text', { exact: true })
   await expect(pending).toBeVisible({ timeout: 10_000 })
   await pending.pressSequentially('X')
@@ -220,7 +224,7 @@ test('undo of a saved tracked insertion removes the paragraph atomically', async
 
   await undo(page).click()
   await expect(save(page)).toBeEnabled()
-  await page.getByRole('button', { name: 'Redo' }).click()
+  await redoButton(page).click()
   await expect(save(page)).toBeDisabled()
   await undo(page).click()
   await expect(save(page)).toBeEnabled()
@@ -271,7 +275,7 @@ test('undo after a reconciled merge save keeps the history usable', async ({
 
   await undo(page).click()
   await expect(editor(page)).not.toHaveValue(/Z/)
-  await page.getByRole('button', { name: 'Redo' }).click()
+  await redoButton(page).click()
   await expect(editor(page)).toHaveValue(/Z/)
   await undo(page).click()
   await expect(editor(page)).not.toHaveValue(/Z/)
