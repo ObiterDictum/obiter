@@ -115,6 +115,19 @@ export function openFormattingPanel() {
   fireEvent.click(screen.getByRole('button', { name: FORMATTING_PANEL }))
 }
 
+function openRibbonGroupMenus(name: string | RegExp) {
+  const triggers = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[role="tabpanel"] [aria-haspopup="menu"]',
+    ),
+  )
+  for (const trigger of triggers) {
+    if (trigger.getAttribute('aria-expanded') === 'true') continue
+    fireEvent.click(trigger)
+    if (visibleCommand(name)) return
+  }
+}
+
 function openSurface(surface: CommandHome) {
   if (surface === 'formatting') openFormattingPanel()
   else if (surface === 'File') openFileMenu()
@@ -147,6 +160,7 @@ export function command(name: string | RegExp): HTMLElement {
       if (visibleCommand(name)) break
     }
   }
+  if (!visibleCommand(name)) openRibbonGroupMenus(name)
   const found = visibleCommand(name) ?? queryCommands(name)[0]
   if (!found) throw new Error(`no command ${String(name)}`)
   return found

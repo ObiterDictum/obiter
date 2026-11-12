@@ -1,12 +1,43 @@
 import '@obiter/test-dom'
-import { describe, expect, it } from 'bun:test'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { setTrackChanges, trackChangesState } from './editor-test-commands'
+import {
+  commandDisabled,
+  setTrackChanges,
+  trackChangesState,
+} from './editor-test-commands'
 import {
   mountWorkspace,
   multiParagraphModel,
   paragraph,
 } from './docx-workspace-harness'
+
+const DEFAULT_PLATFORM = navigator.platform
+const DEFAULT_USER_AGENT = navigator.userAgent
+
+const MAC_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+const WINDOWS_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+
+function stubPlatform(platform: string, userAgent: string) {
+  Object.defineProperty(window.navigator, 'platform', {
+    value: platform,
+    configurable: true,
+  })
+  Object.defineProperty(window.navigator, 'userAgent', {
+    value: userAgent,
+    configurable: true,
+  })
+  Object.defineProperty(window.navigator, 'userAgentData', {
+    value: undefined,
+    configurable: true,
+  })
+}
+
+afterEach(() => {
+  stubPlatform(DEFAULT_PLATFORM, DEFAULT_USER_AGENT)
+})
 
 function mountDocument() {
   return mountWorkspace({
@@ -159,5 +190,108 @@ describe('ribbon track changes', () => {
     ).toBe('false')
     expect(screen.getByRole('button', { name: 'Verify citations' }))
     expect(screen.getByRole('button', { name: 'Check citations' }))
+  })
+})
+
+describe('ribbon platform shortcuts', () => {
+  it('shows the command glyph for All commands on a Mac', async () => {
+    stubPlatform('MacIntel', MAC_USER_AGENT)
+    mountDocument()
+
+    const button = screen.getByRole('button', { name: 'All commands' })
+    expect(button.querySelector('kbd')).toBeNull()
+    expect(button.querySelector('svg')).toBeTruthy()
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+K')
+
+    fireEvent.focus(button)
+    expect((await screen.findByRole('tooltip')).textContent).toBe(
+      'All commands (⌘K)',
+    )
+  })
+
+  it('shows the platform keycap for All commands off a Mac', async () => {
+    stubPlatform('Win32', WINDOWS_USER_AGENT)
+    mountDocument()
+
+    const button = screen.getByRole('button', { name: 'All commands' })
+    expect(button.querySelector('svg')).toBeNull()
+    expect(button.textContent).toBe('Ctrl+K')
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+K')
+
+    fireEvent.focus(button)
+    expect((await screen.findByRole('tooltip')).textContent).toBe(
+      'All commands (Ctrl+K)',
+    )
+  })
+})
+
+describe('ribbon collapsed groups', () => {
+  it('keeps every table structure command in the Table tools menu', () => {
+    mountDocument()
+    fireEvent.click(tab('Insert'))
+
+    const panel = screen.getByRole('tabpanel', { name: 'Insert' })
+    expect(
+      within(panel).getByRole('button', { name: 'Insert table' }),
+    ).toBeTruthy()
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Table tools' }))
+    const menu = screen.getByRole('menu', { name: 'Table tools' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('aria-label')),
+    ).toEqual([
+      'Insert row above',
+      'Insert row below',
+      'Insert column left',
+      'Insert column right',
+      'Delete row',
+      'Delete column',
+      'Delete table',
+    ])
+  })
+
+  it('keeps the reason a collapsed command is unavailable on its menu item', () => {
+    mountDocument()
+    fireEvent.click(tab('Insert'))
+    fireEvent.click(
+      within(screen.getByRole('tabpanel', { name: 'Insert' })).getByRole(
+        'button',
+        { name: 'Table tools' },
+      ),
+    )
+
+    const menu = screen.getByRole('menu', { name: 'Table tools' })
+    const insertRow = within(menu).getByRole('menuitem', {
+      name: 'Insert row above',
+    })
+    expect(commandDisabled(insertRow)).toBe(true)
+    expect(
+      within(insertRow).getByText('Place the cursor in a table cell'),
+    ).toBeTruthy()
+  })
+
+  it('keeps the authorities commands in the Authorities menu', () => {
+    mountDocument()
+    fireEvent.click(tab('Insert'))
+    fireEvent.click(
+      within(screen.getByRole('tabpanel', { name: 'Insert' })).getByRole(
+        'button',
+        { name: 'Authorities' },
+      ),
+    )
+
+    const menu = screen.getByRole('menu', { name: 'Authorities' })
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('aria-label')),
+    ).toEqual([
+      'Insert authority',
+      'Table of authorities',
+      'Update table of authorities',
+      'Mark defined term',
+    ])
   })
 })

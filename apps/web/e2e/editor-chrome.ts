@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 const TAB_OF_NAME: Record<string, string> = {
   Home: 'Format',
@@ -67,6 +67,24 @@ export async function toggleCommand(page: Page, menu: string, command: string) {
   await closeMenu(page)
 }
 
+export async function openRibbonGroup(page: Page, name: string) {
+  const trigger = page.getByRole('button', { name, exact: true })
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') {
+    await trigger.click()
+  }
+  await expect(page.getByRole('menu', { name })).toBeVisible()
+}
+
+async function revealGroupCommand(page: Page, target: Locator) {
+  if (await target.isVisible().catch(() => false)) return
+  const triggers = page.locator('[role="tabpanel"] [aria-haspopup="menu"]')
+  for (const trigger of await triggers.all()) {
+    if ((await trigger.getAttribute('aria-expanded')) === 'true') continue
+    await trigger.click()
+    if (await target.isVisible().catch(() => false)) return
+  }
+}
+
 export function menuItem(page: Page, name: string) {
   return page
     .getByRole('menuitem', { name, exact: true })
@@ -109,6 +127,7 @@ export async function clickMenuItem(page: Page, menu: string, command: string) {
     await openMenu(page, menu)
     const target =
       menu === 'File' ? popupItem(page, menu, command) : menuItem(page, command)
+    await revealGroupCommand(page, target)
     const clicked = await target
       .click({ timeout: 5_000 })
       .then(() => true)

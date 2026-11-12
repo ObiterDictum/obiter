@@ -36,6 +36,7 @@ export type EditorControl = {
 
 export function EditorIconButton({
   label,
+  status,
   pressed,
   disabled,
   soon,
@@ -44,7 +45,8 @@ export function EditorIconButton({
   keyshortcuts,
   onClick,
   icon,
-}: EditorControl & { icon: ReactNode }) {
+  className,
+}: EditorControl & { icon: ReactNode; className?: string }) {
   const unavailable = Boolean(soon)
   const reason = controlReason(soon, disabled, disabledReason)
   const tooltip = reason ?? hint ?? label
@@ -61,7 +63,11 @@ export function EditorIconButton({
         <Button
           variant={pressed ? 'secondary' : 'ghost'}
           size="sm"
-          className="h-7 w-7 rounded-sm px-0 text-muted pointer-coarse:h-11 pointer-coarse:w-11"
+          className={cn(
+            'h-7 w-7 rounded-sm px-0 text-muted pointer-coarse:h-11 pointer-coarse:w-11',
+            status ? 'w-auto gap-1 px-1.5' : null,
+            className,
+          )}
           aria-label={label}
           aria-pressed={pressed}
           aria-keyshortcuts={keyshortcuts}
@@ -69,7 +75,13 @@ export function EditorIconButton({
           title={reason}
           onClick={unavailable ? undefined : onClick}
           iconStart={icon}
-        />
+        >
+          {status ? (
+            <span className="max-w-20 truncate text-caption text-subtle">
+              {status}
+            </span>
+          ) : null}
+        </Button>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
     </Tooltip>

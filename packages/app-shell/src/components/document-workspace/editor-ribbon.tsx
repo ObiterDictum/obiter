@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  KeyboardHint,
   Menu,
   MenuContent,
   MenuRadioGroup,
@@ -16,10 +17,15 @@ import {
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
+  CaretDown,
   Command,
   FloppyDisk,
 } from '@obiter/ui/icons'
-import { formatShortcut, shortcutAttribute } from '../../keyboard-platform'
+import {
+  formatShortcut,
+  shortcutAttribute,
+  useIsMacPlatform,
+} from '../../keyboard-platform'
 import {
   EditorIconButton,
   EditorMenuItem,
@@ -150,15 +156,31 @@ export function EditorRibbon({
               </StatusDot>
             </span>
           ) : null}
-          <EditorIconButton
-            label="All commands"
-            hint={`All commands (${formatShortcut(['primary', 'K'])})`}
-            onClick={onOpenPalette}
-            icon={<Command size={16} aria-hidden />}
-          />
+          <AllCommands onOpenPalette={onOpenPalette} />
         </div>
       </div>
     </div>
+  )
+}
+
+function AllCommands({ onOpenPalette }: { onOpenPalette: () => void }) {
+  const isMac = useIsMacPlatform()
+  const shortcut = formatShortcut(['primary', 'K'], isMac)
+  return (
+    <EditorIconButton
+      label="All commands"
+      hint={`All commands (${shortcut})`}
+      keyshortcuts={shortcutAttribute(['primary', 'K'], isMac)}
+      onClick={onOpenPalette}
+      className="w-auto px-1.5"
+      icon={
+        isMac ? (
+          <Command size={16} aria-hidden />
+        ) : (
+          <KeyboardHint aria-hidden>{shortcut}</KeyboardHint>
+        )
+      }
+    />
   )
 }
 
@@ -223,15 +245,20 @@ function RibbonGroup({ group }: { group: EditorMenuGroup }) {
     (command) => command.host === undefined,
   )
   const selected = commands.filter((command) => command.checked !== undefined)
-  const buttons = commands.filter((command) => command.checked === undefined)
-  if (!group.select && buttons.length === 0) return null
+  const buttons = commands.filter(
+    (command) => command.checked === undefined && !command.menuOnly,
+  )
+  const menuCommands = group.dropdown
+    ? commands.filter((command) => command.menuOnly)
+    : []
+  if (!group.dropdown && !group.select && buttons.length === 0) return null
   return (
-    <div className="flex shrink-0 flex-col justify-center gap-0.5 border-e border-line px-2 last:border-e-0">
+    <div className="flex shrink-0 flex-col justify-center gap-0.5 border-e border-line px-1.5 last:border-e-0">
       <div className="flex items-center gap-1">
         {group.select ? (
           <EditorSelect
             label={group.select.label ?? group.label}
-            className="w-34"
+            className="w-30"
             value={selected.find((command) => command.checked)?.id ?? ''}
             options={selected.map((command) => ({
               value: command.id,
@@ -251,9 +278,70 @@ function RibbonGroup({ group }: { group: EditorMenuGroup }) {
         {buttons.map((command) => (
           <RibbonCommand key={command.id} command={command} />
         ))}
+        {group.dropdown ? (
+          <RibbonGroupMenu
+            label={group.dropdown.label}
+            icon={group.dropdown.icon}
+            commands={menuCommands}
+          />
+        ) : null}
       </div>
       <span className="px-1 text-caption text-subtle">{group.label}</span>
     </div>
+  )
+}
+
+function useCaretRefocus() {
+  const refocusAfterClose = useRef(false)
+  return {
+    onCommand: (command: EditorCommand) => {
+      refocusAfterClose.current = !command.stayOpen && !command.opensSurface
+    },
+    onOpenChangeComplete: (open: boolean) => {
+      if (open || !refocusAfterClose.current) return
+      refocusAfterClose.current = false
+      refocusCaret()
+    },
+  }
+}
+
+function RibbonGroupMenu({
+  label,
+  icon,
+  commands,
+}: {
+  label: string
+  icon: ReactNode
+  commands: readonly EditorCommand[]
+}) {
+  const refocus = useCaretRefocus()
+  return (
+    <Menu modal={false} onOpenChangeComplete={refocus.onOpenChangeComplete}>
+      <MenuTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className={cn(
+              'inline-flex h-7 items-center gap-0.5 rounded-sm px-1.5 text-muted transition-colors duration-150',
+              'hover:bg-hover hover:text-ink',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              'data-[popup-open]:bg-fill data-[popup-open]:text-ink',
+            )}
+          />
+        }
+      >
+        {icon}
+        <CaretDown size={10} aria-hidden />
+      </MenuTrigger>
+      <MenuContent
+        align="start"
+        aria-label={label}
+        className="w-64 overflow-y-auto p-1"
+      >
+        <MenuGroupCommands commands={commands} onEdit={refocus.onCommand} />
+      </MenuContent>
+    </Menu>
   )
 }
 
@@ -275,6 +363,7 @@ function RibbonCommand({ command }: { command: EditorCommand }) {
     return (
       <EditorIconButton
         label={command.label}
+        status={command.status}
         pressed={command.pressed}
         disabled={command.disabled}
         soon={command.soon}
@@ -313,16 +402,9 @@ function commandHint(command: EditorCommand): string | undefined {
 }
 
 function FileMenu({ menu }: { menu: EditorMenu }) {
-  const refocusAfterClose = useRef(false)
+  const refocus = useCaretRefocus()
   return (
-    <Menu
-      modal={false}
-      onOpenChangeComplete={(open) => {
-        if (open || !refocusAfterClose.current) return
-        refocusAfterClose.current = false
-        refocusCaret()
-      }}
-    >
+    <Menu modal={false} onOpenChangeComplete={refocus.onOpenChangeComplete}>
       <MenuTrigger
         render={
           <button type="button" className={cn(tabClassName(false), 'me-1')} />
@@ -342,10 +424,7 @@ function FileMenu({ menu }: { menu: EditorMenu }) {
             </p>
             <MenuGroupCommands
               commands={group.commands}
-              onEdit={(command) => {
-                refocusAfterClose.current =
-                  !command.stayOpen && !command.opensSurface
-              }}
+              onEdit={refocus.onCommand}
             />
           </Fragment>
         ))}

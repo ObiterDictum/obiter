@@ -10,6 +10,7 @@ import {
   menuItem,
   openFormatting,
   openMenu,
+  openRibbonGroup,
   runMenuCommand,
   selectedValue,
 } from './editor-chrome'
@@ -63,6 +64,7 @@ const checksPanel = (page: Page) =>
 
 async function openReferences(page: Page) {
   await openMenu(page, 'Insert')
+  await openRibbonGroup(page, 'Authorities')
 }
 
 async function focusHeading(page: Page) {
