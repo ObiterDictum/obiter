@@ -2,10 +2,10 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import { openRibbonTab } from './editor-chrome'
+import { saveButton } from './editor-chrome'
 import { openMatter, verifyEmailInDb, waitForPaneIdle } from './support'
 
-export { openRibbonTab }
+export { saveButton }
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -85,8 +85,6 @@ export async function openDocx(
 
 export const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-export const saveButton = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
 export const saveState = (page: Page) =>
   page.locator('[data-save-state]').getAttribute('data-save-state')
 

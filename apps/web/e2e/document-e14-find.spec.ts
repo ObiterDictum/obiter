@@ -12,7 +12,7 @@ import {
   saveAndWaitForHistoryReload,
   signIn,
 } from './e13-support'
-import { runMenuCommand } from './editor-chrome'
+import { redoButton, runCommand, undoButton } from './editor-chrome'
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
@@ -171,11 +171,11 @@ test('DOCX find navigates, replaces across a paragraph break, saves and reloads'
     page.locator('[data-paragraph-id]', { hasText: 'Alpha item' }),
   ).toHaveCount(1)
 
-  await page.getByRole('button', { name: 'Undo' }).click()
+  await undoButton(page).click()
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'Beta paragraph' }),
   ).toHaveCount(1)
-  await page.getByRole('button', { name: 'Redo' }).click()
+  await redoButton(page).click()
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'Beta clause' }),
   ).toHaveCount(1)
@@ -344,14 +344,14 @@ test('DOCX find folds Unicode, refuses a protected range, and exports the result
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'also joined tail' }),
   ).toHaveCount(1)
-  await page.getByRole('button', { name: 'Undo' }).click()
+  await undoButton(page).click()
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'also marker' }),
   ).toHaveCount(1)
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'marker tail' }),
   ).toHaveCount(1)
-  await page.getByRole('button', { name: 'Redo' }).click()
+  await redoButton(page).click()
   await expect(
     page.locator('[data-paragraph-id]', { hasText: 'also joined tail' }),
   ).toHaveCount(1)
@@ -379,7 +379,7 @@ test('DOCX find folds Unicode, refuses a protected range, and exports the result
 
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    runMenuCommand(page, 'File', 'Export'),
+    runCommand(page, 'Export'),
   ])
   const exportPath = test.info().outputPath('e14-export.docx')
   await download.saveAs(exportPath)

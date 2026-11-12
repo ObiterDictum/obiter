@@ -4,12 +4,12 @@ import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  choose,
-  menuItem,
+  chooseStyle,
   openFormatting,
-  openMenu,
-  runMenuCommand,
-  selectedValue,
+  ribbonCommand,
+  runCommand,
+  saveButton,
+  styleValue,
 } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -27,8 +27,7 @@ function shot(page: Page, name: string) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
+const save = (page: Page) => saveButton(page)
 
 async function pressKey(page: Page, key: string) {
   await expect(editor(page)).toBeFocused()
@@ -66,9 +65,8 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
   })
 
   await focusParagraph(page, 'E4 Heading')
-  await openMenu(page, 'Format')
-  await choose(page, 'Paragraph style', 'Quote')
-  await expect(selectedValue(page, 'Paragraph style')).toHaveText('Quote')
+  await chooseStyle(page, 'Quote')
+  await expect(styleValue(page)).toHaveText('Quote')
   await shot(page, '01-style-applied')
 
   await focusParagraph(page, 'E4 Heading')
@@ -76,10 +74,7 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
   await expect(page.locator('[data-selection-status]')).toContainText(
     'paragraphs selected',
   )
-  await openMenu(page, 'Format')
-  await expect(
-    page.getByRole('combobox', { name: 'Paragraph style', exact: true }),
-  ).toHaveText('Mixed styles')
+  await expect(styleValue(page)).toHaveText('Mixed styles')
   await shot(page, '02-style-mixed-selection')
 
   await focusParagraph(page, 'Beta paragraph')
@@ -89,16 +84,15 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
     'paragraphs selected',
   )
   await openFormatting(page)
-  const multilevel = page.getByRole('button', { name: 'Multilevel numbering' })
+  const multilevel = await ribbonCommand(page, 'Multilevel numbering')
   await multilevel.click()
   await expect(multilevel).toHaveAttribute('aria-pressed', 'true')
-  await page.getByRole('button', { name: 'Increase list indent' }).click()
+  await runCommand(page, 'Increase list indent')
   await shot(page, '03-list-across-selection')
 
   await focusParagraph(page, 'Alpha item')
-  await runMenuCommand(page, 'Format', 'Restart numbering')
-  await openMenu(page, 'Format')
-  await expect(menuItem(page, 'Restart numbering')).toHaveAttribute(
+  await runCommand(page, 'Restart numbering')
+  await expect(await ribbonCommand(page, 'Restart numbering')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
@@ -132,12 +126,11 @@ test('styles, multi-paragraph lists and list restart save and reload', async ({
   try {
     await openFixtureDocument(reloaded, email, password, matter, STYLED_FIXTURE)
     await focusParagraph(reloaded, 'E4 Heading')
-    await openMenu(reloaded, 'Format')
-    await expect(selectedValue(reloaded, 'Paragraph style')).toHaveText('Quote')
+    await expect(styleValue(reloaded)).toHaveText('Quote')
     await focusParagraph(reloaded, 'Alpha item')
     await openFormatting(reloaded)
     await expect(
-      reloaded.getByRole('button', { name: 'Restart numbering', exact: true }),
+      await ribbonCommand(reloaded, 'Restart numbering'),
     ).toHaveAttribute('aria-pressed', 'true')
     await shot(reloaded, '06-reopened')
   } finally {
@@ -153,10 +146,7 @@ test('a document with no paragraph styles shows one honest disabled control', as
   const matter = `E4 no styles ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter, PLAIN_FIXTURE)
 
-  const select = page.getByRole('combobox', {
-    name: 'Paragraph style',
-    exact: true,
-  })
+  const select = styleValue(page)
   await expect(select).toBeDisabled()
   await expect(
     page.getByTitle('This document has no paragraph styles.'),

@@ -3,8 +3,13 @@ import { focusParagraph, saveAndWait } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { openRibbonTab } from './editor-chrome'
-import { choose, openMenu, selectedValue } from './editor-chrome'
+import {
+  chooseStyle,
+  commandRefusal,
+  ribbonCommand,
+  runCommand,
+  styleValue,
+} from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(HERE, 'fixtures/e4-lists-styles.docx')
@@ -16,14 +21,8 @@ function shot(page: Page, name: string) {
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
 }
 
-const tocButton = (page: Page) =>
-  page.getByRole('button', { name: 'Table of contents', exact: true })
 const headingParagraphs = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: HEADING })
-
-async function openRibbon(page: Page, name: 'Home' | 'References') {
-  await openRibbonTab(page, name)
-}
 
 type EditBody = { operations?: Array<Record<string, unknown>> }
 
@@ -51,24 +50,19 @@ test('table of contents refuses without headings, then paints, saves and reloads
   })
 
   await focusParagraph(page, 'Alpha item')
-  await openRibbon(page, 'References')
-  const refused = tocButton(page)
-  await expect(refused).toBeDisabled()
-  await expect(refused).toHaveAttribute(
-    'title',
-    'The document has no headings a table of contents can list.',
-  )
+  await expect(await ribbonCommand(page, 'Table of contents')).toBeDisabled()
+  await expect
+    .poll(() => commandRefusal(page, 'Table of contents'))
+    .toBe('The document has no headings a table of contents can list.')
   await shot(page, '01-no-headings-refusal')
 
   await focusParagraph(page, HEADING)
-  await openMenu(page, 'Format')
-  await choose(page, 'Paragraph style', 'Heading 1')
-  await expect(selectedValue(page, 'Paragraph style')).toHaveText('Heading 1')
+  await chooseStyle(page, 'Heading 1')
+  await expect(styleValue(page)).toHaveText('Heading 1')
 
   await focusParagraph(page, 'Alpha item')
-  await openRibbon(page, 'References')
-  await expect(tocButton(page)).toBeEnabled()
-  await tocButton(page).click()
+  await expect(await ribbonCommand(page, 'Table of contents')).toBeEnabled()
+  await runCommand(page, 'Table of contents')
   await expect(headingParagraphs(page)).toHaveCount(2)
   await expect(headingParagraphs(page).nth(1)).toContainText('1')
   await shot(page, '02-pending-contents')

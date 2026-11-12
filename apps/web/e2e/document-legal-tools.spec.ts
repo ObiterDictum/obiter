@@ -5,13 +5,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   choose,
-  clickMenuItem,
-  closeMenu,
-  menuItem,
+  documentPanelTab,
   openFormatting,
-  openMenu,
-  openRibbonGroup,
-  runMenuCommand,
+  ribbonCommand,
+  runCommand,
+  saveButton,
   selectedValue,
 } from './editor-chrome'
 
@@ -31,21 +29,14 @@ function shot(page: Page, name: string) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
-async function insertCommand(page: Page, name: string) {
-  if (!(await clickMenuItem(page, 'Insert', name))) {
-    throw new Error(`could not run the ${name} command`)
-  }
-}
+const save = (page: Page) => saveButton(page)
 async function reviewCommand(page: Page, name: string) {
-  if (!(await clickMenuItem(page, 'Review', name))) {
-    throw new Error(`could not run the ${name} command`)
-  }
+  await runCommand(page, name)
   if (name === 'Check defined terms' || name === 'Check cross-references') {
-    await expect(
-      page.getByRole('tab', { name: 'Checks', exact: true }),
-    ).toHaveAttribute('aria-selected', 'true')
+    await expect(documentPanelTab(page, 'Checks')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
     await expect(
       checksPanel(page).getByRole('heading', {
         name:
@@ -61,11 +52,6 @@ const authoritiesPanel = (page: Page) =>
   page.getByRole('complementary', { name: 'Authorities' })
 const checksPanel = (page: Page) =>
   page.getByRole('complementary', { name: 'Checks panel' })
-
-async function openReferences(page: Page) {
-  await openMenu(page, 'Insert')
-  await openRibbonGroup(page, 'Authorities')
-}
 
 async function focusHeading(page: Page) {
   const target = page
@@ -110,15 +96,13 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
     }
   })
 
-  await openReferences(page)
-
-  await expect(menuItem(page, 'Mark defined term')).toBeDisabled()
+  await expect(await ribbonCommand(page, 'Mark defined term')).toBeDisabled()
 
   await choose(page, 'Citation style', 'House style')
 
   const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
   await caretParagraph.click()
-  await insertCommand(page, 'Insert authority')
+  await runCommand(page, 'Insert authority')
   const citationField = page.getByRole('textbox', { name: 'Citation' })
   await citationField.fill('the first defendant')
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
@@ -133,9 +117,8 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   for (let index = 0; index < 6; index += 1) {
     await page.keyboard.press('Shift+ArrowRight')
   }
-  await openReferences(page)
-  await expect(menuItem(page, 'Mark defined term')).toBeEnabled()
-  await menuItem(page, 'Mark defined term').click()
+  await expect(await ribbonCommand(page, 'Mark defined term')).toBeEnabled()
+  await runCommand(page, 'Mark defined term')
   await expect(markedText(page)).toContainText('IN THE')
   await expect(editor(page)).toBeFocused()
   await shot(page, '03-pending-mark')
@@ -150,18 +133,15 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
 
   await reviewCommand(page, 'List of authorities')
   await expect(authoritiesPanel(page)).toContainText(CITATION)
-  await openMenu(page, 'Review')
-  const verifyButton = menuItem(page, 'Check citations')
+  const verifyButton = await ribbonCommand(page, 'Check citations')
   await expect(verifyButton).toBeDisabled()
   await shot(page, '05-verify-dirty')
 
-  await closeMenu(page)
   await saveAndWait(page)
   await shot(page, '06-saved')
 
-  await openMenu(page, 'Review')
   await expect(verifyButton).toBeEnabled()
-  await menuItem(page, 'Verify citations').click()
+  await runCommand(page, 'Verify citations')
   await expect(page.getByRole('button', { name: 'Run Verify' })).toBeFocused()
   await shot(page, '07-verify-revealed')
 
@@ -177,7 +157,6 @@ test('references ribbon legal tools paint, validate, save and persist', async ({
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  await openReferences(page)
   await expect(selectedValue(page, 'Citation style')).toHaveText('House style')
   await reviewCommand(page, 'Check defined terms')
   await expect(checksPanel(page)).toContainText('in the', {
@@ -209,17 +188,15 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
   const matter = `E11 references ${String(Date.now())}`
   await openFixtureDocument(page, email, password, matter, FIXTURE)
 
-  await openReferences(page)
-
   const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
   await caretParagraph.click()
-  await insertCommand(page, 'Insert authority')
+  await runCommand(page, 'Insert authority')
   await page.getByRole('textbox', { name: 'Citation' }).fill(CITATION)
   await page.getByRole('button', { name: 'Cancel', exact: true }).last().click()
   await expect(caretParagraph).not.toContainText(CITATION)
   await expect(save(page)).toBeDisabled()
 
-  await insertCommand(page, 'Cross-reference')
+  await runCommand(page, 'Cross-reference')
   await page
     .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })
     .first()
@@ -229,7 +206,7 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
   await expect(save(page)).toBeDisabled()
   await shot(page, '10-cancelled-dialogs')
 
-  await insertCommand(page, 'Cross-reference')
+  await runCommand(page, 'Cross-reference')
   await page
     .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })
     .first()
@@ -242,8 +219,7 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  await openReferences(page)
-  await reviewCommand(page, 'Check cross-references')
+  await runCommand(page, 'Check cross-references')
   await expect(checksPanel(page)).toContainText('1 reference field checked')
   await expect(checksPanel(page)).toContainText('No cross-reference findings')
   await shot(page, '11-stored-reference-clean')
@@ -256,8 +232,7 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  await openReferences(page)
-  await reviewCommand(page, 'Check cross-references')
+  await runCommand(page, 'Check cross-references')
   await expect(checksPanel(page)).toContainText('differs from the target')
   await shot(page, '12-stored-reference-stale')
 
@@ -266,14 +241,13 @@ test('dialogs cancel cleanly and stored reference fields check back', async ({
     .first()
     .click()
   await openFormatting(page)
-  await runMenuCommand(page, 'Edit', 'Delete paragraph')
+  await runCommand(page, 'Delete paragraph')
   await saveAndWait(page)
   await page.reload({ waitUntil: 'networkidle' })
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
-  await openReferences(page)
-  await reviewCommand(page, 'Check cross-references')
+  await runCommand(page, 'Check cross-references')
   await expect(checksPanel(page)).toContainText(
     'not a bookmark in this document',
   )

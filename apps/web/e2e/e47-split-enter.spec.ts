@@ -2,6 +2,7 @@ import { createAccount } from './document-journey'
 import { openMatter } from './support'
 import { signIn, focusParagraph } from './e13-support'
 import { expect, test, type Page } from '@playwright/test'
+import { saveButton } from './editor-chrome'
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -189,10 +190,8 @@ test('Enter mid-paragraph keeps the second half painted, editable and stored', a
       editBodies.push(outgoing.postDataJSON())
     }
   })
-  await page.getByRole('button', { name: 'Save', exact: true }).click()
-  await expect(
-    page.getByRole('button', { name: 'Save', exact: true }),
-  ).toBeDisabled({
+  await saveButton(page).click()
+  await expect(saveButton(page)).toBeDisabled({
     timeout: 30_000,
   })
   expect(editBodies.length).toBeGreaterThan(0)

@@ -1,10 +1,9 @@
 import { signIn } from './e13-support'
 import {
   choose,
-  fileMenuItem,
-  openMenu,
-  openRibbonTab,
-  runMenuCommand,
+  openFormatting,
+  ribbonCommand,
+  runCommand,
   selectedValue,
 } from './editor-chrome'
 import { execFileSync } from 'node:child_process'
@@ -124,16 +123,6 @@ type MarkingsBody = {
   }
 }
 
-async function openTab(page: Page, name: 'Layout' | 'Review') {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const opened = await openRibbonTab(page, name)
-      .then(() => true)
-      .catch(() => false)
-    if (opened) return
-  }
-  await openRibbonTab(page, name)
-}
-
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test('markings commit as versions, persist, and ride both exports under a non-ASCII name', async ({
@@ -155,16 +144,10 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   })
 
   const kind = selectedValue(page, 'Document type')
-  const draft = page.getByRole('button', { name: 'Draft', exact: true })
-  const privileged = page.getByRole('button', {
-    name: 'Privileged',
-    exact: true,
-  })
-  const withoutPrejudice = page.getByRole('button', {
-    name: 'Without prejudice',
-    exact: true,
-  })
-  await openTab(page, 'Layout')
+  const draft = await ribbonCommand(page, 'Draft')
+  const privileged = await ribbonCommand(page, 'Privileged')
+  const withoutPrejudice = await ribbonCommand(page, 'Without prejudice')
+  await openFormatting(page)
   await expect(kind).toBeVisible()
 
   await choose(page, 'Document type', 'Particulars of claim')
@@ -185,7 +168,7 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
   )
 
   await page.reload({ waitUntil: 'networkidle' })
-  await openTab(page, 'Layout')
+  await openFormatting(page)
   await expect(kind).toHaveText('Particulars of claim', { timeout: 30_000 })
   await expect(draft).toHaveAttribute('aria-pressed', 'true')
   await expect(privileged).toHaveAttribute('aria-pressed', 'true')
@@ -193,7 +176,7 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
 
   const [standardDownload] = await Promise.all([
     page.waitForEvent('download'),
-    runMenuCommand(page, 'File', 'Export'),
+    runCommand(page, 'Export'),
   ])
   expect(standardDownload.suggestedFilename()).toBe(UNICODE_NAME)
   const standardPath = test.info().outputPath('export.docx')
@@ -211,7 +194,7 @@ test('markings commit as versions, persist, and ride both exports under a non-AS
 
   const [shareDownload] = await Promise.all([
     page.waitForEvent('download'),
-    runMenuCommand(page, 'File', 'Share-safe export'),
+    runCommand(page, 'Share-safe export'),
   ])
   const shareName = shareDownload.suggestedFilename()
   expect(shareName).toBe(UNICODE_NAME.replace('.docx', '-share-safe.docx'))
@@ -243,7 +226,7 @@ test('a document redaction run returns its finalized copy as a new version', asy
     buffer: readFileSync(fixturePath()),
   })
 
-  await runMenuCommand(page, 'File', 'Redact this document')
+  await runCommand(page, 'Redact this document')
   const region = page.getByRole('region', { name: 'Redaction runs' })
   await expect(region).toBeFocused()
   await region.getByRole('button', { name: 'Redact this document' }).click()
@@ -300,8 +283,7 @@ test('a document redaction run returns its finalized copy as a new version', asy
 
   await page.getByRole('button', { name: 'Open document' }).click()
   await expect(page).toHaveURL(/\/documents\/doc_/, { timeout: 20_000 })
-  await openMenu(page, 'File')
-  await fileMenuItem(page, 'Document information').click()
+  await runCommand(page, 'Document information')
   const versionsPanel = page.getByRole('complementary', {
     name: 'Document information',
   })

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { openMenu, runMenuCommand } from './editor-chrome'
+import { openReviewPanel, runCommand } from './editor-chrome'
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -69,12 +69,7 @@ async function openCommentsPanel(page: Page) {
   const panel = page.getByRole('complementary', { name: 'Comments' })
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (!(await panel.isVisible())) {
-      await openMenu(page, 'Review').catch(() => undefined)
-      await page
-        .getByRole('button', { name: /^Comments( \(\d+\))?$/u })
-        .first()
-        .click({ timeout: 5_000 })
-        .catch(() => undefined)
+      await openReviewPanel(page, 'Comments')
     }
     const shown = await expect(panel)
       .toBeVisible({ timeout: 5_000 })
@@ -201,7 +196,7 @@ test('comments anchor, navigate, reply, resolve and export', async ({
   expect(caretAnchor?.startOffset).toBe(caretAnchor?.endOffset)
 
   const downloadPromise = page.waitForEvent('download')
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const download = await downloadPromise
   const exportPath = await download.path()
   const commentsXml = zipPart(exportPath, 'word/comments.xml')

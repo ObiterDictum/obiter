@@ -7,8 +7,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { openRibbonTab } from './editor-chrome'
-import { runMenuCommand } from './editor-chrome'
+import { popupMenus, ribbonCommand, runCommand } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
@@ -62,10 +61,6 @@ const bodyParagraph = (page: Page) =>
 const noteParagraph = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: MARKER }).first()
 
-async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Review') {
-  await openRibbonTab(page, name)
-}
-
 function expectExportedDocx(docxPath: string) {
   const script = [
     'import sys, zipfile',
@@ -102,9 +97,8 @@ test('a footnote typed into its opened story survives save, reload and export', 
   }
   await page.keyboard.press('End')
 
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Footnote', exact: true }).click()
-  await expect(page.getByRole('menu')).toHaveCount(0)
+  await runCommand(page, 'Footnote')
+  await expect(popupMenus(page)).toHaveCount(0)
   await expect(editor(page)).toBeVisible()
   await expect(editor(page)).toHaveValue('')
   await expect(editor(page)).toBeFocused()
@@ -120,8 +114,7 @@ test('a footnote typed into its opened story survives save, reload and export', 
   )
   await shot(page, '03-saved')
 
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Close footnotes' }).click()
+  await runCommand(page, 'Close footnotes')
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await bodyParagraph(page).click()
     const focused = await expect(editor(page))
@@ -145,16 +138,11 @@ test('a footnote typed into its opened story survives save, reload and export', 
   try {
     await openFixtureDocument(reloaded, email, password, matter)
     await expect(noteParagraph(reloaded)).toBeVisible({ timeout: 30_000 })
-    await openRibbon(reloaded, 'Insert')
     await noteParagraph(reloaded).click()
-    await openRibbon(reloaded, 'Insert')
-    await expect(
-      reloaded.getByRole('button', { name: 'Close footnotes' }),
-    ).toBeVisible()
+    await expect(await ribbonCommand(reloaded, 'Close footnotes')).toBeVisible()
     await expect(editor(reloaded)).toHaveValue(new RegExp(MARKER))
 
-    await openRibbon(reloaded, 'Insert')
-    await reloaded.getByRole('button', { name: 'Close footnotes' }).click()
+    await runCommand(reloaded, 'Close footnotes')
     await bodyParagraph(reloaded).click()
     await expect(editor(reloaded)).toHaveValue(new RegExp(BODY_TEXT))
     await shot(reloaded, '04-reloaded-note-editable')
@@ -162,9 +150,8 @@ test('a footnote typed into its opened story survives save, reload and export', 
     await fresh.close()
   }
 
-  await openRibbon(page, 'Review')
   const downloadPromise = page.waitForEvent('download', { timeout: 20_000 })
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const download = await downloadPromise
   expect(download.suggestedFilename()).toMatch(/\.docx$/)
   const exportDir = mkdtempSync(path.join(tmpdir(), 'e7b-export-'))
@@ -201,12 +188,10 @@ async function focusParagraphEnd(page: Page, text: string) {
 
 async function insertCitedFootnote(page: Page, anchor: string, note: string) {
   await focusParagraphEnd(page, anchor)
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Footnote', exact: true }).click()
+  await runCommand(page, 'Footnote')
   await expect(editor(page)).toBeFocused()
   await page.keyboard.type(note)
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Close footnotes' }).click()
+  await runCommand(page, 'Close footnotes')
 }
 
 async function numbering(page: Page) {
@@ -292,7 +277,7 @@ test('citation footnotes number in document order and renumber after one is dele
   }
 
   const downloadPromise = page.waitForEvent('download', { timeout: 20_000 })
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const download = await downloadPromise
   const exportDir = mkdtempSync(path.join(tmpdir(), 'e7c-export-'))
   const savedPath = path.join(exportDir, 'citations.docx')

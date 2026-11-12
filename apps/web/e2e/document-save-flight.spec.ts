@@ -9,12 +9,7 @@ import {
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import {
-  choose,
-  openMenu,
-  openRibbonTab,
-  runMenuCommand,
-} from './editor-chrome'
+import { chooseStyle, runCommand, saveButton } from './editor-chrome'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -71,8 +66,7 @@ async function openMatterDocument(page: Page, matterName: string) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
+const save = (page: Page) => saveButton(page)
 const saveState = (page: Page) =>
   page.locator('[data-save-state]').getAttribute('data-save-state')
 const headingParagraphs = (page: Page) =>
@@ -81,10 +75,6 @@ const headingParagraphs = (page: Page) =>
 async function caretAtEnd(page: Page, text: string) {
   await focusParagraph(page, text)
   await page.keyboard.press('Control+End')
-}
-
-async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'References') {
-  await openRibbonTab(page, name)
 }
 
 async function holdNextModelFetch(page: Page) {
@@ -395,19 +385,13 @@ test('typing through the save flight beside a stored table of contents and page 
 
   for (const text of [HEADING, 'Beta paragraph']) {
     await focusParagraph(page, text)
-    await openMenu(page, 'Format')
-    await choose(page, 'Paragraph style', 'Heading 1')
+    await chooseStyle(page, 'Heading 1')
   }
   await focusParagraph(page, BODY)
-  await openRibbon(page, 'Insert')
-  await runMenuCommand(page, 'Insert', 'Page break')
+  await runCommand(page, 'Page break')
 
   await focusParagraph(page, 'Alpha item')
-  await openRibbon(page, 'References')
-  await openRibbon(page, 'Insert')
-  await page
-    .getByRole('button', { name: 'Table of contents', exact: true })
-    .click()
+  await runCommand(page, 'Table of contents')
   await expect(headingParagraphs(page)).toHaveCount(2)
   await saveAndWait(page)
 

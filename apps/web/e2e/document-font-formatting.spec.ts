@@ -6,6 +6,8 @@ import { fixturePath } from './support'
 import {
   choose,
   openFormatting,
+  ribbonCommand,
+  runCommand,
   selectedValue,
   setTrackChanges,
 } from './editor-chrome'
@@ -148,19 +150,19 @@ test('clear formatting removes direct character formatting and saves nulls', asy
   await choose(page, 'Font', 'Georgia')
   await choose(page, 'Font size', '12')
   await choose(page, 'Font colour', 'Red')
-  await page.getByRole('button', { name: 'Bold' }).click()
-  await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute(
+  await runCommand(page, 'Bold')
+  await expect(await ribbonCommand(page, 'Bold')).toHaveAttribute(
     'aria-pressed',
     'true',
   )
   expect((await paintedStyle(page, SELECTED))?.fontFamily).toContain('Georgia')
 
-  await page.getByRole('button', { name: 'Clear formatting' }).click()
+  await runCommand(page, 'Clear formatting')
 
   await expect(fontFamily(page)).toHaveText('Default font')
   await expect(fontSize(page)).toHaveText('Default')
   await expect(fontColour(page)).toHaveText('Automatic')
-  await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute(
+  await expect(await ribbonCommand(page, 'Bold')).toHaveAttribute(
     'aria-pressed',
     'false',
   )
@@ -212,9 +214,7 @@ test('queues font formatting and clear formatting on a tracked partial selection
   await expect(fontFamily(page)).toBeEnabled()
   await expect(fontSize(page)).toBeEnabled()
   await expect(fontColour(page)).toBeEnabled()
-  await expect(
-    page.getByRole('button', { name: 'Clear formatting', exact: true }),
-  ).toBeEnabled()
+  await expect(await ribbonCommand(page, 'Clear formatting')).toBeEnabled()
 
   await choose(page, 'Font', 'Georgia')
   await choose(page, 'Font size', '12')

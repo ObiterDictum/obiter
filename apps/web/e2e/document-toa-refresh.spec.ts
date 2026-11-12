@@ -11,12 +11,7 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import {
-  menuItem,
-  openMenu,
-  openRibbonGroup,
-  runMenuCommand,
-} from './editor-chrome'
+import { ribbonCommand, runCommand } from './editor-chrome'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -46,16 +41,8 @@ async function createAccount(request: APIRequestContext) {
   return { email, password }
 }
 
-const toaButton = (page: Page) => menuItem(page, 'Table of authorities')
-const updateButton = (page: Page) =>
-  menuItem(page, 'Update table of authorities')
 const toaHeading = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: 'Table of Cases' })
-
-async function openReferences(page: Page) {
-  await openMenu(page, 'Insert')
-  await openRibbonGroup(page, 'Authorities')
-}
 
 type EditBody = { operations?: Array<Record<string, unknown>> }
 
@@ -95,14 +82,14 @@ test('table of authorities paints, saves, updates and exports', async ({
   })
 
   await focusParagraph(page, STORED_CITATION)
-  await openReferences(page)
-  await expect(updateButton(page)).toBeDisabled()
+  await expect(
+    await ribbonCommand(page, 'Update table of authorities'),
+  ).toBeDisabled()
 
   const anchorParagraph = page.locator('[data-paragraph-id]').nth(1)
   await anchorParagraph.click()
-  await openReferences(page)
-  await expect(toaButton(page)).toBeEnabled()
-  await toaButton(page).click()
+  await expect(await ribbonCommand(page, 'Table of authorities')).toBeEnabled()
+  await runCommand(page, 'Table of authorities')
   await expect(toaHeading(page)).toHaveCount(1)
   await expect(
     page.locator('[data-paragraph-id]', { hasText: STORED_CITATION }).first(),
@@ -123,26 +110,20 @@ test('table of authorities paints, saves, updates and exports', async ({
   })
   await expect(toaHeading(page)).toHaveCount(1)
   await focusParagraph(page, 'Table of Cases')
-  await openReferences(page)
-  await expect(updateButton(page)).toBeEnabled()
+  await expect(
+    await ribbonCommand(page, 'Update table of authorities'),
+  ).toBeEnabled()
 
   await focusParagraph(page, 'Table of Cases')
-  await openMenu(page, 'Edit')
-  const deleteParagraph = page.getByRole('button', {
-    name: 'Delete paragraph',
-    exact: true,
-  })
-  await expect(deleteParagraph).toBeDisabled()
+  await expect(await ribbonCommand(page, 'Delete paragraph')).toBeDisabled()
   await shot(page, '03-field-boundary-refused')
 
   await focusParagraph(page, 'IN THE HIGH COURT OF JUSTICE')
-  await openReferences(page)
-  await menuItem(page, 'Insert authority').click()
+  await runCommand(page, 'Insert authority')
   await page.getByRole('textbox', { name: 'Citation' }).fill(ADDED_CITATION)
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
   await focusParagraph(page, 'Table of Cases')
-  await openReferences(page)
-  await updateButton(page).click()
+  await runCommand(page, 'Update table of authorities')
   await expect(
     page.locator('[data-paragraph-id]', { hasText: ADDED_CITATION }).first(),
   ).toBeVisible()
@@ -169,7 +150,7 @@ test('table of authorities paints, saves, updates and exports', async ({
   await shot(page, '06-reloaded-refresh')
 
   const downloadPromise = page.waitForEvent('download')
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const download = await downloadPromise
   const exportPath = await download.path()
   const documentXml = zipPart(exportPath, 'word/document.xml')

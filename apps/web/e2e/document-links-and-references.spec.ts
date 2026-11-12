@@ -3,7 +3,7 @@ import { createAccount, openFixtureDocument } from './document-journey'
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { openRibbonTab } from './editor-chrome'
+import { redoButton, runCommand, saveButton, undoButton } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
@@ -21,17 +21,11 @@ function shot(page: Page, name: string) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const save = (page: Page) =>
-  page.getByRole('button', { name: 'Save', exact: true })
-const undo = (page: Page) =>
-  page.getByRole('button', { name: 'Undo', exact: true })
+const save = (page: Page) => saveButton(page)
+const undo = (page: Page) => undoButton(page)
 const linkedText = (page: Page) =>
   page.locator(`[data-link-target="${LINK_TARGET}"]`)
 const fieldMarkers = (page: Page) => page.locator('[data-field-marker]')
-
-async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Layout') {
-  await openRibbonTab(page, name)
-}
 
 async function focusHeading(page: Page) {
   const target = page
@@ -85,8 +79,7 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   for (let index = 0; index < 6; index += 1) {
     await page.keyboard.press('Shift+ArrowRight')
   }
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Link', exact: true }).click()
+  await runCommand(page, 'Link')
   await page.getByLabel('Address').fill(LINK_TARGET)
   await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
   await expect(linkedText(page)).toBeVisible()
@@ -95,10 +88,7 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   await page.keyboard.press('Escape')
   const caretParagraph = page.locator('[data-paragraph-id]').nth(1)
   await caretParagraph.click()
-  await openRibbon(page, 'Insert')
-  await page
-    .getByRole('button', { name: 'Cross-reference', exact: true })
-    .click()
+  await runCommand(page, 'Cross-reference')
   const target = page
     .getByRole('option', { name: new RegExp(HEADING.slice(0, 20)) })
     .first()
@@ -107,11 +97,10 @@ test('hyperlink and cross-reference paint, save and reload', async ({
   await expect(fieldMarkers(page)).toHaveCount(1)
   await shot(page, '02-pending-reference')
 
-  await openRibbon(page, 'Home')
   await undo(page).click()
   await expect(fieldMarkers(page)).toHaveCount(0)
   await shot(page, '03-undone-reference')
-  await page.getByRole('button', { name: 'Redo', exact: true }).click()
+  await redoButton(page).click()
   await expect(fieldMarkers(page)).toHaveCount(1)
 
   await saveAndWait(page)

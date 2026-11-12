@@ -1,6 +1,6 @@
 import { createAccount, openFixtureDocument } from './document-journey'
 import { focusParagraph } from './e13-support'
-import { runMenuCommand } from './editor-chrome'
+import { runCommand, saveButton } from './editor-chrome'
 import { expect, test, type Page } from '@playwright/test'
 
 import path from 'node:path'
@@ -29,16 +29,16 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   await focusParagraph(page, HEADING)
   await page.keyboard.press('Home')
   await page.keyboard.type(`${MARKER} `)
-  const saveButton = page.getByRole('button', { name: 'Save', exact: true })
-  await expect(saveButton).toBeEnabled({ timeout: 15_000 })
-  await saveButton.click()
-  await expect(saveButton).toBeDisabled({ timeout: 30_000 })
+  const save = saveButton(page)
+  await expect(save).toBeEnabled({ timeout: 15_000 })
+  await save.click()
+  await expect(save).toBeDisabled({ timeout: 30_000 })
 
   await focusParagraph(page, 'BETWEEN:')
   await page.keyboard.press('End')
   await page.keyboard.type(' DRAFTX')
 
-  await runMenuCommand(page, 'View', 'Document information')
+  await runCommand(page, 'Document information')
   const history = page.getByRole('complementary', {
     name: 'Document information',
   })
@@ -59,10 +59,10 @@ test('versions: edit saves v2, v1 opens read-only, compare shows the change', as
   ).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText(MARKER).filter({ visible: true })).toHaveCount(0)
   await expect(editor(page).filter({ visible: true })).toHaveCount(0)
-  await expect(saveButton.filter({ visible: true })).toHaveCount(0)
+  await expect(save.filter({ visible: true })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Back to current version' }).click()
-  await runMenuCommand(page, 'File', 'Compare versions')
+  await runCommand(page, 'Compare versions')
   await expect(page.getByText('Comparing versions · read only')).toBeVisible({
     timeout: 15_000,
   })

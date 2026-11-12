@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
-import { runMenuCommand } from './editor-chrome'
+import {
+  redoButton,
+  ribbonCommand,
+  runCommand,
+  saveButton,
+  undoButton,
+} from './editor-chrome'
 import { openMatter } from './support'
 
 /*
@@ -100,11 +106,9 @@ async function openFixtureDocument(page: Page, matter = matterName) {
 
 const editor = (page: Page) =>
   page.getByLabel('Paragraph text', { exact: true })
-const redo = (page: Page) =>
-  page.getByRole('button', { name: 'Redo', exact: true })
-const undo = (page: Page) =>
-  page.getByRole('button', { name: 'Undo', exact: true })
-const save = (page: Page) => page.getByRole('button', { name: 'Save' })
+const redo = (page: Page) => redoButton(page)
+const undo = (page: Page) => undoButton(page)
+const save = (page: Page) => saveButton(page)
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
 
@@ -282,8 +286,8 @@ test.describe('redo in a browser', () => {
     await page.keyboard.press('Home')
     await page.keyboard.press('Shift+ArrowRight')
     await page.keyboard.press('Shift+ArrowRight')
-    await page.getByRole('button', { name: 'Bold' }).click()
-    const bold = page.getByRole('button', { name: 'Bold' })
+    await runCommand(page, 'Bold')
+    const bold = await ribbonCommand(page, 'Bold')
     await check(bold).toHaveAttribute('aria-pressed', 'true')
     await shot(page, '12-formatting-applied')
 
@@ -329,7 +333,7 @@ test.describe('redo in a browser', () => {
     await focusParagraph(page, 'Paragraph 1.')
     const before = await settledParagraphCount(page)
 
-    await runMenuCommand(page, 'Edit', 'Insert paragraph')
+    await runCommand(page, 'Insert paragraph')
     const pending = page.getByLabel('Pending paragraph text', { exact: true })
     await check(pending).toBeVisible({ timeout: 10_000 })
     await pending.pressSequentially('X')

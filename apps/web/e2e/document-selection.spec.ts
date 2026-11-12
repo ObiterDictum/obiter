@@ -1,7 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { openMatter } from './support'
 import path from 'node:path'
-import { menuItem, openMenu, setTrackChanges } from './editor-chrome'
+import {
+  commandRefusal,
+  ribbonCommand,
+  saveButton,
+  setTrackChanges,
+} from './editor-chrome'
 
 /*
  * Browser-only coverage for the cross-paragraph selection. Real selection,
@@ -207,13 +212,10 @@ test.describe('the document selection in a browser', () => {
     await pressMany(page, 'Shift+ArrowDown', 3)
     await check(status(page)).toContainText('3 paragraphs selected')
 
-    await openMenu(page, 'Insert')
-    const link = menuItem(page, 'Link')
-    await expect(link).toBeDisabled()
-    await expect(link).toHaveAttribute(
-      'title',
-      'A link is not recorded as a tracked change',
-    )
+    await expect(await ribbonCommand(page, 'Link')).toBeDisabled()
+    await expect
+      .poll(() => commandRefusal(page, 'Link'))
+      .toBe('A link is not recorded as a tracked change')
     await shot(page, '06-unsupported-action-disabled')
   })
 
@@ -252,8 +254,8 @@ test.describe('the document selection in a browser', () => {
     await check(status(page)).toBeEmpty()
     await check(editor(page)).toHaveValue(/^Northgate Holdings/)
 
-    await page.getByRole('button', { name: 'Save' }).click()
-    await check(page.getByRole('button', { name: 'Save' })).toBeDisabled({
+    await saveButton(page).click()
+    await check(saveButton(page)).toBeDisabled({
       timeout: 30_000,
     })
     expect(edited.length).toBeGreaterThan(0)

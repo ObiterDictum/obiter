@@ -7,8 +7,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { openRibbonTab } from './editor-chrome'
-import { runMenuCommand } from './editor-chrome'
+import { runCommand, saveButton } from './editor-chrome'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURE = path.resolve(
@@ -55,10 +54,6 @@ const bodyParagraph = (page: Page) =>
 const noteParagraph = (page: Page) =>
   page.locator('[data-paragraph-id]', { hasText: MARKER }).first()
 
-async function openRibbon(page: Page, name: 'Home' | 'Insert' | 'Review') {
-  await openRibbonTab(page, name)
-}
-
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test('cut warns about the removed footnote and Undo restores it before save and export', async ({
@@ -70,11 +65,9 @@ test('cut warns about the removed footnote and Undo restores it before save and 
   await bodyParagraph(page).click()
   await expect(editor(page)).toBeFocused()
   await page.keyboard.press('End')
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Footnote', exact: true }).click()
+  await runCommand(page, 'Footnote')
   await page.keyboard.type(MARKER)
-  await openRibbon(page, 'Insert')
-  await page.getByRole('button', { name: 'Close footnotes' }).click()
+  await runCommand(page, 'Close footnotes')
   await saveAndWait(page)
   await bodyParagraph(page).click()
   await expect(editor(page)).toBeFocused()
@@ -111,15 +104,13 @@ test('cut warns about the removed footnote and Undo restores it before save and 
     }
     await page.setViewportSize({ width: 1440, height: 900 })
   }
-  await runMenuCommand(page, 'Edit', 'Undo')
+  await runCommand(page, 'Undo')
   await expect(page.locator('[data-note-mark]')).toHaveCount(1)
-  await expect(
-    page.getByRole('button', { name: 'Save', exact: true }),
-  ).toBeDisabled()
+  await expect(saveButton(page)).toBeDisabled()
   await page.reload()
   await expect(noteParagraph(page)).toBeVisible()
   const downloadPromise = page.waitForEvent('download')
-  await runMenuCommand(page, 'File', 'Export')
+  await runCommand(page, 'Export')
   const download = await downloadPromise
   const exported = path.join(
     mkdtempSync(path.join(tmpdir(), 'cut-note-')),
