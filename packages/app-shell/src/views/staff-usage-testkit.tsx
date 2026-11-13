@@ -140,10 +140,12 @@ export function renderUsage(isStaff: boolean, entry = '/staff/usage') {
 export function tableWithHeaders(names: string[]) {
   const table = screen
     .getAllByRole('table')
-    .find((candidate) =>
-      names.every((name) =>
-        within(candidate).queryByRole('columnheader', { name }),
-      ),
+    .find(
+      (candidate) =>
+        !candidate.classList.contains('sr-only') &&
+        names.every((name) =>
+          within(candidate).queryByRole('columnheader', { name }),
+        ),
     )
   if (!table) throw new Error(`no table with headers: ${names.join(', ')}`)
   return table

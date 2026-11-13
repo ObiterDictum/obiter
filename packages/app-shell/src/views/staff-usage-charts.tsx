@@ -1,6 +1,10 @@
 import type { StaffUsageWeek } from '@obiter/contracts'
 import { formatDate } from '../format'
-import { featureSeries, weeklySeries } from './staff-chart-data'
+import {
+  featureSeries,
+  weeklySeries,
+  type LineSeries,
+} from './staff-chart-data'
 import { LineChart } from './staff-line-chart'
 
 function WeeklyCountsTableView({ weeks }: { weeks: StaffUsageWeek[] }) {
@@ -39,6 +43,34 @@ export function WeeklyActivityChart({ weeks }: { weeks: StaffUsageWeek[] }) {
   )
 }
 
+function FeatureWeekTableView({
+  series,
+  weeks,
+}: {
+  series: LineSeries
+  weeks: StaffUsageWeek[]
+}) {
+  return (
+    <table className="sr-only">
+      <caption>{series.label} per week</caption>
+      <thead>
+        <tr>
+          <th>Week</th>
+          <th>{series.label}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {weeks.map((week, index) => (
+          <tr key={week.weekStart}>
+            <td>{formatDate(week.weekStart)}</td>
+            <td>{series.values[index]}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 export function FeatureUseCharts({ weeks }: { weeks: StaffUsageWeek[] }) {
   const categories = weeks.map((week) => week.weekStart)
   return (
@@ -52,6 +84,7 @@ export function FeatureUseCharts({ weeks }: { weeks: StaffUsageWeek[] }) {
           ariaLabel={`${series.label} per week`}
           title={series.label}
           titleClassName="text-meta text-ink"
+          table={<FeatureWeekTableView series={series} weeks={weeks} />}
         />
       ))}
     </div>

@@ -27,7 +27,9 @@ it('renders charts for staff and keeps the tables behind toggles', async () => {
   ]) {
     expect(screen.getByRole('img', { name: `${label} per week` })).toBeTruthy()
   }
-  expect(screen.queryByRole('columnheader', { name: 'Agent' })).toBeNull()
+  expect(
+    screen.queryByRole('region', { name: 'Weekly feature counts' }),
+  ).toBeNull()
   const orgRegion = section('Usage by organisation')
   expect(
     within(orgRegion).getByRole('button', {
