@@ -61,11 +61,12 @@ export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id']
 
 export function settingsSectionFrom(
   value: unknown,
-  me: MeResponse,
+  me: MeResponse | undefined,
 ): SettingsSectionId {
   return (
-    SETTINGS_SECTIONS.find((item) => item.id === value && item.available(me))
-      ?.id ?? 'account'
+    SETTINGS_SECTIONS.find(
+      (item) => item.id === value && (!me || item.available(me)),
+    )?.id ?? 'account'
   )
 }
 
@@ -76,7 +77,9 @@ export function validateSettingsSearch(search: Record<string, unknown>): {
   return section ? { section: section.id } : {}
 }
 
-export function useSettingsSection(me: MeResponse): SettingsSectionId {
+export function useSettingsSection(
+  me: MeResponse | undefined,
+): SettingsSectionId {
   return useRouterState({
     select: (state) =>
       settingsSectionFrom(

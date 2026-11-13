@@ -87,8 +87,8 @@ export function ModuleTabs() {
   const matterName =
     matters.find((matter) => matter.id === matterId)?.name ?? 'Matter'
   const sourceTitle = useSourceTitle(pathname)
-  const settingsSection = useSettingsSection()
   const { data: me } = useQuery(currentUserQueryOptions())
+  const settingsSection = useSettingsSection(me)
   const settingsLabel = SETTINGS_SECTIONS.find(
     (item) => item.id === settingsSection,
   )?.label

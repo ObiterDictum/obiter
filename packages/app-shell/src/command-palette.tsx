@@ -1,5 +1,5 @@
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@obiter/ui'
 import {
   Suspense,
@@ -15,6 +15,7 @@ import {
   uploadMatterDocumentRequest,
   type DocumentUploadResponse,
 } from './documents'
+import { currentUserQueryOptions } from './current-user'
 import { useMattersList } from './matters'
 import { matterIdFromPath } from './navigation'
 import { useShellShortcuts } from './shell-shortcuts'
@@ -79,6 +80,7 @@ export function CommandPaletteProvider({
 }) {
   const navigate = useNavigate()
   const theme = useAppTheme()
+  const { data: me } = useQuery(currentUserQueryOptions())
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const pathname = useRouterState({
@@ -137,6 +139,8 @@ export function CommandPaletteProvider({
       security: 'settings-security',
       organisation: 'settings-organisation',
       preferences: 'settings-preferences',
+      members: 'settings-members',
+      agent: 'settings-agent',
     } satisfies Record<SettingsSectionId, PaletteActionId>
     return {
       id: `action-settings-${id}`,
@@ -201,8 +205,8 @@ export function CommandPaletteProvider({
       hint: 'Navigation behind the Obiter mark',
       target: { kind: 'action', id: 'layout-clean' },
     },
-    ...SETTINGS_SECTIONS.map((section) =>
-      settingRow(section.id, section.label),
+    ...SETTINGS_SECTIONS.filter((section) => !me || section.available(me)).map(
+      (section) => settingRow(section.id, section.label),
     ),
   ]
 
@@ -234,6 +238,12 @@ export function CommandPaletteProvider({
         return
       case 'settings-preferences':
         openSettings('preferences')
+        return
+      case 'settings-members':
+        openSettings('members')
+        return
+      case 'settings-agent':
+        openSettings('agent')
         return
       case 'layout-sidebar':
         setShellLayout('sidebar')

@@ -39,7 +39,7 @@ export function TitleBar({
     select: (state) => state.location.pathname,
   })
   const section = resolveSection(pathname)
-  const settingsSectionId = useSettingsSection()
+  const settingsSectionId = useSettingsSection(me)
   const settingsSection = SETTINGS_SECTIONS.find(
     (item) => item.id === settingsSectionId,
   )?.label

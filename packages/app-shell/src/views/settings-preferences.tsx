@@ -35,16 +35,15 @@ export function PreferencesSection({ active }: { active: boolean }) {
   return (
     <section
       hidden={!active}
-      aria-labelledby="settings-preferences-heading"
+      aria-label="Preferences"
       className="flex flex-col gap-6"
     >
       <SectionHeading
-        id="settings-preferences-heading"
-        title="Preferences"
+        id="settings-appearance-heading"
+        level="h3"
+        title="Appearance"
         description="Changes apply immediately and are kept on this device."
       />
-
-      <h3 className="text-item text-ink">Appearance</h3>
 
       <div className="flex flex-wrap items-start justify-between gap-8">
         <div className="min-w-0 max-w-[21rem]">

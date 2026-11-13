@@ -11,6 +11,8 @@ export type PaletteActionId =
   | 'settings-security'
   | 'settings-organisation'
   | 'settings-preferences'
+  | 'settings-members'
+  | 'settings-agent'
   | 'layout-sidebar'
   | 'layout-tabs'
   | 'layout-clean'
