@@ -50,7 +50,9 @@ function ContentsTitle({
 }) {
   if (section === 'matters' && matterId)
     return <MatterTitle matterId={matterId} />
-  return <span className="truncate">{SECTION_TITLES[section]}</span>
+  return (
+    <span className="min-w-0 flex-1 truncate">{SECTION_TITLES[section]}</span>
+  )
 }
 
 function ContentsBody({
