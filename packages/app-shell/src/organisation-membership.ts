@@ -5,12 +5,15 @@ import {
   queryOptions,
 } from '@tanstack/react-query'
 import type {
+  AssignableMemberRole,
   CreateOrganisationInviteInput,
   OrganisationInvite,
   OrganisationInviteAccountExists,
   OrganisationInvitePreview,
   OrganisationMember,
   RemoveOrganisationMemberRequest,
+  TransferOrganisationOwnershipInput,
+  UpdateOrganisationMemberRoleResponse,
 } from '@obiter/contracts'
 import { apiFetch, ApiError } from './api'
 import { mattersKeys } from './matters'
@@ -186,6 +189,71 @@ export function useRemoveOrganisationMember(organisationId: string) {
       void queryClient.invalidateQueries({
         queryKey: organisationMembershipKeys.members(organisationId),
       })
+    },
+  })
+}
+
+function invalidateMembership(
+  queryClient: ReturnType<typeof useQueryClient>,
+  organisationId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: mattersKeys.all })
+  void queryClient.invalidateQueries({ queryKey: ['matter-shares'] })
+  void queryClient.invalidateQueries({
+    queryKey: ['member-owned-matters', organisationId],
+  })
+  void queryClient.invalidateQueries({
+    queryKey: organisationMembershipKeys.members(organisationId),
+  })
+  void queryClient.invalidateQueries({ queryKey: ['current-user'] })
+}
+
+export function useUpdateOrganisationMemberRole(organisationId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      role,
+    }: {
+      userId: string
+      role: AssignableMemberRole
+    }) => {
+      const response = await apiFetch<UpdateOrganisationMemberRoleResponse>(
+        `/api/organisations/${organisationId}/members/${userId}`,
+        { method: 'PATCH', body: JSON.stringify({ role }) },
+      )
+      return response.member
+    },
+    onSuccess: () => invalidateMembership(queryClient, organisationId),
+  })
+}
+
+export function useTransferOrganisationOwnership(organisationId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: TransferOrganisationOwnershipInput) => {
+      const response = await apiFetch<{ ownerUserId: string }>(
+        `/api/organisations/${organisationId}/transfer-ownership`,
+        { method: 'POST', body: JSON.stringify(input) },
+      )
+      return response.ownerUserId
+    },
+    onSuccess: () => invalidateMembership(queryClient, organisationId),
+  })
+}
+
+export function useLeaveOrganisation(organisationId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: RemoveOrganisationMemberRequest) => {
+      await apiFetch(`/api/organisations/${organisationId}/leave`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      })
+    },
+    onSuccess: () => {
+      invalidateMembership(queryClient, organisationId)
+      void queryClient.invalidateQueries({ queryKey: ['current-user'] })
     },
   })
 }

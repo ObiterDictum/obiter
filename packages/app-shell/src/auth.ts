@@ -17,6 +17,7 @@ import {
   setDesktopAuthToken,
 } from './lib/auth-token'
 import { readDesktopBridge } from './lib/desktop-bridge'
+import { apiFetch, ApiError } from './api'
 
 function authBaseURL(): string {
   if (typeof window !== 'undefined') {
@@ -92,6 +93,14 @@ export interface UseAuthReturn {
     currentPassword: string
     newPassword: string
   }) => Promise<{ ok: boolean; message?: string; code?: string }>
+  changeEmail: (input: {
+    newEmail: string
+    password: string
+    callbackURL?: string
+  }) => Promise<{ ok: boolean; message?: string }>
+  deleteAccount: (
+    password: string,
+  ) => Promise<{ ok: boolean; message?: string; code?: string }>
   resendVerificationEmail: (
     email: string,
     callbackURL?: string,
@@ -226,6 +235,67 @@ export function useAuth(): UseAuthReturn {
     return { ok: true }
   }
 
+  async function changeEmail(input: {
+    newEmail: string
+    password: string
+    callbackURL?: string
+  }) {
+    const token = desktopAuthFetchOptions ? await getDesktopAuthToken() : null
+    const response = await fetch(`${authBaseURL()}/api/auth/change-email`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        newEmail: input.newEmail,
+        password: input.password,
+        callbackURL: input.callbackURL ?? '/',
+      }),
+    })
+    const data: unknown = await response.json().catch(() => null)
+    if (!response.ok) {
+      const message =
+        data &&
+        typeof data === 'object' &&
+        'message' in data &&
+        typeof data.message === 'string'
+          ? data.message
+          : 'Could not change your email. Try again.'
+      return { ok: false, message }
+    }
+    return { ok: true }
+  }
+
+  async function deleteAccount(password: string) {
+    const userId = realSession.data?.user?.id
+    try {
+      await apiFetch('/api/me', {
+        method: 'DELETE',
+        body: JSON.stringify({ password }),
+      })
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof ApiError
+            ? error.message
+            : 'Could not delete your account. Try again.',
+        code: error instanceof ApiError ? error.code : undefined,
+      }
+    }
+    try {
+      await clearDesktopAuthToken()
+    } finally {
+      suspendDocumentDraftWrites()
+      if (userId) clearStoredDocumentDraftsForUser(userId)
+      queryClient.clear()
+    }
+    await realSession.refetch().catch(() => {})
+    return { ok: true }
+  }
+
   async function requestPasswordReset(email: string) {
     const result = await authClient.requestPasswordReset({ email })
     if (result.error) {
@@ -263,6 +333,8 @@ export function useAuth(): UseAuthReturn {
     requestPasswordReset,
     resetPassword,
     changePassword,
+    changeEmail,
+    deleteAccount,
     resendVerificationEmail,
     signOut,
   }
