@@ -1,9 +1,11 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
+import { SidebarSimple } from '@obiter/ui/icons'
 import { createContext, useContext, type ReactNode, type Ref } from 'react'
+import { ShortcutHint } from './shell-shortcuts'
 
 export interface PagePanel {
   name: string
   expanded: boolean
-  overlay: boolean
   controls: string
   toggle: () => void
   buttonRef?: Ref<HTMLButtonElement>
@@ -32,20 +34,31 @@ export function PagePanelToggle({
 }) {
   const panel = useContext(PagePanelContext)
   if (!panel) return null
-  const here = panel.overlay
-    ? panel.expanded === (site === 'panel')
-    : site === 'page'
-  if (!here) return null
+  if ((site === 'panel') !== panel.expanded) return null
+  const label = panel.expanded ? `Hide ${panel.name}` : `Show ${panel.name}`
   return (
-    <button
-      type="button"
-      ref={panel.buttonRef}
-      aria-controls={panel.controls}
-      aria-expanded={panel.expanded}
-      onClick={panel.toggle}
-      className="inline-flex h-8 shrink-0 items-center rounded-md px-2 text-meta text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-    >
-      {panel.expanded ? 'Hide' : 'Show'} {panel.name}
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            ref={panel.buttonRef}
+            aria-label={label}
+            aria-controls={panel.controls}
+            aria-expanded={panel.expanded}
+            onClick={panel.toggle}
+            className="grid size-7 shrink-0 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <SidebarSimple size={16} aria-hidden />
+          </button>
+        }
+      />
+      <TooltipContent side="bottom">
+        <span className="flex items-center gap-2">
+          {label}
+          <ShortcutHint command="toggle-nav" />
+        </span>
+      </TooltipContent>
+    </Tooltip>
   )
 }

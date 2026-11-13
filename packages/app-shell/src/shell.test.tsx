@@ -234,12 +234,17 @@ describe('shell frame', () => {
     expect(screen.queryByRole('button', { name: /^(Hide|Show) / })).toBeNull()
   })
 
-  it('hides only the contents panel from the toggle beside the page title', async () => {
+  it('hides only the contents panel from the collapse icon in its header', async () => {
     renderShell('/matters/mtr_1')
     await screen.findAllByText('Harrington Vale LLP')
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Hide matter contents' }),
-    )
+    const panel = await screen.findByRole('complementary', {
+      name: 'Matter contents',
+    })
+    const hide = await screen.findByRole('button', {
+      name: 'Hide matter contents',
+    })
+    expect(panel.contains(hide)).toBe(true)
+    fireEvent.click(hide)
     expect(window.localStorage.getItem('obiter.contents.hidden')).toBe('true')
     expect(
       screen.queryByRole('complementary', { name: 'Matter contents' }),
@@ -260,6 +265,64 @@ describe('shell frame', () => {
     expect(
       screen.queryByRole('complementary', { name: 'Matter contents' }),
     ).toBeNull()
+  })
+
+  it('returns focus to the show control when the overlay contents panel closes', async () => {
+    const narrow = spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) => ({
+        matches: query === '(max-width: 1023px)',
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    )
+    try {
+      renderShell('/matters/mtr_1')
+      const show = await screen.findByRole('button', {
+        name: 'Show matter contents',
+      })
+      fireEvent.click(show)
+
+      const panel = await screen.findByRole('complementary', {
+        name: 'Matter contents',
+      })
+      const hide = screen.getByRole('button', { name: 'Hide matter contents' })
+      expect(panel.contains(hide)).toBe(true)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close contents' }))
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('complementary', { name: 'Matter contents' }),
+        ).toBeNull(),
+      )
+      await waitFor(() =>
+        expect(document.activeElement).toBe(
+          screen.getByRole('button', { name: 'Show matter contents' }),
+        ),
+      )
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Show matter contents' }),
+      )
+      await screen.findByRole('button', { name: 'Hide matter contents' })
+      fireEvent.keyDown(window, { key: 'Escape' })
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('complementary', { name: 'Matter contents' }),
+        ).toBeNull(),
+      )
+      await waitFor(() =>
+        expect(document.activeElement).toBe(
+          screen.getByRole('button', { name: 'Show matter contents' }),
+        ),
+      )
+    } finally {
+      narrow.mockRestore()
+    }
   })
 
   it('leaves no app sidebar collapse control in the breadcrumb row', async () => {

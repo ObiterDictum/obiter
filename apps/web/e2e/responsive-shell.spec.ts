@@ -143,7 +143,7 @@ test('the sidebar stays expanded when the viewport changes above the mobile brea
   await expect.poll(async () => asideWidth(sidebar(page))).toBeGreaterThan(300)
 })
 
-test('the panel toggle beside the title hides the section list and leaves the sidebar alone', async ({
+test('the panel collapse icon hides the section list and leaves the sidebar alone', async ({
   page,
 }) => {
   await mockSession(page)
