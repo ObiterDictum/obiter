@@ -85,7 +85,7 @@ function MembersPanel({
         <SectionHeading
           id="settings-members-heading"
           level="h3"
-          title="Members"
+          title="People"
           description={
             canManage
               ? 'Everyone who can sign in to your organisation.'
