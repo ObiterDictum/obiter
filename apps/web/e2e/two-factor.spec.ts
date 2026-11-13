@@ -109,9 +109,9 @@ test('a user enrols in two-factor, signs in with a code or backup code, and turn
     .getByRole('button', { name: 'Verify and sign in', exact: true })
     .click()
   await expect(
-    page.getByText(
-      /That code is not correct|Could not verify your second factor/,
-    ),
+    page.getByText('That backup code is not valid or has already been used', {
+      exact: false,
+    }),
   ).toBeVisible()
   await page.getByRole('switch', { name: 'Use a backup code' }).click()
   await page
