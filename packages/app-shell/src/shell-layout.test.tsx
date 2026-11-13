@@ -26,6 +26,7 @@ function blockWrites() {
 
 afterEach(() => {
   cleanup()
+  setShellLayout('sidebar')
   window.localStorage.clear()
 })
 
@@ -71,12 +72,12 @@ describe('shell layout preference', () => {
     }
   })
 
-  it('keeps working when the choice cannot be written', () => {
+  it('applies the choice for this session when it cannot be written', () => {
     const writes = blockWrites()
     try {
       render(<LayoutProbe />)
       act(() => setShellLayout('tabs'))
-      expect(layoutText()).toBe('sidebar')
+      expect(layoutText()).toBe('tabs')
     } finally {
       writes.mockRestore()
     }

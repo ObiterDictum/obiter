@@ -4,8 +4,10 @@ import { SHELL_STORAGE_KEY } from './shell-preferences'
 export type ShellLayout = 'sidebar' | 'tabs' | 'clean'
 
 const subscribers = new Set<() => void>()
+let chosen: ShellLayout | null = null
 
 function readLayout(): ShellLayout {
+  if (chosen) return chosen
   try {
     const stored = window.localStorage.getItem(SHELL_STORAGE_KEY.layout)
     return stored === 'tabs' || stored === 'clean' ? stored : 'sidebar'
@@ -21,8 +23,9 @@ function notify() {
 export function setShellLayout(layout: ShellLayout) {
   try {
     window.localStorage.setItem(SHELL_STORAGE_KEY.layout, layout)
+    chosen = null
   } catch {
-    return
+    chosen = layout
   }
   notify()
 }
