@@ -38,6 +38,20 @@ export function sortOrganisations(
   })
 }
 
+export function duplicatedOrganisationNames(
+  rows: StaffUsageOrganisation[],
+): Set<string> {
+  const counts = new Map<string, number>()
+  for (const row of rows) {
+    counts.set(row.name, (counts.get(row.name) ?? 0) + 1)
+  }
+  return new Set(
+    [...counts.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([name]) => name),
+  )
+}
+
 export function nextOrganisationSort(
   current: OrganisationSort,
   column: OrganisationSortColumn,

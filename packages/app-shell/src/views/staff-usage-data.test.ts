@@ -4,6 +4,7 @@ import type {
   StaffUsageRetention,
 } from '@obiter/contracts'
 import {
+  duplicatedOrganisationNames,
   nextOrganisationSort,
   retentionGrid,
   retentionPercent,
@@ -63,6 +64,25 @@ describe('sortOrganisations', () => {
         (row) => row.name,
       ),
     ).toEqual(['Alpha', 'Beta', 'Gamma'])
+  })
+})
+
+describe('duplicatedOrganisationNames', () => {
+  it('flags only names shared by two or more organisations', () => {
+    const names = duplicatedOrganisationNames([
+      organisation({
+        name: 'Personal workspace',
+        organisationId: 'org_aaaa111',
+      }),
+      organisation({
+        name: 'Personal workspace',
+        organisationId: 'org_bbbb222',
+      }),
+      organisation({ name: 'Counsel', organisationId: 'org_cccc333' }),
+    ])
+    expect(names.has('Personal workspace')).toBe(true)
+    expect(names.has('Counsel')).toBe(false)
+    expect(names.size).toBe(1)
   })
 })
 

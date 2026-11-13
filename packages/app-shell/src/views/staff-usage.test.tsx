@@ -54,6 +54,13 @@ const usage = {
       ...counts,
       activeUsers: 20,
     },
+    {
+      organisationId: 'zz_alpha_dup',
+      name: 'Alpha Org',
+      memberCount: 6,
+      ...counts,
+      activeUsers: 1,
+    },
   ],
   retention: [
     {
@@ -158,19 +165,33 @@ it('renders the weekly chart, counts, organisations and retention for staff', as
     }),
   ).toBeTruthy()
   expect(screen.getByText(/Obiter staff organisation is excluded/)).toBeTruthy()
-  const weekly = tableWithHeaders(['Week', 'Agent runs'])
+  const weekly = tableWithHeaders(['Week', 'Agent'])
   expect(
-    within(weekly).getByRole('columnheader', { name: 'Verify runs' }),
+    within(weekly).getByRole('columnheader', { name: 'Verify' }),
   ).toBeTruthy()
   const orgTable = tableWithHeaders(['Organisation', 'Members'])
   const bodyRows = within(orgTable).getAllByRole('row').slice(1)
   expect(within(bodyRows[0]).getByText('Alpha Org')).toBeTruthy()
+  expect(bodyRows[0].textContent).toContain('org_al')
   expect(within(bodyRows[1]).getByText('Beta Org')).toBeTruthy()
+  expect(within(bodyRows[2]).getByText('Alpha Org')).toBeTruthy()
+  expect(bodyRows[2].textContent).toContain('zz_alp')
   expect(requested.some((path) => path.includes('weeks=12'))).toBe(true)
   const retention = tableWithHeaders(['Signup week', 'Week 0'])
-  expect(within(retention).getByText('100% · 4')).toBeTruthy()
-  expect(within(retention).getByText('50% · 2')).toBeTruthy()
-  expect(within(retention).getByText('100% · 3')).toBeTruthy()
+  const firstCohort = within(retention).getByRole('cell', {
+    name: 'Week 0: 100 percent, 4 of 4 active',
+  })
+  expect(within(firstCohort).getByText('100%')).toBeTruthy()
+  expect(within(firstCohort).getByText('4')).toBeTruthy()
+  const secondCell = within(retention).getByRole('cell', {
+    name: 'Week 1: 50 percent, 2 of 4 active',
+  })
+  expect(within(secondCell).getByText('50%')).toBeTruthy()
+  expect(within(secondCell).getByText('2')).toBeTruthy()
+  const newestCohortCell = within(retention).getByRole('cell', {
+    name: 'Week 0: 100 percent, 3 of 3 active',
+  })
+  expect(within(newestCohortCell).getByText('3')).toBeTruthy()
   const cohortRows = within(retention).getAllByRole('row').slice(1)
   const newestCohort = within(cohortRows[1]).getAllByRole('cell')
   expect(newestCohort[newestCohort.length - 1].textContent).toBe('')
@@ -201,7 +222,7 @@ it('marks the sorted organisation column with aria-sort', async () => {
   })
   const orgTable = tableWithHeaders(['Organisation', 'Members'])
   const activeHeader = within(orgTable).getByRole('columnheader', {
-    name: /Active users/,
+    name: 'Active',
   })
   expect(activeHeader.getAttribute('aria-sort')).toBe('descending')
   fireEvent.click(within(orgTable).getByRole('button', { name: 'Members' }))
