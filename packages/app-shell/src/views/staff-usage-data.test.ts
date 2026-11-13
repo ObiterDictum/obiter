@@ -8,6 +8,7 @@ import {
   nextOrganisationSort,
   retentionGrid,
   retentionPercent,
+  retentionStep,
   sortOrganisations,
 } from './staff-usage-data'
 
@@ -159,5 +160,23 @@ describe('retentionPercent', () => {
 
   it('avoids dividing by an empty cohort', () => {
     expect(retentionPercent(0, 0)).toBe(0)
+  })
+})
+
+describe('retentionStep', () => {
+  it('leaves a cohort with nobody active untinted', () => {
+    expect(retentionStep(0)).toBe(0)
+    expect(retentionStep(-4)).toBe(0)
+  })
+
+  it('steps up at each quarter boundary', () => {
+    expect(retentionStep(1)).toBe(1)
+    expect(retentionStep(25)).toBe(1)
+    expect(retentionStep(26)).toBe(2)
+    expect(retentionStep(50)).toBe(2)
+    expect(retentionStep(51)).toBe(3)
+    expect(retentionStep(75)).toBe(3)
+    expect(retentionStep(76)).toBe(4)
+    expect(retentionStep(100)).toBe(4)
   })
 })

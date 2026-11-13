@@ -8,11 +8,8 @@ import { ShellNotFound } from '../shell-states'
 import { staffUsageQueryOptions, staffUsageWeeks } from '../staff'
 import { ErrorNotice } from './settings-fields'
 import { WeeklyActivityChart } from './staff-usage-charts'
-import {
-  OrganisationsTable,
-  RetentionTable,
-  WeeklyCountsTable,
-} from './staff-usage-tables'
+import { OrganisationsTable, WeeklyCountsTable } from './staff-usage-tables'
+import { RetentionTable } from './staff-usage-retention'
 
 const WEEK_OPTIONS = [
   { value: '4', label: '4 weeks' },
