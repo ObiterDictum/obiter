@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   queryOptions,
   useQueryClient,
   type QueryKey,
@@ -57,6 +58,7 @@ export function staffOverviewQueryOptions() {
 export function staffUsageQueryOptions(weeks: number) {
   return queryOptions({
     queryKey: ['staff', 'usage', weeks],
+    placeholderData: keepPreviousData,
     queryFn: async () =>
       staffUsageResponseSchema.parse(
         await apiFetch(`/api/staff/usage?weeks=${weeks}`),

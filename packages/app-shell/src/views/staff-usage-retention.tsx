@@ -1,5 +1,15 @@
 import { type ReactNode } from 'react'
-import { Table, TBody, TD, TH, THead, TR } from '@obiter/ui'
+import {
+  Table,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@obiter/ui'
 import type { StaffUsageRetention } from '@obiter/contracts'
 import { formatDate } from '../format'
 import {
@@ -55,16 +65,27 @@ function RetentionCell({
   }
   const percent = retentionPercent(active, cohortSize)
   const step = retentionStep(percent)
+  const description = `Week ${week}: ${percent}% of the cohort still active, ${active} of ${cohortSize}`
   return (
     <TD
       className={`${DENSE_CELL} whitespace-nowrap`}
-      aria-label={`Week ${week}: ${percent} percent, ${active} of ${cohortSize} active`}
+      aria-label={description}
       style={{ backgroundColor: retentionBackground(step) }}
     >
-      <span className="flex flex-col items-end">
-        <span className="text-meta">{percent}%</span>
-        <span className="text-caption text-subtle">{active}</span>
-      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              tabIndex={0}
+              className="flex flex-col items-end rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+            />
+          }
+        >
+          <span className="text-meta">{percent}%</span>
+          <span className="text-caption text-subtle">{active}</span>
+        </TooltipTrigger>
+        <TooltipContent>{description}</TooltipContent>
+      </Tooltip>
     </TD>
   )
 }

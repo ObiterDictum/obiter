@@ -47,6 +47,25 @@ function ScrollRegion({
   )
 }
 
+export function TableToggle({
+  open,
+  onToggle,
+}: {
+  open: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onToggle}
+      className="inline-flex h-7 items-center rounded-md px-2 text-caption text-subtle transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      {open ? 'Hide table' : 'Show as table'}
+    </button>
+  )
+}
+
 export function WeeklyCountsTable({ weeks }: { weeks: StaffUsageWeek[] }) {
   return (
     <ScrollRegion label="Weekly feature counts">

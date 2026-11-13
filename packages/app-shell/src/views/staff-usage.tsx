@@ -1,14 +1,16 @@
+import { useState } from 'react'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Skeleton } from '@obiter/ui'
+import { Skeleton, cn } from '@obiter/ui'
 import { useCurrentUser } from '../current-user'
 import { PageScaffold } from '../page-scaffold'
 import { SegmentedControl } from '../segmented-control'
 import { ShellNotFound } from '../shell-states'
 import { staffUsageQueryOptions, staffUsageWeeks } from '../staff'
 import { ErrorNotice } from './settings-fields'
-import { WeeklyActivityChart } from './staff-usage-charts'
-import { OrganisationsTable, WeeklyCountsTable } from './staff-usage-tables'
+import { FeatureUseCharts, WeeklyActivityChart } from './staff-usage-charts'
+import { OrganisationUsage } from './staff-org-chart'
+import { TableToggle, WeeklyCountsTable } from './staff-usage-tables'
 import { RetentionTable } from './staff-usage-retention'
 
 const WEEK_OPTIONS = [
@@ -33,6 +35,7 @@ function StaffUsage() {
     Object.fromEntries(new URLSearchParams(searchStr)),
   )
   const usage = useQuery(staffUsageQueryOptions(weeks))
+  const [showCountsTable, setShowCountsTable] = useState(false)
   return (
     <PageScaffold
       title="Usage"
@@ -60,20 +63,37 @@ function StaffUsage() {
       ) : usage.isError ? (
         <ErrorNotice message="Could not load usage." />
       ) : (
-        <div className="flex flex-col gap-10">
+        <div
+          className={cn(
+            'flex flex-col gap-10 transition-opacity duration-200',
+            usage.isPlaceholderData && 'opacity-60',
+          )}
+        >
           <section aria-label="Weekly activity" className="flex flex-col gap-4">
             <WeeklyActivityChart weeks={usage.data.weeks} />
           </section>
-          <section aria-label="Weekly counts" className="flex flex-col gap-4">
-            <h2 className="text-item text-ink">Every feature, per week</h2>
-            <WeeklyCountsTable weeks={usage.data.weeks} />
+          <section
+            aria-label="Feature use per week"
+            className="flex flex-col gap-4"
+          >
+            <h2 className="text-item text-ink">Feature use per week</h2>
+            <FeatureUseCharts weeks={usage.data.weeks} />
+            <div className="flex flex-col gap-3">
+              <TableToggle
+                open={showCountsTable}
+                onToggle={() => setShowCountsTable((current) => !current)}
+              />
+              {showCountsTable ? (
+                <WeeklyCountsTable weeks={usage.data.weeks} />
+              ) : null}
+            </div>
           </section>
           <section
             aria-label="Usage by organisation"
             className="flex flex-col gap-4"
           >
             <h2 className="text-item text-ink">By organisation</h2>
-            <OrganisationsTable organisations={usage.data.organisations} />
+            <OrganisationUsage organisations={usage.data.organisations} />
           </section>
           <section aria-label="Retention" className="flex flex-col gap-4">
             <h2 className="text-item text-ink">Retention by signup week</h2>
