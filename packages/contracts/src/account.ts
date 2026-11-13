@@ -18,4 +18,18 @@ export const updateProfileResponseSchema = z.object({
 })
 export type UpdateProfileResponse = z.infer<typeof updateProfileResponseSchema>
 
+export const accountSessionSchema = z.object({
+  id: z.string(),
+  token: z.string(),
+  userAgent: z
+    .string()
+    .nullish()
+    .transform((value) => value ?? null),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type AccountSession = z.infer<typeof accountSessionSchema>
+
+export const accountSessionsResponseSchema = z.array(accountSessionSchema)
+
 export { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './limits'

@@ -17,18 +17,11 @@ import {
 } from '@obiter/ui'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { accountSessionsResponseSchema } from '@obiter/contracts'
 import { apiFetch } from '../api'
 import { useAuth } from '../auth'
 import { formatDate, formatDateTime } from '../format'
 import { ErrorNotice, SectionHeading } from './settings-fields'
-
-interface AuthSession {
-  id: string
-  token: string
-  userAgent: string | null
-  createdAt: string
-  updatedAt: string
-}
 
 const sessionsKey = ['auth-sessions'] as const
 
@@ -36,7 +29,10 @@ function useAuthSessions(enabled: boolean) {
   return useQuery({
     queryKey: sessionsKey,
     enabled,
-    queryFn: () => apiFetch<AuthSession[]>('/api/auth/list-sessions'),
+    queryFn: async () =>
+      accountSessionsResponseSchema.parse(
+        await apiFetch<unknown>('/api/auth/list-sessions'),
+      ),
   })
 }
 
