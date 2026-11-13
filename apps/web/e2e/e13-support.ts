@@ -66,6 +66,15 @@ export async function signInWithTwoFactor(
   await page.waitForLoadState('networkidle')
 }
 
+export async function signOut(page: Page) {
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  await page.waitForURL('**/sign-in**', { timeout: 15_000 })
+  await expect(
+    page.getByRole('heading', { name: 'Sign in', exact: true }),
+  ).toBeVisible()
+}
+
 export async function startTwoFactorEnrolment(
   page: Page,
   password: string,

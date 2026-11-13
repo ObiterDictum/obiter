@@ -1,16 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { createAccount } from './document-journey'
-import { signIn, startTwoFactorEnrolment } from './e13-support'
+import { signIn, signOut, startTwoFactorEnrolment } from './e13-support'
 import { generateTotpCode } from './totp'
-
-async function signOut(page: Page) {
-  await page.getByRole('button', { name: 'Account menu' }).click()
-  await page.getByRole('menuitem', { name: 'Sign out' }).click()
-  await page.waitForURL('**/sign-in**', { timeout: 15_000 })
-  await expect(
-    page.getByRole('heading', { name: 'Sign in', exact: true }),
-  ).toBeVisible()
-}
 
 async function submitCredentials(page: Page, email: string, password: string) {
   await page.goto('/sign-in', { waitUntil: 'networkidle' })
