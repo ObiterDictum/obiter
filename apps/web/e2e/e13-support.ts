@@ -72,7 +72,9 @@ export async function startTwoFactorEnrolment(
 ): Promise<string> {
   await page.goto('/settings?section=security')
   await page.getByRole('button', { name: 'Set up', exact: true }).click()
-  await page.getByLabel('Confirm your password').fill(password)
+  await page
+    .getByRole('textbox', { name: 'Confirm your password' })
+    .fill(password)
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await expect(
     page.getByAltText('QR code for your authenticator app'),
