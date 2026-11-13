@@ -74,7 +74,7 @@ export {
   type MatterTabState,
 } from './matter-tabs'
 export { MatterTabStrip } from './matter-tab-strip'
-export { MatterTabsPane } from './matter-split'
+export { MatterTabsPane, MatterWorkspace } from './matter-split'
 export { PageScaffold, type PageScaffoldProps } from './page-scaffold'
 export {
   classifyShellFailure,

@@ -88,6 +88,44 @@ export function sidebarToggle(page: Page) {
   })
 }
 
+export function topBar(page: Page) {
+  return page.locator('#app-shell-title-bar')
+}
+
+export function topBarTabs(page: Page) {
+  return topBar(page).getByRole('group', { name: 'Open in this matter' })
+}
+
+export function topBarTab(page: Page, name: string | RegExp) {
+  return topBarTabs(page).getByRole('button', { name, exact: true })
+}
+
+export function topBarMatterName(page: Page) {
+  return topBar(page).getByRole('button', {
+    name: /^Switch matter, current matter/,
+  })
+}
+
+export function breadcrumb(page: Page) {
+  return topBar(page).getByRole('navigation', { name: 'Breadcrumb' })
+}
+
+export function matterContents(page: Page) {
+  return page.getByRole('complementary', { name: 'Matter contents' })
+}
+
+export function contentsCrumb(page: Page) {
+  return matterContents(page).getByRole('link', { name: 'Matters' })
+}
+
+export function matterSwitcherMenu(page: Page) {
+  return page.getByRole('menu', { name: 'Switch matter' })
+}
+
+export function allMattersItem(page: Page) {
+  return matterSwitcherMenu(page).getByRole('menuitem', { name: 'All matters' })
+}
+
 export async function gotoOtherMode(page: Page) {
   await page.goto('/search')
   await expect(workspaceNav(page)).toBeVisible()

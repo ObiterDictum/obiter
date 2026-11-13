@@ -148,6 +148,10 @@ mock.module('./account-menu', () => ({
 const { ShellFrame } = await import('./frame')
 const { PagePanelToggle } = await import('./page-panel')
 
+function titleBar() {
+  return document.querySelector('#app-shell-title-bar') as HTMLElement
+}
+
 function PathProbe() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -253,18 +257,17 @@ describe('shell frame', () => {
     ).toBeNull()
   })
 
-  it('leaves no app sidebar collapse control in the breadcrumb row', async () => {
-    renderShell('/matters/mtr_1')
-    await screen.findByRole('navigation', { name: 'Workspace' })
-    const titleBar = document.querySelector('header')
+  it('keeps the breadcrumb row free of shell toggles outside a matter', async () => {
+    renderShell('/matters')
+    await screen.findByRole('navigation', { name: 'Breadcrumb' })
     expect(
-      within(titleBar as HTMLElement).queryByRole('button', {
+      within(titleBar()).queryByRole('button', {
         name: /^(Collapse|Expand) sidebar$/,
       }),
     ).toBeNull()
     expect(
-      within(titleBar as HTMLElement).queryByRole('button', {
-        name: /^(Hide|Show) matter contents$/,
+      within(titleBar()).queryByRole('button', {
+        name: /^(Hide|Show) /,
       }),
     ).toBeNull()
     expect(
@@ -272,6 +275,68 @@ describe('shell frame', () => {
         .querySelector('#app-shell-sidebar')
         ?.contains(screen.getByRole('button', { name: 'Collapse sidebar' })),
     ).toBe(true)
+  })
+
+  it('moves the sidebar toggle into the top bar inside a matter', async () => {
+    renderShell('/matters/mtr_1')
+    await screen.findByRole('group', { name: 'Open in this matter' })
+    const toggle = await screen.findByRole('button', {
+      name: 'Collapse sidebar',
+    })
+    expect(titleBar().contains(toggle)).toBe(true)
+    expect(document.querySelector('#app-shell-sidebar')?.contains(toggle)).toBe(
+      false,
+    )
+  })
+
+  it('puts the matter tabs where the breadcrumb was and leaves the breadcrumb out', async () => {
+    renderShell('/matters/mtr_1')
+    const tabs = await screen.findByRole('group', {
+      name: 'Open in this matter',
+    })
+    expect(titleBar().contains(tabs)).toBe(true)
+    expect(
+      within(titleBar()).queryByRole('navigation', { name: 'Breadcrumb' }),
+    ).toBeNull()
+    expect(
+      within(titleBar())
+        .getByRole('button', { name: 'Smith v Jones Lettings Ltd' })
+        .getAttribute('aria-current'),
+    ).toBe('page')
+  })
+
+  it('keeps the matter name in the top bar while the contents panel is hidden', async () => {
+    renderShell('/matters/mtr_1')
+    await screen.findByRole('group', { name: 'Open in this matter' })
+    await screen.findByRole('complementary', { name: 'Matter contents' })
+    const switcher = /Switch matter, current matter Smith v Jones Lettings Ltd/
+    expect(
+      within(titleBar()).queryByRole('button', { name: switcher }),
+    ).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Hide matter contents' }),
+    )
+    expect(
+      await within(titleBar()).findByRole('button', { name: switcher }),
+    ).toBeTruthy()
+  })
+
+  it('sends the matter contents panel back to the matters list above the matter name', async () => {
+    renderShell('/matters/mtr_1')
+    const contents = await screen.findByRole('complementary', {
+      name: 'Matter contents',
+    })
+    expect(
+      within(contents)
+        .getByRole('link', { name: 'Matters' })
+        .getAttribute('href'),
+    ).toBe('/matters')
+    expect(
+      within(contents).getByRole('button', {
+        name: 'Switch matter, current matter Smith v Jones Lettings Ltd',
+      }),
+    ).toBeTruthy()
   })
 
   it('collapses the sidebar from the toggle beside Settings and remembers it', async () => {

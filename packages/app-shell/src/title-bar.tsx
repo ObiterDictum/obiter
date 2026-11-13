@@ -16,6 +16,9 @@ const MatterSwitcherLazy = lazy(() =>
 import { useMattersList } from './matters'
 import { breadcrumbTrail, matterIdFromPath } from './navigation'
 import { useSourceTitle } from './source-title'
+import { MatterTopBarTabs } from './matter-split'
+import { useMatterTabsOptional } from './matter-tabs-state'
+import { SidebarCollapseToggle } from './sidebar-rows'
 
 const iconButtonClass =
   'app-no-drag grid size-8 shrink-0 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-40'
@@ -56,12 +59,20 @@ export function TitleBar({
   focusMode,
   onExitFocusMode,
   showSearch,
+  compact,
+  showSidebarToggle,
+  onToggleSidebar,
+  showMatterName,
 }: {
   platform: AppPlatform
   loadedBuild?: string | null
   focusMode: boolean
   onExitFocusMode: () => void
   showSearch: boolean
+  compact: boolean
+  showSidebarToggle: boolean
+  onToggleSidebar: () => void
+  showMatterName: boolean
 }) {
   const router = useRouter()
   const { data: me } = useQuery(currentUserQueryOptions())
@@ -74,15 +85,24 @@ export function TitleBar({
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
   const sourceTitle = useSourceTitle(pathname)
   const trail = breadcrumbTrail(pathname, matterName, sourceTitle)
+  const matterTabs = useMatterTabsOptional()
 
   return (
     <header
+      id="app-shell-title-bar"
       className={cn(
         'flex h-10 shrink-0 items-center gap-1 pr-2 max-md:pl-2',
         platform === 'desktop' && 'app-drag',
       )}
     >
       <div className="app-no-drag flex shrink-0 items-center gap-0.5">
+        {showSidebarToggle ? (
+          <SidebarCollapseToggle
+            expanded
+            onToggle={onToggleSidebar}
+            side="top"
+          />
+        ) : null}
         {focusMode ? (
           <TitleButton label="Leave focus mode" onClick={onExitFocusMode}>
             <ArrowsInSimple size={16} aria-hidden />
@@ -96,52 +116,74 @@ export function TitleBar({
         </TitleButton>
       </div>
 
-      <nav
-        aria-label="Breadcrumb"
-        className="app-no-drag flex min-w-0 flex-1 items-center gap-2 px-2 text-meta whitespace-nowrap"
-      >
-        {me?.organisation ? (
-          <>
-            <Link
-              to="/"
-              className="max-w-[16rem] truncate text-muted hover:text-ink"
-            >
-              {me.organisation.name}
-            </Link>
-            <CrumbSeparator />
-          </>
-        ) : null}
-        {trail.map((crumb, index) => (
-          <Fragment key={`${crumb.label}-${index}`}>
-            {index > 0 ? <CrumbSeparator /> : null}
-            {currentMatterId && index === trail.length - 1 && !crumb.to ? (
+      {matterTabs ? (
+        <>
+          {showMatterName && currentMatterId && matterName ? (
+            <div className="app-no-drag flex min-w-0 max-w-[9rem] shrink-0 items-center text-meta max-md:max-w-[6rem]">
               <Suspense
                 fallback={
-                  <span className="max-w-[24rem] truncate px-1 text-ink">
-                    {crumb.label}
+                  <span className="min-w-0 truncate px-1 text-ink">
+                    {matterName}
                   </span>
                 }
               >
                 <MatterSwitcherLazy
                   matterId={currentMatterId}
-                  matterName={crumb.label}
+                  matterName={matterName}
                 />
               </Suspense>
-            ) : crumb.to ? (
+            </div>
+          ) : null}
+          <MatterTopBarTabs platform={platform} compact={compact} />
+        </>
+      ) : (
+        <nav
+          aria-label="Breadcrumb"
+          className="app-no-drag flex min-w-0 flex-1 items-center gap-2 px-2 text-meta whitespace-nowrap"
+        >
+          {me?.organisation ? (
+            <>
               <Link
-                to={crumb.to}
-                className="max-w-[18rem] shrink-0 truncate text-muted hover:text-ink"
+                to="/"
+                className="max-w-[16rem] truncate text-muted hover:text-ink"
               >
-                {crumb.label}
+                {me.organisation.name}
               </Link>
-            ) : (
-              <span className="max-w-[24rem] truncate text-ink">
-                {crumb.label}
-              </span>
-            )}
-          </Fragment>
-        ))}
-      </nav>
+              <CrumbSeparator />
+            </>
+          ) : null}
+          {trail.map((crumb, index) => (
+            <Fragment key={`${crumb.label}-${String(index)}`}>
+              {index > 0 ? <CrumbSeparator /> : null}
+              {currentMatterId && index === trail.length - 1 && !crumb.to ? (
+                <Suspense
+                  fallback={
+                    <span className="max-w-[24rem] truncate px-1 text-ink">
+                      {crumb.label}
+                    </span>
+                  }
+                >
+                  <MatterSwitcherLazy
+                    matterId={currentMatterId}
+                    matterName={crumb.label}
+                  />
+                </Suspense>
+              ) : crumb.to ? (
+                <Link
+                  to={crumb.to}
+                  className="max-w-[18rem] shrink-0 truncate text-muted hover:text-ink"
+                >
+                  {crumb.label}
+                </Link>
+              ) : (
+                <span className="max-w-[24rem] truncate text-ink">
+                  {crumb.label}
+                </span>
+              )}
+            </Fragment>
+          ))}
+        </nav>
+      )}
 
       <AppUpdateNotice
         platform={platform}

@@ -138,7 +138,8 @@ mock.module('./verification-runs', () => ({
 }))
 
 const { ContentsPanel } = await import('./contents-panel')
-const { MatterTabsPane } = await import('./matter-split')
+const { MatterTabsPane, MatterWorkspace } = await import('./matter-split')
+const { MatterTabStrip } = await import('./matter-tab-strip')
 const { MatterPreviewProvider } = await import('./matter-preview')
 const { matterTabStorageKey } = await import('./matter-tabs')
 const { useMatterTabs } = await import('./matter-tabs-state')
@@ -149,6 +150,8 @@ function PromotionControl() {
   return <button onClick={tabs.promoteActive}>Mark document edited</button>
 }
 
+function noDrag() {}
+
 function Pane({ platform }: { platform: 'web' | 'desktop' }) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -157,16 +160,18 @@ function Pane({ platform }: { platform: 'web' | 'desktop' }) {
     <MatterPreviewProvider>
       <div className="flex">
         <ContentsPanel section="matters" pathname={pathname} overlay={false} />
-        <MatterTabsPane
-          matterId="mtr_1"
-          userId="usr_1"
-          platform={platform}
-          compact={false}
-        >
-          <p data-testid="page">{pathname}</p>
-          <input aria-label="Note" />
-          <PromotionControl />
-        </MatterTabsPane>
+        <MatterWorkspace matterId="mtr_1" userId="usr_1">
+          <MatterTabStrip
+            platform={platform}
+            compact={false}
+            onTabDrag={noDrag}
+          />
+          <MatterTabsPane>
+            <p data-testid="page">{pathname}</p>
+            <input aria-label="Note" />
+            <PromotionControl />
+          </MatterTabsPane>
+        </MatterWorkspace>
       </div>
     </MatterPreviewProvider>
   )

@@ -116,9 +116,9 @@ export function MatterTabButton({
               close(tab.id)
             }}
             className={cn(
-              'group -mb-px flex min-w-0 shrink-0 items-center rounded-t-lg border border-transparent',
+              'group flex min-w-0 shrink-0 items-center rounded-md',
               active
-                ? 'border-line border-b-transparent bg-raised text-ink'
+                ? 'bg-raised text-ink'
                 : 'text-muted hover:bg-hover hover:text-ink',
             )}
           >

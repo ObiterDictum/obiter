@@ -134,7 +134,8 @@ mock.module('./verification-runs', () => ({
   useCreateVerificationRun: () => ({ isPending: false, mutate: vi.fn() }),
 }))
 
-const { MatterTabsPane } = await import('./matter-split')
+const { MatterTabsPane, MatterWorkspace } = await import('./matter-split')
+const { MatterTabStrip } = await import('./matter-tab-strip')
 
 const PRESENCE: DocumentPresence[] = [
   { userId: 'usr_2', clientId: 'usr_2-client', cursor: null },
@@ -159,21 +160,21 @@ function TabStatusHost({ documentId }: { documentId: string }) {
   return null
 }
 
+function noDrag() {}
+
 function Pane({ compact }: { compact: boolean }) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
   const documentId = /\/documents\/([^/?#]+)/.exec(pathname)?.[1] ?? null
   return (
-    <MatterTabsPane
-      matterId="mtr_1"
-      userId="usr_1"
-      platform="web"
-      compact={compact}
-    >
-      <p data-testid="page">{pathname}</p>
-      {documentId ? <TabStatusHost documentId={documentId} /> : null}
-    </MatterTabsPane>
+    <MatterWorkspace matterId="mtr_1" userId="usr_1">
+      <MatterTabStrip platform="web" compact={compact} onTabDrag={noDrag} />
+      <MatterTabsPane>
+        <p data-testid="page">{pathname}</p>
+        {documentId ? <TabStatusHost documentId={documentId} /> : null}
+      </MatterTabsPane>
+    </MatterWorkspace>
   )
 }
 

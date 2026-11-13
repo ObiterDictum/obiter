@@ -1,7 +1,9 @@
 import { Link } from '@tanstack/react-router'
 import { Skeleton, cn } from '@obiter/ui'
+import { CaretRight } from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 import { matterIdFromPath, type ShellSection } from './navigation'
+import { MatterSwitcher } from './matter-switcher'
 import { PagePanelToggle } from './page-panel'
 import { useMatter } from './matters'
 import {
@@ -30,12 +32,18 @@ function MatterTitle({ matterId }: { matterId: string }) {
   if (!matter.data) return <span>{SECTION_TITLES.matters}</span>
   return (
     <>
-      <span className="min-w-0 flex-1 truncate">{matter.data.name}</span>
-      {matter.data.clientReference ? (
-        <span className="shrink-0 font-mono text-caption text-subtle">
-          {matter.data.clientReference}
-        </span>
-      ) : null}
+      <Link
+        to="/matters"
+        className="shrink-0 text-muted transition-colors duration-150 hover:text-ink"
+      >
+        {SECTION_TITLES.matters}
+      </Link>
+      <CaretRight
+        size={12}
+        aria-hidden
+        className="shrink-0 text-muted opacity-60"
+      />
+      <MatterSwitcher matterId={matterId} matterName={matter.data.name} />
     </>
   )
 }
@@ -144,7 +152,7 @@ export function ContentsPanel({
           : 'w-[250px] border-r',
       )}
     >
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3 text-item text-ink">
+      <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-line px-3 text-item text-ink">
         <ContentsTitle section={section} matterId={matterId} />
         <PagePanelToggle site="panel" />
       </div>

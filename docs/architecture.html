@@ -2215,12 +2215,14 @@
             root before first paint; auth routes follow the theme. The sidebar
             or rail spans the window's full height and the title bar is the top
             row of the right-hand column, so the title bar starts at the pane
-            edge without an offset; the brand row starts 40px down, level with
-            the pane's first row, which also clears the window controls on
-            darwin. The main content pane is a CSS container and pages lay
-            themselves out with container queries, so a page responds to the
-            space the sidebar, contents panel and right slot actually leave it
-            rather than to the window width.
+            edge without an offset. The brand row starts one 4px spacing step
+            below the window's top edge, which reads level with the 40px title
+            bar while clearing it, and on darwin the whole column drops a
+            further 40px so the mark clears the window controls. The main
+            content pane is a CSS container and pages lay themselves out with
+            container queries, so a page responds to the space the sidebar,
+            contents panel and right slot actually leave it rather than to the
+            window width.
           </p>
           <div class="scroll">
             <table>
@@ -2238,11 +2240,14 @@
                   <td>
                     One labelled column drawn straight on the canvas on every
                     route above the mobile breakpoint: the Obiter monogram with
-                    the organisation name, Home, Matters, Search, Verify and
-                    Redact with their counts and alert dots, an Agent row that
-                    toggles the right slot, recent matters, and settings, theme,
-                    the collapse toggle and account at the foot. Counts come
-                    from queries the frame already runs — active matters,
+                    the organisation name, the search field one spacing step
+                    clear of it and of the module list, Home, Matters, Search,
+                    Verify and Redact with their counts and alert dots, an Agent
+                    row that toggles the right slot, recent matters, and
+                    settings, theme, the collapse toggle and account at the
+                    foot. Inside a matter, where the title bar carries the
+                    toggle, the foot leaves it out so there is still one. Counts
+                    come from queries the frame already runs — active matters,
                     findings waiting on a person across completed Verify runs,
                     redaction runs awaiting a decision. It spans the window's
                     full height, becomes an icon rail only when a person
@@ -2254,20 +2259,28 @@
                   <td class="id">Title bar</td>
                   <td>Global</td>
                   <td>
-                    One 40px row, the top row of the right-hand column: back and
-                    forward, the breadcrumb (organisation, module, current page)
-                    and the search trigger at the far right, plus a Leave focus
-                    mode button while focus mode runs. Inside a matter the
-                    matter's crumb is a switcher button, not a link. Because the
-                    sidebar runs the full height, these controls start exactly
-                    at the pane's left edge and follow it when the sidebar
-                    collapses or expands, without hard-coded offsets. No
-                    collapse control lives here: the sidebar and a section's own
-                    panel each carry their own toggle (persisted per person),
-                    and the right slot has none. The account menu is a
-                    disclosure with the full keyboard contract: arrows,
-                    Home/End, Escape returning focus to the avatar. On desktop
-                    the row is the window drag region with the controls no-drag.
+                    One 40px row, the top row of the right-hand column. Outside
+                    a matter: back and forward, the breadcrumb (organisation,
+                    module, current page), and the search trigger at the far
+                    right while the sidebar is a rail, plus a Leave focus mode
+                    button while focus mode runs. Inside a matter the row is the
+                    sidebar toggle, back and forward, the matter's tab strip,
+                    then the strip's own controls — the breadcrumb leaves the
+                    row and the matter's context moves to the contents panel's
+                    header. The toggle appears here, and nowhere else in the
+                    row, only where the tabs are, and the sidebar's foot drops
+                    its own there; a section's panel keeps its own labelled
+                    toggle beside the page title and the right slot has none.
+                    Whenever the contents panel is not visible the row also
+                    carries a compact matter switcher before the tabs, so the
+                    matter is always named and All matters is one click away.
+                    Because the sidebar runs the full height, these controls
+                    start exactly at the pane's left edge and follow it when the
+                    sidebar collapses or expands, without hard-coded offsets.
+                    The account menu is a disclosure with the full keyboard
+                    contract: arrows, Home/End, Escape returning focus to the
+                    avatar. On desktop the row is the window drag region with
+                    everything in it, the tab strip included, no-drag.
                   </td>
                 </tr>
                 <tr>
@@ -2277,10 +2290,12 @@
                     Every section except Home splits its work area into one
                     rounded pane: a 250px contents column and the page, divided
                     by a hairline. Matters shows Active/Archived/All filters and
-                    recent matters; a matter shows documents, then its Verify
-                    and Redact runs; Verify and Redact group runs by status,
-                    attention first; Search lists stored recent searches;
-                    Settings carries the section nav, whose rows link to
+                    recent matters; a matter's header is a Matters link followed
+                    by the matter name as its switcher, and its body lists
+                    documents, then the matter's Verify and Redact runs; Verify
+                    and Redact group runs by status, attention first; Search
+                    lists stored recent searches; Settings carries the section
+                    nav, whose rows link to
                     <code>/settings?section=…</code>. Its toggle sits beside the
                     page title and names the panel (Hide matters list, Show
                     matters list); at 1023px and under the panel opens as an
@@ -2388,10 +2403,11 @@
                     <code>/matters/:matterId/redact/:runId</code>
                   </td>
                   <td>
-                    The strip at the top of a matter's content area
+                    The strip in the middle of the title bar
                     (<code>matter-tab-strip.tsx</code>) lists the matter
                     overview, open documents, the matter's Verify view and its
-                    redaction runs. The route is the source of truth: the
+                    redaction runs, and the workspace column below it starts on
+                    the ribbon row. The route is the source of truth: the
                     current tab follows the URL, so deep links, back/forward and
                     reload all work, and the tab set is kept per person per
                     matter under

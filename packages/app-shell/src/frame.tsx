@@ -50,6 +50,12 @@ const RightSlotLazy = lazy(() =>
   import('./right-slot').then((module) => ({ default: module.RightSlot })),
 )
 
+const MatterWorkspaceLazy = lazy(() =>
+  import('./matter-split').then((module) => ({
+    default: module.MatterWorkspace,
+  })),
+)
+
 const MatterTabsPaneLazy = lazy(() =>
   import('./matter-split').then((module) => ({
     default: module.MatterTabsPane,
@@ -213,6 +219,9 @@ export function ShellFrame({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [focusMode, contentsOpen])
 
+  const matterWorkspace = matterId !== null && me !== undefined
+  const titleBarSidebarToggle = matterWorkspace && !rail && !focusMode
+
   const pagePanel =
     panelName && !focusMode
       ? {
@@ -224,6 +233,51 @@ export function ShellFrame({
           buttonRef: panelToggleRef,
         }
       : null
+
+  const column = (
+    <>
+      <TitleBar
+        loadedBuild={loadedBuild}
+        platform={platform}
+        focusMode={focusMode}
+        onExitFocusMode={leaveFocusMode}
+        showSearch={rail || focusMode}
+        compact={bottomBar}
+        showSidebarToggle={titleBarSidebarToggle}
+        onToggleSidebar={toggleSidebar}
+        showMatterName={!contentsVisible}
+      />
+      <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
+        <div
+          id="app-shell-pane"
+          className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
+        >
+          <ShellPane
+            section={section}
+            pathname={pathname}
+            narrow={narrow}
+            contentsVisible={contentsVisible}
+            matterTabs={matterWorkspace}
+            matterId={matterId}
+            onCloseContents={closeContentsOverlay}
+          >
+            {children}
+          </ShellPane>
+        </div>
+        {rightSlotOpen && !focusMode ? (
+          <div id="app-shell-right-slot" className="contents">
+            <Suspense fallback={null}>
+              <RightSlotLazy
+                pathname={pathname}
+                tab={normaliseTab(rightSlotTab)}
+                onTabChange={setRightSlotTab}
+              />
+            </Suspense>
+          </div>
+        ) : null}
+      </div>
+    </>
+  )
 
   return (
     <CommandPaletteProvider
@@ -250,50 +304,24 @@ export function ShellFrame({
                 rightSlotOpen={rightSlotOpen}
                 onToggleRightSlot={toggleRightSlot}
                 onCollapse={toggleSidebar}
+                showCollapseToggle={!titleBarSidebarToggle}
               />
             )}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <TitleBar
-                loadedBuild={loadedBuild}
-                platform={platform}
-                focusMode={focusMode}
-                onExitFocusMode={leaveFocusMode}
-                showSearch={rail || focusMode}
-              />
-              <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
-                <div
-                  id="app-shell-pane"
-                  className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
-                >
-                  <MatterPreviewProvider>
-                    <ShellPane
-                      section={section}
-                      pathname={pathname}
-                      narrow={narrow}
-                      contentsVisible={contentsVisible}
-                      matterTabs={matterId !== null && me !== undefined}
+              <MatterPreviewProvider>
+                {matterWorkspace && matterId ? (
+                  <Suspense fallback={null}>
+                    <MatterWorkspaceLazy
                       matterId={matterId}
                       userId={me?.user.id ?? ''}
-                      platform={platform}
-                      compact={bottomBar}
-                      onCloseContents={closeContentsOverlay}
                     >
-                      {children}
-                    </ShellPane>
-                  </MatterPreviewProvider>
-                </div>
-                {rightSlotOpen && !focusMode ? (
-                  <div id="app-shell-right-slot" className="contents">
-                    <Suspense fallback={null}>
-                      <RightSlotLazy
-                        pathname={pathname}
-                        tab={normaliseTab(rightSlotTab)}
-                        onTabChange={setRightSlotTab}
-                      />
-                    </Suspense>
-                  </div>
-                ) : null}
-              </div>
+                      {column}
+                    </MatterWorkspaceLazy>
+                  </Suspense>
+                ) : (
+                  column
+                )}
+              </MatterPreviewProvider>
             </div>
           </div>
         </RightSlotPortalProvider>
@@ -309,9 +337,6 @@ function ShellPane({
   contentsVisible,
   matterTabs,
   matterId,
-  userId,
-  platform,
-  compact,
   onCloseContents,
   children,
 }: {
@@ -319,11 +344,8 @@ function ShellPane({
   pathname: string
   narrow: boolean
   contentsVisible: boolean
-  matterTabs?: boolean
+  matterTabs: boolean
   matterId: string | null
-  userId: string
-  platform: AppPlatform
-  compact: boolean
   onCloseContents: () => void
   children: ReactNode
 }) {
@@ -349,14 +371,7 @@ function ShellPane({
         <ShellOfflineBanner />
         {matterTabs && matterId ? (
           <Suspense fallback={null}>
-            <MatterTabsPaneLazy
-              matterId={matterId}
-              userId={userId}
-              platform={platform}
-              compact={compact}
-            >
-              {children}
-            </MatterTabsPaneLazy>
+            <MatterTabsPaneLazy>{children}</MatterTabsPaneLazy>
           </Suspense>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>

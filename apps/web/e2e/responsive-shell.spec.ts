@@ -5,12 +5,15 @@ import {
   MODULES,
   WIDTHS,
   asideWidth,
+  breadcrumb,
   documentWidths,
   gotoMatters,
   gotoOtherMode,
   mockSession,
   sidebar,
   sidebarToggle,
+  topBar,
+  topBarTabs,
   workspaceNav,
 } from './shell-harness'
 
@@ -166,16 +169,33 @@ test('no app sidebar collapse control sits in the breadcrumb row', async ({
   await mockSession(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await gotoMatters(page)
-  await expect(
-    page.getByRole('navigation', { name: 'Breadcrumb' }),
-  ).toBeVisible()
+  await expect(breadcrumb(page)).toBeVisible()
 
   await expect(
-    page.locator('header').getByRole('button', { name: /sidebar/ }),
+    topBar(page).getByRole('button', { name: /sidebar/ }),
   ).toHaveCount(0)
   await expect(
     sidebar(page).getByRole('button', { name: 'Collapse sidebar' }),
   ).toBeVisible()
+})
+
+test('every section route keeps its breadcrumb in the top bar with no matter tabs', async ({
+  page,
+}) => {
+  await mockSession(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/search')
+  await expect(workspaceNav(page)).toBeVisible()
+
+  for (const module of MODULES) {
+    const link = workspaceNav(page).getByRole('link', {
+      name: new RegExp(`^${module.name}`),
+    })
+    await link.click()
+    await expect(link).toHaveAttribute('aria-current', 'page')
+    await expect(breadcrumb(page)).toBeVisible()
+    await expect(topBarTabs(page)).toHaveCount(0)
+  }
 })
 
 test('the account menu opens inside a narrow viewport, closes on Escape and returns focus', async ({

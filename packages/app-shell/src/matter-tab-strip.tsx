@@ -63,7 +63,10 @@ export function MatterTabStrip({
       ? () => setDeletingId(activeDocumentId)
       : undefined
   return (
-    <div className="flex h-10 shrink-0 items-stretch gap-1 border-b border-line bg-surface px-3">
+    <div
+      id="app-shell-matter-tabs"
+      className="app-no-drag flex h-10 min-w-0 flex-1 items-center gap-1 pl-1"
+    >
       {compact ? (
         <CompactTabs
           tabs={named}
@@ -72,11 +75,11 @@ export function MatterTabStrip({
           documentActions={documentActions}
         />
       ) : (
-        <div className="flex min-w-0 flex-1 items-stretch gap-0.5">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5">
           <div
             role="group"
             aria-label="Open in this matter"
-            className="flex min-w-0 items-stretch gap-0.5 overflow-x-auto [scrollbar-width:none]"
+            className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]"
           >
             {named.map((tab) => (
               <MatterTabButton

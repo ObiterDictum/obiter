@@ -1,5 +1,13 @@
 import type { AppPlatform } from '@obiter/contracts'
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
+import {
+  Suspense,
+  createContext,
+  lazy,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react'
 import { DocumentTabStatusProvider } from './document-tab-status'
 import { useMatterPreviewRef } from './matter-preview'
 import { SPLIT_DIVIDER_WIDTH, SplitScaleProvider } from './matter-split-scale'
@@ -25,41 +33,40 @@ const MIN_SPLIT = 30
 const MAX_SPLIT = 72
 const EVEN_SPLIT = 50
 
-export function MatterTabsPane({
+interface MatterTabDrag {
+  draggingId: string | null
+  startTabDrag: (id: string | null) => void
+}
+
+const MatterTabDragContext = createContext<MatterTabDrag | null>(null)
+
+function useMatterTabDrag(): MatterTabDrag {
+  const value = useContext(MatterTabDragContext)
+  if (!value) throw new Error('A dragged tab needs a matter workspace.')
+  return value
+}
+
+export function MatterWorkspace({
   matterId,
   userId,
-  platform,
-  compact,
   children,
 }: {
   matterId: string
   userId: string
-  platform: AppPlatform
-  compact: boolean
   children: ReactNode
 }) {
   return (
     <MatterTabsProvider key={matterId} userId={userId} matterId={matterId}>
       <DocumentTabStatusProvider>
-        <MatterTabsPaneBody platform={platform} compact={compact}>
-          {children}
-        </MatterTabsPaneBody>
+        <MatterWorkspaceBody>{children}</MatterWorkspaceBody>
       </DocumentTabStatusProvider>
     </MatterTabsProvider>
   )
 }
 
-function MatterTabsPaneBody({
-  platform,
-  compact,
-  children,
-}: {
-  platform: AppPlatform
-  compact: boolean
-  children: ReactNode
-}) {
+function MatterWorkspaceBody({ children }: { children: ReactNode }) {
   useHydrateMatterTabs()
-  const { sideId, openToSide, closeSide, openPreview } = useMatterTabs()
+  const { openPreview } = useMatterTabs()
   const previewRef = useMatterPreviewRef()
   useEffect(() => {
     if (!previewRef) return
@@ -68,62 +75,85 @@ function MatterTabsPaneBody({
       previewRef.current = null
     }
   })
-  const [split, setSplit] = useState(EVEN_SPLIT)
-  const [zoom, setZoom] = useState(100)
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
   return (
-    <>
-      <Suspense fallback={null}>
-        <MatterTabStrip
-          platform={platform}
-          compact={compact}
-          onTabDrag={setDraggingId}
-        />
-      </Suspense>
-      <SplitScaleProvider active={Boolean(sideId)} zoom={zoom} onZoom={setZoom}>
-        <div className="relative flex min-h-0 flex-1">
-          <div
-            className="min-h-0 min-w-0 overflow-y-auto"
-            style={
-              sideId
-                ? {
-                    flex: `0 0 calc(${String(split)}% - ${String(
-                      SPLIT_DIVIDER_WIDTH / 2,
-                    )}px)`,
-                  }
-                : { flex: 1 }
-            }
-          >
-            {children}
-          </div>
-          {sideId ? (
-            <>
-              <SplitDivider split={split} onResize={setSplit} />
-              <Suspense fallback={null}>
-                <MatterSplitSide sideId={sideId} onClose={closeSide} />
-              </Suspense>
-            </>
-          ) : null}
-          {draggingId ? (
-            <button
-              type="button"
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault()
-                openToSide(draggingId)
-                setDraggingId(null)
-              }}
-              className="absolute inset-y-0 right-0 z-20 flex w-44 items-center justify-center border-l-2 border-dashed border-brand bg-brand-soft text-meta text-brand"
-            >
-              <span className="rounded-md bg-surface px-3 py-1.5 shadow-sm">
-                Open to the side
-              </span>
-            </button>
-          ) : null}
+    <MatterTabDragContext.Provider
+      value={{ draggingId, startTabDrag: setDraggingId }}
+    >
+      {children}
+    </MatterTabDragContext.Provider>
+  )
+}
+
+export function MatterTopBarTabs({
+  platform,
+  compact,
+}: {
+  platform: AppPlatform
+  compact: boolean
+}) {
+  const { startTabDrag } = useMatterTabDrag()
+  return (
+    <Suspense fallback={null}>
+      <MatterTabStrip
+        platform={platform}
+        compact={compact}
+        onTabDrag={startTabDrag}
+      />
+    </Suspense>
+  )
+}
+
+export function MatterTabsPane({ children }: { children: ReactNode }) {
+  const { draggingId, startTabDrag } = useMatterTabDrag()
+  const { sideId, openToSide, closeSide } = useMatterTabs()
+  const [split, setSplit] = useState(EVEN_SPLIT)
+  const [zoom, setZoom] = useState(100)
+
+  return (
+    <SplitScaleProvider active={Boolean(sideId)} zoom={zoom} onZoom={setZoom}>
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          className="min-h-0 min-w-0 overflow-y-auto"
+          style={
+            sideId
+              ? {
+                  flex: `0 0 calc(${String(split)}% - ${String(
+                    SPLIT_DIVIDER_WIDTH / 2,
+                  )}px)`,
+                }
+              : { flex: 1 }
+          }
+        >
+          {children}
         </div>
-      </SplitScaleProvider>
-    </>
+        {sideId ? (
+          <>
+            <SplitDivider split={split} onResize={setSplit} />
+            <Suspense fallback={null}>
+              <MatterSplitSide sideId={sideId} onClose={closeSide} />
+            </Suspense>
+          </>
+        ) : null}
+        {draggingId ? (
+          <button
+            type="button"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault()
+              openToSide(draggingId)
+              startTabDrag(null)
+            }}
+            className="absolute inset-y-0 right-0 z-20 flex w-44 items-center justify-center border-l-2 border-dashed border-brand bg-brand-soft text-meta text-brand"
+          >
+            <span className="rounded-md bg-surface px-3 py-1.5 shadow-sm">
+              Open to the side
+            </span>
+          </button>
+        ) : null}
+      </div>
+    </SplitScaleProvider>
   )
 }
 
