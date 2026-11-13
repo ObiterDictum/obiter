@@ -96,8 +96,9 @@ export function LeaveOrganisationDialog({
       <DialogContent size="md">
         <DialogTitle>Leave organisation</DialogTitle>
         <DialogDescription>
-          Transfer every matter you own to a colleague, then leave. Your account
-          and history are kept.
+          Transfer every matter you own to a colleague, then leave. You will be
+          signed out of every device and session. Your account and history are
+          kept.
         </DialogDescription>
         {error ? <ErrorNotice message={error} /> : null}
         {owned.isPending || members.isPending ? (

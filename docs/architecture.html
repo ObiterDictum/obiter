@@ -3217,7 +3217,8 @@
                     same transaction as the removal, so removal is blocked until
                     every matter the member owns has a new owner. The user row
                     is deactivated rather than deleted: organisation and role
-                    are cleared and the name stays for attribution.
+                    are cleared, every session row is deleted so the member is
+                    signed out everywhere, and the name stays for attribution.
                   </td>
                 </tr>
                 <tr>
@@ -3273,11 +3274,12 @@
                     authorization, same-organisation active recipient,
                     transactional created_by update, redundant recipient-share
                     cleanup and matter.ownership_transferred audit. Removal
-                    retains user records for attribution and revokes departing
-                    grants atomically with transfers. The UI also offers the
-                    action to the creator as requested for stage 1; the server
-                    settles creator authorization, and refusals remain visible.
-                    No production mocks.
+                    retains user records for attribution, revokes departing
+                    grants and deletes every session row atomically with
+                    transfers, so the member is signed out everywhere. The UI
+                    also offers the action to the creator as requested for stage
+                    1; the server settles creator authorization, and refusals
+                    remain visible. No production mocks.
                   </td>
                 </tr>
                 <tr>
@@ -4942,9 +4944,12 @@
                   </td>
                   <td>
                     better-auth identity tables. users carries the sign-up
-                    organisation-name stash consumed at first provisioning.
+                    organisation-name stash consumed at first provisioning,
+                    lifecycle columns for account deletion and the daily job
+                    that anonymises a deleted user six years after
+                    <code>deletedAt</code>.
                   </td>
-                  <td class="id">0001, 0016</td>
+                  <td class="id">0001, 0016, 0053, 0054</td>
                 </tr>
                 <tr>
                   <td class="id">organisations</td>

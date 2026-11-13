@@ -28,6 +28,12 @@ deleting an account. Contracts live in `packages/contracts/src/account.ts` and
   `ownership_transfer_required` error; the UI shows "Transfer ownership before
   you leave." instead of a control the API refuses. Leaving audits
   `organisation.member_leave`.
+- **Removal and leaving sign the member out everywhere.** Both paths delete
+  every `sessions` row for the departing user inside the same transaction as
+  the membership change, so the next request is refused and the person returns
+  to sign-in. Removal audits `organisation.member_remove` and leaving audits
+  `organisation.member_leave`; each record carries `revokedSessionCount` in its
+  metadata alongside the existing share-revocation audits.
 - **Sign-in email change keeps the old address until verified.** The flow uses
   the auth provider's change-email endpoint: the current password is
   re-verified server-side, a confirmation link goes to the NEW address, and the
@@ -47,18 +53,18 @@ deleting an account. Contracts live in `packages/contracts/src/account.ts` and
   `user.account_delete`. Pending invites are revoked. Sign-in is blocked for
   deleted users at session creation. Audit rows, document versions and matter
   history are untouched.
-- **No identity anonymisation.** `docs/data-and-compliance.md` requires
-  retained audit and document history but does not authorise rewriting a
-  user's name or email, so deletion keeps both. Open question for the founder:
-  whether display name and email may be anonymised after the retention window.
-- **Migration `0053_account_lifecycle.sql`** adds `users."deletedAt"` and
-  `organisations.deleted_at`. `0052` is reserved by another branch; `0053` is
-  the next free number on `origin/dev`.
-
-## Open questions
-
-- May a deleted user's display name and email be anonymised once the legal
-  retention basis is confirmed? Currently retained verbatim.
-- Should session revocation also apply to the existing member-removal flow
-  (it clears organisation membership but leaves sessions valid)? Leaving
-  inherits that behaviour for now.
+- **Identity anonymisation after six years.** Founder decision, 13 Nov 2026:
+  a deleted user's name and email are kept for six years from
+  `users."deletedAt"`, matching the UK six-year limitation period for civil
+  claims, and are then replaced. Name becomes `Deleted user`; email becomes
+  the unique non-routable `deleted-<userId>@deleted.invalid`; `image` and
+  `pendingOrganisationName` are cleared; `anonymisedAt` marks the row done.
+  The daily in-process `user-anonymisation` job selects due users, anonymises
+  each in its own transaction and audits `user.anonymise`, and is safe to
+  re-run. Audit rows, document versions and matter history keep the user id,
+  so they show `Deleted user` afterwards, and the freed email can be used to
+  sign up again.
+- **Migrations `0053_account_lifecycle.sql` and
+  `0054_user_anonymisation.sql`** add `users."deletedAt"`,
+  `organisations.deleted_at` and `users."anonymisedAt"`. `0052` is reserved by
+  another branch; `0053` and `0054` are the next free numbers on `origin/dev`.
