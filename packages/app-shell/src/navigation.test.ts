@@ -82,4 +82,32 @@ describe('breadcrumbTrail', () => {
       { label: 'Page not found' },
     ])
   })
+
+  it('names the open settings section under the Settings crumb', () => {
+    expect(
+      breadcrumbTrail('/settings', null, null, {
+        settingsSection: 'Preferences',
+      }),
+    ).toEqual([{ label: 'Settings' }, { label: 'Preferences' }])
+    expect(breadcrumbTrail('/settings', null)).toEqual([{ label: 'Settings' }])
+  })
+
+  it('trails the staff area to Access review', () => {
+    expect(breadcrumbTrail('/staff', null, null, { staff: true })).toEqual([
+      { label: 'Staff', to: '/staff' },
+      { label: 'Access review' },
+    ])
+    expect(
+      breadcrumbTrail('/staff/access', null, null, { staff: true }),
+    ).toEqual([{ label: 'Staff', to: '/staff' }, { label: 'Access review' }])
+  })
+
+  it('hides the staff area from people who are not staff', () => {
+    expect(breadcrumbTrail('/staff', null, null, { staff: false })).toEqual([
+      { label: 'Page not found' },
+    ])
+    expect(
+      breadcrumbTrail('/staff/access', null, null, { staff: false }),
+    ).toEqual([{ label: 'Page not found' }])
+  })
 })

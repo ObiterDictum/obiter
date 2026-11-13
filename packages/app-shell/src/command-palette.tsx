@@ -19,6 +19,7 @@ import { useMattersList } from './matters'
 import { matterIdFromPath } from './navigation'
 import { useShellShortcuts } from './shell-shortcuts'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings-sections'
+import { setShellLayout } from './shell-layout'
 import { setAppTheme, useAppTheme } from './use-app-theme'
 import type {
   PaletteActionId,
@@ -182,6 +183,24 @@ export function CommandPaletteProvider({
       hint: 'Change how Obiter looks',
       target: { kind: 'action', id: 'toggle-theme' },
     },
+    {
+      id: 'action-layout-sidebar',
+      label: 'Switch to sidebar layout',
+      hint: 'Navigation beside the page',
+      target: { kind: 'action', id: 'layout-sidebar' },
+    },
+    {
+      id: 'action-layout-tabs',
+      label: 'Switch to tabs layout',
+      hint: 'Modules in the title bar',
+      target: { kind: 'action', id: 'layout-tabs' },
+    },
+    {
+      id: 'action-layout-clean',
+      label: 'Switch to clean layout',
+      hint: 'Navigation behind the Obiter mark',
+      target: { kind: 'action', id: 'layout-clean' },
+    },
     ...SETTINGS_SECTIONS.map((section) =>
       settingRow(section.id, section.label),
     ),
@@ -215,6 +234,15 @@ export function CommandPaletteProvider({
         return
       case 'settings-preferences':
         openSettings('preferences')
+        return
+      case 'layout-sidebar':
+        setShellLayout('sidebar')
+        return
+      case 'layout-tabs':
+        setShellLayout('tabs')
+        return
+      case 'layout-clean':
+        setShellLayout('clean')
         return
       default: {
         const unhandled: never = id

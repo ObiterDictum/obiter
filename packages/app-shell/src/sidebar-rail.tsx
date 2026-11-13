@@ -76,20 +76,11 @@ export function SidebarRail({
         shortcut="toggle-right-slot"
       />
       <span className="flex-1" />
+      {isStaff ? <RailStaffLink current={section === 'staff'} /> : null}
       <RailSettingsLink current={section === 'settings'} />
       <RailSlot>
         <ThemeToggle />
       </RailSlot>
-      {isStaff && (
-        <Link
-          to="/staff"
-          aria-label="Staff"
-          aria-current={currentPath.startsWith('/staff') ? 'page' : undefined}
-          className="grid size-9 place-items-center rounded-lg text-muted hover:bg-hover hover:text-ink"
-        >
-          <ShieldCheck size={16} aria-hidden />
-        </Link>
-      )}
       <RailSlot className="max-md:hidden">
         <SidebarCollapseToggle
           expanded={false}
@@ -115,6 +106,27 @@ function RailSlot({
     <div className={cn('grid size-9 shrink-0 place-items-center', className)}>
       {children}
     </div>
+  )
+}
+
+function RailStaffLink({ current }: { current: boolean }) {
+  const link = (
+    <Link
+      to="/staff"
+      aria-label="Staff"
+      aria-current={current ? 'page' : undefined}
+      className="relative grid size-9 place-items-center rounded-lg text-muted transition-colors duration-150 hover:bg-hover hover:text-ink"
+    >
+      <ShieldCheck size={16} aria-hidden />
+    </Link>
+  )
+  return (
+    <Tooltip>
+      <TooltipTrigger render={link} />
+      <TooltipContent side="right" className="max-md:hidden">
+        Staff
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

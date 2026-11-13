@@ -1,5 +1,13 @@
 import '@obiter/test-dom'
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import {
   cleanup,
@@ -449,6 +457,130 @@ describe('shell frame', () => {
       expect(document.activeElement).toBe(
         screen.getByRole('button', { name: 'Hide matter contents' }),
       ),
+    )
+  })
+})
+
+describe('shell layout modes', () => {
+  it('keeps the sidebar chrome when the stored layout is not a layout', async () => {
+    window.localStorage.setItem('obiter.layout', 'grid')
+    renderShell('/')
+    expect(
+      await screen.findByRole('navigation', { name: 'Workspace' }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: 'Modules' })).toBeNull()
+  })
+
+  it('keeps the sidebar chrome when storage cannot be read', async () => {
+    const reads = spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage blocked')
+    })
+    try {
+      renderShell('/')
+      expect(
+        await screen.findByRole('navigation', { name: 'Workspace' }),
+      ).toBeTruthy()
+    } finally {
+      reads.mockRestore()
+    }
+  })
+
+  it('replaces the sidebar and breadcrumb with module tabs in tabs layout', async () => {
+    window.localStorage.setItem('obiter.layout', 'tabs')
+    renderShell('/')
+
+    expect(
+      await screen.findByRole('navigation', { name: 'Modules' }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: 'Workspace' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull()
+    expect(
+      screen.getByRole('link', { name: 'Home' }).getAttribute('aria-current'),
+    ).toBe('page')
+    for (const name of ['Matters', 'Search', 'Verify', 'Redact']) {
+      expect(
+        screen.getByRole('link', { name: new RegExp(`^${name}`) }),
+      ).toBeTruthy()
+    }
+
+    const header = document.querySelector('header') as HTMLElement
+    expect(
+      within(header).getByRole('button', { name: 'Search Obiter' }),
+    ).toBeTruthy()
+    expect(within(header).getByRole('link', { name: 'Settings' })).toBeTruthy()
+    expect(
+      within(header).getByRole('button', {
+        name: /^Switch to (light|dark) theme$/,
+      }),
+    ).toBeTruthy()
+  })
+
+  it('toggles the right slot from the Agent control in tabs layout', async () => {
+    window.localStorage.setItem('obiter.layout', 'tabs')
+    renderShell('/')
+    const agent = await screen.findByRole('button', { name: 'Agent' })
+    fireEvent.click(agent)
+    expect(
+      await screen.findByRole('complementary', { name: 'Agent panel' }),
+    ).toBeTruthy()
+  })
+
+  it('moves the matter switcher beside the Matters tab inside a matter', async () => {
+    window.localStorage.setItem('obiter.layout', 'tabs')
+    renderShell('/matters/mtr_1')
+    expect(
+      await screen.findByRole('button', {
+        name: /Switch matter, current matter/,
+      }),
+    ).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull()
+    expect(
+      await screen.findByRole('complementary', { name: 'Matter contents' }),
+    ).toBeTruthy()
+  })
+
+  it('opens the Obiter menu from the mark in clean layout and Escape returns focus', async () => {
+    window.localStorage.setItem('obiter.layout', 'clean')
+    renderShell('/')
+
+    expect(screen.queryByRole('navigation', { name: 'Workspace' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: 'Modules' })).toBeNull()
+    expect(
+      await screen.findByRole('navigation', { name: 'Breadcrumb' }),
+    ).toBeTruthy()
+
+    const mark = await screen.findByRole('button', { name: 'Open Obiter menu' })
+    fireEvent.click(mark)
+
+    const dialog = await screen.findByRole('dialog', { name: 'Obiter' })
+    expect(within(dialog).getByRole('link', { name: /^Matters/ })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: 'Agent' })).toBeTruthy()
+    expect(
+      within(dialog).getByRole('link', {
+        name: /Smith v Jones Lettings Ltd/,
+      }),
+    ).toBeTruthy()
+    expect(within(dialog).getByRole('link', { name: 'Settings' })).toBeTruthy()
+    expect(within(dialog).getByText('Alex Morgan')).toBeTruthy()
+    expect(
+      within(dialog).getByRole('button', { name: 'Sign out' }),
+    ).toBeTruthy()
+
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Obiter' })).toBeNull(),
+    )
+    await waitFor(() => expect(document.activeElement).toBe(mark))
+  })
+
+  it('keeps the go shortcuts working in clean layout', async () => {
+    window.localStorage.setItem('obiter.layout', 'clean')
+    renderShell('/')
+    await screen.findByRole('button', { name: 'Open Obiter menu' })
+    fireEvent.keyDown(window, { key: 'g' })
+    fireEvent.keyDown(window, { key: 'm' })
+    await waitFor(() =>
+      expect(screen.getByTestId('pathname').textContent).toBe('/matters'),
     )
   })
 })

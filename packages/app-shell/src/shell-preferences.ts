@@ -5,6 +5,7 @@ export const SHELL_STORAGE_KEY = {
   contentsHidden: 'obiter.contents.hidden',
   rightSlotOpen: 'obiter.rightSlot.open',
   rightSlotTab: 'obiter.rightSlot.tab',
+  layout: 'obiter.layout',
 } as const
 
 function readStored(key: string): string | null {

@@ -11,6 +11,9 @@ export type PaletteActionId =
   | 'settings-security'
   | 'settings-organisation'
   | 'settings-preferences'
+  | 'layout-sidebar'
+  | 'layout-tabs'
+  | 'layout-clean'
 
 export type PaletteCreateId =
   'new-matter' | 'upload-document' | 'blank-document' | 'start-redaction'

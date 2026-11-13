@@ -79,13 +79,28 @@ export interface Crumb {
   to?: string
 }
 
+export interface BreadcrumbOptions {
+  settingsSection?: string
+  staff?: boolean
+}
+
 export function breadcrumbTrail(
   path: string,
   matterName: string | null,
   sourceTitle: string | null = null,
+  options: BreadcrumbOptions = {},
 ): Crumb[] {
   const section = resolveSection(path)
   if (section === 'home') return [{ label: 'Home' }]
+  if (section === 'staff') {
+    if (options.staff === false) return [{ label: 'Page not found' }]
+    return [{ label: 'Staff', to: '/staff' }, { label: 'Access review' }]
+  }
+  if (section === 'settings') {
+    const crumbs: Crumb[] = [{ label: 'Settings' }]
+    if (options.settingsSection) crumbs.push({ label: options.settingsSection })
+    return crumbs
+  }
 
   const modulePath = sectionPath(section)
   const sectionCrumb: Crumb = modulePath
