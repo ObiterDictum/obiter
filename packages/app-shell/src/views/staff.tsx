@@ -68,6 +68,7 @@ function StaffAccessReview() {
     >
       <SegmentedControl<StaffTab>
         label="Access review views"
+        className="self-start"
         value={tab}
         options={[
           { value: 'queue', label: 'Waiting for review' },
