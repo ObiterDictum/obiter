@@ -9,6 +9,7 @@ import {
   MODULES,
   matterIdFromPath,
   resolveSection,
+  staffScreenLabel,
   type ModuleItem,
 } from './navigation'
 import { countNote, countToneClass } from './sidebar-rows'
@@ -133,7 +134,7 @@ export function ModuleTabs() {
       {section === 'staff' && me?.isStaff ? (
         <span className="flex shrink-0 items-center gap-1">
           <ModuleTab label="Staff" to="/staff" icon={ShieldCheck} current />
-          <TabDetail>Access review</TabDetail>
+          <TabDetail>{staffScreenLabel(pathname)}</TabDetail>
         </span>
       ) : null}
     </nav>

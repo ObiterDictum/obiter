@@ -24,6 +24,8 @@ import {
   resolveCaseDocumentIdFromSlug,
   useMatterTabsOptional,
   validateSettingsSearch,
+  validateStaffFeedbackSearch,
+  validateStaffUsageSearch,
 } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -112,6 +114,18 @@ const DesktopVerifyPage = lazy(async () => ({
 const MatterVerifyView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/verify')).VerifyRouteView,
 }))
+const StaffOverviewRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/staff-overview'))
+    .StaffOverviewRouteView,
+}))
+const StaffUsageRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/staff-usage'))
+    .StaffUsageRouteView,
+}))
+const StaffFeedbackRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/staff-feedback'))
+    .StaffFeedbackRouteView,
+}))
 
 function RouteLoading() {
   return (
@@ -137,6 +151,8 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/search',
   '/staff',
   '/staff/access',
+  '/staff/usage',
+  '/staff/feedback',
   '/request-access/setup',
   '/settings',
   '/verify',
@@ -343,7 +359,7 @@ const staffRoute = createRoute({
   },
   component: () => (
     <Suspense fallback={<RouteLoading />}>
-      <StaffRouteView />
+      <StaffOverviewRouteView />
     </Suspense>
   ),
 })
@@ -358,6 +374,36 @@ const staffAccessRoute = createRoute({
   component: () => (
     <Suspense fallback={<RouteLoading />}>
       <StaffRouteView />
+    </Suspense>
+  ),
+})
+const staffUsageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'staff/usage',
+  validateSearch: validateStaffUsageSearch,
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
+  },
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <StaffUsageRouteView />
+    </Suspense>
+  ),
+})
+const staffFeedbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'staff/feedback',
+  validateSearch: validateStaffFeedbackSearch,
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
+  },
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <StaffFeedbackRouteView />
     </Suspense>
   ),
 })
@@ -655,6 +701,8 @@ const routeTree = rootRoute.addChildren([
   verifyRoute,
   staffRoute,
   staffAccessRoute,
+  staffUsageRoute,
+  staffFeedbackRoute,
   accessSetupRoute,
   settingsRoute,
   casesRoute,

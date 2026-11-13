@@ -10,9 +10,9 @@ import {
   RedactContents,
   SearchContents,
   SettingsContents,
-  StaffContents,
   VerifyContents,
 } from './contents-sections'
+import { StaffContents } from './staff-contents'
 
 const SECTION_TITLES = {
   home: 'Home',

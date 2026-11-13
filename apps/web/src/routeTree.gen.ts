@@ -22,6 +22,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RequestAccessIndexRouteImport } from './routes/request-access/index'
 import { Route as RedactIndexRouteImport } from './routes/redact/index'
 import { Route as MattersIndexRouteImport } from './routes/matters/index'
+import { Route as StaffUsageRouteImport } from './routes/staff_.usage'
+import { Route as StaffFeedbackRouteImport } from './routes/staff_.feedback'
 import { Route as StaffAccessRouteImport } from './routes/staff_.access'
 import { Route as RequestAccessSetupRouteImport } from './routes/request-access/setup'
 import { Route as RequestAccessConfirmRouteImport } from './routes/request-access/confirm'
@@ -101,6 +103,18 @@ const MattersIndexRoute = MattersIndexRouteImport.update({
   path: '/matters/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StaffUsageRoute = StaffUsageRouteImport.update({
+  id: '/staff_/usage',
+  path: '/staff/usage',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/staff_.usage.lazy').then((d) => d.Route))
+const StaffFeedbackRoute = StaffFeedbackRouteImport.update({
+  id: '/staff_/feedback',
+  path: '/staff/feedback',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() =>
+  import('./routes/staff_.feedback.lazy').then((d) => d.Route),
+)
 const StaffAccessRoute = StaffAccessRouteImport.update({
   id: '/staff_/access',
   path: '/staff/access',
@@ -189,6 +203,8 @@ export interface FileRoutesByFullPath {
   '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/request-access/setup': typeof RequestAccessSetupRoute
   '/staff/access': typeof StaffAccessRoute
+  '/staff/feedback': typeof StaffFeedbackRoute
+  '/staff/usage': typeof StaffUsageRoute
   '/matters/': typeof MattersIndexRoute
   '/redact/': typeof RedactIndexRoute
   '/request-access/': typeof RequestAccessIndexRoute
@@ -216,6 +232,8 @@ export interface FileRoutesByTo {
   '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/request-access/setup': typeof RequestAccessSetupRoute
   '/staff/access': typeof StaffAccessRoute
+  '/staff/feedback': typeof StaffFeedbackRoute
+  '/staff/usage': typeof StaffUsageRoute
   '/matters': typeof MattersIndexRoute
   '/redact': typeof RedactIndexRoute
   '/request-access': typeof RequestAccessIndexRoute
@@ -245,6 +263,8 @@ export interface FileRoutesById {
   '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/request-access/setup': typeof RequestAccessSetupRoute
   '/staff_/access': typeof StaffAccessRoute
+  '/staff_/feedback': typeof StaffFeedbackRoute
+  '/staff_/usage': typeof StaffUsageRoute
   '/matters/': typeof MattersIndexRoute
   '/redact/': typeof RedactIndexRoute
   '/request-access/': typeof RequestAccessIndexRoute
@@ -275,6 +295,8 @@ export interface FileRouteTypes {
     | '/request-access/confirm'
     | '/request-access/setup'
     | '/staff/access'
+    | '/staff/feedback'
+    | '/staff/usage'
     | '/matters/'
     | '/redact/'
     | '/request-access/'
@@ -302,6 +324,8 @@ export interface FileRouteTypes {
     | '/request-access/confirm'
     | '/request-access/setup'
     | '/staff/access'
+    | '/staff/feedback'
+    | '/staff/usage'
     | '/matters'
     | '/redact'
     | '/request-access'
@@ -330,6 +354,8 @@ export interface FileRouteTypes {
     | '/request-access/confirm'
     | '/request-access/setup'
     | '/staff_/access'
+    | '/staff_/feedback'
+    | '/staff_/usage'
     | '/matters/'
     | '/redact/'
     | '/request-access/'
@@ -359,6 +385,8 @@ export interface RootRouteChildren {
   RequestAccessConfirmRoute: typeof RequestAccessConfirmRoute
   RequestAccessSetupRoute: typeof RequestAccessSetupRoute
   StaffAccessRoute: typeof StaffAccessRoute
+  StaffFeedbackRoute: typeof StaffFeedbackRoute
+  StaffUsageRoute: typeof StaffUsageRoute
   MattersIndexRoute: typeof MattersIndexRoute
   RedactIndexRoute: typeof RedactIndexRoute
   RequestAccessIndexRoute: typeof RequestAccessIndexRoute
@@ -455,6 +483,20 @@ declare module '@tanstack/react-router' {
       path: '/matters'
       fullPath: '/matters/'
       preLoaderRoute: typeof MattersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff_/usage': {
+      id: '/staff_/usage'
+      path: '/staff/usage'
+      fullPath: '/staff/usage'
+      preLoaderRoute: typeof StaffUsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff_/feedback': {
+      id: '/staff_/feedback'
+      path: '/staff/feedback'
+      fullPath: '/staff/feedback'
+      preLoaderRoute: typeof StaffFeedbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/staff_/access': {
@@ -590,6 +632,8 @@ const rootRouteChildren: RootRouteChildren = {
   RequestAccessConfirmRoute: RequestAccessConfirmRoute,
   RequestAccessSetupRoute: RequestAccessSetupRoute,
   StaffAccessRoute: StaffAccessRoute,
+  StaffFeedbackRoute: StaffFeedbackRoute,
+  StaffUsageRoute: StaffUsageRoute,
   MattersIndexRoute: MattersIndexRoute,
   RedactIndexRoute: RedactIndexRoute,
   RequestAccessIndexRoute: RequestAccessIndexRoute,
@@ -597,12 +641,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

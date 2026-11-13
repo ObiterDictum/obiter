@@ -25,7 +25,7 @@ import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
 
 const ROWS_PER_GROUP = 6
 
-const rowClass = (current?: boolean) =>
+export const rowClass = (current?: boolean) =>
   cn(
     'flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-meta',
     current
@@ -448,30 +448,6 @@ export function SettingsContents() {
           ) : null}
         </Link>
       ))}
-    </nav>
-  )
-}
-
-export function StaffContents({ pathname }: { pathname: string }) {
-  const { data: me } = useCurrentUser()
-  if (!me.isStaff) return null
-  const current = pathname === '/staff' || pathname.startsWith('/staff/')
-  return (
-    <nav
-      aria-label="Staff sections"
-      className="flex flex-col gap-px px-1.5 pt-1"
-    >
-      <Link
-        to="/staff/access"
-        aria-current={current ? 'page' : undefined}
-        className={cn(rowClass(current), 'gap-2.5')}
-      >
-        <ShieldCheck size={16} aria-hidden className="shrink-0" />
-        <span className="min-w-0 flex-1 truncate">Access review</span>
-        {current ? (
-          <CaretRight size={12} aria-hidden className="text-subtle" />
-        ) : null}
-      </Link>
     </nav>
   )
 }
