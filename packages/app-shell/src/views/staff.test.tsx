@@ -77,6 +77,7 @@ for (const [label, target, decision] of [
     })
     client.setQueryData(['current-user'], {
       isStaff: true,
+      twoFactorEnabled: true,
       user: {
         id: 'synthetic',
         name: 'Synthetic reviewer',
@@ -135,6 +136,7 @@ function renderStaff(client: QueryClient) {
 function staffUser(isStaff: boolean) {
   return {
     isStaff,
+    twoFactorEnabled: isStaff,
     user: {
       id: 'synthetic',
       name: 'Synthetic reviewer',

@@ -52,6 +52,9 @@ test('staff approves an unknown domain and the applicant sets up an account', as
   const totpSecret = await startTwoFactorEnrolment(page, staff.password)
   await confirmTwoFactorEnrolment(page, totpSecret)
   await page.getByRole('link', { name: 'Staff', exact: true }).click()
+  await page
+    .getByRole('link', { name: 'Access review', exact: true })
+    .click()
   const group = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: domain, exact: true }) })

@@ -79,6 +79,17 @@ export interface Crumb {
   to?: string
 }
 
+const STAFF_SCREENS = new Map([
+  ['/staff', 'Overview'],
+  ['/staff/access', 'Access review'],
+  ['/staff/usage', 'Usage'],
+  ['/staff/feedback', 'Feedback'],
+])
+
+export function staffScreenLabel(path: string): string {
+  return STAFF_SCREENS.get(path) ?? 'Page not found'
+}
+
 export interface BreadcrumbOptions {
   settingsSection?: string
   staff?: boolean
@@ -94,7 +105,7 @@ export function breadcrumbTrail(
   if (section === 'home') return [{ label: 'Home' }]
   if (section === 'staff') {
     if (options.staff === false) return [{ label: 'Page not found' }]
-    return [{ label: 'Staff', to: '/staff' }, { label: 'Access review' }]
+    return [{ label: 'Staff', to: '/staff' }, { label: staffScreenLabel(path) }]
   }
   if (section === 'settings') {
     const crumbs: Crumb[] = [{ label: 'Settings' }]

@@ -13,10 +13,6 @@ mock.module('../current-user', () => ({
   useCurrentUser: mocks.useCurrentUser,
 }))
 
-mock.module('./staff', () => ({
-  StaffRouteView: () => <div>staff route content</div>,
-}))
-
 const routerModuleKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,
@@ -54,7 +50,7 @@ mock.module('@tanstack/react-router', () =>
   ),
 )
 
-const { StaffGateView } = await import('./staff-gate')
+const { StaffGate } = await import('./staff-gate')
 
 const ME_BASE: MeResponse = {
   isStaff: false,
@@ -74,10 +70,14 @@ afterEach(() => {
   cleanup()
 })
 
-describe('StaffGateView', () => {
+describe('StaffGate', () => {
   it('shows the not-found state to a non-staff user', () => {
     signedIn(ME_BASE)
-    render(<StaffGateView />)
+    render(
+      <StaffGate>
+        <div>staff route content</div>
+      </StaffGate>,
+    )
 
     expect(screen.getByText('We cannot find that page')).toBeTruthy()
     expect(screen.queryByText('staff route content')).toBeNull()
@@ -85,7 +85,11 @@ describe('StaffGateView', () => {
 
   it('explains that staff need two-factor when the account has not enabled it', () => {
     signedIn({ ...ME_BASE, isStaff: true, twoFactorEnabled: false })
-    render(<StaffGateView />)
+    render(
+      <StaffGate>
+        <div>staff route content</div>
+      </StaffGate>,
+    )
 
     expect(
       screen.getByText('Staff accounts need two-factor authentication'),
@@ -95,14 +99,18 @@ describe('StaffGateView', () => {
     expect(screen.queryByText('staff route content')).toBeNull()
   })
 
-  it('renders the staff route when the staff account has two-factor enabled', () => {
+  it('renders the staff screen when the staff account has two-factor enabled', () => {
     signedIn({
       ...ME_BASE,
       isStaff: true,
       twoFactorEnabled: true,
       twoFactorEnabledAt: '2026-01-02T03:04:05.000Z',
     })
-    render(<StaffGateView />)
+    render(
+      <StaffGate>
+        <div>staff route content</div>
+      </StaffGate>,
+    )
 
     expect(screen.getByText('staff route content')).toBeTruthy()
     expect(

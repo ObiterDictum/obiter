@@ -1,6 +1,6 @@
 import { createLazyFileRoute } from '@tanstack/react-router'
-import { StaffGateView } from '@obiter/app-shell/views/staff-gate'
+import { StaffRouteView } from '@obiter/app-shell/views/staff'
 
 export const Route = createLazyFileRoute('/staff_/access')({
-  component: StaffGateView,
+  component: StaffRouteView,
 })

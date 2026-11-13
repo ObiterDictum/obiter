@@ -92,14 +92,25 @@ describe('breadcrumbTrail', () => {
     expect(breadcrumbTrail('/settings', null)).toEqual([{ label: 'Settings' }])
   })
 
-  it('trails the staff area to Access review', () => {
-    expect(breadcrumbTrail('/staff', null, null, { staff: true })).toEqual([
-      { label: 'Staff', to: '/staff' },
-      { label: 'Access review' },
-    ])
+  it('trails each staff screen under Staff', () => {
+    const screens = [
+      ['/staff', 'Overview'],
+      ['/staff/access', 'Access review'],
+      ['/staff/usage', 'Usage'],
+      ['/staff/feedback', 'Feedback'],
+    ] as const
+    for (const [path, label] of screens) {
+      expect(breadcrumbTrail(path, null, null, { staff: true })).toEqual([
+        { label: 'Staff', to: '/staff' },
+        { label },
+      ])
+    }
+  })
+
+  it('names an unknown staff path as not found', () => {
     expect(
-      breadcrumbTrail('/staff/access', null, null, { staff: true }),
-    ).toEqual([{ label: 'Staff', to: '/staff' }, { label: 'Access review' }])
+      breadcrumbTrail('/staff/unknown', null, null, { staff: true }),
+    ).toEqual([{ label: 'Staff', to: '/staff' }, { label: 'Page not found' }])
   })
 
   it('hides the staff area from people who are not staff', () => {

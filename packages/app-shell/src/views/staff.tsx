@@ -1,3 +1,4 @@
+import { StaffGate } from './staff-gate'
 import { useState } from 'react'
 import {
   useMutation,
@@ -30,8 +31,6 @@ import {
 import { apiFetch } from '../api'
 import { PageScaffold } from '../page-scaffold'
 import { SegmentedControl } from '../segmented-control'
-import { ShellNotFound } from '../shell-states'
-import { useCurrentUser } from '../current-user'
 import { formatDateTime } from '../format'
 import {
   staffQueueQueryOptions,
@@ -48,9 +47,11 @@ const TARGET_KIND_LABELS = { domain: 'Domain', person: 'Person' } as const
 type StaffTab = 'queue' | 'decisions'
 
 export function StaffRouteView() {
-  const { data: me } = useCurrentUser()
-  if (!me.isStaff) return <ShellNotFound />
-  return <StaffAccessReview />
+  return (
+    <StaffGate>
+      <StaffAccessReview />
+    </StaffGate>
+  )
 }
 
 function StaffAccessReview() {
@@ -68,6 +69,7 @@ function StaffAccessReview() {
     >
       <SegmentedControl<StaffTab>
         label="Access review views"
+        className="self-start"
         value={tab}
         options={[
           { value: 'queue', label: 'Waiting for review' },

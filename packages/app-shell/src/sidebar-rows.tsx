@@ -38,6 +38,7 @@ export function ModuleRow({
   count,
   alertTone,
   current,
+  onClick,
 }: {
   label: string
   to: string
@@ -45,12 +46,14 @@ export function ModuleRow({
   count?: number
   alertTone?: 'danger' | 'warning' | 'success'
   current?: boolean
+  onClick?: () => void
 }) {
   const note = countNote(label, count)
   const toneClass = countToneClass(label, alertTone)
   return (
     <Link
       to={to}
+      onClick={onClick}
       aria-label={note ? `${label}, ${note}` : label}
       aria-current={current ? 'page' : undefined}
       className={cn(

@@ -539,7 +539,7 @@ describe('shell layout modes', () => {
     ).toBeTruthy()
   })
 
-  it('opens the Obiter menu from the mark in clean layout and Escape returns focus', async () => {
+  it('opens the Obiter menu as a popup under the mark in clean layout and Escape returns focus', async () => {
     window.localStorage.setItem('obiter.layout', 'clean')
     renderShell('/')
 
@@ -552,7 +552,7 @@ describe('shell layout modes', () => {
     const mark = await screen.findByRole('button', { name: 'Open Obiter menu' })
     fireEvent.click(mark)
 
-    const dialog = await screen.findByRole('dialog', { name: 'Obiter' })
+    const dialog = await screen.findByRole('dialog', { name: 'Obiter menu' })
     expect(within(dialog).getByRole('link', { name: /^Matters/ })).toBeTruthy()
     expect(within(dialog).getByRole('button', { name: 'Agent' })).toBeTruthy()
     expect(
@@ -561,6 +561,9 @@ describe('shell layout modes', () => {
       }),
     ).toBeTruthy()
     expect(within(dialog).getByRole('link', { name: 'Settings' })).toBeTruthy()
+    expect(
+      document.querySelector('[role="dialog"][aria-modal="true"]'),
+    ).toBeNull()
     expect(within(dialog).getByText('Alex Morgan')).toBeTruthy()
     expect(
       within(dialog).getByRole('button', { name: 'Sign out' }),
@@ -568,7 +571,7 @@ describe('shell layout modes', () => {
 
     fireEvent.keyDown(document.body, { key: 'Escape' })
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'Obiter' })).toBeNull(),
+      expect(screen.queryByRole('dialog', { name: 'Obiter menu' })).toBeNull(),
     )
     await waitFor(() => expect(document.activeElement).toBe(mark))
   })

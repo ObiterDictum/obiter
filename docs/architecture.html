@@ -2143,8 +2143,9 @@
           <h2>Clients</h2>
           <p>
             Staff members have a sidebar entry opening the lazy
-            <code>/staff</code> and <code>/staff/access</code> shared review
-            screen, with an Access review section and a Decisions view. Approval
+            <code>/staff</code> Overview, <code>/staff/access</code> Access
+            review, <code>/staff/usage</code> Usage and
+            <code>/staff/feedback</code> Feedback shared screens. Approval
             emails open <code>/request-access/setup</code>, reusing the account
             setup form.
           </p>
@@ -2964,7 +2965,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>40 migrations, 0001 to 0041, 0008 withdrawn</dd>
+                <dd>51 migrations, 0001 to 0052, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3086,8 +3087,12 @@
           <p>
             <code>GET /api/me</code> includes <code>isStaff</code>. Staff-only
             routes are <code>GET /api/staff/access</code>,
-            <code>GET /api/staff/organisations</code> and
-            <code>GET|POST /api/staff/access/decisions</code>. Non-staff receive
+            <code>GET /api/staff/organisations</code>,
+            <code>GET|POST /api/staff/access/decisions</code>,
+            <code>GET /api/staff/overview</code>,
+            <code>GET /api/staff/usage</code>,
+            <code>GET /api/staff/feedback</code> and
+            <code>POST /api/staff/feedback/:id/handled</code>. Non-staff receive
             404. <code>POST /api/access-requests/setup</code> consumes a
             hash-only, seven-day setup token.
           </p>
