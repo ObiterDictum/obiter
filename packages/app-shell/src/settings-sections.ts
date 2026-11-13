@@ -21,7 +21,7 @@ export const SETTINGS_SECTIONS = [
     id: 'security',
     label: 'Security',
     icon: Lock,
-    description: 'Change the password you sign in with.',
+    description: 'Your password and two-factor authentication.',
     available: always,
   },
   {

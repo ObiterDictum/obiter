@@ -189,7 +189,7 @@ export function ShellStaffTwoFactorRequired() {
       tone="warning"
       icon={<Lock size={20} aria-hidden />}
       title="Staff accounts need two-factor authentication"
-      description="Your staff account must set up an authenticator app or backup codes before it can use staff tools. Set it up in Settings, then sign in again."
+      description="Staff tools need an authenticator app on your account. Set one up in Security settings, then come back here."
       actions={
         <>
           <Link
