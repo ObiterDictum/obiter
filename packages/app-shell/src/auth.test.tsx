@@ -355,6 +355,59 @@ describe('useAuth — two-factor sign-in verification', () => {
       code: 'INVALID_TWO_FACTOR_COOKIE',
     })
   })
+
+  it('explains that a used or unknown backup code works once', async () => {
+    verifyBackupCode.mockResolvedValueOnce({
+      error: { message: 'Invalid backup code', code: 'INVALID_BACKUP_CODE' },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.verifyTwoFactorSignIn({
+        code: 'aaaaa-bbbbb',
+        backupCode: true,
+      })
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      message:
+        'That backup code is not valid or has already been used. Each backup code works once.',
+      code: 'INVALID_BACKUP_CODE',
+    })
+    expect(verifyTotp).not.toHaveBeenCalled()
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
+  it('keeps the generic message for an unrecognised backup-code failure', async () => {
+    verifyBackupCode.mockResolvedValueOnce({
+      error: { message: 'Failed to verify backup code. Please try again.' },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.verifyTwoFactorSignIn({
+        code: 'aaaaa-bbbbb',
+        backupCode: true,
+      })
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'Could not verify your second factor. Try again.',
+      code: undefined,
+    })
+  })
 })
 
 describe('useAuth — session presence', () => {

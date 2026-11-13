@@ -139,6 +139,8 @@ function twoFactorSignInMessage(code: string | undefined): string {
       return 'Too many incorrect attempts. Try again later.'
     case 'INVALID_TWO_FACTOR_COOKIE':
       return 'Your sign-in timed out. Start again.'
+    case 'INVALID_BACKUP_CODE':
+      return 'That backup code is not valid or has already been used. Each backup code works once.'
     default:
       return 'Could not verify your second factor. Try again.'
   }
