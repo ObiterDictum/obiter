@@ -24,6 +24,29 @@ const overview = {
   activeUsers: { today: 5, last7Days: 12, last30Days: 40 },
 }
 
+const counts = {
+  activeUsers: 10,
+  newAccounts: 2,
+  documentsOpened: 30,
+  documentsSaved: 20,
+  mattersCreated: 4,
+  redactionRuns: 1,
+  verificationRuns: 3,
+  agentRuns: 0,
+  sourcesSaved: 5,
+}
+
+const usage = {
+  windowWeeks: 12,
+  weeks: [
+    { weekStart: '2026-01-05', ...counts, activeUsers: 10, newAccounts: 2 },
+    { weekStart: '2026-01-12', ...counts, activeUsers: 14, newAccounts: 5 },
+    { weekStart: '2026-01-19', ...counts, activeUsers: 12, newAccounts: 3 },
+  ],
+  organisations: [],
+  retention: [],
+}
+
 function staffUser(isStaff: boolean) {
   return {
     isStaff,
@@ -45,9 +68,15 @@ function renderOverview(isStaff: boolean) {
         const path = String(input)
         const body = path.endsWith('/api/staff/overview')
           ? overview
-          : { error: { code: 'not_found', message: 'missing' } }
+          : path.includes('/api/staff/usage')
+            ? usage
+            : { error: { code: 'not_found', message: 'missing' } }
         return new Response(JSON.stringify(body), {
-          status: path.endsWith('/api/staff/overview') ? 200 : 404,
+          status:
+            path.endsWith('/api/staff/overview') ||
+            path.includes('/api/staff/usage')
+              ? 200
+              : 404,
           headers: { 'content-type': 'application/json' },
         })
       },
@@ -105,7 +134,64 @@ it('shows each overview figure and links it to its staff screen', async () => {
   }
   expect(access.getAttribute('href')).toContain('/staff/access')
   expect(feedback.getAttribute('href')).toContain('/staff/feedback')
-  expect(within(usageCards[0]).getByText('9')).toBeTruthy()
+  const accounts = screen.getByRole('link', { name: /New accounts/ })
+  expect(within(accounts).getByText('4')).toBeTruthy()
+  client.clear()
+})
+
+it('draws a sparkline and week-on-week change on trend tiles only', async () => {
+  const client = renderOverview(true)
+  const accounts = await screen.findByRole('link', { name: /New accounts/ })
+  expect(
+    within(accounts).getByRole('img', {
+      name: /New accounts per week, last 3 weeks/,
+    }),
+  ).toBeTruthy()
+  expect(within(accounts).getByText('-2')).toBeTruthy()
+  const active = screen.getByRole('link', { name: /Active users/ })
+  expect(
+    within(active).getByRole('img', {
+      name: /Active users per week, last 3 weeks/,
+    }),
+  ).toBeTruthy()
+  expect(within(active).getByText('-2')).toBeTruthy()
+  const organisations = screen.getByRole('link', {
+    name: /New organisations/,
+  })
+  expect(
+    within(organisations).queryByRole('img', { name: /per week/ }),
+  ).toBeNull()
+  expect(within(organisations).queryByText(/previous week/)).toBeNull()
+  client.clear()
+})
+
+it('orders the two trend tiles ahead of the three number tiles', async () => {
+  const client = renderOverview(true)
+  await screen.findByRole('link', { name: /Active users/ })
+  const titles = screen
+    .getAllByRole('link')
+    .map((link) => link.textContent ?? '')
+    .filter((text) =>
+      /Active users|New accounts|Access review|Feedback|New organisations/.test(
+        text,
+      ),
+    )
+    .map((text) =>
+      [
+        'Active users',
+        'New accounts',
+        'Access review',
+        'Feedback',
+        'New organisations',
+      ].find((title) => text.includes(title)),
+    )
+  expect(titles).toEqual([
+    'Active users',
+    'New accounts',
+    'Access review',
+    'Feedback',
+    'New organisations',
+  ])
   client.clear()
 })
 

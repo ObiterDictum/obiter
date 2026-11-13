@@ -223,7 +223,6 @@ export function ShellFrame({
       ? {
           name: panelName,
           expanded: contentsExpanded,
-          overlay: narrow,
           controls: 'app-shell-contents',
           toggle: toggleContents,
           buttonRef: panelToggleRef,

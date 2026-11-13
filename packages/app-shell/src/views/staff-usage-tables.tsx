@@ -1,17 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import { Table, TBody, TD, TH, THead, TR } from '@obiter/ui'
 import { CaretDown, CaretUp } from '@obiter/ui/icons'
-import type {
-  StaffUsageOrganisation,
-  StaffUsageRetention,
-  StaffUsageWeek,
-} from '@obiter/contracts'
+import type { StaffUsageOrganisation, StaffUsageWeek } from '@obiter/contracts'
 import { formatDate } from '../format'
 import {
   duplicatedOrganisationNames,
   nextOrganisationSort,
-  retentionGrid,
-  retentionPercent,
   sortOrganisations,
   type OrganisationSort,
   type OrganisationSortColumn,
@@ -50,6 +44,25 @@ function ScrollRegion({
     >
       {children}
     </div>
+  )
+}
+
+export function TableToggle({
+  open,
+  onToggle,
+}: {
+  open: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onToggle}
+      className="inline-flex h-7 items-center rounded-md px-2 text-caption text-subtle transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      {open ? 'Hide table' : 'Show as table'}
+    </button>
   )
 }
 
@@ -200,89 +213,6 @@ export function OrganisationsTable({
                 <TD key={key} className={DENSE_CELL}>
                   {org[key]}
                 </TD>
-              ))}
-            </TR>
-          ))}
-        </TBody>
-      </Table>
-    </ScrollRegion>
-  )
-}
-
-function RetentionCell({
-  active,
-  cohortSize,
-  week,
-}: {
-  active: number | null
-  cohortSize: number
-  week: number
-}) {
-  if (active === null) {
-    return <TD className={DENSE_CELL} />
-  }
-  const percent = retentionPercent(active, cohortSize)
-  return (
-    <TD
-      className={`${DENSE_CELL} whitespace-nowrap`}
-      aria-label={`Week ${week}: ${percent} percent, ${active} of ${cohortSize} active`}
-      style={{
-        backgroundColor: `color-mix(in srgb, var(--obiter-brand) ${Math.round(percent * 0.4)}%, var(--obiter-surface-raised))`,
-      }}
-    >
-      <span className="flex flex-col items-end">
-        <span className="text-meta">{percent}%</span>
-        <span className="text-caption text-subtle">{active}</span>
-      </span>
-    </TD>
-  )
-}
-
-export function RetentionTable({
-  retention,
-}: {
-  retention: StaffUsageRetention[]
-}) {
-  const grid = retentionGrid(retention)
-  if (grid.cohorts.length === 0) {
-    return <p className="text-meta text-muted">No signup cohorts yet.</p>
-  }
-  return (
-    <ScrollRegion label="Retention by signup week">
-      <Table>
-        <THead>
-          <TR className="hover:bg-transparent">
-            <TH className={FIRST_HEAD}>Signup week</TH>
-            <TH
-              align="end"
-              title="Users who signed up that week"
-              className="whitespace-nowrap px-2 pb-2"
-            >
-              Signed up
-            </TH>
-            {Array.from({ length: grid.weekCount }, (_, index) => (
-              <TH
-                key={index}
-                align="end"
-                className="whitespace-nowrap px-2 pb-2"
-              >
-                Week {index}
-              </TH>
-            ))}
-          </TR>
-        </THead>
-        <TBody>
-          {grid.cohorts.map((cohort) => (
-            <TR key={cohort.cohortWeek} className="group">
-              <TD className={FIRST_CELL}>{formatDate(cohort.cohortWeek)}</TD>
-              <TD className={DENSE_CELL}>{cohort.cohortSize}</TD>
-              {cohort.cells.map((active, index) => (
-                <RetentionCell
-                  key={index}
-                  active={active}
-                  cohortSize={cohort.cohortSize}
-                  week={index}
-                />
               ))}
             </TR>
           ))}

@@ -1,164 +1,14 @@
 import '@obiter/test-dom'
-import { afterEach, expect, it, mock, spyOn } from 'bun:test'
-import { Suspense } from 'react'
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  RouterProvider,
-} from '@tanstack/react-router'
-import { ToastProvider } from '@obiter/ui'
-import { StaffUsageRouteView } from './staff-usage'
-import { validateStaffUsageSearch } from '../staff'
-
-const counts = {
-  activeUsers: 10,
-  newAccounts: 2,
-  documentsOpened: 30,
-  documentsSaved: 20,
-  mattersCreated: 4,
-  redactionRuns: 1,
-  verificationRuns: 3,
-  agentRuns: 0,
-  sourcesSaved: 5,
-}
-
-const usage = {
-  windowWeeks: 12,
-  weeks: [
-    { weekStart: '2026-01-05', ...counts, activeUsers: 10, newAccounts: 2 },
-    { weekStart: '2026-01-12', ...counts, activeUsers: 14, newAccounts: 3 },
-    { weekStart: '2026-01-19', ...counts, activeUsers: 12, newAccounts: 1 },
-  ],
-  organisations: [
-    {
-      organisationId: 'org_beta',
-      name: 'Beta Org',
-      memberCount: 5,
-      ...counts,
-      activeUsers: 4,
-    },
-    {
-      organisationId: 'org_alpha',
-      name: 'Alpha Org',
-      memberCount: 8,
-      ...counts,
-      activeUsers: 20,
-    },
-    {
-      organisationId: 'zz_alpha_dup',
-      name: 'Alpha Org',
-      memberCount: 6,
-      ...counts,
-      activeUsers: 1,
-    },
-  ],
-  retention: [
-    {
-      cohortWeek: '2026-01-05',
-      cohortSize: 4,
-      weekStart: '2026-01-05',
-      activeUsers: 4,
-    },
-    {
-      cohortWeek: '2026-01-05',
-      cohortSize: 4,
-      weekStart: '2026-01-12',
-      activeUsers: 2,
-    },
-    {
-      cohortWeek: '2026-01-12',
-      cohortSize: 3,
-      weekStart: '2026-01-12',
-      activeUsers: 3,
-    },
-  ],
-}
-
-function staffUser(isStaff: boolean) {
-  return {
-    isStaff,
-    twoFactorEnabled: isStaff,
-    user: {
-      id: 'synthetic',
-      name: 'Synthetic reviewer',
-      email: 'staff@synthetic.test',
-      role: 'member',
-    },
-    organisation: null,
-  }
-}
-
-function renderUsage(isStaff: boolean, entry = '/staff/usage') {
-  const requested: string[] = []
-  spyOn(globalThis, 'fetch').mockImplementation(
-    Object.assign(
-      async (input: Parameters<typeof fetch>[0]) => {
-        const path = String(input)
-        requested.push(path)
-        const body = path.includes('/api/staff/usage') ? usage : {}
-        return new Response(JSON.stringify(body), {
-          headers: { 'content-type': 'application/json' },
-        })
-      },
-      { preconnect: fetch.preconnect },
-    ),
-  )
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
-  client.setQueryData(['current-user'], staffUser(isStaff))
-  const rootRoute = createRootRoute()
-  const router = createRouter({
-    routeTree: rootRoute.addChildren([
-      createRoute({
-        getParentRoute: () => rootRoute,
-        path: '/staff/usage',
-        validateSearch: validateStaffUsageSearch,
-        component: StaffUsageRouteView,
-      }),
-    ]),
-    history: createMemoryHistory({ initialEntries: [entry] }),
-  })
-  render(
-    <QueryClientProvider client={client}>
-      <ToastProvider>
-        <Suspense fallback={<p>Loading…</p>}>
-          <RouterProvider router={router} />
-        </Suspense>
-      </ToastProvider>
-    </QueryClientProvider>,
-  )
-  return { client, requested }
-}
+import { afterEach, expect, it, mock } from 'bun:test'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { renderUsage, section, tableWithHeaders } from './staff-usage-testkit'
 
 afterEach(() => {
   cleanup()
   mock.restore()
 })
 
-function tableWithHeaders(names: string[]) {
-  const table = screen
-    .getAllByRole('table')
-    .find((candidate) =>
-      names.every((name) =>
-        within(candidate).queryByRole('columnheader', { name }),
-      ),
-    )
-  expect(table).toBeTruthy()
-  return table as HTMLElement
-}
-
-it('renders the weekly chart, counts, organisations and retention for staff', async () => {
+it('renders charts for staff and keeps the tables behind toggles', async () => {
   const { client, requested } = renderUsage(true)
   expect(
     await screen.findByRole('img', {
@@ -166,10 +16,43 @@ it('renders the weekly chart, counts, organisations and retention for staff', as
     }),
   ).toBeTruthy()
   expect(screen.getByText(/Obiter staff organisation is excluded/)).toBeTruthy()
+  for (const label of [
+    'Docs opened',
+    'Docs saved',
+    'Matters',
+    'Redact',
+    'Verify',
+    'Agent',
+    'Sources',
+  ]) {
+    expect(screen.getByRole('img', { name: `${label} per week` })).toBeTruthy()
+  }
+  expect(
+    screen.queryByRole('region', { name: 'Weekly feature counts' }),
+  ).toBeNull()
+  const orgRegion = section('Usage by organisation')
+  expect(
+    within(orgRegion).getByRole('button', {
+      name: 'Alpha Org: 20 active users',
+    }),
+  ).toBeTruthy()
+  expect(
+    within(orgRegion).queryByRole('columnheader', { name: 'Members' }),
+  ).toBeNull()
+
+  fireEvent.click(
+    within(section('Feature use per week')).getByRole('button', {
+      name: 'Show as table',
+    }),
+  )
   const weekly = tableWithHeaders(['Week', 'Agent'])
   expect(
     within(weekly).getByRole('columnheader', { name: 'Verify' }),
   ).toBeTruthy()
+
+  fireEvent.click(
+    within(orgRegion).getByRole('button', { name: 'Show as table' }),
+  )
   const orgTable = tableWithHeaders(['Organisation', 'Members'])
   const bodyRows = within(orgTable).getAllByRole('row').slice(1)
   expect(within(bodyRows[0]).getByText('Alpha Org')).toBeTruthy()
@@ -178,24 +61,46 @@ it('renders the weekly chart, counts, organisations and retention for staff', as
   expect(within(bodyRows[2]).getByText('Alpha Org')).toBeTruthy()
   expect(bodyRows[2].textContent).toContain('zz_alp')
   expect(requested.some((path) => path.includes('weeks=12'))).toBe(true)
+
   const retention = tableWithHeaders(['Signup week', 'Week 0'])
   const firstCohort = within(retention).getByRole('cell', {
-    name: 'Week 0: 100 percent, 4 of 4 active',
+    name: 'Week 0: 100% of the cohort still active, 4 of 4',
   })
   expect(within(firstCohort).getByText('100%')).toBeTruthy()
   expect(within(firstCohort).getByText('4')).toBeTruthy()
   const secondCell = within(retention).getByRole('cell', {
-    name: 'Week 1: 50 percent, 2 of 4 active',
+    name: 'Week 1: 50% of the cohort still active, 2 of 4',
   })
   expect(within(secondCell).getByText('50%')).toBeTruthy()
   expect(within(secondCell).getByText('2')).toBeTruthy()
   const newestCohortCell = within(retention).getByRole('cell', {
-    name: 'Week 0: 100 percent, 3 of 3 active',
+    name: 'Week 0: 100% of the cohort still active, 3 of 3',
   })
   expect(within(newestCohortCell).getByText('3')).toBeTruthy()
   const cohortRows = within(retention).getAllByRole('row').slice(1)
   const newestCohort = within(cohortRows[1]).getAllByRole('cell')
   expect(newestCohort[newestCohort.length - 1].textContent).toBe('')
+  client.clear()
+})
+
+it('re-sorts the organisation bars when the metric changes', async () => {
+  const { client } = renderUsage(true)
+  await screen.findByRole('img', {
+    name: /Line chart of active users and new accounts/,
+  })
+  const orgRegion = section('Usage by organisation')
+  const barNames = () =>
+    within(orgRegion)
+      .getAllByRole('button')
+      .filter((button) => button.getAttribute('aria-label')?.includes(':'))
+      .map((button) => button.getAttribute('aria-label'))
+  expect(barNames()[0]).toBe('Alpha Org: 20 active users')
+  fireEvent.click(
+    within(orgRegion).getByRole('button', { name: 'Verify runs' }),
+  )
+  expect(barNames()[0]).toBe('Alpha Org: 9 verify runs')
+  expect(barNames()[1]).toBe('Alpha Org: 7 verify runs')
+  expect(barNames()[2]).toBe('Beta Org: 2 verify runs')
   client.clear()
 })
 
@@ -221,6 +126,10 @@ it('marks the sorted organisation column with aria-sort', async () => {
   await screen.findByRole('img', {
     name: /Line chart of active users and new accounts/,
   })
+  const orgRegion = section('Usage by organisation')
+  fireEvent.click(
+    within(orgRegion).getByRole('button', { name: 'Show as table' }),
+  )
   const orgTable = tableWithHeaders(['Organisation', 'Members'])
   const activeHeader = within(orgTable).getByRole('columnheader', {
     name: 'Active',
