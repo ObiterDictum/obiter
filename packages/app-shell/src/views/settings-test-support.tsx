@@ -84,7 +84,13 @@ export function readOnlyValue(scope: HTMLElement, label: string) {
 }
 
 export async function openSection(
-  name: 'Account' | 'Security' | 'Organisation' | 'Preferences',
+  name:
+    | 'Account'
+    | 'Security'
+    | 'Organisation'
+    | 'Preferences'
+    | 'Members'
+    | 'Agent',
 ) {
   fireEvent.click(await screen.findByRole('link', { name }))
   return screen.findByRole('region', { name })

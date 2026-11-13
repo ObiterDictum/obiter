@@ -240,7 +240,7 @@ describe('agent tab', () => {
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
-  it('links a refusal for a missing setting to the Agent settings in Organisation', async () => {
+  it('links a refusal for a missing setting to the Agent settings', async () => {
     runs = [refused]
     renderTab()
     fireEvent.click(await screen.findByText(refused.goal))
@@ -250,7 +250,7 @@ describe('agent tab', () => {
     )
     expect(
       screen.getByRole('link', { name: 'Settings' }).getAttribute('href'),
-    ).toBe('/settings?section=organisation#settings-agent')
+    ).toBe('/settings?section=agent')
   })
 
   it('tells the user when the organisation has no agent model set', async () => {

@@ -61,8 +61,14 @@ mock.module('@tanstack/react-router', () => ({
   useNavigate: () => mocks.navigate,
 }))
 
-const { OWNER_ME, idleMutation, openSection, renderSettings } =
-  await import('./settings-test-support')
+const {
+  MEMBER_ME,
+  ORGLESS_ME,
+  OWNER_ME,
+  idleMutation,
+  openSection,
+  renderSettings,
+} = await import('./settings-test-support')
 
 function signedIn(user: MeResponse = OWNER_ME) {
   mocks.useCurrentUser.mockReturnValue({ data: user })
@@ -94,7 +100,14 @@ describe('SettingsRouteView — information architecture', () => {
       within(nav)
         .getAllByRole('link')
         .map((button) => button.textContent),
-    ).toEqual(['Account', 'Security', 'Organisation', 'Preferences'])
+    ).toEqual([
+      'Account',
+      'Security',
+      'Preferences',
+      'Organisation',
+      'Members',
+      'Agent',
+    ])
 
     expect(
       within(nav)
@@ -165,13 +178,47 @@ describe('SettingsRouteView — addressable sections', () => {
     ).toEqual([
       '/settings?section=account',
       '/settings?section=security',
-      '/settings?section=organisation',
       '/settings?section=preferences',
+      '/settings?section=organisation',
+      '/settings?section=members',
+      '/settings?section=agent',
     ])
+  })
+
+  it('hides Members from a plain member but keeps Agent', async () => {
+    signedIn(MEMBER_ME)
+    renderSettings()
+    const nav = await screen.findByRole('navigation', {
+      name: 'Settings sections',
+    })
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Account', 'Security', 'Preferences', 'Organisation', 'Agent'])
+  })
+
+  it('offers only the organisation-free sections without an organisation', async () => {
+    signedIn(ORGLESS_ME)
+    renderSettings()
+    const nav = await screen.findByRole('navigation', {
+      name: 'Settings sections',
+    })
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Account', 'Security', 'Preferences', 'Organisation'])
   })
 
   it('opens Account for a section the address does not know', async () => {
     renderSettings('/settings?section=billing')
+    expect(await screen.findByRole('region', { name: 'Account' })).toBeTruthy()
+  })
+
+  it('opens Account for a section this user cannot see', async () => {
+    signedIn(MEMBER_ME)
+    renderSettings('/settings?section=members')
     expect(await screen.findByRole('region', { name: 'Account' })).toBeTruthy()
   })
 })

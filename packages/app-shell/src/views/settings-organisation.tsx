@@ -14,10 +14,9 @@ import {
   ErrorNotice,
   ReadOnlyField,
   SavedNotice,
+  SectionHeading,
   roleLabel,
 } from './settings-fields'
-import { OrganisationAgentSettingsSection } from './settings-agent'
-import { OrganisationPeople } from './settings-members'
 import { useCanonicalNameField } from './use-canonical-name-field'
 
 export function OrganisationSection({
@@ -32,47 +31,43 @@ export function OrganisationSection({
   return (
     <section
       hidden={!active}
-      aria-labelledby="settings-organisation-heading"
-      className="flex flex-col gap-6"
+      aria-label="Organisation"
+      className="flex flex-col gap-8"
     >
-      <div>
-        <h2
-          id="settings-organisation-heading"
-          className="text-section text-ink"
-        >
-          Organisation
-        </h2>
-        <p className="mt-1 max-w-[62ch] text-meta text-muted">
-          {organisation
-            ? 'Changes here apply to everyone in your organisation.'
-            : 'Name the organisation you work in. Matters and Redact work without one: you keep a personal workspace until you create one.'}
-        </p>
-      </div>
-
       {organisation ? (
         <>
-          {me.user.role === 'owner' ? (
-            <OrganisationNameForm organisation={organisation} />
-          ) : (
-            <div className="flex max-w-[420px] flex-col gap-3">
-              <dl>
-                <ReadOnlyField
-                  label="Organisation name"
-                  value={organisation.name}
-                />
-              </dl>
-              <p className="text-meta text-muted">
-                Only an owner can rename the organisation.
-              </p>
-            </div>
-          )}
-
-          <dl className="flex max-w-[420px] flex-col gap-4">
-            <ReadOnlyField
-              label="Your role"
-              value={me.user.role ? roleLabel(me.user.role) : 'Member'}
+          <div className="flex flex-col gap-6">
+            <SectionHeading
+              id="settings-organisation-name-heading"
+              level="h3"
+              title="Name"
+              description="Changes here apply to everyone in your organisation."
             />
-          </dl>
+            {me.user.role === 'owner' ? (
+              <OrganisationNameForm organisation={organisation} />
+            ) : (
+              <div className="flex max-w-[480px] flex-col gap-3">
+                <dl>
+                  <ReadOnlyField
+                    label="Organisation name"
+                    value={organisation.name}
+                  />
+                </dl>
+                <p className="text-meta text-muted">
+                  Only an owner can rename the organisation.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex max-w-[480px] flex-col gap-4 border-t border-line pt-8">
+            <dl>
+              <ReadOnlyField
+                label="Your role"
+                value={me.user.role ? roleLabel(me.user.role) : 'Member'}
+              />
+            </dl>
+          </div>
 
           {me.isStaff && (
             <p className="text-body text-warning">
@@ -84,22 +79,17 @@ export function OrganisationSection({
             organisationId={organisation.id}
             role={me.user.role}
           />
-          <OrganisationAgentSettingsSection
-            organisationId={organisation.id}
-            role={me.user.role}
-          />
-
-          {me.user.role === 'owner' || me.user.role === 'admin' ? (
-            <OrganisationPeople
-              organisationId={organisation.id}
-              role={me.user.role}
-              selfId={me.user.id}
-              active={active}
-            />
-          ) : null}
         </>
       ) : (
-        <CreateOrganisationForm />
+        <div className="flex flex-col gap-6">
+          <SectionHeading
+            id="settings-organisation-create-heading"
+            level="h3"
+            title="Set up your organisation"
+            description="Matters and Redact work without one: you keep a personal workspace until you create one."
+          />
+          <CreateOrganisationForm />
+        </div>
       )}
     </section>
   )
@@ -123,7 +113,7 @@ function OrganisationNameForm({
 
   return (
     <form
-      className="flex max-w-[420px] flex-col gap-4"
+      className="flex max-w-[480px] flex-col gap-4"
       onSubmit={field.submit}
       noValidate
     >
@@ -148,13 +138,13 @@ function OrganisationNameForm({
         </Button>
         <Button
           type="button"
-          variant="secondary"
+          variant="ghost"
           disabled={!field.dirty || field.submitting}
           onClick={field.reset}
         >
           Reset
         </Button>
-        <SavedNotice message="Organisation name saved." show={field.saved} />
+        <SavedNotice message="Saved" show={field.saved} />
       </div>
       {field.error ? <ErrorNotice message={field.error} /> : null}
     </form>
@@ -209,7 +199,7 @@ function CreateOrganisationForm() {
 
   return (
     <form
-      className="flex max-w-[420px] flex-col gap-4"
+      className="flex max-w-[480px] flex-col gap-4"
       onSubmit={handleCreate}
       noValidate
     >

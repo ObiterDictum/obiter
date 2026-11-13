@@ -120,7 +120,7 @@ describe('SettingsRouteView — organisation', () => {
     })
     expect(await within(organisation).findByRole('status')).toHaveProperty(
       'textContent',
-      'Organisation name saved.',
+      'Saved',
     )
   })
 
@@ -142,26 +142,26 @@ describe('SettingsRouteView — organisation', () => {
 
   it('offers the invite role through the shared select, not a native form control', async () => {
     renderSettings()
-    const organisation = await openSection('Organisation')
+    const members = await openSection('Members')
 
-    const role = within(organisation).getByRole('combobox', { name: 'Role' })
+    const role = within(members).getByRole('combobox', { name: 'Role' })
     expect(role.tagName).toBe('BUTTON')
-    expect(organisation.querySelector('select')).toBeNull()
+    expect(members.querySelector('select')).toBeNull()
   })
 
   it('sends an invite only after the admin attests the invitee works in a legal role', async () => {
     renderSettings()
-    const organisation = await openSection('Organisation')
-    fireEvent.change(within(organisation).getByLabelText('Email'), {
+    const members = await openSection('Members')
+    fireEvent.change(within(members).getByLabelText('Email'), {
       target: { value: 'colleague@ashcombe.example' },
     })
-    const send = within(organisation).getByRole('button', {
+    const send = within(members).getByRole('button', {
       name: 'Send invite',
     })
     expect(send).toHaveProperty('disabled', true)
 
     fireEvent.click(
-      within(organisation).getByRole('checkbox', {
+      within(members).getByRole('checkbox', {
         name: /works in a legal role here/,
       }),
     )

@@ -119,6 +119,7 @@ describe('SettingsRouteView — account save refreshes GET /api/me', () => {
         if (path === '/api/me') {
           return { ...ME, user: { ...ME.user, name: storedName } }
         }
+        if (path === '/api/auth/list-sessions') return []
         throw new Error(`Unexpected request: ${path}`)
       },
     )
@@ -154,7 +155,7 @@ describe('SettingsRouteView — account save refreshes GET /api/me', () => {
     })
     expect(await within(account).findByRole('status')).toHaveProperty(
       'textContent',
-      'All changes saved',
+      'Saved',
     )
   })
 
@@ -171,6 +172,7 @@ describe('SettingsRouteView — account save refreshes GET /api/me', () => {
           )
         }
         if (path === '/api/me') return ME
+        if (path === '/api/auth/list-sessions') return []
         throw new Error(`Unexpected request: ${path}`)
       },
     )

@@ -1,6 +1,6 @@
-import { Link } from '@tanstack/react-router'
 import { Skeleton, cn } from '@obiter/ui'
 import type { ReactNode } from 'react'
+import { useCurrentUser } from './current-user'
 import { matterIdFromPath, type ShellSection } from './navigation'
 import { PagePanelToggle } from './page-panel'
 import { useMatter } from './matters'
@@ -10,6 +10,7 @@ import {
   RedactContents,
   SearchContents,
   SettingsContents,
+  StaffContents,
   VerifyContents,
 } from './contents-sections'
 
@@ -74,17 +75,7 @@ function ContentsBody({
     case 'search':
       return <SearchContents />
     case 'staff':
-      return (
-        <nav aria-label="Staff sections">
-          <Link
-            to="/staff/access"
-            aria-current="page"
-            className="block rounded-md px-3 py-2 text-body text-ink hover:bg-hover"
-          >
-            Access review
-          </Link>
-        </nav>
-      )
+      return <StaffContents pathname={pathname} />
     case 'settings':
       return <SettingsContents />
     default:
@@ -115,12 +106,35 @@ export function contentsPanelName(
       return 'redaction runs'
     case 'settings':
       return 'settings sections'
+    case 'staff':
+      return 'staff sections'
     default:
       return null
   }
 }
 
-export function ContentsPanel({
+export function ContentsPanel(props: {
+  section: ShellSection
+  pathname: string
+  overlay: boolean
+  onDismiss?: () => void
+}): ReactNode {
+  if (props.section === 'staff') return <StaffContentsPanel {...props} />
+  return <ContentsPanelFrame {...props} />
+}
+
+function StaffContentsPanel(props: {
+  section: ShellSection
+  pathname: string
+  overlay: boolean
+  onDismiss?: () => void
+}): ReactNode {
+  const { data: me } = useCurrentUser()
+  if (!me.isStaff) return null
+  return <ContentsPanelFrame {...props} />
+}
+
+function ContentsPanelFrame({
   section,
   pathname,
   overlay,

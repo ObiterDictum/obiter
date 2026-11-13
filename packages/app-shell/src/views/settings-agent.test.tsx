@@ -88,7 +88,11 @@ function renderSection(role: UserRole) {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <OrganisationAgentSettingsSection organisationId="org_1" role={role} />
+      <OrganisationAgentSettingsSection
+        organisationId="org_1"
+        role={role}
+        active
+      />
     </QueryClientProvider>,
   )
   return screen.findByRole('region', { name: 'Agent' })

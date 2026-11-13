@@ -74,19 +74,18 @@ export function SecuritySection({ active }: { active: boolean }) {
   return (
     <section
       hidden={!active}
-      aria-labelledby="settings-security-heading"
+      aria-label="Security"
       className="flex flex-col gap-6"
     >
-      <div>
-        <SectionHeading
-          id="settings-security-heading"
-          title="Security"
-          description="Change the password you sign in with. Other devices are signed out."
-        />
-      </div>
+      <SectionHeading
+        id="settings-security-heading"
+        level="h3"
+        title="Password"
+        description="Change the password you sign in with. Other devices are signed out."
+      />
 
       <form
-        className="flex max-w-[420px] flex-col gap-4"
+        className="flex max-w-[480px] flex-col gap-4"
         onSubmit={handleSubmit}
         noValidate
       >
@@ -120,10 +119,7 @@ export function SecuritySection({ active }: { active: boolean }) {
           >
             Change password
           </Button>
-          <SavedNotice
-            message="Password changed. Other devices have been signed out."
-            show={saved}
-          />
+          <SavedNotice message="Saved" show={saved} />
         </div>
         {error ? <ErrorNotice message={error} /> : null}
       </form>
