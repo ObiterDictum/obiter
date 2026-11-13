@@ -65,6 +65,15 @@ One screen to open each morning:
 
 Each figure links to the screen behind it.
 
+API: `GET /api/staff/overview` returns `staffOverviewResponseSchema`. The
+waiting count and oldest wait come from `access_requests` in
+`pending_review`; unread feedback counts rows with no `handled_at`; account
+and organisation figures count rows created in the last 7 and 30 days,
+excluding the staff organisation; active users are distinct users with an
+audit event or a created record today, in the last 7 days and in the last 30
+days, also excluding the staff organisation. The API has no deployed-build
+source, so the build commit and deploy time are omitted for now.
+
 ### 2. Access review
 
 Requests in `pending_review`, grouped by email domain, oldest first. For each
@@ -155,6 +164,18 @@ is tracked in the browser.
 - Retention: of the people who joined in a given week, how many were active in
   each later week.
 
+API: `GET /api/staff/usage?weeks=<1..52>` (default 12) returns
+`staffUsageResponseSchema`. Weeks are ISO weeks (Monday start, UTC) produced
+by `generate_series`, so empty weeks still appear. Active users and new
+accounts come from the same recorded-activity union as the overview;
+documents opened come from `document_opens`, documents saved from
+`document_versions`, matters from `matters`, Redact runs from
+`redaction_runs`, Verify runs from `verification_runs`, agent runs from
+`agent_runs` and sources saved from `matter_saved_sources`. The per-week and
+per-organisation figures exclude the staff organisation; organisation rows
+carry id, name, member count and the same counts. Retention cohorts are
+signup weeks inside the window, with `cohortSize` and per-week active users.
+
 ### 6. Feedback
 
 The in-app feedback messages:
@@ -165,6 +186,12 @@ The in-app feedback messages:
 
 Actions: mark a message handled, or reopen it. Handled messages leave the
 default view.
+
+API: `GET /api/staff/feedback?kind=&status=open|handled|all` returns
+`staffFeedbackListResponseSchema`, newest first, default `status=open`.
+`POST /api/staff/feedback/:id/handled` takes `{ handled: boolean }` and
+returns `staffFeedbackHandledResponseSchema`; it writes a `staff.feedback.*`
+audit record with the staff user, the feedback id and the request id.
 
 ### 7. System
 
