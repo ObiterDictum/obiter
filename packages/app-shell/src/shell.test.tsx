@@ -267,59 +267,65 @@ describe('shell frame', () => {
     ).toBeNull()
   })
 
-  it('returns focus to the show control when the overlay contents panel closes', async () => {
-    const narrow = spyOn(window, 'matchMedia').mockImplementation(
-      (query: string) => ({
-        matches: query === '(max-width: 1023px)',
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      }),
+  function narrowViewport() {
+    return spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: query === '(max-width: 1023px)',
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }))
+  }
+
+  async function openOverlayContents() {
+    renderShell('/matters/mtr_1')
+    await screen.findAllByText('Harrington Vale LLP')
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Show matter contents' }),
     )
-    try {
-      renderShell('/matters/mtr_1')
-      const show = await screen.findByRole('button', {
-        name: 'Show matter contents',
-      })
-      fireEvent.click(show)
+    const panel = await screen.findByRole('complementary', {
+      name: 'Matter contents',
+    })
+    expect(
+      panel.contains(
+        screen.getByRole('button', { name: 'Hide matter contents' }),
+      ),
+    ).toBe(true)
+  }
 
-      const panel = await screen.findByRole('complementary', {
-        name: 'Matter contents',
-      })
-      const hide = screen.getByRole('button', { name: 'Hide matter contents' })
-      expect(panel.contains(hide)).toBe(true)
-
-      fireEvent.click(screen.getByRole('button', { name: 'Close contents' }))
-      await waitFor(() =>
-        expect(
-          screen.queryByRole('complementary', { name: 'Matter contents' }),
-        ).toBeNull(),
-      )
-      await waitFor(() =>
-        expect(document.activeElement).toBe(
-          screen.getByRole('button', { name: 'Show matter contents' }),
-        ),
-      )
-
-      fireEvent.click(
+  async function expectOverlayClosedWithFocusOnShow() {
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('complementary', { name: 'Matter contents' }),
+      ).toBeNull(),
+    )
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
         screen.getByRole('button', { name: 'Show matter contents' }),
-      )
-      await screen.findByRole('button', { name: 'Hide matter contents' })
+      ),
+    )
+  }
+
+  it('returns focus to the show control when the overlay contents panel is closed', async () => {
+    const narrow = narrowViewport()
+    try {
+      await openOverlayContents()
+      fireEvent.click(screen.getByRole('button', { name: 'Close contents' }))
+      await expectOverlayClosedWithFocusOnShow()
+    } finally {
+      narrow.mockRestore()
+    }
+  })
+
+  it('returns focus to the show control when Escape closes the overlay contents panel', async () => {
+    const narrow = narrowViewport()
+    try {
+      await openOverlayContents()
       fireEvent.keyDown(window, { key: 'Escape' })
-      await waitFor(() =>
-        expect(
-          screen.queryByRole('complementary', { name: 'Matter contents' }),
-        ).toBeNull(),
-      )
-      await waitFor(() =>
-        expect(document.activeElement).toBe(
-          screen.getByRole('button', { name: 'Show matter contents' }),
-        ),
-      )
+      await expectOverlayClosedWithFocusOnShow()
     } finally {
       narrow.mockRestore()
     }
