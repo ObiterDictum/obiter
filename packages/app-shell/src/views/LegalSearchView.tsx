@@ -99,8 +99,8 @@ export function LegalSearchView() {
       <header className="flex flex-col gap-6">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-3">
-            <h1 className="min-w-0 text-page text-ink">Search</h1>
             <PagePanelToggle />
+            <h1 className="min-w-0 text-page text-ink">Search</h1>
           </div>
           <p className="mt-2 max-w-[68ch] text-body text-muted">
             UK case law and legislation. Every result links to the source.

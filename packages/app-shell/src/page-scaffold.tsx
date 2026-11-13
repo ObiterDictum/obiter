@@ -27,8 +27,8 @@ export function PageScaffold({
       {compact ? (
         <header className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 @max-pane-wide:flex-col @max-pane-wide:items-stretch">
           <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1">
+            <PagePanelToggle className="self-center" />
             <h1 className="min-w-0 truncate text-section text-ink">{title}</h1>
-            <PagePanelToggle />
             {eyebrow ? (
               <p className="flex flex-wrap items-center gap-2 text-meta text-subtle">
                 {eyebrow}
@@ -48,10 +48,10 @@ export function PageScaffold({
               <p className="mb-1 text-meta text-subtle">{eyebrow}</p>
             ) : null}
             <div className="flex min-w-0 items-center gap-3">
+              <PagePanelToggle />
               <h1 className="min-w-0 text-page text-ink [text-wrap:balance]">
                 {title}
               </h1>
-              <PagePanelToggle />
             </div>
             {description ? (
               <div className="mt-2 max-w-[68ch] text-body text-muted">

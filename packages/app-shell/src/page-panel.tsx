@@ -1,4 +1,4 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
+import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
 import { SidebarSimple } from '@obiter/ui/icons'
 import { createContext, useContext, type ReactNode, type Ref } from 'react'
 import { ShortcutHint } from './shell-shortcuts'
@@ -29,8 +29,10 @@ export function PagePanelProvider({
 
 export function PagePanelToggle({
   site = 'page',
+  className,
 }: {
   site?: 'page' | 'panel'
+  className?: string
 }) {
   const panel = useContext(PagePanelContext)
   if (!panel) return null
@@ -47,7 +49,10 @@ export function PagePanelToggle({
             aria-controls={panel.controls}
             aria-expanded={panel.expanded}
             onClick={panel.toggle}
-            className="grid size-7 shrink-0 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className={cn(
+              'grid size-7 shrink-0 place-items-center rounded-md text-muted transition-colors duration-150 hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              className,
+            )}
           >
             <SidebarSimple size={16} aria-hidden />
           </button>
