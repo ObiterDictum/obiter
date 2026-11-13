@@ -330,8 +330,8 @@ const verifyRoute = createRoute({
   component: DesktopVerifyRoute,
 })
 
-const StaffRouteView = lazy(async () => ({
-  default: (await import('@obiter/app-shell/views/staff')).StaffRouteView,
+const StaffGateView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/staff-gate')).StaffGateView,
 }))
 const staffRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -343,7 +343,7 @@ const staffRoute = createRoute({
   },
   component: () => (
     <Suspense fallback={<RouteLoading />}>
-      <StaffRouteView />
+      <StaffGateView />
     </Suspense>
   ),
 })
@@ -357,7 +357,7 @@ const staffAccessRoute = createRoute({
   },
   component: () => (
     <Suspense fallback={<RouteLoading />}>
-      <StaffRouteView />
+      <StaffGateView />
     </Suspense>
   ),
 })

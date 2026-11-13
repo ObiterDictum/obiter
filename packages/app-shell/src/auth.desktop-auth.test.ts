@@ -23,6 +23,7 @@ bunMock.module('better-auth/react', () => ({
 
 bunMock.module('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
+  twoFactorClient: () => ({}),
 }))
 
 const bridge = {

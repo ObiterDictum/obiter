@@ -27,6 +27,7 @@ export * from './organisation'
 export * from './matter'
 export * from './person'
 export * from './saved-sources'
+export * from './two-factor'
 export * from './xml-text'
 export * from './verification'
 

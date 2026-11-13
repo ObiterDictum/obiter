@@ -53,6 +53,7 @@ export const API_ERROR_CODES = [
   'agent_key_rejected',
   'agent_model_unknown',
   'agent_provider_unreachable',
+  'staff_two_factor_required',
 ] as const
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number]

@@ -10,7 +10,8 @@
     "./api-error-response": "./src/api-error-response.ts",
     "./case-paths": "./src/case-paths.ts",
     "./legislation-paths": "./src/legislation-paths.ts",
-    "./limits": "./src/limits.ts"
+    "./limits": "./src/limits.ts",
+    "./two-factor": "./src/two-factor.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

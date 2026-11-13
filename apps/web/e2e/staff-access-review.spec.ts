@@ -3,7 +3,12 @@ import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { createAccount } from './document-journey'
-import { signIn } from './e13-support'
+import {
+  confirmTwoFactorEnrolment,
+  signIn,
+  signInWithTwoFactor,
+  startTwoFactorEnrolment,
+} from './e13-support'
 
 const { apiOrigin, databaseName } = resolveJourneyTargets()
 function sql(statement: string) {
@@ -44,6 +49,8 @@ test('staff approves an unknown domain and the applicant sets up an account', as
     page.getByRole('heading', { name: "We're confirming your organisation" }),
   ).toBeVisible()
   await signIn(page, staff.email, staff.password)
+  const totpSecret = await startTwoFactorEnrolment(page, staff.password)
+  await confirmTwoFactorEnrolment(page, totpSecret)
   await page.getByRole('link', { name: 'Staff', exact: true }).click()
   const group = page
     .locator('section')
@@ -57,6 +64,17 @@ test('staff approves an unknown domain and the applicant sets up an account', as
   await expect(page.getByText('1 request(s) updated.')).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(group).toHaveCount(0)
+  await page.evaluate(async (origin) => {
+    await fetch(`${origin}/api/auth/sign-out`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+  }, apiOrigin)
+  await signInWithTwoFactor(page, staff.email, staff.password, totpSecret)
+  await page.getByRole('link', { name: 'Staff', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Access review' }),
+  ).toBeVisible({ timeout: 15_000 })
   const messages = await request.get(
     `${apiOrigin}/__e2e/mailbox?email=${encodeURIComponent(email)}`,
   )

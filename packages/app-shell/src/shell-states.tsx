@@ -74,10 +74,13 @@ const NOT_FOUND_CODES = new Set([
   'invite_not_found',
 ])
 
-export type ShellFailure = 'error' | 'not-found' | 'forbidden'
+export type ShellFailure =
+  'error' | 'not-found' | 'forbidden' | 'staff-two-factor-required'
 
 export function classifyShellFailure(error: unknown): ShellFailure {
   if (!(error instanceof ApiError)) return 'error'
+  if (error.code === 'staff_two_factor_required')
+    return 'staff-two-factor-required'
   if (error.code === 'forbidden' || error.code === 'no_organisation')
     return 'forbidden'
   if (NOT_FOUND_CODES.has(error.code)) return 'not-found'
@@ -180,6 +183,31 @@ export function ShellPermissionDenied() {
   )
 }
 
+export function ShellStaffTwoFactorRequired() {
+  return (
+    <StatePage
+      tone="warning"
+      icon={<Lock size={20} aria-hidden />}
+      title="Staff accounts need two-factor authentication"
+      description="Your staff account must set up an authenticator app or backup codes before it can use staff tools. Set it up in Settings, then sign in again."
+      actions={
+        <>
+          <Link
+            to="/settings"
+            search={{ section: 'security' }}
+            className={linkClass.primary}
+          >
+            Open Security settings
+          </Link>
+          <Link to="/" className={linkClass.secondary}>
+            Go to Home
+          </Link>
+        </>
+      }
+    />
+  )
+}
+
 export function ShellError({
   error,
   reset,
@@ -190,6 +218,8 @@ export function ShellError({
   const failure = classifyShellFailure(error)
   if (failure === 'not-found') return <ShellNotFound />
   if (failure === 'forbidden') return <ShellPermissionDenied />
+  if (failure === 'staff-two-factor-required')
+    return <ShellStaffTwoFactorRequired />
 
   return (
     <StatePage

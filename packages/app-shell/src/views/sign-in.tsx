@@ -7,6 +7,7 @@ import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
 import { SegmentedControl } from '../segmented-control'
 import { AuthForm, AuthFoot, AuthHeading, AuthLayout } from './auth-layout'
+import { SignInTwoFactorStep } from './sign-in-two-factor'
 
 type Mode = 'password' | 'magic-link'
 
@@ -17,8 +18,12 @@ const MODES = [
 
 export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
-  const { signInWithEmail, requestMagicLink, resendVerificationEmail } =
-    useAuth()
+  const {
+    signInWithEmail,
+    verifyTwoFactorSignIn,
+    requestMagicLink,
+    resendVerificationEmail,
+  } = useAuth()
   // SAFETY: useSearch with strict:false is untyped; token is typeof-narrowed into inviteToken below and reset is compared against a literal.
   const search = useSearch({ strict: false }) as {
     reset?: string
@@ -39,6 +44,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   )
   const [submitting, setSubmitting] = useState(false)
   const [unverified, setUnverified] = useState(false)
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState(false)
 
   async function goToHome() {
     if (inviteToken) {
@@ -62,6 +68,13 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
       if (!result.ok) {
         setError(result.message ?? 'Sign-in failed.')
         setUnverified(result.code === 'EMAIL_NOT_VERIFIED')
+        return
+      }
+      if (result.twoFactor) {
+        setError(null)
+        setNotice(null)
+        setUnverified(false)
+        setTwoFactorChallenge(true)
         return
       }
       await goToHome()
@@ -97,6 +110,31 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   }
 
   const handleSubmit = mode === 'password' ? handlePassword : handleMagicLink
+
+  if (twoFactorChallenge) {
+    return (
+      <AuthLayout footnote="Need help? Contact your firm administrator.">
+        <AuthHeading
+          title="Two-factor authentication"
+          description="Your password was accepted. Confirm it is you with your second factor."
+        />
+        <SignInTwoFactorStep
+          onVerify={async (input) => {
+            const result = await verifyTwoFactorSignIn(input)
+            if (result.ok) {
+              await goToHome()
+              return { ok: true }
+            }
+            return { ok: false, message: result.message }
+          }}
+          onRestart={() => {
+            setTwoFactorChallenge(false)
+            setPassword('')
+          }}
+        />
+      </AuthLayout>
+    )
+  }
 
   return (
     <AuthLayout footnote="Need help? Contact your firm administrator.">

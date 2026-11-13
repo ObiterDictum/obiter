@@ -12,6 +12,8 @@ const mock = vi.hoisted(() => ({
   sendVerificationEmail: vi.fn(),
   useSession: vi.fn(),
   refetch: vi.fn(),
+  verifyTotp: vi.fn(),
+  verifyBackupCode: vi.fn(),
 }))
 
 bunMock.module('better-auth/react', () => ({
@@ -20,17 +22,29 @@ bunMock.module('better-auth/react', () => ({
     signIn: { email: mock.signInEmail },
     signOut: mock.signOutFn,
     sendVerificationEmail: mock.sendVerificationEmail,
+    twoFactor: {
+      verifyTotp: mock.verifyTotp,
+      verifyBackupCode: mock.verifyBackupCode,
+    },
   }),
 }))
 
 bunMock.module('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
+  twoFactorClient: () => ({}),
 }))
 
 const { useAuth } = await import('./auth')
 
-const { signInEmail, useSession, signOutFn, sendVerificationEmail, refetch } =
-  mock
+const {
+  signInEmail,
+  useSession,
+  signOutFn,
+  sendVerificationEmail,
+  refetch,
+  verifyTotp,
+  verifyBackupCode,
+} = mock
 
 function createWrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -182,6 +196,28 @@ describe('useAuth — sign-in success/failure', () => {
     })
   })
 
+  it('asks for the second factor when the server returns a two-factor redirect', async () => {
+    signInEmail.mockResolvedValueOnce({
+      error: null,
+      data: { twoFactorRedirect: true, twoFactorMethods: ['totp'] },
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.signInWithEmail({
+        email: 'staff@obiter.dev',
+        password: 'obiter-dev',
+      })
+    })
+
+    expect(outcome).toEqual({ ok: true, twoFactor: true })
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
   it('forwards EMAIL_NOT_VERIFIED so the sign-in screen can offer a resend', async () => {
     signInEmail.mockResolvedValueOnce({
       error: {
@@ -207,6 +243,116 @@ describe('useAuth — sign-in success/failure', () => {
       ok: false,
       message: 'Email not verified',
       code: 'EMAIL_NOT_VERIFIED',
+    })
+  })
+})
+
+describe('useAuth — two-factor sign-in verification', () => {
+  it('verifies a TOTP code and refreshes the session', async () => {
+    verifyTotp.mockResolvedValueOnce({ error: null, data: { token: 'tok' } })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.verifyTwoFactorSignIn({ code: '123456' })
+    })
+
+    expect(verifyTotp).toHaveBeenCalledWith({ code: '123456' })
+    expect(refetch).toHaveBeenCalledTimes(1)
+    expect(outcome).toEqual({ ok: true })
+  })
+
+  it('verifies a backup code through the backup-code endpoint', async () => {
+    verifyBackupCode.mockResolvedValueOnce({
+      error: null,
+      data: { token: 'tok' },
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    await act(async () => {
+      await result.current.verifyTwoFactorSignIn({
+        code: 'abcd-efgh',
+        backupCode: true,
+      })
+    })
+
+    expect(verifyBackupCode).toHaveBeenCalledWith({ code: 'abcd-efgh' })
+    expect(verifyTotp).not.toHaveBeenCalled()
+  })
+
+  it('explains a wrong code without exposing server detail', async () => {
+    verifyTotp.mockResolvedValueOnce({
+      error: { message: 'Invalid code', code: 'INVALID_CODE' },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.verifyTwoFactorSignIn({ code: '000000' })
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'That code is not correct. Check it and try again.',
+      code: 'INVALID_CODE',
+    })
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
+  it('tells the user to restart sign-in after too many attempts', async () => {
+    verifyTotp.mockResolvedValueOnce({
+      error: {
+        message: 'Too many attempts',
+        code: 'TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE',
+      },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.verifyTwoFactorSignIn({ code: '000000' })
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'Too many incorrect attempts. Start sign-in again.',
+      code: 'TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE',
+    })
+  })
+
+  it('reports an expired challenge cookie', async () => {
+    verifyTotp.mockResolvedValueOnce({
+      error: { message: 'Bad cookie', code: 'INVALID_TWO_FACTOR_COOKIE' },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.verifyTwoFactorSignIn({ code: '123456' })
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'Your sign-in timed out. Start again.',
+      code: 'INVALID_TWO_FACTOR_COOKIE',
     })
   })
 })
