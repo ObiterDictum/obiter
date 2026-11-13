@@ -7,7 +7,8 @@ import {
   formatTick,
   linePoints,
   niceMax,
-  orgBars,
+  orgChart,
+  orgFoldText,
   seriesMax,
   sparklinePoints,
   weekDelta,
@@ -172,27 +173,27 @@ function organisation(
   }
 }
 
-describe('orgBars', () => {
+describe('orgChart', () => {
   it('sorts organisations by the chosen metric, largest first', () => {
-    const bars = orgBars(
+    const chart = orgChart(
       [
         organisation({ name: 'Beta', activeUsers: 2, documentsSaved: 9 }),
         organisation({ name: 'Alpha', activeUsers: 8, documentsSaved: 1 }),
       ],
       'activeUsers',
     )
-    expect(bars.map((bar) => bar.label)).toEqual(['Alpha', 'Beta'])
-    const saved = orgBars(
+    expect(chart.bars.map((bar) => bar.label)).toEqual(['Alpha', 'Beta'])
+    const saved = orgChart(
       [
         organisation({ name: 'Beta', activeUsers: 2, documentsSaved: 9 }),
         organisation({ name: 'Alpha', activeUsers: 8, documentsSaved: 1 }),
       ],
       'documentsSaved',
     )
-    expect(saved.map((bar) => bar.label)).toEqual(['Beta', 'Alpha'])
+    expect(saved.bars.map((bar) => bar.label)).toEqual(['Beta', 'Alpha'])
   })
 
-  it('folds organisations past the tenth into a single Other bar', () => {
+  it('keeps only the top ten bars and folds the rest into a count and total', () => {
     const orgs = Array.from({ length: 13 }, (_, index) =>
       organisation({
         name: `Org ${String(index).padStart(2, '0')}`,
@@ -200,21 +201,43 @@ describe('orgBars', () => {
         activeUsers: 13 - index,
       }),
     )
-    const bars = orgBars(orgs, 'activeUsers')
-    expect(bars).toHaveLength(11)
-    expect(bars[9].label).toBe('Org 09')
-    const other = bars[10]
-    expect(other.label).toBe('Other (3 organisations)')
-    expect(other.value).toBe(3 + 2 + 1)
-    expect(other.organisations).toBe(3)
+    const chart = orgChart(orgs, 'activeUsers')
+    expect(chart.bars).toHaveLength(10)
+    expect(chart.bars[9].label).toBe('Org 09')
+    expect(chart.fold).toEqual({ organisations: 3, total: 3 + 2 + 1 })
   })
 
-  it('keeps every organisation when ten or fewer qualify', () => {
-    const bars = orgBars(
+  it('scales bars to the largest shown bar, not the folded total', () => {
+    const orgs = Array.from({ length: 12 }, (_, index) =>
+      organisation({
+        name: `Org ${String(index).padStart(2, '0')}`,
+        organisationId: `org_${index}`,
+        activeUsers: index === 0 ? 100 : 10,
+      }),
+    )
+    const chart = orgChart(orgs, 'activeUsers')
+    expect(chart.max).toBe(100)
+    expect(chart.fold).toEqual({ organisations: 2, total: 20 })
+  })
+
+  it('has no fold when ten or fewer organisations qualify', () => {
+    const chart = orgChart(
       [organisation({ name: 'Solo', activeUsers: 3 })],
       'activeUsers',
     )
-    expect(bars).toHaveLength(1)
-    expect(bars[0].organisations).toBe(1)
+    expect(chart.bars).toHaveLength(1)
+    expect(chart.fold).toBeNull()
+    expect(chart.max).toBe(3)
+  })
+})
+
+describe('orgFoldText', () => {
+  it('names the folded organisations and their metric total', () => {
+    expect(orgFoldText({ organisations: 8, total: 19 }, 'Active users')).toBe(
+      '8 more organisations, 19 active users in total',
+    )
+    expect(orgFoldText({ organisations: 1, total: 4 }, 'Verify runs')).toBe(
+      '1 more organisation, 4 verify runs in total',
+    )
   })
 })

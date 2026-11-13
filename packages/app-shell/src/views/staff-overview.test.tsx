@@ -133,7 +133,8 @@ it('shows each overview figure and links it to its staff screen', async () => {
   }
   expect(access.getAttribute('href')).toContain('/staff/access')
   expect(feedback.getAttribute('href')).toContain('/staff/feedback')
-  expect(within(usageCards[0]).getByText('4')).toBeTruthy()
+  const accounts = screen.getByRole('link', { name: /New accounts/ })
+  expect(within(accounts).getByText('4')).toBeTruthy()
   client.clear()
 })
 
@@ -160,6 +161,36 @@ it('draws a sparkline and week-on-week change on trend tiles only', async () => 
     within(organisations).queryByRole('img', { name: /per week/ }),
   ).toBeNull()
   expect(within(organisations).queryByText(/previous week/)).toBeNull()
+  client.clear()
+})
+
+it('orders the two trend tiles ahead of the three number tiles', async () => {
+  const client = renderOverview(true)
+  await screen.findByRole('link', { name: /Active users/ })
+  const titles = screen
+    .getAllByRole('link')
+    .map((link) => link.textContent ?? '')
+    .filter((text) =>
+      /Active users|New accounts|Access review|Feedback|New organisations/.test(
+        text,
+      ),
+    )
+    .map((text) =>
+      [
+        'Active users',
+        'New accounts',
+        'Access review',
+        'Feedback',
+        'New organisations',
+      ].find((title) => text.includes(title)),
+    )
+  expect(titles).toEqual([
+    'Active users',
+    'New accounts',
+    'Access review',
+    'Feedback',
+    'New organisations',
+  ])
   client.clear()
 })
 

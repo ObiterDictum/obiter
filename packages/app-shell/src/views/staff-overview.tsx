@@ -73,49 +73,54 @@ function trendTile(
 function overviewTiles(
   data: StaffOverviewResponse,
   weeks: StaffUsageWeek[] | undefined,
-): OverviewTile[] {
+) {
   const { accessReview, feedback, accounts, organisations, activeUsers } = data
-  return [
-    {
-      to: '/staff/access',
-      title: 'Access review',
-      value: String(accessReview.waiting),
-      note:
-        accessReview.waiting === 0
-          ? 'Nobody is waiting for review'
-          : accessReview.oldestWaitingAt
-            ? `Oldest wait ${formatRelativeTime(accessReview.oldestWaitingAt)}`
-            : undefined,
-    },
-    {
-      to: '/staff/feedback',
-      title: 'Feedback',
-      value: String(feedback.unread),
-      note: feedback.unread === 0 ? 'No unread feedback' : 'Newest first',
-    },
-    trendTile(
-      '/staff/usage',
-      'New accounts',
-      String(accounts.last7Days),
-      weeks,
-      (week) => week.newAccounts,
-      SERIES_COLOURS[1],
-    ),
-    {
-      to: '/staff/usage',
-      title: 'New organisations',
-      value: String(organisations.last7Days),
-      caption: 'last 7 days',
-    },
-    trendTile(
-      '/staff/usage',
-      'Active users',
-      String(activeUsers.last7Days),
-      weeks,
-      (week) => week.activeUsers,
-      SERIES_COLOURS[0],
-    ),
-  ]
+  return {
+    trends: [
+      trendTile(
+        '/staff/usage',
+        'Active users',
+        String(activeUsers.last7Days),
+        weeks,
+        (week) => week.activeUsers,
+        SERIES_COLOURS[0],
+      ),
+      trendTile(
+        '/staff/usage',
+        'New accounts',
+        String(accounts.last7Days),
+        weeks,
+        (week) => week.newAccounts,
+        SERIES_COLOURS[1],
+      ),
+    ],
+    figures: [
+      {
+        to: '/staff/access',
+        title: 'Access review',
+        value: String(accessReview.waiting),
+        note:
+          accessReview.waiting === 0
+            ? 'Nobody is waiting for review'
+            : accessReview.oldestWaitingAt
+              ? `Oldest wait ${formatRelativeTime(accessReview.oldestWaitingAt)}`
+              : undefined,
+      },
+      {
+        to: '/staff/feedback',
+        title: 'Feedback',
+        value: String(feedback.unread),
+        note: feedback.unread === 0 ? 'No unread feedback' : 'Newest first',
+      },
+      {
+        to: '/staff/usage',
+        title: 'New organisations',
+        value: String(organisations.last7Days),
+        caption: 'last 7 days',
+        note: `${organisations.last30Days} in the last 30 days`,
+      },
+    ],
+  }
 }
 
 function DeltaMark({ delta }: { delta: OverviewDelta }) {
@@ -149,7 +154,7 @@ function StatTile({ tile }: { tile: OverviewTile }) {
   return (
     <Link
       to={tile.to}
-      className="flex min-w-0 flex-col gap-2 rounded-lg bg-surface p-5 transition-colors hover:bg-fill focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="flex h-full min-w-0 flex-col gap-2 rounded-lg bg-surface p-5 transition-colors hover:bg-fill focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       <span className="text-meta text-muted">{tile.title}</span>
       <span className="flex items-baseline gap-2">
@@ -163,7 +168,7 @@ function StatTile({ tile }: { tile: OverviewTile }) {
           <span className="flex h-4 items-center">
             {tile.delta ? <DeltaMark delta={tile.delta} /> : null}
           </span>
-          <span className="block h-9">
+          <span className="mt-auto block h-12">
             <Sparkline
               values={tile.trend.values}
               colour={tile.trend.colour}
@@ -178,6 +183,30 @@ function StatTile({ tile }: { tile: OverviewTile }) {
   )
 }
 
+function StaffTiles({
+  data,
+  weeks,
+}: {
+  data: StaffOverviewResponse
+  weeks: StaffUsageWeek[] | undefined
+}) {
+  const { trends, figures } = overviewTiles(data, weeks)
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-4 @pane:grid-cols-2">
+        {trends.map((tile) => (
+          <StatTile key={tile.title} tile={tile} />
+        ))}
+      </div>
+      <div className="grid gap-4 @pane:grid-cols-3">
+        {figures.map((tile) => (
+          <StatTile key={tile.title} tile={tile} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function StaffOverview() {
   const overview = useQuery(staffOverviewQueryOptions())
   const usage = useQuery(staffUsageQueryOptions(SPARKLINE_WEEKS))
@@ -187,22 +216,24 @@ function StaffOverview() {
       description="The state of the service at a glance. Each figure opens the screen behind it."
     >
       {overview.isPending ? (
-        <div className="grid gap-4 @pane:grid-cols-2 @pane-wide:grid-cols-3">
-          {[0, 1, 2, 3, 4].map((index) => (
-            <Skeleton key={index} className="h-36" />
-          ))}
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-4 @pane:grid-cols-2">
+            <Skeleton className="h-48" />
+            <Skeleton className="h-48" />
+          </div>
+          <div className="grid gap-4 @pane:grid-cols-3">
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+          </div>
         </div>
       ) : overview.isError ? (
         <ErrorNotice message="Could not load the overview." />
       ) : (
-        <div className="grid gap-4 @pane:grid-cols-2 @pane-wide:grid-cols-3">
-          {overviewTiles(
-            overview.data,
-            usage.data?.weeks?.slice(-SPARKLINE_WEEKS),
-          ).map((tile) => (
-            <StatTile key={tile.title} tile={tile} />
-          ))}
-        </div>
+        <StaffTiles
+          data={overview.data}
+          weeks={usage.data?.weeks?.slice(-SPARKLINE_WEEKS)}
+        />
       )}
     </PageScaffold>
   )

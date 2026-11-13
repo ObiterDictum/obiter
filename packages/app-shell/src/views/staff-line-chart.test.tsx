@@ -16,13 +16,13 @@ const series = [
   {
     key: 'activeUsers',
     label: 'Active users',
-    colour: 'var(--obiter-reviewer-1)',
+    colour: 'var(--obiter-chart-1)',
     values: [10, 14, 12],
   },
   {
     key: 'newAccounts',
     label: 'New accounts',
-    colour: 'var(--obiter-reviewer-4)',
+    colour: 'var(--obiter-chart-2)',
     dashed: true,
     values: [2, 3, 1],
   },
@@ -82,6 +82,15 @@ it('hides the tooltip when the pointer leaves the plot', () => {
   expect(screen.getByRole('tooltip')).toBeTruthy()
   fireEvent.pointerLeave(hitArea)
   expect(screen.queryByRole('tooltip')).toBeNull()
+})
+
+it('draws at the fallback width when no resize observer exists', () => {
+  const { container } = render(
+    <LineChart categories={categories} series={series} ariaLabel="chart" />,
+  )
+  const svg = container.querySelector('svg')
+  expect(svg?.getAttribute('viewBox')).toBe('0 0 640 240')
+  expect(svg?.getAttribute('width')).toBe('640')
 })
 
 it('keeps a hidden data table for screen readers and table views', () => {

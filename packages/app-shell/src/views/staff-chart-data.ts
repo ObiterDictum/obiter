@@ -1,11 +1,11 @@
 import type { StaffUsageOrganisation, StaffUsageWeek } from '@obiter/contracts'
 
 export const SERIES_COLOURS = [
-  'var(--obiter-reviewer-1)',
-  'var(--obiter-reviewer-4)',
+  'var(--obiter-chart-1)',
+  'var(--obiter-chart-2)',
 ] as const
 
-export const CHART_SURFACE = 'var(--obiter-canvas)'
+export const CHART_SURFACE = 'var(--obiter-surface-raised)'
 
 export interface LineSeries {
   key: string
@@ -203,35 +203,49 @@ export interface OrgBar {
   id: string
   label: string
   value: number
+}
+
+export interface OrgFold {
   organisations: number
+  total: number
+}
+
+export interface OrgChart {
+  bars: OrgBar[]
+  fold: OrgFold | null
+  max: number
 }
 
 const ORG_BAR_LIMIT = 10
 
-export function orgBars(
+export function orgChart(
   organisations: StaffUsageOrganisation[],
   metric: OrgMetricKey,
-): OrgBar[] {
+): OrgChart {
   const sorted = [...organisations].sort(
     (a, b) => b[metric] - a[metric] || a.name.localeCompare(b.name),
   )
   const top = sorted.slice(0, ORG_BAR_LIMIT)
   const rest = sorted.slice(ORG_BAR_LIMIT)
-  const bars: OrgBar[] = top.map((org) => ({
-    id: org.organisationId,
-    label: org.name,
-    value: org[metric],
-    organisations: 1,
-  }))
-  if (rest.length > 0) {
-    bars.push({
-      id: 'other',
-      label: `Other (${rest.length} ${
-        rest.length === 1 ? 'organisation' : 'organisations'
-      })`,
-      value: rest.reduce((sum, org) => sum + org[metric], 0),
-      organisations: rest.length,
-    })
+  return {
+    bars: top.map((org) => ({
+      id: org.organisationId,
+      label: org.name,
+      value: org[metric],
+    })),
+    fold:
+      rest.length > 0
+        ? {
+            organisations: rest.length,
+            total: rest.reduce((sum, org) => sum + org[metric], 0),
+          }
+        : null,
+    max: Math.max(1, ...top.map((org) => org[metric])),
   }
-  return bars
+}
+
+export function orgFoldText(fold: OrgFold, metricLabel: string): string {
+  return `${fold.organisations} more ${
+    fold.organisations === 1 ? 'organisation' : 'organisations'
+  }, ${formatCount(fold.total)} ${metricLabel.toLowerCase()} in total`
 }

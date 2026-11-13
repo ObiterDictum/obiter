@@ -1,5 +1,6 @@
 import { useState, type PointerEvent, type ReactNode } from 'react'
 import { formatDate } from '../format'
+import { useElementWidth } from '../use-element-width'
 import {
   CHART_SURFACE,
   COMPACT_CHART,
@@ -16,43 +17,10 @@ import {
   type ChartGeometry,
   type LineSeries,
 } from './staff-chart-data'
+import { endLabelInset, endMarks } from './staff-end-labels'
 
 const GRID_FRACTIONS = [0, 0.25, 0.5, 0.75, 1]
 const COMPACT_GRID_FRACTIONS = [0, 0.5, 1]
-const LABEL_GAP = 14
-
-interface EndMark {
-  series: LineSeries
-  x: number
-  y: number
-  labelY: number
-}
-
-function endMarks(
-  series: LineSeries[],
-  max: number,
-  count: number,
-  geometry: ChartGeometry,
-): EndMark[] {
-  const marks = series.map((item) => ({
-    series: item,
-    x: xAt(count - 1, count, geometry),
-    y: yAt(item.values[count - 1] ?? 0, max, geometry),
-    labelY: 0,
-  }))
-  const ordered = [...marks].sort((a, b) => a.y - b.y)
-  const floor = geometry.top + 10
-  const ceiling = geometry.top + plotHeight(geometry) - 2
-  let previous = -Infinity
-  for (const mark of ordered) {
-    mark.labelY = Math.min(
-      Math.max(mark.y + 13, previous + LABEL_GAP, floor),
-      ceiling,
-    )
-    previous = mark.labelY
-  }
-  return marks
-}
 
 export function LineChart({
   categories,
@@ -74,7 +42,14 @@ export function LineChart({
   table?: ReactNode
 }) {
   const [hover, setHover] = useState<number | null>(null)
-  const geometry = variant === 'compact' ? COMPACT_CHART : FULL_CHART
+  const base = variant === 'compact' ? COMPACT_CHART : FULL_CHART
+  const { ref, width: measuredWidth } = useElementWidth(base.width)
+  const inset = series.length > 1 ? endLabelInset(series) : null
+  const geometry: ChartGeometry = {
+    ...base,
+    width: measuredWidth,
+    right: inset ?? base.right,
+  }
   const { width, height, left, right, top } = geometry
   const plotW = plotWidth(geometry)
   const plotH = plotHeight(geometry)
@@ -110,12 +85,14 @@ export function LineChart({
       {title ? (
         <figcaption className={titleClassName}>{title}</figcaption>
       ) : null}
-      <div className="relative">
+      <div ref={ref} className="relative">
         <svg
           viewBox={`0 0 ${width} ${height}`}
+          width={width}
+          height={height}
           role="img"
           aria-label={ariaLabel}
-          className="block h-auto w-full"
+          className="block"
         >
           {fractions.map((fraction) => {
             const y = top + plotH * (1 - fraction)
@@ -193,9 +170,9 @@ export function LineChart({
           {ends.map((mark) => (
             <text
               key={mark.series.key}
-              x={mark.x - 6}
+              x={mark.labelX}
               y={mark.labelY}
-              textAnchor="end"
+              dominantBaseline="middle"
               className="fill-ink text-caption"
             >
               {mark.series.label}

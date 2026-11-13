@@ -61,6 +61,8 @@ Source of truth is `packages/ui/src/tokens.css`, consumed by Tailwind v4 via `@t
 
 The canvas is `--obiter-canvas`: the solid colour behind every pane, warm in light and darker than the panes in dark. Additional surfaces: `--obiter-inset` (charcoal document surround in dark), `--obiter-fill`, `--obiter-fill-hover`, `--obiter-paper`, `--obiter-paper-ink`, `--obiter-paper-muted`. Paper stays near-white in both themes. Interaction washes: `--obiter-hover`, `--obiter-brand-hover`, `--obiter-brand-soft`. Status tints: `--obiter-status-{info,success,warning,danger}-soft`.
 
+Chart series use `--obiter-chart-{1,2,3,4}` (defined per theme, assigned in fixed order and never cycled). They are for data series only and never for status.
+
 ### 2.2 Status (defined per theme, each with `-fg` for text-on-fill)
 
 `--obiter-status-info`, `--obiter-status-success`, `--obiter-status-warning`, `--obiter-status-danger` (each with a matching `--obiter-status-*-fg`).
