@@ -65,7 +65,7 @@ export function ShellMenuButton({
           </button>
         }
       />
-      <DialogContent className="inset-0 left-0 top-0 h-dvh w-full max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 shadow-none">
+      <DialogContent className="inset-0 left-0 top-0 h-dvh max-h-none w-full max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 shadow-none">
         <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-8 overflow-y-auto px-6 py-10">
           <DialogTitle className="text-page text-ink">Obiter</DialogTitle>
 
