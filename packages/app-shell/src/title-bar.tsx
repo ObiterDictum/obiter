@@ -54,7 +54,9 @@ export function TitleBar({
   })
   const variant = focusMode ? 'sidebar' : chrome
   const clearsTrafficLights =
-    platform === 'desktop' && useIsMacPlatform() && variant !== 'sidebar'
+    platform === 'desktop' &&
+    useIsMacPlatform() &&
+    (focusMode || chrome !== 'sidebar')
 
   if (variant === 'tabs') {
     return (
@@ -88,7 +90,8 @@ export function TitleBar({
   return (
     <header
       className={cn(
-        'flex h-10 shrink-0 items-center gap-1 pr-2 max-md:pl-2',
+        'flex h-10 shrink-0 items-center gap-1 pr-2',
+        clearsTrafficLights ? 'pl-20' : 'max-md:pl-2',
         platform === 'desktop' && 'app-drag',
       )}
     >

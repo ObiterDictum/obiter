@@ -236,6 +236,7 @@ describe('shell frame', () => {
 
   it('hides only the contents panel from the toggle beside the page title', async () => {
     renderShell('/matters/mtr_1')
+    await screen.findAllByText('Harrington Vale LLP')
     fireEvent.click(
       await screen.findByRole('button', { name: 'Hide matter contents' }),
     )
@@ -437,6 +438,7 @@ describe('shell frame', () => {
 
   it('fades the panes into focus mode and returns focus to the panel toggle on Escape', async () => {
     renderShell('/matters/mtr_1')
+    await screen.findAllByText('Harrington Vale LLP')
     await screen.findByRole('button', { name: 'Hide matter contents' })
     fireEvent.keyDown(window, { key: '.', ctrlKey: true })
 
