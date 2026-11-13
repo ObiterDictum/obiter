@@ -10,7 +10,9 @@ import {
 } from '@obiter/ui'
 import type { OwnedMatter } from '@obiter/contracts'
 import { useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { ApiError } from '../api'
+import { useAuth } from '../auth'
 import { useMemberOwnedMatters } from '../matter-ownership'
 import {
   useLeaveOrganisation,
@@ -30,6 +32,8 @@ export function LeaveOrganisationDialog({
   const owned = useMemberOwnedMatters(organisationId, selfId)
   const members = useOrganisationMembers(organisationId)
   const leave = useLeaveOrganisation(organisationId)
+  const { signOut } = useAuth()
+  const navigate = useNavigate()
   const [owners, setOwners] = useState<Record<string, string>>({})
   const [uncovered, setUncovered] = useState<OwnedMatter[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -63,6 +67,8 @@ export function LeaveOrganisationDialog({
         })),
       })
       onClose()
+      await signOut().catch(() => undefined)
+      void navigate({ to: '/sign-in' })
     } catch (cause) {
       setError(
         cause instanceof ApiError

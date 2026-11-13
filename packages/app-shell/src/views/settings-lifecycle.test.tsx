@@ -1,7 +1,13 @@
 import '@obiter/test-dom'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
-import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import type { MeResponse, OrganisationMember } from '@obiter/contracts'
 
 const mocks = vi.hoisted(() => ({
@@ -11,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   useUpdateProfile: vi.fn(),
   useAuth: vi.fn(),
   navigate: vi.fn(),
+  signOut: vi.fn(),
   updateRole: vi.fn(),
   transferOwnership: vi.fn(),
   leaveOrganisation: vi.fn(),
@@ -122,6 +129,7 @@ function signedIn(user: MeResponse = OWNER_ME) {
     changeEmail: vi.fn().mockResolvedValue({ ok: true }),
     deleteAccount: vi.fn().mockResolvedValue({ ok: true }),
     changePassword: vi.fn().mockResolvedValue({ ok: true }),
+    signOut: mocks.signOut.mockResolvedValue(undefined),
   })
 }
 
@@ -203,6 +211,27 @@ describe('SettingsRouteView — ownership and leaving', () => {
         name: 'Transfer ownership',
       }),
     ).toBeNull()
+  })
+
+  it('ends the local session and routes to sign-in once a member has left', async () => {
+    signedIn(MEMBER_ME)
+    renderSettings()
+    const organisation = await openSection('Organisation')
+
+    fireEvent.click(
+      within(organisation).getByRole('button', {
+        name: 'Leave organisation',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Leave organisation' }),
+    )
+
+    await waitFor(() => {
+      expect(mocks.signOut).toHaveBeenCalled()
+      expect(mocks.navigate).toHaveBeenCalledWith({ to: '/sign-in' })
+    })
   })
 })
 
