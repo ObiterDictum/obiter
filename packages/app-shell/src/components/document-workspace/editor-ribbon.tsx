@@ -11,7 +11,6 @@ import {
   MenuContent,
   MenuRadioGroup,
   MenuTrigger,
-  StatusDot,
   cn,
 } from '@obiter/ui'
 import {
@@ -40,6 +39,7 @@ import type {
   EditorMenuGroup,
   EditorMenuId,
 } from './editor-commands'
+import { ALL_COMMANDS_SHORTCUT } from './editor-commands'
 
 const FILE_MENU_ID: EditorMenuId = 'file'
 const DEFAULT_TAB_ID: EditorMenuId = 'format'
@@ -124,6 +124,9 @@ export function EditorRibbon({
             )
           })}
         </div>
+        <div className="ms-auto flex shrink-0 items-center">
+          <AllCommands onOpenPalette={onOpenPalette} />
+        </div>
       </div>
       <div
         data-editor-toolbar
@@ -145,19 +148,6 @@ export function EditorRibbon({
             ))}
           </div>
         ) : null}
-        <div className="ms-auto flex shrink-0 items-center gap-1">
-          {props.trackChanges ? (
-            <span
-              data-track-changes="on"
-              className="inline-flex shrink-0 items-center rounded-sm bg-fill px-2 py-1"
-            >
-              <StatusDot tone="info" className="text-caption">
-                Track changes on
-              </StatusDot>
-            </span>
-          ) : null}
-          <AllCommands onOpenPalette={onOpenPalette} />
-        </div>
       </div>
     </div>
   )
@@ -165,12 +155,12 @@ export function EditorRibbon({
 
 function AllCommands({ onOpenPalette }: { onOpenPalette: () => void }) {
   const isMac = useIsMacPlatform()
-  const shortcut = formatShortcut(['primary', 'K'], isMac)
+  const shortcut = formatShortcut(ALL_COMMANDS_SHORTCUT, isMac)
   return (
     <EditorIconButton
       label="All commands"
       hint={`All commands (${shortcut})`}
-      keyshortcuts={shortcutAttribute(['primary', 'K'], isMac)}
+      keyshortcuts={shortcutAttribute(ALL_COMMANDS_SHORTCUT, isMac)}
       onClick={onOpenPalette}
       className="w-auto px-1.5"
       icon={

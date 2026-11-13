@@ -73,7 +73,7 @@ function MatterTabsPaneBody({
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col bg-surface">
       <Suspense fallback={null}>
         <MatterTabStrip
           platform={platform}
@@ -82,7 +82,7 @@ function MatterTabsPaneBody({
         />
       </Suspense>
       <SplitScaleProvider active={Boolean(sideId)} zoom={zoom} onZoom={setZoom}>
-        <div className="relative flex min-h-0 flex-1">
+        <div className="relative mx-2 mb-2 flex min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-raised">
           <div
             className="min-h-0 min-w-0 overflow-y-auto"
             style={
@@ -123,7 +123,7 @@ function MatterTabsPaneBody({
           ) : null}
         </div>
       </SplitScaleProvider>
-    </>
+    </div>
   )
 }
 

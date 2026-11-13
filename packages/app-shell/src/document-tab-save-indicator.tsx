@@ -1,4 +1,10 @@
-import { Tooltip, TooltipContent, TooltipTrigger, cn } from '@obiter/ui'
+import {
+  StatusDot,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  cn,
+} from '@obiter/ui'
 import { Warning } from '@obiter/ui/icons'
 import type { SaveStateLabel } from './components/document-workspace/document-save-state'
 
@@ -35,6 +41,24 @@ export function SaveStateMark({
         className,
       )}
     />
+  )
+}
+
+export function DocumentTrackChangesMark({
+  trackChanges,
+}: {
+  trackChanges: boolean
+}) {
+  if (!trackChanges) return null
+  return (
+    <span
+      data-track-changes="on"
+      className="inline-flex shrink-0 items-center self-center rounded-sm bg-fill px-2 py-0.5"
+    >
+      <StatusDot tone="info" className="text-caption">
+        Track changes on
+      </StatusDot>
+    </span>
   )
 }
 

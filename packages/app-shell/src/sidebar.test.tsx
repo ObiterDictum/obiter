@@ -371,11 +371,22 @@ describe('Sidebar', () => {
     expect(brand?.textContent).toContain('Harrington Vale LLP')
   })
 
+  it('gives the search field a spacing step clear of the brand row and the module list', async () => {
+    renderSidebar('/')
+    const field = await screen.findByRole('button', { name: 'Search Obiter' })
+    const brand = field.previousElementSibling
+    const modules = field.nextElementSibling
+
+    expect(brand?.className).toContain('mb-1')
+    expect(modules?.className).toContain('mt-1')
+  })
+
   it('puts the monogram on the title bar row rather than a padded strip below it', async () => {
     renderSidebar('/')
     const sidebar = await screen.findByRole('complementary', {
       name: 'Workspace',
     })
+    expect(sidebar.className).toContain('pt-1')
     expect(sidebar.className).not.toContain('pt-10')
   })
 })

@@ -79,7 +79,7 @@ export function MatterTabButton({
       onDoubleClick={() => promote(tab.id)}
       className={cn(
         'flex min-w-0 items-center text-meta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-        pinned ? 'px-2.5' : 'gap-2 py-1.5 pr-1 pl-2.5',
+        pinned ? 'h-full px-2.5' : 'h-full gap-2 pr-1 pl-2.5',
       )}
     >
       <TabIcon kind={tab.kind} />
@@ -116,10 +116,10 @@ export function MatterTabButton({
               close(tab.id)
             }}
             className={cn(
-              'group -mb-px flex min-w-0 shrink-0 items-center rounded-t-lg border border-transparent',
+              'group flex h-7 min-w-0 shrink-0 items-center rounded-md border transition-colors duration-150',
               active
-                ? 'border-line border-b-transparent bg-raised text-ink'
-                : 'text-muted hover:bg-hover hover:text-ink',
+                ? 'border-line bg-raised text-ink shadow-sm'
+                : 'border-transparent text-muted hover:bg-hover hover:text-ink',
             )}
           >
             {pinned ? (

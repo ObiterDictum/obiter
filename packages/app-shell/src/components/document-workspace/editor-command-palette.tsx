@@ -9,7 +9,7 @@ import {
   cn,
 } from '@obiter/ui'
 import type { EditorCommand, EditorMenu } from './editor-commands'
-import { editorCommandList } from './editor-commands'
+import { ALL_COMMANDS_SHORTCUT, editorCommandList } from './editor-commands'
 import {
   formatShortcut,
   shortcutLabels,
@@ -157,7 +157,7 @@ const SHORTCUTS: ReadonlyArray<{ keys: readonly string[]; action: string }> = [
   { keys: ['primary', 'S'], action: 'Save' },
   { keys: ['primary', 'Z'], action: 'Undo' },
   { keys: ['primary', 'shift', 'Z'], action: 'Redo' },
-  { keys: ['primary', 'K'], action: 'All commands' },
+  { keys: ALL_COMMANDS_SHORTCUT, action: 'All commands' },
   { keys: ['primary', 'F'], action: 'Find and replace' },
   { keys: ['primary', 'P'], action: 'Print' },
   { keys: ['primary', 'alt', 'F'], action: 'Insert footnote' },

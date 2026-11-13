@@ -1,6 +1,6 @@
 import '@obiter/test-dom'
 import { afterEach, describe, expect, it } from 'bun:test'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { EditorCommandPalette } from './editor-command-palette'
 import type { EditorMenu } from './editor-commands'
 
@@ -34,6 +34,13 @@ const menus: readonly EditorMenu[] = [
   },
 ]
 
+function shortcutOf(help: HTMLElement, action: string) {
+  const row = within(help).getByText(action).closest('div')
+  return Array.from(row?.querySelectorAll('kbd') ?? []).map((key) =>
+    key.textContent?.trim(),
+  )
+}
+
 function openPalette() {
   render(
     <EditorCommandPalette open onOpenChange={() => undefined} menus={menus} />,
@@ -51,6 +58,7 @@ describe('the editor command palette', () => {
     openPalette()
     const help = screen.getByLabelText('Keyboard shortcuts')
     expect(help.textContent).toContain('⇧')
+    expect(shortcutOf(help, 'All commands')).toEqual(['⌘', '⇧', 'P'])
     expect(help.textContent).not.toContain('Ctrl')
     expect(help.textContent).not.toContain('Shift')
   })
@@ -61,6 +69,7 @@ describe('the editor command palette', () => {
     const help = screen.getByLabelText('Keyboard shortcuts')
     expect(help.textContent).toContain('Ctrl')
     expect(help.textContent).toContain('Shift')
+    expect(shortcutOf(help, 'All commands')).toEqual(['Ctrl', 'Shift', 'P'])
     expect(help.textContent).not.toContain('⌘')
     expect(help.textContent).not.toContain('⇧')
   })

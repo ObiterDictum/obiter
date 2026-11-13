@@ -21,7 +21,7 @@
     },
     "apps/desktop": {
       "name": "@obiter/desktop",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@obiter/app-shell": "workspace:*",
         "@obiter/redact-ui": "workspace:*",

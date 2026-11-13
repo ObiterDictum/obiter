@@ -155,7 +155,7 @@ describe('ribbon commands', () => {
 })
 
 describe('ribbon track changes', () => {
-  it('shows the on-state in the quick access row when the version tracks revisions', () => {
+  it('keeps the tracking indicator out of the ribbon row', () => {
     mountWorkspace({
       models: {
         doc_1: {
@@ -165,17 +165,18 @@ describe('ribbon track changes', () => {
       },
     })
 
-    expect(screen.getByText('Track changes on')).toBeTruthy()
+    const toolbar = screen.getByRole('toolbar', { name: 'Document toolbar' })
+    expect(toolbar.textContent).not.toContain('Track changes on')
+    expect(toolbar.querySelector('[data-track-changes]')).toBeNull()
   })
 
-  it('turns tracking on from the Review tab and shows the indicator', async () => {
+  it('turns tracking on from the Review tab', async () => {
     mountDocument()
 
-    expect(screen.queryByText('Track changes on')).toBeNull()
+    expect(trackChangesState()).toBe('false')
     setTrackChanges(true)
 
     await waitFor(() => expect(trackChangesState()).toBe('true'))
-    expect(screen.getByText('Track changes on')).toBeTruthy()
   })
 
   it('keeps the verify status and both verify actions in the Review tab', () => {
@@ -201,11 +202,11 @@ describe('ribbon platform shortcuts', () => {
     const button = screen.getByRole('button', { name: 'All commands' })
     expect(button.querySelector('kbd')).toBeNull()
     expect(button.querySelector('svg')).toBeTruthy()
-    expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+K')
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+Shift+P')
 
     fireEvent.focus(button)
     expect((await screen.findByRole('tooltip')).textContent).toBe(
-      'All commands (⌘K)',
+      'All commands (⌘⇧P)',
     )
   })
 
@@ -215,12 +216,12 @@ describe('ribbon platform shortcuts', () => {
 
     const button = screen.getByRole('button', { name: 'All commands' })
     expect(button.querySelector('svg')).toBeNull()
-    expect(button.textContent).toBe('Ctrl+K')
-    expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+K')
+    expect(button.textContent).toBe('Ctrl+Shift+P')
+    expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+Shift+P')
 
     fireEvent.focus(button)
     expect((await screen.findByRole('tooltip')).textContent).toBe(
-      'All commands (Ctrl+K)',
+      'All commands (Ctrl+Shift+P)',
     )
   })
 })

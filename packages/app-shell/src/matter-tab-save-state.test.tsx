@@ -142,6 +142,7 @@ const PRESENCE: DocumentPresence[] = [
 
 let saveStatus: SaveState['status'] = 'saved'
 let participants: DocumentPresence[] = []
+let tracking = false
 
 function TabStatusHost({ documentId }: { documentId: string }) {
   usePublishDocumentTabStatus({
@@ -150,6 +151,7 @@ function TabStatusHost({ documentId }: { documentId: string }) {
     versionLabel: 'version 1',
     offline: false,
     remoteChange: false,
+    trackChanges: tracking,
     participants,
     presenceNames: new Map([['usr_2', 'Priya Raman']]),
     currentUserId: 'usr_1',
@@ -223,6 +225,7 @@ beforeEach(() => {
   mocks.canManage = true
   saveStatus = 'saved'
   participants = []
+  tracking = false
   window.localStorage.clear()
 })
 
@@ -322,6 +325,23 @@ describe('save state on the document tab', () => {
     fireEvent.click(switcher)
     const item = await screen.findByRole('menuitem', { name: /Defence.docx/ })
     expect(item.querySelector('[data-save-indicator="dot"]')).toBeTruthy()
+  })
+})
+
+describe('track changes on the tab strip', () => {
+  it('names the tracking state beside the open document tab while it is on', async () => {
+    tracking = true
+    renderPane('/matters/mtr_1/documents/doc_1')
+
+    expect(await screen.findByText('Track changes on')).toBeTruthy()
+    expect(document.querySelector('[data-track-changes="on"]')).toBeTruthy()
+  })
+
+  it('shows nothing on the strip while tracking is off', async () => {
+    renderPane('/matters/mtr_1/documents/doc_1')
+
+    await waitFor(() => expect(tabButton()).toBeTruthy())
+    expect(screen.queryByText('Track changes on')).toBeNull()
   })
 })
 
