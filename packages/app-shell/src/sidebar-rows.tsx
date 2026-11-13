@@ -193,7 +193,6 @@ export function AgentRow({
       >
         <Robot size={16} weight={expanded ? 'fill' : 'regular'} aria-hidden />
         <span className="min-w-0 flex-1 truncate text-left">Agent</span>
-        <ShortcutHint command="toggle-right-slot" />
       </button>
     </RailTooltip>
   )
