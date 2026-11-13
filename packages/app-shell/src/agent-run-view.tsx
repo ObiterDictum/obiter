@@ -153,8 +153,7 @@ function RunOutcome({ run }: { run: AgentRun }) {
                   in{' '}
                   <Link
                     to="/settings"
-                    search={{ section: 'organisation' }}
-                    hash="settings-agent"
+                    search={{ section: 'agent' }}
                     className="text-brand underline"
                   >
                     Settings

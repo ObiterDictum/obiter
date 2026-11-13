@@ -37,7 +37,7 @@ export function OrganisationUpdates({
   const policy = useUpdatePolicy(organisationId)
   const change = useChangeUpdatePolicy(organisationId)
   return (
-    <section className="flex max-w-[520px] flex-col gap-4">
+    <section className="flex max-w-[480px] flex-col gap-4">
       <SectionHeading
         id="settings-updates-heading"
         level="h3"

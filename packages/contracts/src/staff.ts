@@ -56,6 +56,10 @@ export const staffDecisionsResponseSchema = z.object({
     }),
   ),
 })
+export type StaffDecisionsResponse = z.infer<
+  typeof staffDecisionsResponseSchema
+>
+export type StaffDecision = StaffDecisionsResponse['decisions'][number]
 export const staffOrganisationsResponseSchema = z.object({
   organisations: z.array(z.object({ id: z.string(), name: z.string() })),
 })
