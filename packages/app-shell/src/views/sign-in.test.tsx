@@ -113,7 +113,9 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('lex@obiter.dev', 'wrong-password')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Invalid email or password.')).toBeTruthy()
@@ -151,14 +153,18 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('lex@obiter.dev', 'password123')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Email not verified')).toBeTruthy()
     })
-    fireEvent.click(
-      screen.getByRole('button', { name: /resend verification email/i }),
-    )
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /resend verification email/i }),
+      )
+    })
     await waitFor(() => {
       expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
         'lex@obiter.dev',
@@ -185,7 +191,9 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="desktop" />)
     fillPasswordForm('lex@obiter.dev', 'password123')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Network down')).toBeTruthy()
@@ -201,7 +209,9 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('staff@obiter.dev', 'correct-password')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
 
     await waitFor(() => {
       expect(
@@ -224,7 +234,9 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('staff@obiter.dev', 'correct-password')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
     await waitFor(() => {
       expect(screen.getByLabelText('Authentication code')).toBeTruthy()
     })
@@ -260,7 +272,9 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('staff@obiter.dev', 'correct-password')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
     await waitFor(() => {
       expect(screen.getByLabelText('Authentication code')).toBeTruthy()
     })
@@ -296,7 +310,9 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('staff@obiter.dev', 'correct-password')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
     await waitFor(() => {
       expect(screen.getByLabelText('Authentication code')).toBeTruthy()
     })
@@ -329,7 +345,9 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('staff@obiter.dev', 'correct-password')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
     await waitFor(() => {
       expect(screen.getByLabelText('Authentication code')).toBeTruthy()
     })
@@ -351,7 +369,11 @@ describe('SignInRouteView — password submit outcomes', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
       target: { value: 'lex@obiter.dev' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /send sign-in link/i }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /send sign-in link/i }),
+      )
+    })
 
     await waitFor(() => {
       expect(authMocks.requestMagicLink).toHaveBeenCalledWith(
@@ -369,7 +391,11 @@ describe('SignInRouteView — password submit outcomes', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
       target: { value: 'lex@obiter.dev' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /send sign-in link/i }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /send sign-in link/i }),
+      )
+    })
 
     await waitFor(() => {
       expect(authMocks.requestMagicLink).toHaveBeenCalledWith(

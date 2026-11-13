@@ -2,6 +2,7 @@ import '@obiter/test-dom'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -74,7 +75,9 @@ async function submitPasswordStep(password: string) {
     ),
   )
   if (!submit) throw new Error('password step submit not found')
-  fireEvent.click(submit)
+  await act(async () => {
+    fireEvent.click(submit)
+  })
 }
 
 beforeEach(() => {
@@ -119,7 +122,11 @@ describe('TwoFactorSection — off state', () => {
     fireEvent.change(screen.getByLabelText('Authentication code'), {
       target: { value: '123456' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm and turn on' }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Confirm and turn on' }),
+      )
+    })
 
     await waitFor(() => {
       expect(mocks.confirmTwoFactorEnrolment).toHaveBeenCalledWith('123456')
