@@ -34,7 +34,11 @@ test('staff sees the insight screens and non-staff gets not found', async ({
   await expect(
     page.getByRole('heading', { name: 'Overview', exact: true }),
   ).toBeVisible()
-  await expect(page.getByRole('link', { name: /Access review/ })).toBeVisible()
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('link', { name: /Access review/ }),
+  ).toBeVisible()
   await page.goto('/staff/access')
   await expect(
     page.getByRole('heading', { name: 'Access review', exact: true }),
