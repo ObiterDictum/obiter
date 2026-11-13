@@ -43,11 +43,11 @@ export function Sidebar({
       id="app-shell-sidebar"
       aria-label="Workspace"
       className={cn(
-        'flex w-[236px] shrink-0 flex-col gap-2 pr-2 pb-1 pl-1',
+        'flex w-[236px] shrink-0 flex-col gap-2 pr-2 pb-1 pl-1 pt-1',
         clearsTrafficLights && 'pt-10',
       )}
     >
-      <div className="flex h-10 items-center gap-2.5 px-1.5">
+      <div className="mb-1 flex h-10 items-center gap-2.5 px-1.5">
         <ObiterMark className="size-7 shrink-0" title="" />
         <div className="min-w-0">
           <p className="truncate text-item text-ink">Obiter</p>
@@ -61,7 +61,7 @@ export function Sidebar({
 
       <nav
         aria-label="Workspace"
-        className="flex min-h-0 flex-1 flex-col gap-px overflow-x-hidden overflow-y-auto"
+        className="mt-1 flex min-h-0 flex-1 flex-col gap-px overflow-x-hidden overflow-y-auto"
       >
         <ul className="flex flex-col gap-px">
           {MODULES.map((module) => (
