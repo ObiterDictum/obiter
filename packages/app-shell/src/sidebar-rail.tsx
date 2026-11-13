@@ -43,7 +43,7 @@ export function SidebarRail({
       id="app-shell-sidebar"
       aria-label="Workspace"
       className={cn(
-        'flex w-12 shrink-0 flex-col items-center gap-1 pb-1',
+        'flex w-12 shrink-0 flex-col items-center gap-1 pb-1.5',
         clearsTrafficLights && 'pt-10',
         'max-md:h-12 max-md:w-full max-md:flex-row max-md:justify-between max-md:px-1 max-md:py-0 max-md:pt-0',
       )}
@@ -67,7 +67,6 @@ export function SidebarRail({
           shortcut={moduleShortcut(module.id)}
         />
       ))}
-      <span className="flex-1" />
       <RailItem
         label="Agent"
         icon={Robot}
@@ -76,6 +75,7 @@ export function SidebarRail({
         controls="app-shell-right-slot"
         shortcut="toggle-right-slot"
       />
+      <span className="flex-1" />
       <RailSettingsLink current={section === 'settings'} />
       <RailSlot>
         <ThemeToggle />

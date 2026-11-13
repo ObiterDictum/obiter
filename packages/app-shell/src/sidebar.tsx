@@ -43,11 +43,11 @@ export function Sidebar({
       id="app-shell-sidebar"
       aria-label="Workspace"
       className={cn(
-        'flex w-[236px] shrink-0 flex-col gap-2 pr-2 pb-1 pl-1 pt-1',
+        'flex w-[236px] shrink-0 flex-col gap-2 pr-2 pb-2 pl-1 pt-1',
         clearsTrafficLights && 'pt-10',
       )}
     >
-      <div className="mb-1 flex h-10 items-center gap-2.5 px-1.5">
+      <div className="mb-7 flex h-10 items-center gap-2.5 px-1.5">
         <ObiterMark className="size-7 shrink-0" title="" />
         <div className="min-w-0">
           <p className="truncate text-item text-ink">Obiter</p>
@@ -76,11 +76,10 @@ export function Sidebar({
               />
             </li>
           ))}
+          <li>
+            <AgentRow expanded={rightSlotOpen} onClick={onToggleRightSlot} />
+          </li>
         </ul>
-
-        <div className="mt-3 flex flex-col gap-px">
-          <AgentRow expanded={rightSlotOpen} onClick={onToggleRightSlot} />
-        </div>
 
         {recent.length > 0 ? (
           <div className="mt-4 flex flex-col gap-px">
@@ -101,7 +100,7 @@ export function Sidebar({
         ) : null}
       </nav>
 
-      <div className="flex items-center gap-1 px-0.5 pt-1">
+      <div className="flex h-8 items-center gap-1 px-0.5">
         <Link
           to="/settings"
           aria-label="Settings"

@@ -309,7 +309,7 @@ describe('Sidebar', () => {
     renderSidebar('/')
     const nav = await screen.findByRole('navigation', { name: 'Workspace' })
     const rows = Array.from(nav.querySelectorAll('ul:first-of-type > li')).map(
-      (item) => item.querySelector('a')?.getAttribute('aria-label'),
+      (item) => item.querySelector('a, button')?.getAttribute('aria-label'),
     )
     expect(rows).toEqual([
       'Home',
@@ -317,9 +317,11 @@ describe('Sidebar', () => {
       'Search',
       expect.stringMatching(/^Verify/),
       expect.stringMatching(/^Redact/),
+      'Agent',
     ])
 
     const agent = screen.getByRole('button', { name: 'Agent' })
+    expect(agent.textContent).toBe('Agent')
     expect(agent.getAttribute('aria-expanded')).toBe('false')
     expect(agent.getAttribute('aria-controls')).toBe('app-shell-right-slot')
     fireEvent.click(agent)
@@ -371,14 +373,22 @@ describe('Sidebar', () => {
     expect(brand?.textContent).toContain('Harrington Vale LLP')
   })
 
-  it('gives the search field a spacing step clear of the brand row and the module list', async () => {
+  it('drops the search field to the contents divider line, clear of the brand row', async () => {
     renderSidebar('/')
     const field = await screen.findByRole('button', { name: 'Search Obiter' })
     const brand = field.previousElementSibling
     const modules = field.nextElementSibling
 
-    expect(brand?.className).toContain('mb-1')
+    expect(brand?.className).toContain('mb-7')
     expect(modules?.className).toContain('mt-1')
+  })
+
+  it('ends the footer on the workspace bottom edge', async () => {
+    renderSidebar('/')
+    const sidebar = await screen.findByRole('complementary', {
+      name: 'Workspace',
+    })
+    expect(sidebar.className).toContain('pb-2')
   })
 
   it('puts the monogram on the title bar row rather than a padded strip below it', async () => {
@@ -420,6 +430,20 @@ describe('SidebarRail', () => {
     renderSidebar('/matters', 'rail')
     const rail = await screen.findByRole('navigation', { name: 'Workspace' })
     expect(rail.className).not.toContain('pt-10')
+  })
+
+  it('keeps Agent with the modules at the top of the rail', async () => {
+    renderSidebar('/matters', 'rail')
+    const agent = await screen.findByRole('button', { name: 'Agent' })
+    const redact = screen.getByRole('link', { name: 'Redact' })
+    expect(
+      redact.compareDocumentPosition(agent) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      agent.compareDocumentPosition(
+        screen.getByRole('link', { name: 'Settings' }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   it('toggles the agent panel from the rail', async () => {
