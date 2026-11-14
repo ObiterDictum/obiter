@@ -13,6 +13,7 @@ import type { ChromeDrafts, WorkspaceDrafts } from './use-workspace-drafts'
 import type { useWorkspacePanels } from './use-workspace-panels'
 import type { ChangeReview } from './use-change-review'
 import type { documentExportHandlers } from './document-workspace-export'
+import { untrackedDraftPending } from '../../document-untracked-edits'
 import { documentClipboardToolbar } from './use-workspace-clipboard'
 import { changeReviewToolbar } from './change-review-toolbar'
 import { editorMenus } from './editor-commands'
@@ -362,7 +363,25 @@ export function docxWorkspaceChrome({
           onOpen: panels.tabs.openLegalChecks,
         }
       : undefined,
-    onToggleTrackChanges: () => drafts.setTrackChangesFlip(!trackChanges),
+    onToggleTrackChanges: () => {
+      const next = !trackChanges
+      const apply = () => {
+        if (!next || !untrackedDraftPending(drafts.latestState())) {
+          drafts.setTrackChangesFlip(next)
+          return
+        }
+        void save.flushSave().then((clean) => {
+          if (!clean) return
+          drafts.setTrackChangesFlip(true)
+          void save.flushSave()
+        })
+      }
+      if (next && insert.imageReadPending) {
+        void insert.whenImageReadsIdle().then(apply)
+        return
+      }
+      apply()
+    },
     onZoom: setZoom,
     onExportText: exports.onExportText,
     onExportShareSafe: exports.onExportShareSafe,
@@ -380,12 +399,18 @@ export function docxWorkspaceChrome({
     },
     deleteParagraphReason,
     onSave: save.save,
-    canSave: save.dirty && !save.saving && save.saveState.status !== 'blocked',
+    canSave:
+      save.dirty &&
+      !save.saving &&
+      save.saveState.status !== 'blocked' &&
+      !insert.imageReadPending,
     saveReason: save.saving
       ? 'The save is still running.'
       : save.saveState.status === 'blocked'
         ? 'The edit history needs a reload before saving.'
-        : 'There are no unsaved changes.',
+        : insert.imageReadPending && save.dirty
+          ? 'Wait for the picture to finish reading.'
+          : 'There are no unsaved changes.',
     format,
     picture: drafts.picture.control,
     clipboard: documentClipboardToolbar({

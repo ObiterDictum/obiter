@@ -2,7 +2,7 @@ import { pendingTableChange } from '../../document-pending-table'
 import { storyTables } from '../../document-page-tables'
 import { foldTableStructure } from '../../document-table-structure-fold'
 import { OoxmlError } from '@obiter/ooxml'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
 import { useLatestHandlers } from './use-latest-callback'
@@ -26,6 +26,8 @@ export type InsertRibbonProps = {
   onPageBreak: () => void
   onSectionBreak: () => void
   breakUnavailable?: string
+  imageReadPending: boolean
+  whenImageReadsIdle: () => Promise<void>
   structure: DocumentStructureToolbar & { picturePicker: ReactNode }
 }
 
@@ -57,6 +59,27 @@ export function useInsertRibbon(
   onImageError: (message: string) => void,
 ): InsertRibbonProps {
   const pictureInput = useRef<HTMLInputElement>(null)
+  const imageReadCount = useRef(0)
+  const imageReadWaiters = useRef(new Set<() => void>())
+  const [imageReadPending, setImageReadPending] = useState(false)
+  function beginImageRead() {
+    imageReadCount.current += 1
+    setImageReadPending(true)
+  }
+  function endImageRead() {
+    imageReadCount.current -= 1
+    if (imageReadCount.current > 0) return
+    setImageReadPending(false)
+    for (const resolve of imageReadWaiters.current) resolve()
+    imageReadWaiters.current.clear()
+  }
+  function whenImageReadsIdle() {
+    return imageReadCount.current === 0
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          imageReadWaiters.current.add(resolve)
+        })
+  }
   const cellParagraphIds = useMemo(
     () =>
       storyTableCellIds(
@@ -113,6 +136,8 @@ export function useInsertRibbon(
     }),
   )
   return {
+    imageReadPending,
+    whenImageReadsIdle,
     ...documentBreakToolbar({
       paragraphId,
       model: painted ?? model,
@@ -249,14 +274,22 @@ export function useInsertRibbon(
             const file = event.target.files?.[0]
             event.target.value = ''
             if (!file) return
-            void readImageInsert(file).then((result) => {
-              if ('error' in result) {
-                onImageError(result.error)
-                return
+            beginImageRead()
+            void (async () => {
+              try {
+                const result = await readImageInsert(file)
+                if ('error' in result) {
+                  onImageError(result.error)
+                  return
+                }
+                const outcome = structure.insertImage(result)
+                if (!outcome.inserted) onImageError(outcome.reason)
+              } catch {
+                onImageError('That image could not be read.')
+              } finally {
+                endImageRead()
               }
-              const outcome = structure.insertImage(result)
-              if (!outcome.inserted) onImageError(outcome.reason)
-            })
+            })()
           }}
         />
       ),

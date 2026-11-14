@@ -291,6 +291,104 @@ describe('DocxWorkspace export', () => {
       ),
     ).toBeTruthy()
   })
+
+  it('saves unsaved edits before exporting', async () => {
+    const order: string[] = []
+    const editAsync = vi.fn(async (_input: unknown) => {
+      order.push('save')
+      return {
+        documentId: 'doc_1',
+        versionId: 'ver_2',
+        versionNumber: 2,
+        lineage: textEditLineage('ver_1', 'ver_2'),
+      }
+    })
+    const blob = new Blob()
+    fetchDocumentExport.mockImplementation(async () => {
+      order.push('export')
+      return { blob, skippedCommentCount: 0 }
+    })
+    mountWorkspace({ editAsync })
+    selectBodyParagraph()
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Hello world' },
+    })
+    openRibbonTab('Review')
+    fireEvent.click(command('Export'))
+
+    await waitFor(() => {
+      expect(downloadBlob).toHaveBeenCalledWith('brief.docx', blob)
+    })
+    expect(order).toEqual(['save', 'export'])
+  })
+
+  it('saves unsaved edits before a share-safe export', async () => {
+    const order: string[] = []
+    const editAsync = vi.fn(async (_input: unknown) => {
+      order.push('save')
+      return {
+        documentId: 'doc_1',
+        versionId: 'ver_2',
+        versionNumber: 2,
+        lineage: textEditLineage('ver_1', 'ver_2'),
+      }
+    })
+    const blob = new Blob()
+    fetchDocumentExport.mockImplementation(async () => {
+      order.push('export')
+      return {
+        blob,
+        skippedCommentCount: 0,
+        filename: 'brief-share-safe.docx',
+      }
+    })
+    mountWorkspace({ editAsync })
+    selectBodyParagraph()
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Hello world' },
+    })
+    openRibbonTab('Review')
+    fireEvent.click(command('Share-safe export'))
+
+    await waitFor(() => {
+      expect(downloadBlob).toHaveBeenCalledWith('brief-share-safe.docx', blob)
+    })
+    expect(order).toEqual(['save', 'export'])
+    expect(fetchDocumentExport).toHaveBeenCalledWith('doc_1', {
+      shareSafe: true,
+    })
+  })
+
+  it('does not export when the pre-export save fails', async () => {
+    const editAsync = vi.fn(async () => {
+      throw new ApiError(
+        'storage_unavailable',
+        'The save failed.',
+        500,
+        'req_1',
+      )
+    })
+    fetchDocumentExport.mockResolvedValue({
+      blob: new Blob(),
+      skippedCommentCount: 0,
+    })
+    mountWorkspace({ editAsync })
+    selectBodyParagraph()
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Hello world' },
+    })
+    openRibbonTab('Review')
+    fireEvent.click(command('Export'))
+
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Your changes have not been saved\./),
+      ).toBeTruthy()
+    })
+    expect(fetchDocumentExport).not.toHaveBeenCalled()
+    expect(downloadBlob).not.toHaveBeenCalled()
+  })
 })
 
 describe('DocxWorkspace save', () => {
@@ -686,5 +784,101 @@ describe('DocxWorkspace track changes toggle', () => {
     view.unmount()
     mountWorkspace({ models: { doc_1: tracked } })
     await waitFor(() => expect(trackChangesState()).toBe('false'))
+  })
+
+  it('saves pending structural edits before switching tracking on', async () => {
+    let version = 1
+    const editAsync = vi.fn(
+      async (_input: {
+        operations?: Array<{ type: string }>
+        trackChanges?: boolean
+      }) => {
+        version += 1
+        return {
+          documentId: 'doc_1',
+          versionId: `ver_${String(version)}`,
+          versionNumber: version,
+          lineage: textEditLineage(
+            `ver_${String(version - 1)}`,
+            `ver_${String(version)}`,
+          ),
+        }
+      },
+    )
+    mountWorkspace({
+      editAsync,
+      modelFor: () => ({
+        versionId: `ver_${String(version)}`,
+        versionNumber: version,
+        model: multiParagraphModel([paragraph('p1', 'Hello')]),
+      }),
+    })
+    selectBodyParagraph()
+    openRibbonTab('Insert')
+    fireEvent.click(command('Insert table'))
+    fireEvent.click(command('Insert'))
+    await waitFor(() =>
+      expect(command('Save')).toHaveProperty('disabled', false),
+    )
+
+    setTrackChanges(true)
+
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
+    const first = editAsync.mock.calls[0]?.[0]
+    expect(
+      first?.operations?.some((operation) => operation.type === 'insert_table'),
+    ).toBe(true)
+    expect(first?.trackChanges).toBeUndefined()
+    const second = editAsync.mock.calls[1]?.[0]
+    expect(second?.operations ?? []).toEqual([])
+    expect(second?.trackChanges).toBe(true)
+    await waitFor(() => expect(trackChangesState()).toBe('true'))
+  })
+
+  it('keeps tracking off when the pre-switch save fails', async () => {
+    const editAsync = vi.fn(async () => {
+      throw new ApiError(
+        'storage_unavailable',
+        'The save failed.',
+        500,
+        'req_1',
+      )
+    })
+    mountWorkspace({ editAsync })
+    selectBodyParagraph()
+    openRibbonTab('Insert')
+    fireEvent.click(command('Insert table'))
+    fireEvent.click(command('Insert'))
+    await waitFor(() =>
+      expect(command('Save')).toHaveProperty('disabled', false),
+    )
+
+    setTrackChanges(true)
+
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Your changes have not been saved\./),
+      ).toBeTruthy()
+    })
+    expect(trackChangesState()).toBe('false')
+  })
+
+  it('switches tracking off without saving first', async () => {
+    const editAsync = vi.fn()
+    mountWorkspace({
+      editAsync,
+      models: {
+        doc_1: {
+          ...multiParagraphModel([paragraph('p1', 'Hello')]),
+          trackRevisions: true,
+        },
+      },
+    })
+
+    setTrackChanges(false)
+
+    await waitFor(() => expect(trackChangesState()).toBe('false'))
+    expect(editAsync).not.toHaveBeenCalled()
   })
 })

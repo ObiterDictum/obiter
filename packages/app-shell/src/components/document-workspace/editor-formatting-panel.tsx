@@ -33,6 +33,11 @@ import {
   EditorSelect,
   EditorTextButton,
 } from './editor-controls'
+import {
+  EDITING_HINT,
+  listControlReason,
+  markingsDisabledReason,
+} from './editor-commands'
 
 const FONT_FACES = [
   'Calibri',
@@ -149,7 +154,7 @@ export function EditorFormattingPanel({
                     value={format?.fontFamily ?? ''}
                     options={[DEFAULT_FONT, ...FONT_FACES]}
                     disabled={!editing || Boolean(emphasis)}
-                    disabledReason={emphasis}
+                    disabledReason={emphasis ?? EDITING_HINT}
                     onChange={(value) =>
                       format?.onFontFamily(value === '' ? null : value)
                     }
@@ -165,7 +170,7 @@ export function EditorFormattingPanel({
                     }
                     options={[DEFAULT_SIZE, ...FONT_SIZES]}
                     disabled={!editing || Boolean(emphasis)}
-                    disabledReason={emphasis}
+                    disabledReason={emphasis ?? EDITING_HINT}
                     onChange={(value) =>
                       format?.onFontSize(value === '' ? null : Number(value))
                     }
@@ -176,7 +181,7 @@ export function EditorFormattingPanel({
                     label="Strikethrough"
                     pressed={format?.strikethrough}
                     disabled={!editing || Boolean(emphasis)}
-                    disabledReason={emphasis}
+                    disabledReason={emphasis ?? EDITING_HINT}
                     onClick={format?.onToggleStrikethrough}
                     icon={<TextStrikethrough size={16} aria-hidden />}
                   />
@@ -186,7 +191,7 @@ export function EditorFormattingPanel({
                       format?.highlight && format.highlight !== 'none',
                     )}
                     disabled={!editing || Boolean(emphasis)}
-                    disabledReason={emphasis}
+                    disabledReason={emphasis ?? EDITING_HINT}
                     onClick={format?.onToggleHighlight}
                     icon={<Highlighter size={16} aria-hidden />}
                   />
@@ -194,7 +199,7 @@ export function EditorFormattingPanel({
                     label="Superscript"
                     pressed={format?.vertAlign === 'superscript'}
                     disabled={!editing || Boolean(emphasis)}
-                    disabledReason={emphasis}
+                    disabledReason={emphasis ?? EDITING_HINT}
                     onClick={format?.onToggleSuperscript}
                     icon={<TextSuperscript size={16} aria-hidden />}
                   />
@@ -202,14 +207,14 @@ export function EditorFormattingPanel({
                     label="Subscript"
                     pressed={format?.vertAlign === 'subscript'}
                     disabled={!editing || Boolean(emphasis)}
-                    disabledReason={emphasis}
+                    disabledReason={emphasis ?? EDITING_HINT}
                     onClick={format?.onToggleSubscript}
                     icon={<TextSubscript size={16} aria-hidden />}
                   />
                   <EditorIconButton
                     label="Clear formatting"
                     disabled={!editing || Boolean(emphasis)}
-                    disabledReason={emphasis}
+                    disabledReason={emphasis ?? EDITING_HINT}
                     onClick={format?.onClearFormatting}
                     icon={<Eraser size={16} aria-hidden />}
                   />
@@ -221,7 +226,7 @@ export function EditorFormattingPanel({
                     value={fontColourSelectValue(format?.colour)}
                     options={[DEFAULT_COLOUR, ...FONT_COLOURS]}
                     disabled={!editing || Boolean(emphasis)}
-                    disabledReason={emphasis}
+                    disabledReason={emphasis ?? EDITING_HINT}
                     onChange={(value) =>
                       format?.onColour(value === '' ? null : value)
                     }
@@ -237,6 +242,7 @@ export function EditorFormattingPanel({
                     value={format?.lineSpacing ?? ''}
                     options={LINE_SPACING_OPTIONS}
                     disabled={!editing}
+                    disabledReason={EDITING_HINT}
                     placeholder="Single"
                     onChange={(value) => format?.onLineSpacing(value)}
                   />
@@ -246,6 +252,7 @@ export function EditorFormattingPanel({
                     value={format?.indentKind ?? ''}
                     options={INDENT_OPTIONS}
                     disabled={!editing}
+                    disabledReason={EDITING_HINT}
                     placeholder="None"
                     onChange={(value) => {
                       const option = INDENT_OPTIONS.find(
@@ -260,24 +267,44 @@ export function EditorFormattingPanel({
                     label="Multilevel numbering"
                     pressed={format?.listKind === 'multilevel'}
                     disabled={!editing || !format?.canApplyMultilevel}
+                    disabledReason={
+                      editing
+                        ? listControlReason(format, 'canApplyMultilevel')
+                        : EDITING_HINT
+                    }
                     onClick={() => format?.onToggleList('multilevel')}
                     icon={<TreeStructure size={16} aria-hidden />}
                   />
                   <EditorIconButton
                     label="Increase list indent"
                     disabled={!editing || !format?.canIndent}
+                    disabledReason={
+                      editing
+                        ? listControlReason(format, 'canIndent')
+                        : EDITING_HINT
+                    }
                     onClick={format?.onIndent}
                     icon={<TextIndent size={16} aria-hidden />}
                   />
                   <EditorIconButton
                     label="Decrease list indent"
                     disabled={!editing || !format?.canOutdent}
+                    disabledReason={
+                      editing
+                        ? listControlReason(format, 'canOutdent')
+                        : EDITING_HINT
+                    }
                     onClick={format?.onOutdent}
                     icon={<TextOutdent size={16} aria-hidden />}
                   />
                   <EditorIconButton
                     label="Continue list"
                     disabled={!editing || !format?.canContinue}
+                    disabledReason={
+                      editing
+                        ? listControlReason(format, 'canContinue')
+                        : EDITING_HINT
+                    }
                     onClick={format?.onContinueList}
                     icon={<ListChecks size={16} aria-hidden />}
                   />
@@ -285,6 +312,11 @@ export function EditorFormattingPanel({
                     label="Restart numbering"
                     pressed={format?.listRestarted}
                     disabled={!editing || !format?.canRestart}
+                    disabledReason={
+                      editing
+                        ? listControlReason(format, 'canRestart')
+                        : EDITING_HINT
+                    }
                     onClick={format?.onRestartList}
                     icon={<ArrowsClockwise size={16} aria-hidden />}
                   />
@@ -299,7 +331,7 @@ export function EditorFormattingPanel({
                     value={format?.marginsKind ?? ''}
                     options={MARGIN_OPTIONS}
                     disabled={layoutDisabled}
-                    disabledReason={format?.layoutUnavailable}
+                    disabledReason={format?.layoutUnavailable ?? EDITING_HINT}
                     onChange={(value) => {
                       const option = SECTION_MARGINS_OPTIONS.find(
                         (item) => item.value === value,
@@ -313,7 +345,7 @@ export function EditorFormattingPanel({
                     value={format?.pageSizeKind ?? ''}
                     options={PAGE_SIZE_SELECT_OPTIONS}
                     disabled={layoutDisabled}
-                    disabledReason={format?.layoutUnavailable}
+                    disabledReason={format?.layoutUnavailable ?? EDITING_HINT}
                     onChange={(value) => {
                       const option = PAGE_SIZE_OPTIONS.find(
                         (item) => item.value === value,
@@ -325,7 +357,7 @@ export function EditorFormattingPanel({
                     label="Orientation"
                     pressed={format?.orientation === 'landscape'}
                     disabled={layoutDisabled}
-                    disabledReason={format?.layoutUnavailable}
+                    disabledReason={format?.layoutUnavailable ?? EDITING_HINT}
                     onClick={() => format?.onOrientation()}
                     icon={<Swap size={16} aria-hidden />}
                   />
@@ -346,7 +378,7 @@ export function EditorFormattingPanel({
                       markings.pending ||
                       Boolean(markings.unavailable)
                     }
-                    disabledReason={markings?.unavailable}
+                    disabledReason={markingsDisabledReason(markings)}
                     onChange={(value) =>
                       markings?.onDocumentKind(value === '' ? null : value)
                     }
@@ -361,7 +393,7 @@ export function EditorFormattingPanel({
                       markings.pending ||
                       Boolean(markings.unavailable)
                     }
-                    disabledReason={markings?.unavailable}
+                    disabledReason={markingsDisabledReason(markings)}
                     onClick={markings?.onToggleDraft}
                   />
                   <EditorTextButton
@@ -372,7 +404,7 @@ export function EditorFormattingPanel({
                       markings.pending ||
                       Boolean(markings.unavailable)
                     }
-                    disabledReason={markings?.unavailable}
+                    disabledReason={markingsDisabledReason(markings)}
                     onClick={markings?.onTogglePrivileged}
                   />
                   <EditorTextButton
@@ -383,7 +415,7 @@ export function EditorFormattingPanel({
                       markings.pending ||
                       Boolean(markings.unavailable)
                     }
-                    disabledReason={markings?.unavailable}
+                    disabledReason={markingsDisabledReason(markings)}
                     onClick={markings?.onToggleWithoutPrejudice}
                   />
                 </div>

@@ -173,7 +173,7 @@ export type EditorChromeActions = {
   closeStory: () => void
 }
 
-const EDITING_HINT = 'Requires an editable document.'
+export const EDITING_HINT = 'Requires an editable document.'
 
 export function editorMenus(
   props: EditorChromeProps,
@@ -275,6 +275,11 @@ export function editorMenus(
               shortcut: ['primary', 'Z'],
               host: 'quick-access',
               disabled: !props.canEdit || !props.canUndo,
+              disabledReason: !props.canEdit
+                ? EDITING_HINT
+                : props.canUndo
+                  ? undefined
+                  : 'Nothing to undo',
               run: props.onUndo,
             },
             {
@@ -283,6 +288,11 @@ export function editorMenus(
               shortcut: ['primary', 'shift', 'Z'],
               host: 'quick-access',
               disabled: !props.canEdit || !props.canRedo,
+              disabledReason: !props.canEdit
+                ? EDITING_HINT
+                : props.canRedo
+                  ? undefined
+                  : 'Nothing to redo',
               run: props.onRedo,
             },
           ],
@@ -295,7 +305,8 @@ export function editorMenus(
               label: 'Cut',
               shortcut: ['primary', 'X'],
               disabled: !clipboard?.canCut,
-              disabledReason: clipboard?.cutReason,
+              disabledReason:
+                clipboard?.cutReason ?? 'The clipboard is not available here.',
               run: clipboard?.onCut,
             },
             {
@@ -303,7 +314,8 @@ export function editorMenus(
               label: 'Copy',
               shortcut: ['primary', 'C'],
               disabled: !clipboard?.canCopy,
-              disabledReason: clipboard?.copyReason,
+              disabledReason:
+                clipboard?.copyReason ?? 'The clipboard is not available here.',
               run: clipboard?.onCopy,
             },
             {
@@ -311,7 +323,9 @@ export function editorMenus(
               label: 'Paste',
               shortcut: ['primary', 'V'],
               disabled: !clipboard?.canPaste,
-              disabledReason: clipboard?.pasteReason,
+              disabledReason:
+                clipboard?.pasteReason ??
+                'The clipboard is not available here.',
               run: clipboard?.onPaste,
             },
           ],
@@ -323,6 +337,7 @@ export function editorMenus(
               id: 'insert-paragraph',
               label: 'Insert paragraph',
               disabled: !props.canEdit,
+              disabledReason: EDITING_HINT,
               run: props.onInsertParagraph,
             },
             {
@@ -330,7 +345,7 @@ export function editorMenus(
               label: 'Delete paragraph',
               disabled:
                 !props.canEdit || props.deleteParagraphReason !== undefined,
-              disabledReason: props.deleteParagraphReason,
+              disabledReason: props.deleteParagraphReason ?? EDITING_HINT,
               run: props.onDeleteParagraph,
             },
           ],
@@ -344,6 +359,7 @@ export function editorMenus(
               shortcut: ['primary', 'F'],
               hint: find ? undefined : EDITING_HINT,
               disabled: !find,
+              disabledReason: find ? undefined : EDITING_HINT,
               opensSurface: true,
               run: actions.openFind,
             },
@@ -427,7 +443,9 @@ export function editorMenus(
               disabled:
                 !structure?.onTableStructure ||
                 Boolean(structure.tableStructureUnavailable),
-              disabledReason: structure?.tableStructureUnavailable,
+              disabledReason:
+                structure?.tableStructureUnavailable ??
+                'Table structure editing is not available here.',
               run: () => {
                 if (
                   type === 'insert_table_row' ||
@@ -649,7 +667,7 @@ export function editorMenus(
               shortcut: ['primary', 'B'],
               pressed: Boolean(format?.bold),
               disabled: !editing || Boolean(format?.emphasisUnavailable),
-              disabledReason: format?.emphasisUnavailable,
+              disabledReason: format?.emphasisUnavailable ?? EDITING_HINT,
               run: format?.onToggleBold,
             },
             {
@@ -659,7 +677,7 @@ export function editorMenus(
               shortcut: ['primary', 'I'],
               pressed: Boolean(format?.italic),
               disabled: !editing,
-              disabledReason: format?.emphasisUnavailable,
+              disabledReason: format?.emphasisUnavailable ?? EDITING_HINT,
               run: format?.onToggleItalic,
             },
             {
@@ -669,7 +687,7 @@ export function editorMenus(
               shortcut: ['primary', 'U'],
               pressed: Boolean(format?.underline),
               disabled: !editing,
-              disabledReason: format?.emphasisUnavailable,
+              disabledReason: format?.emphasisUnavailable ?? EDITING_HINT,
               run: format?.onToggleUnderline,
             },
             {
@@ -678,7 +696,7 @@ export function editorMenus(
               host: 'font-panel',
               pressed: Boolean(format?.strikethrough),
               disabled: !editing,
-              disabledReason: format?.emphasisUnavailable,
+              disabledReason: format?.emphasisUnavailable ?? EDITING_HINT,
               run: format?.onToggleStrikethrough,
             },
             {
@@ -689,7 +707,7 @@ export function editorMenus(
                 format?.highlight && format.highlight !== 'none',
               ),
               disabled: !editing,
-              disabledReason: format?.emphasisUnavailable,
+              disabledReason: format?.emphasisUnavailable ?? EDITING_HINT,
               run: format?.onToggleHighlight,
             },
             {
@@ -698,7 +716,7 @@ export function editorMenus(
               host: 'font-panel',
               pressed: format?.vertAlign === 'superscript',
               disabled: !editing,
-              disabledReason: format?.emphasisUnavailable,
+              disabledReason: format?.emphasisUnavailable ?? EDITING_HINT,
               run: format?.onToggleSuperscript,
             },
             {
@@ -707,7 +725,7 @@ export function editorMenus(
               host: 'font-panel',
               pressed: format?.vertAlign === 'subscript',
               disabled: !editing,
-              disabledReason: format?.emphasisUnavailable,
+              disabledReason: format?.emphasisUnavailable ?? EDITING_HINT,
               run: format?.onToggleSubscript,
             },
             {
@@ -715,7 +733,7 @@ export function editorMenus(
               label: 'Clear formatting',
               host: 'font-panel',
               disabled: !editing,
-              disabledReason: format?.emphasisUnavailable,
+              disabledReason: format?.emphasisUnavailable ?? EDITING_HINT,
               run: format?.onClearFormatting,
             },
           ],
@@ -733,6 +751,9 @@ export function editorMenus(
               icon: <ListBullets size={16} aria-hidden />,
               pressed: format?.listKind === 'bullet',
               disabled: !editing || !format?.canApplyBullet,
+              disabledReason: editing
+                ? listControlReason(format, 'canApplyBullet')
+                : EDITING_HINT,
               run: () => format?.onToggleList('bullet'),
             },
             {
@@ -741,6 +762,9 @@ export function editorMenus(
               icon: <ListNumbers size={16} aria-hidden />,
               pressed: format?.listKind === 'number',
               disabled: !editing || !format?.canApplyNumber,
+              disabledReason: editing
+                ? listControlReason(format, 'canApplyNumber')
+                : EDITING_HINT,
               run: () => format?.onToggleList('number'),
             },
             {
@@ -749,6 +773,9 @@ export function editorMenus(
               host: 'font-panel',
               pressed: format?.listKind === 'multilevel',
               disabled: !editing || !format?.canApplyMultilevel,
+              disabledReason: editing
+                ? listControlReason(format, 'canApplyMultilevel')
+                : EDITING_HINT,
               run: () => format?.onToggleList('multilevel'),
             },
             {
@@ -756,6 +783,9 @@ export function editorMenus(
               label: 'Increase list indent',
               host: 'font-panel',
               disabled: !editing || !format?.canIndent,
+              disabledReason: editing
+                ? listControlReason(format, 'canIndent')
+                : EDITING_HINT,
               run: format?.onIndent,
             },
             {
@@ -763,6 +793,9 @@ export function editorMenus(
               label: 'Decrease list indent',
               host: 'font-panel',
               disabled: !editing || !format?.canOutdent,
+              disabledReason: editing
+                ? listControlReason(format, 'canOutdent')
+                : EDITING_HINT,
               run: format?.onOutdent,
             },
             {
@@ -770,6 +803,9 @@ export function editorMenus(
               label: 'Continue list',
               host: 'font-panel',
               disabled: !editing || !format?.canContinue,
+              disabledReason: editing
+                ? listControlReason(format, 'canContinue')
+                : EDITING_HINT,
               run: format?.onContinueList,
             },
             {
@@ -778,6 +814,9 @@ export function editorMenus(
               host: 'font-panel',
               pressed: format?.listRestarted,
               disabled: !editing || !format?.canRestart,
+              disabledReason: editing
+                ? listControlReason(format, 'canRestart')
+                : EDITING_HINT,
               run: format?.onRestartList,
             },
           ],
@@ -920,7 +959,11 @@ export function editorMenus(
                   !props.verify.available ||
                   props.verify.onCheck === undefined
                 : true,
-              disabledReason: props.verify?.reason,
+              disabledReason:
+                props.verify?.reason ??
+                (props.verify === undefined
+                  ? 'Verification is not available for this document.'
+                  : 'Verification is still running.'),
               run: props.verify?.onCheck,
             },
             {
@@ -937,6 +980,8 @@ export function editorMenus(
               icon: <ListChecks size={16} aria-hidden />,
               pressed: props.legalChecks?.open === 'terms',
               disabled: !props.legalChecks,
+              disabledReason:
+                'These checks are not available for this document.',
               stayOpen: true,
               run: () => props.legalChecks?.onOpen('terms'),
             },
@@ -946,6 +991,8 @@ export function editorMenus(
               icon: <TreeStructure size={16} aria-hidden />,
               pressed: props.legalChecks?.open === 'references',
               disabled: !props.legalChecks,
+              disabledReason:
+                'These checks are not available for this document.',
               stayOpen: true,
               run: () => props.legalChecks?.onOpen('references'),
             },
@@ -1017,6 +1064,7 @@ export function editorMenus(
               icon: <Info size={16} aria-hidden />,
               pressed: props.infoOpen,
               disabled: props.onToggleInfo === undefined,
+              disabledReason: 'The document detail is not loaded.',
               stayOpen: true,
               run: props.onToggleInfo,
             },
@@ -1107,6 +1155,46 @@ function reviewAllLabel(
     : `${verb} all changes`
 }
 
+const LIST_DISABLED_REASONS = {
+  canApplyBullet: 'The document has no bullet list to apply.',
+  canApplyNumber: 'The document has no numbered list to apply.',
+  canApplyMultilevel: 'The document has no multilevel list to apply.',
+  canIndent: 'No deeper list level is available here.',
+  canOutdent: 'Place the cursor in a list to outdent.',
+  canContinue: 'Place the cursor after a list to continue numbering.',
+  canRestart: 'Place the cursor in a numbered list to restart numbering.',
+} as const
+
+export function listControlReason(
+  format:
+    | Pick<
+        DocumentFormatToolbar,
+        | 'canApplyBullet'
+        | 'canApplyNumber'
+        | 'canApplyMultilevel'
+        | 'canIndent'
+        | 'canOutdent'
+        | 'canContinue'
+        | 'canRestart'
+      >
+    | undefined,
+  flag: keyof typeof LIST_DISABLED_REASONS,
+): string | undefined {
+  if (!format || format[flag]) return undefined
+  return LIST_DISABLED_REASONS[flag]
+}
+
+export function markingsDisabledReason(
+  markings: DocumentMarkingsToolbar | undefined,
+): string {
+  return (
+    markings?.unavailable ??
+    (markings?.pending
+      ? 'The marking change is still saving.'
+      : 'Document markings are not available here.')
+  )
+}
+
 function markingsCommands(
   markings: DocumentMarkingsToolbar | undefined,
 ): EditorCommand[] {
@@ -1114,7 +1202,7 @@ function markingsCommands(
     !markings || markings.pending || Boolean(markings.unavailable)
   const base = {
     disabled,
-    disabledReason: markings?.unavailable,
+    disabledReason: markingsDisabledReason(markings),
     host: 'font-panel' as const,
   }
   const stored = markings?.markings.documentKind
