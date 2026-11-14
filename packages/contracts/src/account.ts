@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MAX_PASSWORD_LENGTH } from './limits'
 import { currentUserSchema, displayNameField } from './organisation'
 
 export const USER_NAME_MAX_LENGTH = 120
@@ -31,5 +32,10 @@ export const accountSessionSchema = z.object({
 export type AccountSession = z.infer<typeof accountSessionSchema>
 
 export const accountSessionsResponseSchema = z.array(accountSessionSchema)
+
+export const deleteAccountInputSchema = z.object({
+  password: z.string().min(1).max(MAX_PASSWORD_LENGTH),
+})
+export type DeleteAccountInput = z.infer<typeof deleteAccountInputSchema>
 
 export { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './limits'

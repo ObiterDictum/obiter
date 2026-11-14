@@ -100,7 +100,8 @@ export function RemoveMemberDialog({
         <DialogTitle>Remove {member.name}</DialogTitle>
         <DialogDescription>
           Transfer every matter to an active colleague before removing this
-          member. Existing history and colleagues’ shares are kept.
+          member. They will be signed out of every device and session. Existing
+          history and colleagues’ shares are kept.
         </DialogDescription>
         {error ? <ErrorNotice message={error} /> : null}
         {owned.isPending || members.isPending ? (

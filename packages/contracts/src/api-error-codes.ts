@@ -4,6 +4,7 @@ export const API_ERROR_CODES = [
   'validation_failed',
   'organisation_not_found',
   'organisation_not_empty',
+  'ownership_transfer_required',
   'invite_not_found',
   'invite_expired',
   'invite_revoked',

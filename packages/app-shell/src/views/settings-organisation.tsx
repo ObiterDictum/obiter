@@ -18,6 +18,8 @@ import {
   roleLabel,
 } from './settings-fields'
 import { useCanonicalNameField } from './use-canonical-name-field'
+import { TransferOwnershipDialog } from './transfer-ownership-dialog'
+import { LeaveOrganisationDialog } from './leave-organisation-dialog'
 
 export function OrganisationSection({
   me,
@@ -27,6 +29,8 @@ export function OrganisationSection({
   active: boolean
 }) {
   const organisation = me.organisation
+  const [transferring, setTransferring] = useState(false)
+  const [leaving, setLeaving] = useState(false)
 
   return (
     <section
@@ -36,6 +40,21 @@ export function OrganisationSection({
     >
       {organisation ? (
         <>
+          {transferring ? (
+            <TransferOwnershipDialog
+              organisationId={organisation.id}
+              organisationName={organisation.name}
+              selfId={me.user.id}
+              onClose={() => setTransferring(false)}
+            />
+          ) : null}
+          {leaving ? (
+            <LeaveOrganisationDialog
+              organisationId={organisation.id}
+              selfId={me.user.id}
+              onClose={() => setLeaving(false)}
+            />
+          ) : null}
           <div className="flex flex-col gap-6">
             <SectionHeading
               id="settings-organisation-name-heading"
@@ -79,6 +98,42 @@ export function OrganisationSection({
             organisationId={organisation.id}
             role={me.user.role}
           />
+
+          <div className="flex max-w-[480px] flex-col gap-4 border-t border-line pt-8">
+            <SectionHeading
+              id="settings-organisation-danger-heading"
+              level="h3"
+              title="Membership"
+              description="Ownership and leaving are permanent changes to who controls this organisation."
+            />
+            {me.user.role === 'owner' ? (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setTransferring(true)}
+                  >
+                    Transfer ownership
+                  </Button>
+                </div>
+                <p className="text-meta text-muted">
+                  Transfer ownership before you leave. The owner cannot leave
+                  the organisation directly.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setLeaving(true)}
+                >
+                  Leave organisation
+                </Button>
+              </div>
+            )}
+          </div>
         </>
       ) : (
         <div className="flex flex-col gap-6">

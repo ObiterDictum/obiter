@@ -142,6 +142,37 @@ export const organisationMemberSchema = z.object({
 })
 export type OrganisationMember = z.infer<typeof organisationMemberSchema>
 
+export const assignableMemberRoleSchema = z.enum(['admin', 'member'])
+export type AssignableMemberRole = z.infer<typeof assignableMemberRoleSchema>
+
+export const updateOrganisationMemberRoleInputSchema = z.object({
+  role: assignableMemberRoleSchema,
+})
+export type UpdateOrganisationMemberRoleInput = z.infer<
+  typeof updateOrganisationMemberRoleInputSchema
+>
+
+export const updateOrganisationMemberRoleResponseSchema = z.object({
+  member: organisationMemberSchema,
+})
+export type UpdateOrganisationMemberRoleResponse = z.infer<
+  typeof updateOrganisationMemberRoleResponseSchema
+>
+
+export const transferOrganisationOwnershipInputSchema = z.object({
+  userId: z.string().min(1),
+})
+export type TransferOrganisationOwnershipInput = z.infer<
+  typeof transferOrganisationOwnershipInputSchema
+>
+
+export const transferOrganisationOwnershipResponseSchema = z.object({
+  ownerUserId: z.string().min(1),
+})
+export type TransferOrganisationOwnershipResponse = z.infer<
+  typeof transferOrganisationOwnershipResponseSchema
+>
+
 export type AuthViewState =
   | { status: 'authenticated'; me: MeResponse }
   | { status: 'unauthenticated' }

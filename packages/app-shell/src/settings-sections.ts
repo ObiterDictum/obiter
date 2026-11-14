@@ -4,9 +4,6 @@ import type { MeResponse } from '@obiter/contracts'
 
 const always = () => true
 const inOrganisation = (me: MeResponse) => me.organisation !== null
-const managesOrganisation = (me: MeResponse) =>
-  me.organisation !== null &&
-  (me.user.role === 'owner' || me.user.role === 'admin')
 
 export const SETTINGS_SECTIONS = [
   {
@@ -45,7 +42,7 @@ export const SETTINGS_SECTIONS = [
     icon: Users,
     description:
       'Who is in your organisation and the invitations you have sent.',
-    available: managesOrganisation,
+    available: inOrganisation,
   },
   {
     id: 'agent',
