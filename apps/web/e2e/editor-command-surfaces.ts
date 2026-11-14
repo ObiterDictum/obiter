@@ -1,0 +1,93 @@
+type Surface =
+  | 'File'
+  | 'Edit'
+  | 'Insert'
+  | 'Format'
+  | 'Review'
+  | 'View'
+  | 'Font panel'
+  | 'Quick access'
+
+export type CommandSurface = { tab: Surface; group?: string }
+
+export const TAB_OF_NAME: Record<string, string> = {
+  Home: 'Format',
+  Layout: 'Format',
+  Insert: 'Insert',
+  References: 'Insert',
+  Review: 'Review',
+  View: 'View',
+  Edit: 'Edit',
+  Format: 'Format',
+  File: 'File',
+}
+
+export const SURFACE_OF_COMMAND: Record<string, CommandSurface> = {
+  Save: { tab: 'Quick access' },
+  'Citation style': { tab: 'Insert' },
+  Undo: { tab: 'Quick access' },
+  Redo: { tab: 'Quick access' },
+  'Document information': { tab: 'View' },
+  'Print layout': { tab: 'View' },
+  'Web layout': { tab: 'View' },
+  Ruler: { tab: 'View' },
+  'Navigation pane': { tab: 'View' },
+  'Zoom in': { tab: 'View' },
+  'Zoom out': { tab: 'View' },
+  'Insert paragraph': { tab: 'Edit' },
+  'Delete paragraph': { tab: 'Edit' },
+  Cut: { tab: 'Edit' },
+  Copy: { tab: 'Edit' },
+  Paste: { tab: 'Edit' },
+  'Page break': { tab: 'Insert' },
+  'Section break': { tab: 'Insert' },
+  'Insert table': { tab: 'Insert' },
+  'Insert row above': { tab: 'Insert', group: 'Table tools' },
+  'Insert row below': { tab: 'Insert', group: 'Table tools' },
+  'Insert column left': { tab: 'Insert', group: 'Table tools' },
+  'Insert column right': { tab: 'Insert', group: 'Table tools' },
+  'Delete row': { tab: 'Insert', group: 'Table tools' },
+  'Delete column': { tab: 'Insert', group: 'Table tools' },
+  'Delete table': { tab: 'Insert', group: 'Table tools' },
+  Link: { tab: 'Insert' },
+  'Cross-reference': { tab: 'Insert' },
+  Footnote: { tab: 'Insert' },
+  'Close footnotes': { tab: 'Insert' },
+  Header: { tab: 'Insert' },
+  'Close header': { tab: 'Insert' },
+  'Page number': { tab: 'Insert' },
+  'Table of contents': { tab: 'Insert' },
+  'Insert authority': { tab: 'Insert', group: 'Authorities' },
+  'Table of authorities': { tab: 'Insert', group: 'Authorities' },
+  'Update table of authorities': { tab: 'Insert', group: 'Authorities' },
+  'Mark defined term': { tab: 'Insert', group: 'Authorities' },
+  Bold: { tab: 'Format' },
+  'Track changes': { tab: 'Review' },
+  'Accept change': { tab: 'Review' },
+  'Reject change': { tab: 'Review' },
+  Comments: { tab: 'Review' },
+  Changes: { tab: 'Review' },
+  'Verify citations': { tab: 'Review' },
+  'Check citations': { tab: 'Review' },
+  'List of authorities': { tab: 'Review' },
+  'Check defined terms': { tab: 'Review' },
+  'Check cross-references': { tab: 'Review' },
+  Spelling: { tab: 'Review' },
+  Export: { tab: 'File' },
+  'Share-safe export': { tab: 'File' },
+  'Redact this document': { tab: 'File' },
+  'Compare versions': { tab: 'File' },
+  Print: { tab: 'File' },
+  Strikethrough: { tab: 'Font panel' },
+  Highlight: { tab: 'Font panel' },
+  Superscript: { tab: 'Font panel' },
+  Subscript: { tab: 'Font panel' },
+  'Clear formatting': { tab: 'Font panel' },
+  'Multilevel numbering': { tab: 'Font panel' },
+  'Increase list indent': { tab: 'Font panel' },
+  'Restart numbering': { tab: 'Font panel' },
+  Orientation: { tab: 'Font panel' },
+  Draft: { tab: 'Font panel' },
+  Privileged: { tab: 'Font panel' },
+  'Without prejudice': { tab: 'Font panel' },
+}
