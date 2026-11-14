@@ -165,6 +165,17 @@ The workspace never reports content saved before the API commits it. See
 `docs/architecture.md`, "Document drafts: addressability, containment and reload
 persistence".
 
+## Retention
+
+A deleted account keeps the user's name and email for six years from
+`users."deletedAt"`, matching the UK six-year limitation period for civil
+claims, so audit rows and document history stay attributable. A daily job then
+replaces the name with `Deleted user` and the email with a unique non-routable
+`deleted-<userId>@deleted.invalid` placeholder, clears the remaining personal
+profile fields (`image`, `pendingOrganisationName`), and marks the row with
+`anonymisedAt`. The user id is retained throughout, so history still resolves
+to the anonymised identity and the freed email can register again.
+
 ## Learning And Model Behavior
 
 Phase 1 should rely on:

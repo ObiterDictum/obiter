@@ -1,5 +1,6 @@
 import { Input, Button } from '@obiter/ui'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { USER_NAME_MAX_LENGTH, type CurrentUser } from '@obiter/contracts'
 import { useUpdateProfile } from '../current-user'
 import {
@@ -10,6 +11,8 @@ import {
 } from './settings-fields'
 import { SignedInDevices } from './settings-sessions'
 import { useCanonicalNameField } from './use-canonical-name-field'
+import { ChangeEmailDialog } from './change-email-dialog'
+import { DeleteAccountDialog } from './delete-account-dialog'
 
 export function AccountSection({
   user,
@@ -19,6 +22,9 @@ export function AccountSection({
   active: boolean
 }) {
   const updateProfile = useUpdateProfile()
+  const navigate = useNavigate()
+  const [changingEmail, setChangingEmail] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
   const field = useCanonicalNameField({
     identity: user.id,
@@ -89,16 +95,53 @@ export function AccountSection({
           title="Sign-in email"
           description="The address used for sign-in, invitations and Verify notifications."
         />
+        {changingEmail ? (
+          <ChangeEmailDialog onClose={() => setChangingEmail(false)} />
+        ) : null}
         <dl className="max-w-[480px]">
           <ReadOnlyField
             label="Email"
             value={user.email}
-            helper="Ask your firm administrator to change the email you sign in with."
+            helper="The new address must be on your current email domain or a domain verified for your organisation."
           />
         </dl>
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setChangingEmail(true)}
+          >
+            Change email
+          </Button>
+        </div>
       </div>
 
       <SignedInDevices active={active} />
+
+      <div className="flex max-w-[480px] flex-col gap-4 border-t border-line pt-8">
+        <SectionHeading
+          id="settings-delete-heading"
+          level="h3"
+          title="Delete account"
+          description="Permanently remove your access to Obiter. Matters and audit history are retained."
+        />
+        {deleting ? (
+          <DeleteAccountDialog
+            user={user}
+            onClose={() => setDeleting(false)}
+            onDeleted={() => void navigate({ to: '/sign-in' })}
+          />
+        ) : null}
+        <div>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={() => setDeleting(true)}
+          >
+            Delete account
+          </Button>
+        </div>
+      </div>
     </section>
   )
 }
