@@ -10,8 +10,8 @@ import { SegmentedControl } from '../segmented-control'
 import {
   staffFeedbackHandledMutationOptions,
   staffFeedbackQueryOptions,
-  validateStaffFeedbackSearch,
 } from '../staff'
+import { validateStaffFeedbackSearch } from '../staff-search'
 import { ErrorNotice } from './settings-fields'
 
 const KIND_OPTIONS = [

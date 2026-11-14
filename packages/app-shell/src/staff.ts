@@ -152,30 +152,3 @@ export function staffFeedbackHandledMutationOptions(): MutationOptions<
     },
   }
 }
-
-const STAFF_USAGE_WEEKS = new Set([4, 12, 26, 52])
-
-export function validateStaffUsageSearch(search: Record<string, unknown>) {
-  const weeks = Number(search.weeks)
-  return STAFF_USAGE_WEEKS.has(weeks) ? { weeks } : {}
-}
-
-export function validateStaffFeedbackSearch(
-  search: Record<string, unknown>,
-): StaffFeedbackQuery {
-  const kind =
-    search.kind === 'problem' ||
-    search.kind === 'idea' ||
-    search.kind === 'question'
-      ? search.kind
-      : undefined
-  const status =
-    search.status === 'handled' || search.status === 'all'
-      ? search.status
-      : 'open'
-  return { ...(kind ? { kind } : {}), status }
-}
-
-export function staffUsageWeeks(search: Record<string, unknown>): number {
-  return validateStaffUsageSearch(search).weeks ?? 12
-}
