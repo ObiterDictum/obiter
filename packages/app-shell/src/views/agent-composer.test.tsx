@@ -13,7 +13,7 @@ import { conversationTitle } from '../agent-sessions'
 
 let calls: Array<{ url: string; body: unknown }> = []
 let conflict = false
-function setup(live = false) {
+function setup(matterId: string | null = null, live = false) {
   calls = []
   spyOn(globalThis, 'fetch').mockImplementation(
     Object.assign(
@@ -44,7 +44,7 @@ function setup(live = false) {
   const sent = mock()
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <AgentComposer matterId={null} live={live} onSent={sent} />
+      <AgentComposer matterId={matterId} live={live} onSent={sent} />
     </QueryClientProvider>,
   )
   return sent
@@ -77,7 +77,7 @@ it('creates a private session and posts its first turn before handing off to the
   ])
 })
 it('disables messages while a run is live and explains why', () => {
-  setup(true)
+  setup(null, true)
   expect(
     screen.getByRole('textbox', { name: 'Message' }).hasAttribute('disabled'),
   ).toBe(true)
@@ -122,4 +122,20 @@ it('keeps the Message name with a hidden label and grows the editor up to eight 
   })
   fireEvent.change(message, { target: { value: 'Longer question' } })
   expect(message.style.height).toBe('192px')
+})
+
+it('invites questions about the matter inside a matter and about the law elsewhere', () => {
+  setup('mtr_1')
+  expect(
+    screen
+      .getByRole('textbox', { name: 'Message' })
+      .getAttribute('placeholder'),
+  ).toBe('Ask about this matter…')
+  cleanup()
+  setup()
+  expect(
+    screen
+      .getByRole('textbox', { name: 'Message' })
+      .getAttribute('placeholder'),
+  ).toBe('Ask about case law or legislation…')
 })

@@ -105,7 +105,11 @@ export function AgentComposer({
         <textarea
           id={id}
           rows={1}
-          placeholder="Ask about case law or legislation…"
+          placeholder={
+            matterId
+              ? 'Ask about this matter…'
+              : 'Ask about case law or legislation…'
+          }
           ref={(node) => {
             if (node) {
               node.style.height = 'auto'
