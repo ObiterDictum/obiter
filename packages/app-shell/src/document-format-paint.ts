@@ -51,6 +51,41 @@ export function formattedModel(
   }
 }
 
+export function formatPendingParagraphs(
+  painted: DocumentModelWire,
+  baseline: DocumentModelWire,
+  format: FormatDrafts,
+): DocumentModelWire {
+  const known = new Set(
+    baseline.stories.flatMap((story) =>
+      story.paragraphs.map((paragraph) => paragraph.id),
+    ),
+  )
+  if (
+    painted.stories.every((story) =>
+      story.paragraphs.every((paragraph) => known.has(paragraph.id)),
+    )
+  ) {
+    return painted
+  }
+  const numbering = paintedNumbering(baseline, format)
+  const paintedFormat = numbering.instances.length
+    ? { ...format, numbering: numbering.drafts }
+    : format
+  const emphasisByRun = runEmphasisIndex(paintedFormat)
+  return {
+    ...painted,
+    stories: painted.stories.map((story) => ({
+      ...story,
+      paragraphs: story.paragraphs.map((paragraph) =>
+        known.has(paragraph.id)
+          ? paragraph
+          : formattedParagraph(paragraph, paintedFormat, emphasisByRun),
+      ),
+    })),
+  }
+}
+
 function paintedNumbering(model: DocumentModelWire, format: FormatDrafts) {
   const drafts = { ...format.numbering }
   const instances: DocumentNumberingWire[] = []

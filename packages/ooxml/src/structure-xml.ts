@@ -1,11 +1,13 @@
 import type {
   DocumentEditInsertTableOperation,
   DocumentStyleWire,
+  TableCellEdit,
 } from '@obiter/contracts'
 
 import { escapeXmlAttribute } from './parts/overlay'
 import { WORD_NAMESPACE } from './parts/xml-elements'
 import { wordRunInnerTextXml } from './text-run-edit'
+import { insertRunPropertiesXml } from './model-paragraph-edits'
 
 export const W14_NAMESPACE =
   'http://schemas.microsoft.com/office/word/2010/wordml'
@@ -71,6 +73,64 @@ export function buildTableParagraphXml(
     : `<w:p w14:paraId="${paraId}"/>`
 }
 
+export function tableCellParagraphPropertiesXml(
+  paragraph: TableCellEdit['paragraph'],
+) {
+  if (!paragraph) return ''
+  const children: string[] = []
+  if (paragraph.styleId) {
+    children.push(
+      `<w:pStyle w:val="${escapeXmlAttribute(paragraph.styleId)}"/>`,
+    )
+  }
+  if (paragraph.numbering) {
+    children.push(
+      `<w:numPr><w:ilvl w:val="${String(paragraph.numbering.ilvl)}"/>` +
+        `<w:numId w:val="${escapeXmlAttribute(paragraph.numbering.numId)}"/></w:numPr>`,
+    )
+  }
+  const spacing: string[] = []
+  if (paragraph.spaceBefore != null) {
+    spacing.push(`w:before="${String(paragraph.spaceBefore)}"`)
+  }
+  if (paragraph.spaceAfter != null) {
+    spacing.push(`w:after="${String(paragraph.spaceAfter)}"`)
+  }
+  if (paragraph.lineSpacing) {
+    spacing.push(`w:line="${String(paragraph.lineSpacing.line)}"`)
+    if (paragraph.lineSpacing.lineRule) {
+      spacing.push(`w:lineRule="${paragraph.lineSpacing.lineRule}"`)
+    }
+  }
+  if (spacing.length > 0) children.push(`<w:spacing ${spacing.join(' ')}/>`)
+  if (paragraph.indentation) {
+    const indent: string[] = []
+    for (const key of ['left', 'right', 'firstLine', 'hanging'] as const) {
+      const value = paragraph.indentation[key]
+      if (value != null) indent.push(`w:${key}="${String(value)}"`)
+    }
+    if (indent.length > 0) children.push(`<w:ind ${indent.join(' ')}/>`)
+  }
+  if (paragraph.alignment != null) {
+    children.push(`<w:jc w:val="${escapeXmlAttribute(paragraph.alignment)}"/>`)
+  }
+  return children.length === 0 ? '' : `<w:pPr>${children.join('')}</w:pPr>`
+}
+
+export function tableCellEditContentXml(edit: TableCellEdit) {
+  const runs = edit.runs?.length
+    ? edit.runs
+        .map(
+          (run) =>
+            `<w:r>${insertRunPropertiesXml('w', run)}${wordRunInnerTextXml('w', run.text)}</w:r>`,
+        )
+        .join('')
+    : edit.text === undefined
+      ? ''
+      : `<w:r>${wordRunInnerTextXml('w', edit.text)}</w:r>`
+  return tableCellParagraphPropertiesXml(edit.paragraph) + runs
+}
+
 export function buildTableXml(
   rows: number,
   columns: number,
@@ -80,16 +140,17 @@ export function buildTableXml(
   const columnWidth = Math.floor(TABLE_WIDTH_TWIPS / columns)
   const grid = `<w:gridCol w:w="${String(columnWidth)}"/>`.repeat(columns)
   let cursor = 0
-  const textByCell = new Map(
-    cellEdits.map((edit) => [edit.row * columns + edit.column, edit.text]),
+  const editByCell = new Map(
+    cellEdits.map((edit) => [edit.row * columns + edit.column, edit]),
   )
   const cell = () => {
     const index = cursor++
-    const text = textByCell.get(index)
+    const edit = editByCell.get(index)
+    const content = edit ? tableCellEditContentXml(edit) : ''
     const paragraph =
-      text === undefined
+      content === ''
         ? buildTableParagraphXml(cellParaIds[index] ?? '', false)
-        : `<w:p w14:paraId="${cellParaIds[index] ?? ''}"><w:r>${wordRunInnerTextXml('w', text)}</w:r></w:p>`
+        : `<w:p w14:paraId="${cellParaIds[index] ?? ''}">${content}</w:p>`
     return `<w:tc><w:tcPr><w:tcW w:w="${String(columnWidth)}" w:type="dxa"/></w:tcPr>${paragraph}</w:tc>`
   }
   const row = () =>

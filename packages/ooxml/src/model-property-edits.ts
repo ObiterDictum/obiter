@@ -43,6 +43,11 @@ export type ParagraphFormat = {
     firstLine?: number | null
     hanging?: number | null
   } | null
+  numbering?: {
+    numId: string
+    ilvl: number
+    startOverride?: number | null
+  }
 }
 
 export function setRunEmphasis(

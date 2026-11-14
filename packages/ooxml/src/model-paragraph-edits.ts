@@ -13,6 +13,7 @@ import {
 } from './document-lineage'
 import { requireEditablePart } from './model-edit-overlay'
 import type { ParagraphFormat } from './model-property-edits'
+import { resolveParagraphNumbering } from './numbering-edits'
 import { escapeXmlAttribute, setOverlayReplacement } from './parts/overlay'
 import { wordRunInnerTextXml } from './text-run-edit'
 
@@ -55,7 +56,7 @@ export function insertParagraphAfter(
   const properties = insertParagraphPropertiesXml(
     xml.prefix,
     styleId,
-    xml.paragraphFormat,
+    resolvedInsertFormat(document, xml.paragraphFormat),
   )
   const runFragment = runs
     .map((run) => {
@@ -123,6 +124,26 @@ export function allocateModelId(document: OoxmlDocument, prefix: string) {
   return `${prefix}-${String(sequence).padStart(6, '0')}`
 }
 
+function resolvedInsertFormat(
+  document: OoxmlDocument,
+  format: ParagraphFormat | undefined,
+): ParagraphFormat | undefined {
+  const numbering = format?.numbering
+  if (!format || !numbering) return format
+  const resolved = resolveParagraphNumbering(document, numbering)
+  if (resolved.numId === null) {
+    const { numbering: _numbering, ...rest } = format
+    return rest
+  }
+  return {
+    ...format,
+    numbering: {
+      numId: resolved.numId,
+      ilvl: resolved.ilvl ?? numbering.ilvl,
+    },
+  }
+}
+
 function insertParagraphPropertiesXml(
   prefix: string,
   styleId: string | null | undefined,
@@ -132,6 +153,12 @@ function insertParagraphPropertiesXml(
   if (styleId) {
     children.push(
       `<${prefix}:pStyle ${prefix}:val="${escapeXmlAttribute(styleId)}"/>`,
+    )
+  }
+  if (format?.numbering) {
+    children.push(
+      `<${prefix}:numPr><${prefix}:ilvl ${prefix}:val="${String(format.numbering.ilvl)}"/>` +
+        `<${prefix}:numId ${prefix}:val="${escapeXmlAttribute(format.numbering.numId)}"/></${prefix}:numPr>`,
     )
   }
   if (
@@ -175,7 +202,7 @@ function insertParagraphPropertiesXml(
     : `<${prefix}:pPr>${children.join('')}</${prefix}:pPr>`
 }
 
-function insertRunPropertiesXml(prefix: string, run: DocumentEditRun) {
+export function insertRunPropertiesXml(prefix: string, run: DocumentEditRun) {
   const children: string[] = []
   if (run.styleId) {
     children.push(
