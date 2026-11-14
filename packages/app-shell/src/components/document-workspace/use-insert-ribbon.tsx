@@ -1,3 +1,4 @@
+import { pendingTableChange } from '../../document-pending-table'
 import { storyTables } from '../../document-page-tables'
 import { foldTableStructure } from '../../document-table-structure-fold'
 import { OoxmlError } from '@obiter/ooxml'
@@ -135,6 +136,16 @@ export function useInsertRibbon(
           if (!(error instanceof OoxmlError)) throw error
           onImageError(error.message)
           return
+        }
+        if (model) {
+          const pending = pendingTableChange(model, drafts.structures, {
+            ...operation,
+            paragraphId: targetId,
+          })
+          if (pending) {
+            drafts.setStructures(() => pending)
+            return
+          }
         }
         const table = storyTables(story).find((item) =>
           item.paragraphIds.includes(targetId),
