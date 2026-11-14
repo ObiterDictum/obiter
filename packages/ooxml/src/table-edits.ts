@@ -1,5 +1,6 @@
 import type {
   DocumentParagraphWire,
+  DocumentEditInsertTableOperation,
   DocumentStoryWire,
 } from '@obiter/contracts'
 
@@ -27,6 +28,7 @@ export function insertTable(
   afterWire: DocumentParagraphWire | undefined,
   occurrence: number,
   lineage?: { recorder: LineageRecorder; operationIndex: number },
+  cellEdits?: DocumentEditInsertTableOperation['cellEdits'],
 ) {
   const part = requireEditablePart(document, anchor.partName)
   const source = part.overlay.source
@@ -58,7 +60,7 @@ export function insertTable(
   const separatorXml = separatorParaId
     ? buildTableParagraphXml(separatorParaId, true)
     : ''
-  const tblXml = buildTableXml(rows, columns, paraIds)
+  const tblXml = buildTableXml(rows, columns, paraIds, cellEdits)
   const tableXml = separatorXml + tblXml
 
   const at = anchor.paragraphRange.end
@@ -104,11 +106,24 @@ export function insertTable(
       preservedXmlFragments: [],
     })
   }
-  for (const paraId of paraIds) {
+  const textByCell = new Map(
+    cellEdits?.map((edit) => [edit.row * columns + edit.column, edit.text]),
+  )
+  for (const [index, paraId] of paraIds.entries()) {
+    const text = textByCell.get(index)
     cellWires.push({
       id: `para-w14-${paraId}`,
       sourceParaId: paraId,
-      runs: [],
+      runs:
+        text === undefined
+          ? []
+          : [
+              {
+                id: `para-w14-${paraId}:run-0`,
+                text,
+                preservedXmlFragments: [],
+              },
+            ],
       preservedXmlFragments: [],
     })
   }

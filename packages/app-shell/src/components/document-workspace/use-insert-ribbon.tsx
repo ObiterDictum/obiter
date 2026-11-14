@@ -1,3 +1,4 @@
+import { pendingTableChange } from '../../document-pending-table'
 import { storyTables } from '../../document-page-tables'
 import { foldTableStructure } from '../../document-table-structure-fold'
 import { OoxmlError } from '@obiter/ooxml'
@@ -67,6 +68,15 @@ export function useInsertRibbon(
       ),
     [painted, model],
   )
+  const baselineIds = new Set(
+    model?.stories.flatMap((item) => item.paragraphs.map((p) => p.id)),
+  )
+  const pendingCellText = [...cellParagraphIds].some(
+    (id) => !baselineIds.has(id) && Boolean(drafts.extraRuns[id]?.length),
+  )
+  const pendingCellUnavailable = pendingCellText
+    ? 'Save text in new table cells before changing table structure'
+    : undefined
   const paragraphId = (caret.kind === 'caret' && caret.paragraphId) || null
   const selectionActive = caret.kind === 'selection'
   const selectionRange =
@@ -116,10 +126,14 @@ export function useInsertRibbon(
         ? 'Table structure changes are not recorded as tracked changes'
         : !paragraphId || !cellParagraphIds.has(paragraphId)
           ? 'Place the cursor in a table cell'
-          : undefined,
+          : pendingCellUnavailable,
       onTableStructure: (operation) => {
         const targetId = operation.paragraphId || paragraphId
         if (trackChanges || !targetId || !cellParagraphIds.has(targetId)) return
+        if (pendingCellUnavailable) {
+          onImageError(pendingCellUnavailable)
+          return
+        }
         const story = (painted ?? model)?.stories.find(
           (item) => item.kind === 'document',
         )
@@ -136,11 +150,18 @@ export function useInsertRibbon(
           onImageError(error.message)
           return
         }
+        if (model) {
+          const pending = pendingTableChange(model, drafts.structures, {
+            ...operation,
+            paragraphId: targetId,
+          })
+          if (pending) {
+            drafts.setStructures(() => pending)
+            return
+          }
+        }
         const table = storyTables(story).find((item) =>
           item.paragraphIds.includes(targetId),
-        )
-        const baselineIds = new Set(
-          model?.stories.flatMap((item) => item.paragraphs.map((p) => p.id)),
         )
         const anchorId = table?.paragraphIds.find((id) => baselineIds.has(id))
         if (!table || !anchorId) return

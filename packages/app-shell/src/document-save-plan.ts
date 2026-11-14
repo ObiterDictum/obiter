@@ -1,3 +1,4 @@
+import { pendingTableDraft } from './document-pending-table'
 import { withStructuralDrafts } from './document-structure-fold'
 import { storyTables } from './document-page-tables'
 import type { DocumentModelWire } from '@obiter/contracts'
@@ -74,6 +75,28 @@ export function planDocumentSave(
       ),
     )
     if (!cellEdits.length) continue
+    const pending = pendingTableDraft(
+      model,
+      keep.structures,
+      table.paragraphIds[0] ?? '',
+    )
+    if (pending) {
+      const occurrence = keep.structures
+        .filter(
+          (draft) =>
+            draft.kind === 'table' && draft.paragraphId === pending.paragraphId,
+        )
+        .indexOf(pending)
+      const insert = operations.filter(
+        (operation) =>
+          operation.type === 'insert_table' &&
+          operation.paragraphId === pending.paragraphId,
+      )[occurrence]
+      if (insert?.type !== 'insert_table')
+        throw new Error('Missing insertion for pending table cell text')
+      insert.cellEdits = cellEdits
+      continue
+    }
     for (let index = operations.length - 1; index >= 0; index--) {
       const operation = operations[index]
       if (
