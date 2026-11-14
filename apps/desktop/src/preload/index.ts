@@ -5,11 +5,11 @@ const apiOrigin = typeof rawApiOrigin === 'string' ? rawApiOrigin : null
 
 contextBridge.exposeInMainWorld('obiterDesktop', {
   onMainError: (
-    listener: (error: { kind: string; message: string }) => void,
+    listener: (error: { kind: string; message: string; stack: string }) => void,
   ) => {
     const receive = (
       _event: unknown,
-      error: { kind: string; message: string },
+      error: { kind: string; message: string; stack: string },
     ) => listener(error)
     ipcRenderer.on('obiter:main-error', receive)
     return () => {

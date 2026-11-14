@@ -113,7 +113,12 @@ export function startErrorReporting(
     void flush()
   }, 5000)
   const unsubscribe = readDesktopBridge()?.onMainError?.((error) =>
-    reportError(Object.assign(new Error(error.message), { name: error.kind })),
+    reportError(
+      Object.assign(new Error(error.message), {
+        name: error.kind,
+        stack: error.stack,
+      }),
+    ),
   )
   return () => {
     clearInterval(timer)

@@ -1,4 +1,4 @@
-import { redactMessage } from '@obiter/config/error-reporting'
+import { redactMessage, errorFrames } from '@obiter/config/error-reporting'
 import {
   app,
   ipcMain,
@@ -188,6 +188,13 @@ process.on('uncaughtExceptionMonitor', (error) => {
       window.webContents.send('obiter:main-error', {
         kind: redactMessage(error.name),
         message: redactMessage(error.message),
+        stack: [
+          'Error',
+          ...errorFrames(error).map(
+            (frame) =>
+              `    at ${frame.function || 'main'} (${frame.file}:${frame.line}:${frame.column})`,
+          ),
+        ].join('\n'),
       })
   }
 })

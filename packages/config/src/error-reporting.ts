@@ -12,7 +12,7 @@ export function redactMessage(message: string): string {
 }
 
 const routeSegments = new Set(
-  'api matters documents users organisations auth sign-in sign-out sign-up search fetch redact redaction runs versions comments replies shares sources verify findings settings account health access-requests changelog assets index.html outputs presence updates invites sessions me password reset verify-email case-law legislation acts provisions authorities files upload download'.split(
+  'staff errors telemetry overview usage feedback api matters documents users organisations auth sign-in sign-out sign-up search fetch redact redaction runs versions comments replies shares sources verify findings settings account health access-requests changelog assets index.html outputs presence updates invites sessions me password reset verify-email case-law legislation acts provisions authorities files upload download'.split(
     ' ',
   ),
 )
@@ -31,12 +31,14 @@ export function routePattern(raw: string): string {
           : ':value',
       )
       .join('/')
-  )
+  ).slice(0, 1000)
 }
 
 export function sourceFile(raw: string): string {
   const file = raw.split(/[?#]/)[0]?.split(/[/\\]/).pop() ?? ''
-  return /^[a-zA-Z0-9_.-]+\.(?:[cm]?js|tsx?)$/.test(file) ? file : '[file]'
+  return file.length <= 200 && /^[a-zA-Z0-9_.-]+\.(?:[cm]?js|tsx?)$/.test(file)
+    ? file
+    : '[file]'
 }
 
 export function errorFrames(error: unknown) {
