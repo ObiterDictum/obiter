@@ -5,7 +5,6 @@ import type { AppPlatform, MeResponse } from '@obiter/contracts'
 import { AccountMenu } from './account-menu'
 import { ModuleTabs } from './module-tabs'
 import { ShellMenuButton } from './shell-launcher'
-import { AgentRow } from './sidebar-rows'
 import type { ShellSection } from './navigation'
 import type { Crumb } from './navigation'
 import { ThemeToggle } from './theme-toggle'
@@ -48,8 +47,10 @@ export function TabsTitleBar({
         >
           <ObiterMark className="size-6" title="" />
         </Link>
-        <ModuleTabs />
-        <AgentRow expanded={rightSlotOpen} onClick={onToggleRightSlot} />
+        <ModuleTabs
+          rightSlotOpen={rightSlotOpen}
+          onToggleRightSlot={onToggleRightSlot}
+        />
       </div>
       <div className="app-no-drag flex shrink-0 items-center gap-1">
         <TitleBarActions
