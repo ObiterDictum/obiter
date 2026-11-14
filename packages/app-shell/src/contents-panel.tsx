@@ -13,6 +13,10 @@ import {
   VerifyContents,
 } from './contents-sections'
 
+const AgentContents = lazy(() =>
+  import('./views/agent-contents').then((m) => ({ default: m.AgentContents })),
+)
+
 const StaffContents = lazy(() =>
   import('./staff-contents').then((module) => ({
     default: module.StaffContents,
@@ -21,6 +25,7 @@ const StaffContents = lazy(() =>
 
 const SECTION_TITLES = {
   home: 'Home',
+  agent: 'Conversations',
   matters: 'Matters',
   search: 'Recent searches',
   verify: 'Verify runs',
@@ -75,6 +80,12 @@ function ContentsBody({
       ) : (
         <MattersListContents />
       )
+    case 'agent':
+      return (
+        <Suspense fallback={null}>
+          <AgentContents pathname={pathname} />
+        </Suspense>
+      )
     case 'verify':
       return <VerifyContents />
     case 'redact':
@@ -105,6 +116,8 @@ export function contentsPanelName(
   pathname: string,
 ): string | null {
   switch (section) {
+    case 'agent':
+      return 'conversations'
     case 'home':
       return null
     case 'matters':

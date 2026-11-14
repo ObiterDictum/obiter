@@ -8,7 +8,6 @@ import {
   cn,
 } from '@obiter/ui'
 import { GearSix, ShieldCheck } from '@obiter/ui/icons'
-import { Robot } from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 import { AccountMenu } from './account-menu'
 import { useIsMacPlatform } from './keyboard-platform'
@@ -21,14 +20,11 @@ import { ThemeToggle } from './theme-toggle'
 export function SidebarRail({
   isStaff = false,
   platform,
-  rightSlotOpen,
-  onToggleRightSlot,
   onExpand,
 }: {
   isStaff?: boolean
   platform: AppPlatform
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
+
   onExpand: () => void
 }) {
   const currentPath = useRouterState({
@@ -67,14 +63,6 @@ export function SidebarRail({
           shortcut={moduleShortcut(module.id)}
         />
       ))}
-      <RailItem
-        label="Agent"
-        icon={Robot}
-        onClick={onToggleRightSlot}
-        expanded={rightSlotOpen}
-        controls="app-shell-right-slot"
-        shortcut="toggle-right-slot"
-      />
       <span className="flex-1" />
       {isStaff ? <RailStaffLink current={section === 'staff'} /> : null}
       <RailSettingsLink current={section === 'settings'} />

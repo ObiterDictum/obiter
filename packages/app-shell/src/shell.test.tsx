@@ -180,6 +180,7 @@ function renderShell(path: string) {
     '/redact',
     '/search',
     '/settings',
+    '/agent',
   ]
   const router = createRouter({
     routeTree: rootRoute.addChildren(
@@ -372,6 +373,23 @@ describe('shell frame', () => {
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeTruthy()
   })
 
+  it('opens and closes the matter agent from the workspace control', async () => {
+    renderShell('/matters/mtr_1')
+    const show = await screen.findByRole('button', { name: 'Show agent panel' })
+    expect(show.getAttribute('aria-expanded')).toBe('false')
+    expect(show.getAttribute('aria-controls')).toBe('app-shell-right-slot')
+    fireEvent.click(show)
+    const hide = await screen.findByRole('button', { name: 'Hide agent panel' })
+    expect(hide.getAttribute('aria-expanded')).toBe('true')
+    expect(
+      await screen.findByRole('complementary', { name: 'Agent panel' }),
+    ).toBeTruthy()
+    fireEvent.click(hide)
+    expect(
+      screen.queryByRole('complementary', { name: 'Agent panel' }),
+    ).toBeNull()
+  })
+
   it('toggles the right slot with Ctrl+J and only lists tabs with content', async () => {
     renderShell('/matters/mtr_1')
     await screen.findByRole('button', { name: 'Hide matter contents' })
@@ -391,23 +409,27 @@ describe('shell frame', () => {
     ).toBeNull()
   })
 
-  it('toggles the right slot from the sidebar and keeps no panel button in the title bar', async () => {
+  it('links Agent to its window without opening a panel', async () => {
+    window.localStorage.setItem('obiter.rightSlot.open', 'true')
     renderShell('/')
-    await screen.findByRole('button', { name: 'Collapse sidebar' })
-    expect(screen.queryByRole('button', { name: 'Show panel' })).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
-    await screen.findByRole('complementary', { name: 'Agent panel' })
-    expect(
-      screen
-        .getByRole('button', { name: 'Agent' })
-        .getAttribute('aria-expanded'),
-    ).toBe('true')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Agent' }))
+    const agent = await screen.findByRole('link', { name: 'Agent' })
+    expect(agent.getAttribute('href')).toBe('/agent')
+    fireEvent.click(agent)
     expect(
       screen.queryByRole('complementary', { name: 'Agent panel' }),
     ).toBeNull()
+  })
+
+  it('opens Agent with Ctrl+J outside a matter', async () => {
+    renderShell('/')
+    await screen.findByRole('link', { name: 'Agent' })
+    fireEvent.keyDown(window, { key: 'j', ctrlKey: true })
+    expect(
+      screen.queryByRole('complementary', { name: 'Agent panel' }),
+    ).toBeNull()
+    expect(
+      await screen.findByRole('button', { name: 'Hide conversations' }),
+    ).toBeTruthy()
   })
 
   it('opens the command palette from the sidebar field and returns focus to it on Escape', async () => {
@@ -586,21 +608,22 @@ describe('shell layout modes', () => {
     ).toBeTruthy()
   })
 
-  it('toggles the right slot from the Agent control in tabs layout', async () => {
+  it('links Agent to its window in tabs layout without opening a panel', async () => {
     window.localStorage.setItem('obiter.layout', 'tabs')
     renderShell('/')
-    const agent = await screen.findByRole('button', { name: 'Agent' })
+    const agent = await screen.findByRole('link', { name: 'Agent' })
+    expect(agent.getAttribute('href')).toBe('/agent')
     fireEvent.click(agent)
     expect(
-      await screen.findByRole('complementary', { name: 'Agent panel' }),
-    ).toBeTruthy()
+      screen.queryByRole('complementary', { name: 'Agent panel' }),
+    ).toBeNull()
   })
 
   it('keeps the Agent tab with the module tabs in tabs layout', async () => {
     window.localStorage.setItem('obiter.layout', 'tabs')
     renderShell('/')
     const tabs = await screen.findByRole('navigation', { name: 'Modules' })
-    const agent = within(tabs).getByRole('button', { name: 'Agent' })
+    const agent = within(tabs).getByRole('link', { name: 'Agent' })
     const redact = within(tabs).getByRole('link', { name: /^Redact/ })
     expect(
       redact.compareDocumentPosition(agent) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -647,7 +670,7 @@ describe('shell layout modes', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Obiter menu' })
     expect(within(dialog).getByRole('link', { name: /^Matters/ })).toBeTruthy()
-    expect(within(dialog).getByRole('button', { name: 'Agent' })).toBeTruthy()
+    expect(within(dialog).getByRole('link', { name: 'Agent' })).toBeTruthy()
     expect(
       within(dialog).getByRole('link', {
         name: /Smith v Jones Lettings Ltd/,
@@ -680,3 +703,22 @@ describe('shell layout modes', () => {
     )
   })
 })
+
+for (const layout of ['sidebar', 'tabs', 'clean']) {
+  it(`navigates to Agent without rendering the stored panel in ${layout} layout`, async () => {
+    window.localStorage.setItem('obiter.layout', layout)
+    window.localStorage.setItem('obiter.rightSlot.open', 'true')
+    renderShell('/')
+    if (layout === 'clean')
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Open Obiter menu' }),
+      )
+    fireEvent.click(await screen.findByRole('link', { name: 'Agent' }))
+    expect(
+      await screen.findByRole('button', { name: 'Hide conversations' }),
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('complementary', { name: 'Agent panel' }),
+    ).toBeNull()
+  })
+}

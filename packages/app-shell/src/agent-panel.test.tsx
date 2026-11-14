@@ -19,7 +19,6 @@ import {
 } from '@tanstack/react-router'
 import type { AgentRun, AgentRunDetailResponse } from '@obiter/contracts'
 import { AgentTab } from './agent-panel'
-
 const baseRun = {
   id: 'arun_1',
   organisationId: 'org_1',
@@ -52,7 +51,6 @@ const baseRun = {
   startedAt: '2026-11-03T10:00:00.000Z',
   finishedAt: '2026-11-03T10:00:12.000Z',
 } as const
-
 const completed: AgentRun = {
   ...baseRun,
   toolAllowList: [...baseRun.toolAllowList],
@@ -78,7 +76,6 @@ const completed: AgentRun = {
     droppedSentenceCount: 1,
   },
 }
-
 const refused: AgentRun = {
   ...baseRun,
   toolAllowList: [...baseRun.toolAllowList],
@@ -96,7 +93,6 @@ const refused: AgentRun = {
     },
   },
 }
-
 const running: AgentRun = {
   ...baseRun,
   toolAllowList: [...baseRun.toolAllowList],
@@ -104,10 +100,8 @@ const running: AgentRun = {
   status: 'running',
   stopReason: null,
 }
-
 let runs: AgentRun[] = []
 const requests: Array<{ url: string; method: string }> = []
-
 function detail(run: AgentRun): AgentRunDetailResponse {
   return { run, steps: [], toolCalls: [], events: [] }
 }
@@ -149,6 +143,7 @@ beforeEach(() => {
             keySetAt: null,
           })
         }
+        if (url.includes('/api/agent-sessions')) return json({ sessions: [] })
         if (url.endsWith('/api/matters/mtr_1/agent-runs')) return json({ runs })
         if (url.endsWith('/cancel')) {
           return json({
@@ -232,11 +227,9 @@ function renderTab(path = '/matters/mtr_1') {
 }
 
 describe('agent tab', () => {
-  it('asks the user to open a matter, because a run works on exactly one', async () => {
+  it('renders no agent panel content outside matters', async () => {
     renderTab('/')
-    expect(
-      await screen.findByText(/Open a matter to ask the agent/),
-    ).toBeTruthy()
+    await new Promise((resolve) => setTimeout(resolve, 20))
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
@@ -285,12 +278,22 @@ describe('agent tab', () => {
     })
   })
 
-  it('labels the ask shortcut for the platform it runs on', async () => {
+  it('offers a Message composer for a new matter conversation', async () => {
     runs = []
     renderTab()
-    const ask = await screen.findByRole('button', { name: /Ask/ })
-    expect(ask.textContent).toContain(
-      /mac/i.test(navigator.platform) ? '⌘Enter' : 'Ctrl+Enter',
-    )
+    expect(await screen.findByRole('textbox', { name: 'Message' })).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled'),
+    ).toBe(true)
   })
+})
+it('offers a matter question without law starter prompts in an empty panel', async () => {
+  runs = []
+  renderTab()
+  expect(
+    await screen.findByRole('heading', { name: 'Ask about this matter' }),
+  ).toBeTruthy()
+  expect(await screen.findByRole('textbox', { name: 'Message' })).toBeTruthy()
+  expect(screen.queryByText('What are the elements of negligence?')).toBeNull()
+  expect(screen.queryByText(/No runs on this matter yet/)).toBeNull()
 })

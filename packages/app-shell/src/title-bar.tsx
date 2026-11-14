@@ -4,6 +4,7 @@ import { ArrowsInSimple } from '@obiter/ui/icons'
 import { ArrowLeft, ArrowRight } from '@obiter/ui/icons/shell'
 import { cn } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
+import { sessionQueryOptions } from './agent-sessions'
 import { currentUserQueryOptions } from './current-user'
 import { useIsMacPlatform } from './keyboard-platform'
 import type { ShellLayout } from './shell-layout'
@@ -21,8 +22,6 @@ export function TitleBar({
   onExitFocusMode,
   showSearch,
   chrome,
-  rightSlotOpen,
-  onToggleRightSlot,
 }: {
   platform: AppPlatform
   loadedBuild?: string | null
@@ -30,8 +29,6 @@ export function TitleBar({
   onExitFocusMode: () => void
   showSearch: boolean
   chrome: ShellLayout
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
 }) {
   const router = useRouter()
   const { data: me } = useQuery(currentUserQueryOptions())
@@ -48,10 +45,17 @@ export function TitleBar({
   const matterName =
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
   const sourceTitle = useSourceTitle(pathname)
+  const sessionId = pathname.match(/^\/agent\/([^/]+)$/)?.[1]
+  const session = useQuery({
+    ...sessionQueryOptions(sessionId ?? ''),
+    enabled: Boolean(sessionId),
+  })
   const trail = breadcrumbTrail(pathname, matterName, sourceTitle, {
     settingsSection,
     staff: me?.isStaff === true,
   })
+  if (sessionId && session.data)
+    trail[trail.length - 1] = { label: session.data.session.title }
   const variant = focusMode ? 'sidebar' : chrome
   const clearsTrafficLights =
     platform === 'desktop' &&
@@ -65,8 +69,7 @@ export function TitleBar({
         loadedBuild={loadedBuild}
         me={me}
         section={section}
-        rightSlotOpen={rightSlotOpen}
-        onToggleRightSlot={onToggleRightSlot}
+
         clearsTrafficLights={clearsTrafficLights}
       />
     )
@@ -80,8 +83,7 @@ export function TitleBar({
         me={me}
         trail={trail}
         orgName={me?.organisation?.name}
-        rightSlotOpen={rightSlotOpen}
-        onToggleRightSlot={onToggleRightSlot}
+
         clearsTrafficLights={clearsTrafficLights}
       />
     )

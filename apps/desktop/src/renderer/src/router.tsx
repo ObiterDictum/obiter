@@ -416,6 +416,40 @@ const accessSetupRoute = createRoute({
   component: AccessSetupRouteView,
 })
 
+const AgentWindowView = lazy(() =>
+  import('@obiter/app-shell/views/agent-window').then((m) => ({
+    default: m.AgentWindowView,
+  })),
+)
+const agentRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'agent',
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
+  },
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <AgentWindowView />
+    </Suspense>
+  ),
+})
+const agentSessionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'agent/$sessionId',
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
+  },
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <AgentWindowView />
+    </Suspense>
+  ),
+})
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'settings',
@@ -705,6 +739,8 @@ const routeTree = rootRoute.addChildren([
   staffFeedbackRoute,
   accessSetupRoute,
   settingsRoute,
+  agentRoute,
+  agentSessionRoute,
   casesRoute,
   caseSlugRoute,
   legislationRoute,

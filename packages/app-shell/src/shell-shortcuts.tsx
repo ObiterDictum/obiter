@@ -17,6 +17,7 @@ export type ShellCommand =
   | 'go-verify'
   | 'go-redact'
   | 'go-search'
+  | 'go-agent'
 
 const COMMAND_KEYS = {
   'open-palette': ['primary', 'K'],
@@ -28,6 +29,7 @@ const COMMAND_KEYS = {
   'go-verify': ['g', 'v'],
   'go-redact': ['g', 'r'],
   'go-search': ['g', 's'],
+  'go-agent': ['g', 'a'],
 } satisfies Record<ShellCommand, readonly string[]>
 
 const PRIMARY_KEYS = new Map<string, ShellCommand>([
@@ -43,6 +45,7 @@ const SEQUENCE_KEYS = new Map<string, ShellCommand>([
   ['v', 'go-verify'],
   ['r', 'go-redact'],
   ['s', 'go-search'],
+  ['a', 'go-agent'],
 ])
 
 const GO_KEY = 'g'
@@ -58,6 +61,8 @@ export function moduleShortcut(module: ModuleId): ShellCommand {
       return 'go-search'
     case 'verify':
       return 'go-verify'
+    case 'agent':
+      return 'go-agent'
     case 'redact':
       return 'go-redact'
     default: {

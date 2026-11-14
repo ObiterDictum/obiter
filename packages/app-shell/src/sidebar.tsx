@@ -5,12 +5,7 @@ import { GearSix, ShieldCheck } from '@obiter/ui/icons'
 import { AccountMenu } from './account-menu'
 import { useIsMacPlatform } from './keyboard-platform'
 import { PaletteTrigger } from './palette-trigger'
-import {
-  AgentRow,
-  MatterRow,
-  ModuleRow,
-  SidebarCollapseToggle,
-} from './sidebar-rows'
+import { MatterRow, ModuleRow, SidebarCollapseToggle } from './sidebar-rows'
 import { moduleTone, useSidebarData } from './sidebar-counts'
 import { MODULES, matterIdFromPath, resolveSection } from './navigation'
 import { ThemeToggle } from './theme-toggle'
@@ -19,15 +14,12 @@ export function Sidebar({
   isStaff = false,
   orgName,
   platform,
-  rightSlotOpen,
-  onToggleRightSlot,
   onCollapse,
 }: {
   isStaff?: boolean
   orgName?: string | null
   platform: AppPlatform
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
+
   onCollapse: () => void
 }) {
   const currentPath = useRouterState({
@@ -76,9 +68,6 @@ export function Sidebar({
               />
             </li>
           ))}
-          <li>
-            <AgentRow expanded={rightSlotOpen} onClick={onToggleRightSlot} />
-          </li>
         </ul>
 
         {recent.length > 0 ? (

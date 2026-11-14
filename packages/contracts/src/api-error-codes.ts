@@ -53,6 +53,8 @@ export const API_ERROR_CODES = [
   'share_safe_export_refused',
   'redaction_return_unavailable',
   'agent_run_not_found',
+  'agent_session_not_found',
+  'agent_session_busy',
   'agent_unavailable',
   'agent_key_rejected',
   'agent_model_unknown',
