@@ -148,6 +148,7 @@ export function useWorkspaceSurface(input: {
         trackChanges,
         drafts.drafts,
         drafts.extraRuns,
+        drafts.inserts,
       )
     : undefined
   const outline = useMemo(

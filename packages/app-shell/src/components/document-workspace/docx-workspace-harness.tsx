@@ -365,11 +365,33 @@ export function mountWorkspace(
   hooks.useReopenDocumentComment.mockReturnValue(
     idleMutation({ mutate: options.reopenComment ?? vi.fn() }),
   )
-  hooks.useEditDocument.mockReturnValue(
-    idleMutation({ mutateAsync: options.editAsync ?? vi.fn() }),
+  hooks.useEditDocument.mockImplementation(
+    (
+      _documentId: string,
+      _matterId: string,
+      onCommitted?: (input: unknown) => void,
+    ) =>
+      idleMutation({
+        mutateAsync: async (input: unknown) => {
+          const result = await (options.editAsync ?? vi.fn())(input)
+          onCommitted?.(input)
+          return result
+        },
+      }),
   )
-  hooks.useCollaborationMerge.mockReturnValue(
-    idleMutation({ mutateAsync: options.mergeAsync ?? vi.fn() }),
+  hooks.useCollaborationMerge.mockImplementation(
+    (
+      _documentId: string,
+      _matterId: string,
+      onCommitted?: (input: unknown) => void,
+    ) =>
+      idleMutation({
+        mutateAsync: async (input: unknown) => {
+          const result = await (options.mergeAsync ?? vi.fn())(input)
+          onCommitted?.(input)
+          return result
+        },
+      }),
   )
   hooks.useTrackedChangeDecision.mockReturnValue(
     idleMutation({

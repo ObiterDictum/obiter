@@ -1,3 +1,5 @@
+import type { TableCellEdit } from '@obiter/contracts'
+
 import { OoxmlError, type OoxmlDocument, type ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { writePropertyChildren } from './model-properties'
@@ -63,6 +65,33 @@ export function resolveParagraphNumbering(
     numId: createNumberingOverride(document, source, abstractId, ilvl, start),
     ilvl,
     startOverride: start,
+  }
+}
+
+export function resolveCellEditNumbering(
+  document: OoxmlDocument,
+  edit: TableCellEdit,
+): TableCellEdit {
+  const numbering = edit.paragraph?.numbering
+  if (!numbering || numbering.startOverride == null) return edit
+  const resolved = resolveParagraphNumbering(document, {
+    numId: numbering.numId,
+    ilvl: numbering.ilvl,
+    startOverride: numbering.startOverride,
+  })
+  if (resolved.numId === null) return edit
+  return {
+    ...edit,
+    paragraph: {
+      ...edit.paragraph,
+      numbering: {
+        numId: resolved.numId,
+        ilvl: resolved.ilvl ?? numbering.ilvl,
+        ...(resolved.startOverride != null
+          ? { startOverride: resolved.startOverride }
+          : {}),
+      },
+    },
   }
 }
 

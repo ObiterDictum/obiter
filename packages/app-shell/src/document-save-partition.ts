@@ -16,6 +16,7 @@ import {
 } from './document-edits'
 import { footnoteNoteParagraphId } from './document-structural-drafts'
 import { partitionFormatDrafts } from './document-format-partition'
+import { storyTables } from './document-page-tables'
 import { emphasisSlotKey } from './document-save-slots'
 import { resolveInsertAnchor } from './document-story-flow'
 import { partitionStructureSlots } from './document-structure-partition'
@@ -298,7 +299,29 @@ export function partitionDraftState(
     })
   }
 
-  const format = partitionFormatDrafts(state, paragraphIds, insertById, keep)
+  const keptCellIds = new Set(
+    withStructuralDrafts(model, keep.structures)
+      .stories.flatMap((story) => storyTables(story))
+      .flatMap((table) =>
+        table.rows.flatMap((row) =>
+          row.cells.flatMap((cell) => cell.paragraphIds),
+        ),
+      )
+      .filter((id) => !paragraphIds.has(id)),
+  )
+  const keptCellRunIds = new Set(
+    [...keptCellIds].flatMap((id) =>
+      (keep.extraRuns[id] ?? []).map((run) => run.id),
+    ),
+  )
+
+  const format = partitionFormatDrafts(
+    state,
+    paragraphIds,
+    insertById,
+    keep,
+    keptCellIds,
+  )
   covered.push(...format.covered)
   blocked.push(...format.blocked)
 
@@ -309,9 +332,10 @@ export function partitionDraftState(
     }
     const addressable =
       item.runId !== undefined
-        ? runIds.has(item.runId)
+        ? runIds.has(item.runId) || keptCellRunIds.has(item.runId)
         : item.paragraphId !== undefined &&
-          paragraphIds.has(item.paragraphId) &&
+          (paragraphIds.has(item.paragraphId) ||
+            keptCellIds.has(item.paragraphId)) &&
           item.from !== undefined &&
           item.to !== undefined &&
           item.from < item.to

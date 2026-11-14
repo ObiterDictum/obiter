@@ -10,7 +10,10 @@ import {
   extractAuthorities,
   type AuthorityHit,
 } from '../../document-authorities'
-import { formattedModel } from '../../document-format-edits'
+import {
+  formattedModel,
+  formatPendingParagraphs,
+} from '../../document-format-paint'
 import {
   batchParagraphDeletions,
   FIELD_BOUNDARY_MESSAGE,
@@ -177,7 +180,14 @@ export function useWorkspaceDerivations({
         : undefined,
     [formatted, drafts.structures, drafts.drafts, deletions],
   )
-  const painted = structured
+  const pendingFormatted = useMemo(
+    () =>
+      structured && model
+        ? formatPendingParagraphs(structured, model, drafts.format)
+        : undefined,
+    [structured, model, drafts.format],
+  )
+  const painted = pendingFormatted
   const pendingRedlines = useMemo(
     () =>
       structured && model && insert.trackChanges

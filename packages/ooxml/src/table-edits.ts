@@ -13,11 +13,14 @@ import { requireEditablePart } from './model-edit-overlay'
 import { parseXmlElements, setOverlayReplacement } from './parts/overlay'
 import { isWord } from './parts/xml-elements'
 import { nextSyntheticParaId } from './structure-package'
+import { resolveCellEditNumbering } from './numbering-edits'
 import {
   buildTableParagraphXml,
   buildTableXml,
   decideTablePlacement,
+  tableCellParagraphPropertiesXml,
 } from './structure-xml'
+import { insertRunPropertiesXml } from './model-paragraph-edits'
 
 export function insertTable(
   document: OoxmlDocument,
@@ -60,7 +63,10 @@ export function insertTable(
   const separatorXml = separatorParaId
     ? buildTableParagraphXml(separatorParaId, true)
     : ''
-  const tblXml = buildTableXml(rows, columns, paraIds, cellEdits)
+  const resolvedEdits = cellEdits?.map((edit) =>
+    resolveCellEditNumbering(document, edit),
+  )
+  const tblXml = buildTableXml(rows, columns, paraIds, resolvedEdits)
   const tableXml = separatorXml + tblXml
 
   const at = anchor.paragraphRange.end
@@ -106,25 +112,37 @@ export function insertTable(
       preservedXmlFragments: [],
     })
   }
-  const textByCell = new Map(
-    cellEdits?.map((edit) => [edit.row * columns + edit.column, edit.text]),
+  const editByCell = new Map(
+    resolvedEdits?.map((edit) => [edit.row * columns + edit.column, edit]),
   )
   for (const [index, paraId] of paraIds.entries()) {
-    const text = textByCell.get(index)
+    const edit = editByCell.get(index)
+    const pPr = tableCellParagraphPropertiesXml(edit?.paragraph)
+    const wireRuns = edit?.runs?.length
+      ? edit.runs.map((run, runIndex) => {
+          const rPr = insertRunPropertiesXml('w', run)
+          return {
+            id: `para-w14-${paraId}:run-${String(runIndex)}`,
+            ...(run.styleId ? { styleId: run.styleId } : {}),
+            text: run.text,
+            preservedXmlFragments: rPr === '' ? [] : [rPr],
+          }
+        })
+      : edit?.text === undefined
+        ? []
+        : [
+            {
+              id: `para-w14-${paraId}:run-0`,
+              text: edit.text,
+              preservedXmlFragments: [],
+            },
+          ]
     cellWires.push({
       id: `para-w14-${paraId}`,
       sourceParaId: paraId,
-      runs:
-        text === undefined
-          ? []
-          : [
-              {
-                id: `para-w14-${paraId}:run-0`,
-                text,
-                preservedXmlFragments: [],
-              },
-            ],
-      preservedXmlFragments: [],
+      ...(edit?.paragraph?.styleId ? { styleId: edit.paragraph.styleId } : {}),
+      runs: wireRuns,
+      preservedXmlFragments: pPr === '' ? [] : [pPr],
     })
   }
   const lastCell = cellWires[cellWires.length - 1] ?? anchor.wire

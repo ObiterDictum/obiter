@@ -40,7 +40,7 @@ import { useWorkspaceDerivations } from './use-workspace-derivations'
 import { chromeDraftsOf, useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
 import { useWorkspaceComments } from './use-workspace-comments'
-import { documentExportHandlers } from './document-workspace-export'
+import { exportsFor } from './document-workspace-export'
 import { selectionAnnouncement } from './document-workspace-status'
 import { useDocumentMarkings } from './use-document-markings'
 import { useLegalToolsState } from './use-legal-tools-state'
@@ -301,7 +301,7 @@ export function DocxWorkspace({
   const redo = withCaretRefocus(redoDocument)
   const print = withCaretRefocus(() => void forPrint(printDocument))
   const reload = useLatestCallback(withCaretRefocus(save.reload))
-  const exports = documentExportHandlers(documentId, filename, setBanner)
+  const exports = exportsFor(documentId, filename, setBanner, insert, save)
   const citation = useLatestHandlers(
     usePendingCitation(documentId, (text) => {
       if (selectedParagraphId)

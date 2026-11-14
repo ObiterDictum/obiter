@@ -324,6 +324,8 @@ describe('DocxWorkspace change review', () => {
     const menus = editorMenus(
       {
         canEdit: false,
+        imageReadPending: false,
+        whenImageReadsIdle: () => Promise.resolve(),
         trackChanges: false,
         zoom: 100,
         commentsOpen: false,

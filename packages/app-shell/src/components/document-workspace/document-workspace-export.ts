@@ -28,12 +28,15 @@ export function documentExportHandlers(
   documentId: string,
   filename: string,
   onNotice: (notice: string) => void,
+  flushSave?: () => Promise<boolean>,
 ) {
   const run = (options?: { shareSafe?: boolean }) => () => {
     refocusCaretBeforeFlight()
-    void exportDocumentAsDocx(documentId, filename, options).then((message) => {
+    void (async () => {
+      if (flushSave && !(await flushSave())) return
+      const message = await exportDocumentAsDocx(documentId, filename, options)
       if (message) onNotice(message)
-    })
+    })()
   }
   return { onExportText: run(), onExportShareSafe: run({ shareSafe: true }) }
 }
@@ -42,4 +45,17 @@ function skippedCommentsMessage(count: number) {
   return count === 1
     ? '1 comment could not be placed in the exported document and was skipped.'
     : `${String(count)} comments could not be placed in the exported document and were skipped.`
+}
+
+export function exportsFor(
+  documentId: string,
+  filename: string,
+  onNotice: (notice: string) => void,
+  insert: { whenImageReadsIdle: () => Promise<void> },
+  save: { flushSave: () => Promise<boolean> },
+) {
+  return documentExportHandlers(documentId, filename, onNotice, async () => {
+    await insert.whenImageReadsIdle()
+    return save.flushSave()
+  })
 }

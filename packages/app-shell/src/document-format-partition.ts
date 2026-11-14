@@ -11,14 +11,19 @@ export function partitionFormatDrafts(
   paragraphIds: ReadonlySet<string>,
   insertById: ReadonlyMap<string, LocalInsert>,
   keep: DraftState,
+  pendingCellIds: ReadonlySet<string> = new Set(),
 ) {
   const covered: DraftSlot[] = []
   const blocked: BlockedDraft[] = []
+  const pending = (paragraphId: string) =>
+    paragraphIds.has(paragraphId) ||
+    insertById.has(paragraphId) ||
+    pendingCellIds.has(paragraphId)
 
   for (const [paragraphId, styleId] of Object.entries(
     state.format.paragraphStyles,
   )) {
-    if (paragraphIds.has(paragraphId) || insertById.has(paragraphId)) {
+    if (pending(paragraphId)) {
       keep.format.paragraphStyles[paragraphId] = styleId
       covered.push({
         kind: 'paragraph-style',
@@ -41,7 +46,7 @@ export function partitionFormatDrafts(
   for (const [paragraphId, numbering] of Object.entries(
     state.format.numbering,
   )) {
-    if (paragraphIds.has(paragraphId)) {
+    if (pending(paragraphId)) {
       keep.format.numbering[paragraphId] = numbering
       covered.push({
         kind: 'numbering',
@@ -50,22 +55,17 @@ export function partitionFormatDrafts(
       })
       continue
     }
-    const onInsert = insertById.has(paragraphId)
     blocked.push({
       slot: { kind: 'numbering', key: `number:${paragraphId}`, paragraphId },
-      reason: onInsert
-        ? 'List formatting on a paragraph that has not been saved yet cannot be sent separately.'
-        : 'This paragraph is no longer in the document.',
-      label: onInsert
-        ? 'list formatting on a new paragraph'
-        : 'list formatting',
+      reason: 'This paragraph is no longer in the document.',
+      label: 'list formatting',
     })
   }
 
   for (const [paragraphId, paragraphFormat] of Object.entries(
     state.format.paragraphFormats,
   )) {
-    if (paragraphIds.has(paragraphId)) {
+    if (pending(paragraphId)) {
       keep.format.paragraphFormats[paragraphId] = paragraphFormat
       covered.push({
         kind: 'paragraph-format',
@@ -74,19 +74,14 @@ export function partitionFormatDrafts(
       })
       continue
     }
-    const onInsert = insertById.has(paragraphId)
     blocked.push({
       slot: {
         kind: 'paragraph-format',
         key: `pformat:${paragraphId}`,
         paragraphId,
       },
-      reason: onInsert
-        ? 'Paragraph formatting on a paragraph that has not been saved yet cannot be sent separately.'
-        : 'This paragraph is no longer in the document.',
-      label: onInsert
-        ? 'paragraph formatting on a new paragraph'
-        : 'paragraph formatting',
+      reason: 'This paragraph is no longer in the document.',
+      label: 'paragraph formatting',
     })
   }
 

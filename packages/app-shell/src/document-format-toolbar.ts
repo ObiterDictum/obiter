@@ -21,9 +21,11 @@ import {
   toggleEmphasisAtAddress,
 } from './document-format-edits'
 import {
+  editableOrInsertParagraph,
   formatControlState,
   selectedParagraph,
 } from './document-format-controls'
+import type { LocalInsert } from './document-story-flow'
 import { effectiveParagraph } from './document-model-text'
 import {
   sectionFormatState,
@@ -85,6 +87,7 @@ export function documentFormatToolbar(
   trackChanges = false,
   drafts?: Record<string, string>,
   extraRuns: ExtraRuns = {},
+  inserts: readonly LocalInsert[] = [],
 ) {
   const ranges: ReadonlyArray<ParagraphRange> =
     target.kind === 'selection'
@@ -102,7 +105,10 @@ export function documentFormatToolbar(
     emphasis,
     drafts,
     extraRuns,
+    inserts,
   )
+  const storedFor = (id: string | null) =>
+    editableOrInsertParagraph(model, inserts, id)
   const section = sectionFormatState(model, format.section)
   const nothingSelected = target.kind === 'selection' && emphasis.length === 0
   const toggle = (patch: EmphasisPatch) => {
@@ -158,7 +164,7 @@ export function documentFormatToolbar(
     )
   }
   const formatParagraphIds = controls.paragraphIds.filter(
-    (id) => id.length > 0 && selectedParagraph(model, id) !== undefined,
+    (id) => id.length > 0 && storedFor(id) !== undefined,
   )
   const forEachFormatParagraph = (
     apply: (current: FormatDrafts, paragraphId: string) => FormatDrafts,
@@ -225,13 +231,17 @@ export function documentFormatToolbar(
       forEachFormatParagraph((current, id) => {
         if (
           kind === 'none' &&
-          paragraphFormatState(model, current, [id]).indent === 'none'
+          paragraphFormatState(model, current, [id], (target) =>
+            storedFor(target),
+          ).indent === 'none'
         ) {
           return current
         }
         return setParagraphFormatDraft(current, id, {
           indentation: indentationPatch(kind, {
-            leftPx: paragraphIndentLeftPx(model, current, id),
+            leftPx: paragraphIndentLeftPx(model, current, id, (target) =>
+              storedFor(target),
+            ),
           }),
         })
       })
@@ -290,27 +300,27 @@ export function documentFormatToolbar(
     },
     onIndent: () =>
       forEachParagraph((current, id) => {
-        const target = selectedParagraph(model, id)
+        const target = storedFor(id)
         return target ? indentList(current, model, target) : current
       }),
     onOutdent: () =>
       forEachParagraph((current, id) => {
-        const target = selectedParagraph(model, id)
+        const target = storedFor(id)
         return target ? outdentList(current, model, target) : current
       }),
     onContinueList: () =>
       forEachParagraph((current, id) => {
-        const target = selectedParagraph(model, id)
+        const target = storedFor(id)
         return target ? continueList(current, model, target) : current
       }),
     onRestartList: () =>
       forEachParagraph((current, id) => {
-        const target = selectedParagraph(model, id)
+        const target = storedFor(id)
         return target ? restartList(current, model, target) : current
       }),
     onToggleList: (kind: ListKind) => {
       const targets = controls.paragraphIds.flatMap((id) => {
-        const target = selectedParagraph(model, id)
+        const target = storedFor(id)
         return target ? [target] : []
       })
       if (targets.length === 0) return

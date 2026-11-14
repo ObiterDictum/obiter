@@ -133,14 +133,14 @@ export function useDocumentSave({
     slots: readonly DraftSlot[]
     sent: DraftState
   } | null>(null)
-  const inFlight = useRef(false)
+  const flight = useRef<Promise<void> | null>(null)
 
   const plan = useMemo(
     () =>
       model ? planDocumentSave(model, drafts.state, trackChanges) : EMPTY_PLAN,
     [model, drafts.state, trackChanges],
   )
-  const togglePending = model ? trackChanges !== model.trackRevisions : false
+  const togglePending = drafts.trackFlipPending
   const dirty =
     plan.operations.length > 0 || plan.rejections.length > 0 || togglePending
   const editsPending =
@@ -180,7 +180,8 @@ export function useDocumentSave({
     sent: DraftState,
   ) {
     pendingBatch.current = { covered, sent }
-    const flip = togglePending ? { trackChanges } : {}
+    const pendingFlip = drafts.pendingTrackFlip()
+    const flip = pendingFlip === undefined ? {} : { trackChanges: pendingFlip }
     const collaborators = presence.some((item) => item.userId !== currentUserId)
     if (collaborators || remoteChange) {
       const saved = await mergeDocument.mutateAsync({
@@ -305,17 +306,24 @@ export function useDocumentSave({
 
   function startFlight() {
     refocusCaretBeforeFlight()
-    inFlight.current = true
     setFailure(null)
     setNotice(null)
   }
 
-  async function save() {
+  function save(): Promise<void> {
+    if (!flight.current) {
+      flight.current = performSave().finally(() => {
+        flight.current = null
+      })
+    }
+    return flight.current
+  }
+
+  async function performSave() {
     if (!model) return
     if (drafts.lineageUnresolved) return
     if (drafts.boundaryPending) return
-    if (inFlight.current) return
-    const sent = drafts.state
+    const sent = drafts.latestState()
     const current = planDocumentSave(model, sent, trackChanges)
     if (current.operations.length === 0 && current.rejections.length > 0) {
       const changeIds = [
@@ -340,13 +348,16 @@ export function useDocumentSave({
         return
       }
       startFlight()
+      const decisionFlip = drafts.pendingTrackFlip()
       try {
         const saved = await decideChange.mutateAsync({
           baseVersionId,
           action: 'reject',
           changeIds,
           ...(removeParagraphIds.length > 0 ? { removeParagraphIds } : {}),
-          ...(togglePending ? { trackRevisions: trackChanges } : {}),
+          ...(decisionFlip === undefined
+            ? {}
+            : { trackRevisions: decisionFlip }),
         })
         drafts.clearSlots(
           current.rejections.map((rejection) => ({
@@ -367,12 +378,10 @@ export function useDocumentSave({
           return
         }
         setFailure(messageFor(error))
-      } finally {
-        inFlight.current = false
       }
       return
     }
-    if (current.operations.length === 0 && !togglePending) return
+    if (current.operations.length === 0 && !drafts.trackFlipPendingNow()) return
     startFlight()
     try {
       const result = await sendBatch(current.operations, current.covered, sent)
@@ -403,9 +412,32 @@ export function useDocumentSave({
         return
       }
       setFailure(messageFor(error))
-    } finally {
-      inFlight.current = false
     }
+  }
+
+  function clean() {
+    if (!model) return true
+    if (drafts.lineageUnresolved) return false
+    const latest = planDocumentSave(model, drafts.latestState(), trackChanges)
+    return (
+      latest.operations.length === 0 &&
+      latest.rejections.length === 0 &&
+      latest.pending === 0 &&
+      !drafts.trackFlipPendingNow()
+    )
+  }
+
+  async function flushSave(): Promise<boolean> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      await updateSave.current.save()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (updateSave.current.clean()) return true
+      const status = updateSave.current.saveState.status
+      if (status === 'failed' || status === 'stale' || status === 'blocked') {
+        return false
+      }
+    }
+    return false
   }
 
   const saveState: SaveState = drafts.lineageUnresolved
@@ -422,9 +454,9 @@ export function useDocumentSave({
               ? { status: 'unsaved' }
               : { status: 'saved' }
 
-  const updateSave = useRef({ save, saveState })
+  const updateSave = useRef({ save, saveState, clean })
   useEffect(() => {
-    updateSave.current = { save, saveState }
+    updateSave.current = { save, saveState, clean }
   })
   useEffect(
     () =>
@@ -452,6 +484,7 @@ export function useDocumentSave({
     notice,
     save: () => void save(),
     retry: () => void save(),
+    flushSave,
     reload: () => void reload(),
     markStale: () => setStale(true),
     discardBlocked: () => drafts.clearSlots(blocked.map((item) => item.slot)),

@@ -19,6 +19,7 @@ export function planOperation(
   validateEmphasis(operation)
   validateParagraphFormat(operation)
   validateNumbering(operation, numberingIds)
+  validateCellEdits(operation, styleIds, numberingIds)
   if (operation.type === 'set_section_properties') return operation
   if (
     operation.type === 'insert_break' ||
@@ -157,10 +158,51 @@ function validateNumbering(
   operation: DocumentEditOperation,
   numberingIds: ReadonlySet<string>,
 ) {
+  if (
+    operation.type === 'insert_paragraph_after' ||
+    operation.type === 'insert_paragraph_before'
+  ) {
+    if (
+      operation.numbering !== undefined &&
+      !numberingIds.has(operation.numbering.numId)
+    ) {
+      throw new OoxmlError('invalid-document-edit')
+    }
+    return
+  }
   if (operation.type !== 'set_paragraph_numbering') return
   if (operation.numId !== null) {
     if (!numberingIds.has(operation.numId) || operation.ilvl === undefined) {
       throw new OoxmlError('invalid-document-edit')
+    }
+  }
+}
+
+function validateCellEdits(
+  operation: DocumentEditOperation,
+  styleIds: ReadonlySet<string>,
+  numberingIds: ReadonlySet<string>,
+) {
+  if (!('cellEdits' in operation) || !operation.cellEdits) return
+  for (const edit of operation.cellEdits) {
+    const paragraph = edit.paragraph
+    if (
+      paragraph?.styleId !== undefined &&
+      paragraph.styleId !== null &&
+      !styleIds.has(paragraph.styleId)
+    ) {
+      throw new OoxmlError('invalid-document-edit')
+    }
+    if (
+      paragraph?.numbering !== undefined &&
+      !numberingIds.has(paragraph.numbering.numId)
+    ) {
+      throw new OoxmlError('invalid-document-edit')
+    }
+    for (const run of edit.runs ?? []) {
+      if (run.styleId && !styleIds.has(run.styleId)) {
+        throw new OoxmlError('invalid-document-edit')
+      }
     }
   }
 }

@@ -11,24 +11,27 @@ const insert: LocalInsert = {
 }
 
 describe('format draft partition', () => {
-  it('blocks list formatting keyed to a paragraph that has not been saved yet', () => {
+  it('keeps list formatting keyed to a paragraph that has not been saved yet', () => {
     const state = emptyDraftState()
     state.format.numbering.ins1 = { numId: '1', ilvl: 0 }
+    const keep = emptyDraftState()
 
     const result = partitionFormatDrafts(
       state,
       new Set(),
       new Map([[insert.clientId, insert]]),
-      emptyDraftState(),
+      keep,
     )
 
-    expect(result.covered).toEqual([])
-    expect(result.blocked).toEqual([
-      expect.objectContaining({
-        reason:
-          'List formatting on a paragraph that has not been saved yet cannot be sent separately.',
-      }),
+    expect(result.covered).toEqual([
+      {
+        kind: 'numbering',
+        key: 'number:ins1',
+        paragraphId: 'ins1',
+      },
     ])
+    expect(result.blocked).toEqual([])
+    expect(keep.format.numbering.ins1).toEqual({ numId: '1', ilvl: 0 })
   })
 
   it('keeps a pending insert style as a covered slot that rides on the insert', () => {

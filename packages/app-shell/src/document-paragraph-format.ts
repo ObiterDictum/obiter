@@ -92,9 +92,11 @@ export function paragraphFormatState(
   model: DocumentModelWire,
   format: FormatDrafts,
   paragraphIds: readonly string[],
+  storedFor: (id: string) => DocumentParagraphWire | undefined = (id) =>
+    editableParagraph(model, id),
 ): ParagraphFormatState {
   const faces = paragraphIds.flatMap((id) => {
-    const stored = editableParagraph(model, id)
+    const stored = storedFor(id)
     if (!stored) return []
     return [
       faceFormat(
@@ -113,8 +115,10 @@ export function paragraphIndentLeftPx(
   model: DocumentModelWire,
   format: FormatDrafts,
   paragraphId: string,
+  storedFor: (id: string) => DocumentParagraphWire | undefined = (id) =>
+    editableParagraph(model, id),
 ): number {
-  const stored = editableParagraph(model, paragraphId)
+  const stored = storedFor(paragraphId)
   if (!stored) return 0
   return (
     paragraphFace(formattedParagraphDraft(stored, format), model.styles)

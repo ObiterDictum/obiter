@@ -25,6 +25,11 @@ import {
 } from './document-list-toggle'
 import { paragraphFormatState } from './document-paragraph-format'
 import {
+  flowParagraphIds,
+  insertParagraphWire,
+  type LocalInsert,
+} from './document-story-flow'
+import {
   formattedParagraphDraft,
   paragraphStyleOptions,
   projectRangeEmphasis,
@@ -38,6 +43,17 @@ export function selectedParagraph(
 ) {
   if (!paragraphId) return undefined
   return editableParagraph(model, paragraphId)
+}
+
+export function editableOrInsertParagraph(
+  model: DocumentModelWire,
+  inserts: readonly LocalInsert[],
+  paragraphId: string | null,
+) {
+  const stored = selectedParagraph(model, paragraphId)
+  if (stored || !paragraphId) return stored
+  const insert = inserts.find((item) => item.clientId === paragraphId)
+  return insert ? insertParagraphWire(insert) : undefined
 }
 export function runFlagOn(
   xml: string,
@@ -144,8 +160,11 @@ export function formatControlState(
   }> = ranges,
   drafts?: Record<string, string>,
   extraRuns?: ExtraRuns,
+  inserts: readonly LocalInsert[] = [],
 ) {
-  const stored = selectedParagraph(model, paragraphId)
+  const storedFor = (id: string) =>
+    editableOrInsertParagraph(model, inserts, id)
+  const stored = storedFor(paragraphId ?? '')
   const paragraph = stored ? formattedParagraphDraft(stored, format) : undefined
   const covered = coveredRuns(model, emphasisRanges, format, drafts, extraRuns)
   const numPr = paragraph
@@ -155,7 +174,16 @@ export function formatControlState(
   const story = paragraphId ? editableStoryOf(model, paragraphId) : undefined
   const index =
     story?.paragraphs.findIndex((item) => item.id === paragraphId) ?? -1
-  const previous = index > 0 ? story?.paragraphs[index - 1] : undefined
+  const flowOrder = paragraphId
+    ? flowParagraphIds(model, inserts, [])
+    : undefined
+  const flowIndex = flowOrder ? flowOrder.indexOf(paragraphId ?? '') : -1
+  const previous =
+    index > 0
+      ? story?.paragraphs[index - 1]
+      : flowIndex > 0
+        ? storedFor(flowOrder?.[flowIndex - 1] ?? '')
+        : undefined
   const previousNum = previous
     ? (format.numbering[previous.id] ?? paragraphNumPr(previous, model.styles))
     : undefined
@@ -176,7 +204,7 @@ export function formatControlState(
   const paragraphStyleId = styleAgrees ? (paragraphStyleIds[0] ?? '') : ''
   const paragraphStyleMixed = paragraphIds.length > 1 && !styleAgrees
   const targetParagraphs = paragraphIds.flatMap((id) => {
-    const item = selectedParagraph(model, id)
+    const item = storedFor(id)
     return item ? [item] : []
   })
   const numberedTargets = targetParagraphs.filter((item) =>
@@ -189,7 +217,12 @@ export function formatControlState(
       const override = paragraphStartOverride(model, format, item)
       return override !== undefined && override !== null
     })
-  const paragraphFormat = paragraphFormatState(model, format, paragraphIds)
+  const paragraphFormat = paragraphFormatState(
+    model,
+    format,
+    paragraphIds,
+    storedFor,
+  )
   return {
     paragraph,
     paragraphIds,

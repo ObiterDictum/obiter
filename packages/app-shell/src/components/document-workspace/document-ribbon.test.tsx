@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'bun:test'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import {
   commandDisabled,
+  commandReason,
   setTrackChanges,
   trackChangesState,
 } from './editor-test-commands'
@@ -151,6 +152,68 @@ describe('ribbon commands', () => {
     expect(
       screen.getByRole('combobox', { name: 'Paragraph style' }),
     ).toBeTruthy()
+  })
+
+  it('exposes a reason on every disabled ribbon control', () => {
+    mountDocument()
+    const offenders = new Set<string>()
+    const CONTROL_ROLES = [
+      'button',
+      'menuitem',
+      'menuitemcheckbox',
+      'menuitemradio',
+    ] as const
+    const collect = (root: ParentNode) => {
+      for (const role of CONTROL_ROLES) {
+        for (const element of within(root as HTMLElement).queryAllByRole(
+          role,
+        )) {
+          if (
+            commandDisabled(element) &&
+            commandReason(element).trim() === ''
+          ) {
+            offenders.add(
+              `${role} "${
+                element.getAttribute('aria-label') ??
+                element.textContent?.trim() ??
+                '?'
+              }"`,
+            )
+          }
+        }
+      }
+    }
+    const collectRibbon = () => {
+      collect(document.body)
+      for (const trigger of document.querySelectorAll<HTMLElement>(
+        '[role="tabpanel"] [aria-haspopup="menu"]',
+      )) {
+        if (trigger.getAttribute('aria-expanded') === 'true') continue
+        fireEvent.click(trigger)
+        const menu = document.querySelector<HTMLElement>('[role="menu"]')
+        if (menu) collect(menu)
+        fireEvent.keyDown(document.activeElement ?? menu ?? document.body, {
+          key: 'Escape',
+        })
+      }
+    }
+
+    collectRibbon()
+    for (const name of ['Edit', 'Insert', 'Format', 'Review', 'View']) {
+      fireEvent.click(tab(name))
+      collectRibbon()
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'File' }))
+    const fileMenu = screen.getByRole('menu', { name: 'File' })
+    collect(fileMenu)
+    fireEvent.keyDown(fileMenu, { key: 'Escape' })
+    fireEvent.click(tab('Format'))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Font, paragraph and page' }),
+    )
+    collect(screen.getByRole('dialog', { name: 'Font, paragraph and page' }))
+
+    expect([...offenders]).toEqual([])
   })
 })
 
