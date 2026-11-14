@@ -213,10 +213,12 @@ build bakes the commit its marker records into the client as
 `__OBITER_BUILD_COMMIT__` (`apps/web/vite.config.ts`, from `buildIdentity` in
 `build-provenance.mjs`), and `serve.mjs` serves the running commit at
 `/.well-known/obiter-version`. The shell (`packages/app-shell/src/build-version.ts`)
-asks that route every 5 minutes while the tab is visible and whenever the
-window regains focus. When the served commit differs from the one the page
-loaded, it stops polling and shows a compact update icon in the top bar,
-labelled "Update available. Reload to update". It never reloads by itself,
+asks that route every minute while the tab is visible, and at once whenever the
+window regains focus, the tab becomes visible again or the browser comes back
+online. When the served commit differs from the one the page loaded, it stops
+polling and shows a "Reload to update" prompt in the top bar, a brand-filled
+pill with visible text whose accessible name is "Update available. Reload to
+update". It never reloads by itself,
 because a person may be editing.
 
 - A failed request, an error status or an unreadable body is silent: the next

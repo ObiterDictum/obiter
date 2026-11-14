@@ -9,7 +9,12 @@ import {
 
 function fakeTab(visibility: 'visible' | 'hidden' = 'visible') {
   const intervals = new Map<number, { fn: () => void; ms: number }>()
-  const focusListeners = new Set<() => void>()
+  const listeners = new Map<string, Set<() => void>>()
+  const focusListeners = {
+    get size() {
+      return [...listeners.values()].reduce((sum, set) => sum + set.size, 0)
+    },
+  }
   let nextId = 1
   const target: BuildWatchTarget = {
     document: { visibilityState: visibility },
@@ -21,11 +26,13 @@ function fakeTab(visibility: 'visible' | 'hidden' = 'visible') {
     clearInterval: (id) => {
       intervals.delete(id)
     },
-    addEventListener: (_type, listener) => {
-      focusListeners.add(listener)
+    addEventListener: (type, listener) => {
+      const set = listeners.get(type) ?? new Set()
+      set.add(listener)
+      listeners.set(type, set)
     },
-    removeEventListener: (_type, listener) => {
-      focusListeners.delete(listener)
+    removeEventListener: (type, listener) => {
+      listeners.get(type)?.delete(listener)
     },
   }
   return {
@@ -36,8 +43,11 @@ function fakeTab(visibility: 'visible' | 'hidden' = 'visible') {
     tick() {
       for (const { fn } of intervals.values()) fn()
     },
+    fire(type: string) {
+      for (const listener of listeners.get(type) ?? []) listener()
+    },
     focus() {
-      for (const listener of focusListeners) listener()
+      for (const listener of listeners.get('focus') ?? []) listener()
     },
     intervals,
     focusListeners,
@@ -56,7 +66,7 @@ function servedBuilds(...builds: (string | null)[]) {
 }
 
 describe('watchServedBuild', () => {
-  it('polls every five minutes', () => {
+  it('polls every minute', () => {
     const tab = fakeTab()
     const stop = watchServedBuild({
       loadedBuild: 'a',
@@ -67,7 +77,7 @@ describe('watchServedBuild', () => {
     expect([...tab.intervals.values()].map((entry) => entry.ms)).toEqual([
       BUILD_POLL_INTERVAL_MS,
     ])
-    expect(BUILD_POLL_INTERVAL_MS).toBe(5 * 60 * 1000)
+    expect(BUILD_POLL_INTERVAL_MS).toBe(60 * 1000)
     stop()
   })
 
@@ -117,6 +127,24 @@ describe('watchServedBuild', () => {
     await settle()
     expect(seen).toEqual(['b'])
   })
+
+  for (const event of ['visibilitychange', 'online']) {
+    it(`checks straight away on ${event}, without waiting for the next poll`, async () => {
+      const tab = fakeTab('hidden')
+      const served = servedBuilds('b')
+      const seen: string[] = []
+      watchServedBuild({
+        loadedBuild: 'a',
+        onNewBuild: (build) => seen.push(build),
+        fetchBuild: served.fetchBuild,
+        target: tab.target,
+      })
+      tab.setVisibility('visible')
+      tab.fire(event)
+      await settle()
+      expect(seen).toEqual(['b'])
+    })
+  }
 
   it('stays quiet while the served build is the one the page loaded', async () => {
     const tab = fakeTab()

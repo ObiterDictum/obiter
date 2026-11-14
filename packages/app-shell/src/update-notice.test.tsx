@@ -87,6 +87,16 @@ describe('the web update notice', () => {
     ).toBeTruthy()
   })
 
+  it('shows the reload prompt as visible text, not only an icon', async () => {
+    serveBuild('b')
+    render(<AppUpdateNotice platform="web" loadedBuild="a" />)
+    await focusTab()
+    const button = await screen.findByRole('button', {
+      name: 'Update available. Reload to update',
+    })
+    expect(button.textContent).toBe('Reload to update')
+  })
+
   it('never reloads the page by itself', async () => {
     serveBuild('b')
     const reload = spyOn(window.location, 'reload').mockImplementation(() => {})
