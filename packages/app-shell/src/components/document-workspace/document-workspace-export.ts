@@ -46,3 +46,16 @@ function skippedCommentsMessage(count: number) {
     ? '1 comment could not be placed in the exported document and was skipped.'
     : `${String(count)} comments could not be placed in the exported document and were skipped.`
 }
+
+export function exportsFor(
+  documentId: string,
+  filename: string,
+  onNotice: (notice: string) => void,
+  insert: { whenImageReadsIdle: () => Promise<void> },
+  save: { flushSave: () => Promise<boolean> },
+) {
+  return documentExportHandlers(documentId, filename, onNotice, async () => {
+    await insert.whenImageReadsIdle()
+    return save.flushSave()
+  })
+}
