@@ -6,7 +6,7 @@ import { createAccount } from './document-journey'
 import { signIn } from './e13-support'
 import { openMatter } from './support'
 
-const { databaseName } = resolveJourneyTargets()
+const { databaseName, webOrigin } = resolveJourneyTargets()
 
 test('private research remembers turns and denies colleagues access', async ({
   page,
@@ -16,6 +16,12 @@ test('private research remembers turns and denies colleagues access', async ({
   const owner = await createAccount(request, 'AgentOwner')
   const colleague = await createAccount(request, 'AgentColleague')
   await signIn(page, owner.email, owner.password)
+  const created = await page.request.post('/api/organisations', {
+    data: { name: 'Agent Synthetic Chambers' },
+    headers: { Origin: webOrigin },
+  })
+  expect(created.ok(), await created.text()).toBe(true)
+  await page.reload()
   const me = meResponseSchema.parse(
     await (await page.request.get('/api/me')).json(),
   )
