@@ -12,7 +12,7 @@ import {
 } from '@tanstack/react-router'
 import { ToastProvider } from '@obiter/ui'
 import { StaffUsageRouteView } from './staff-usage'
-import { validateStaffUsageSearch } from '../staff'
+import { validateStaffUsageSearch } from '../staff-search'
 
 const counts = {
   activeUsers: 10,

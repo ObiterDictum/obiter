@@ -19,7 +19,7 @@ import {
 } from '@tanstack/react-router'
 import { ToastProvider, Toaster } from '@obiter/ui'
 import { StaffFeedbackRouteView } from './staff-feedback'
-import { validateStaffFeedbackSearch } from '../staff'
+import { validateStaffFeedbackSearch } from '../staff-search'
 
 const items = [
   {
