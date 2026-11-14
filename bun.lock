@@ -24,6 +24,7 @@
       "version": "0.1.2",
       "dependencies": {
         "@obiter/app-shell": "workspace:*",
+        "@obiter/config": "workspace:*",
         "@obiter/redact-ui": "workspace:*",
         "@obiter/ui": "workspace:*",
         "@tanstack/react-query": "^5.100.1",
@@ -70,6 +71,7 @@
       "name": "@obiter/app-shell",
       "version": "0.0.0",
       "dependencies": {
+        "@obiter/config": "workspace:*",
         "@obiter/contracts": "workspace:*",
         "@obiter/ooxml": "workspace:*",
         "@obiter/ui": "workspace:*",

@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./env-keys": "./src/env-keys.mjs",
-    "./local-env": "./src/local-env.mjs"
+    "./local-env": "./src/local-env.mjs",
+    "./error-reporting": "./src/error-reporting.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

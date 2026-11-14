@@ -1,3 +1,4 @@
+import { redactMessage } from '@obiter/config/error-reporting'
 import {
   app,
   ipcMain,
@@ -178,5 +179,11 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
+  }
+})
+
+process.on('uncaughtExceptionMonitor',error => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send('obiter:main-error',{kind:redactMessage(error.name),message:redactMessage(error.message)})
   }
 })

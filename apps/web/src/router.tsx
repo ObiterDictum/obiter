@@ -1,3 +1,4 @@
+import { startErrorReporting } from '@obiter/app-shell/error-reporting'
 import { createRouter as createTanStackRouter } from '@tanstack/react-router'
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
 import { routeTree } from './routeTree.gen'
@@ -5,6 +6,7 @@ import { getContext } from './integrations/tanstack-query/root-provider'
 import { initServerRequest } from './lib/init-server-request'
 
 export function getRouter() {
+  startErrorReporting('web',__OBITER_BUILD_COMMIT__,import.meta.env.PROD)
   initServerRequest()
   const context = getContext()
   const router = createTanStackRouter({

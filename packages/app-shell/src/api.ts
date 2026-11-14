@@ -1,3 +1,4 @@
+import { reportError } from './error-reporting'
 import {
   parseApiErrorResponse,
   type ApiErrorCode,
@@ -96,7 +97,11 @@ async function authorisedFetch(
       ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
       ...init?.headers,
     },
+  }).catch((error: unknown) => {
+    reportError(new Error('API network request failed'),{route:input,method:init?.method ?? 'GET'})
+    throw error
   })
+  if (response.status >= 500) reportError(new Error('API server request failed'),{route:input,status:response.status,method:init?.method ?? 'GET'})
   if (!response.ok) await throwApiError(response)
   return response
 }

@@ -12,6 +12,7 @@ const STAFF_SECTIONS = [
   { to: '/staff/access', label: 'Access review', icon: ShieldCheck },
   { to: '/staff/usage', label: 'Usage', icon: ArrowsClockwise },
   { to: '/staff/feedback', label: 'Feedback', icon: ChatText },
+  { to: '/staff/errors', label: 'Errors', icon: ArrowsClockwise },
 ] as const
 
 export function StaffContents({ pathname }: { pathname: string }) {

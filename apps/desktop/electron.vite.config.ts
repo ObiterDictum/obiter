@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
@@ -24,6 +25,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
+    define: { __OBITER_BUILD_COMMIT__: JSON.stringify(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()) },
     build: {
       manifest: true,
       minify: true,

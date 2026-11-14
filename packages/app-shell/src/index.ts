@@ -148,3 +148,5 @@ export {
 } from './legal-search-recents'
 
 export { AccessSetupRouteView } from './views/access-setup'
+
+export { ErrorReportingBoundary } from './error-boundary'

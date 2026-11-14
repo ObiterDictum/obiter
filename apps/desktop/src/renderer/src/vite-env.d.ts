@@ -14,3 +14,5 @@ interface Window {
     restartToUpdate(): Promise<void>
   }
 }
+
+declare const __OBITER_BUILD_COMMIT__: string
