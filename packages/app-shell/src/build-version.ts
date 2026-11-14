@@ -1,5 +1,8 @@
 export const BUILD_VERSION_PATH = '/.well-known/obiter-version'
-export const BUILD_POLL_INTERVAL_MS = 5 * 60 * 1000
+export const BUILD_POLL_INTERVAL_MS = 60 * 1000
+
+const RECHECK_EVENTS = ['focus', 'visibilitychange', 'online'] as const
+type RecheckEvent = (typeof RECHECK_EVENTS)[number]
 
 type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -7,8 +10,8 @@ export interface BuildWatchTarget {
   document: { visibilityState: DocumentVisibilityState }
   setInterval(fn: () => void, ms: number): number
   clearInterval(id: number): void
-  addEventListener(type: 'focus', listener: () => void): void
-  removeEventListener(type: 'focus', listener: () => void): void
+  addEventListener(type: RecheckEvent, listener: () => void): void
+  removeEventListener(type: RecheckEvent, listener: () => void): void
 }
 
 export async function fetchServedBuild(
@@ -46,13 +49,13 @@ export function watchServedBuild({
     stop()
     onNewBuild(served)
   }
-  const onFocus = () => void check()
-  const timer = target.setInterval(onFocus, BUILD_POLL_INTERVAL_MS)
-  target.addEventListener('focus', onFocus)
+  const recheck = () => void check()
+  const timer = target.setInterval(recheck, BUILD_POLL_INTERVAL_MS)
+  for (const type of RECHECK_EVENTS) target.addEventListener(type, recheck)
   function stop() {
     stopped = true
     target.clearInterval(timer)
-    target.removeEventListener('focus', onFocus)
+    for (const type of RECHECK_EVENTS) target.removeEventListener(type, recheck)
   }
   return stop
 }

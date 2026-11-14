@@ -1,6 +1,5 @@
 import { flushUpdateSaves } from './update-saves'
 import type { AppPlatform } from '@obiter/contracts'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
 import { ArrowClockwise } from '@obiter/ui/icons/shell'
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { useUpdatePolicy } from './update-policy'
@@ -79,22 +78,21 @@ export function AppUpdateNotice({
       </Suspense>
     )
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            aria-label={label}
-            disabled={saving}
-            className="app-no-drag relative grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-ring"
-            onClick={() => void saveAndUpdate()}
-          >
-            <ArrowClockwise size={16} aria-hidden />
-            <span className="absolute top-0 right-0 size-1.5 rounded-full bg-brand" />
-          </button>
-        }
-      />
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
+    <button
+      type="button"
+      aria-label={label}
+      disabled={saving}
+      className="app-no-drag flex h-7 shrink-0 items-center gap-1.5 rounded-pill bg-brand px-2.5 text-caption font-medium text-brand-fg transition-colors duration-150 hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60"
+      onClick={() => void saveAndUpdate()}
+    >
+      <ArrowClockwise size={14} aria-hidden />
+      <span className="max-sm:hidden">
+        {saving
+          ? 'Saving…'
+          : desktop
+            ? 'Restart to update'
+            : 'Reload to update'}
+      </span>
+    </button>
   )
 }
