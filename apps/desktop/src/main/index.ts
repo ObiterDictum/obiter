@@ -182,8 +182,12 @@ app.on('window-all-closed', () => {
   }
 })
 
-process.on('uncaughtExceptionMonitor',error => {
+process.on('uncaughtExceptionMonitor', (error) => {
   for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) window.webContents.send('obiter:main-error',{kind:redactMessage(error.name),message:redactMessage(error.message)})
+    if (!window.isDestroyed())
+      window.webContents.send('obiter:main-error', {
+        kind: redactMessage(error.name),
+        message: redactMessage(error.message),
+      })
   }
 })

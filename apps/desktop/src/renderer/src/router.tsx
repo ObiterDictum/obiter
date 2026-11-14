@@ -122,7 +122,10 @@ const StaffUsageRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/staff-usage'))
     .StaffUsageRouteView,
 }))
-const StaffErrorsRouteView = lazy(async () => ({default:(await import('@obiter/app-shell/views/staff-errors')).StaffErrorsRouteView}))
+const StaffErrorsRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/staff-errors'))
+    .StaffErrorsRouteView,
+}))
 const StaffFeedbackRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/staff-feedback'))
     .StaffFeedbackRouteView,
@@ -394,7 +397,15 @@ const staffUsageRoute = createRoute({
     </Suspense>
   ),
 })
-const staffErrorsRoute = createRoute({getParentRoute:() => rootRoute,path:'staff/errors',component:() => <Suspense fallback={<RouteLoading />}><StaffErrorsRouteView /></Suspense>})
+const staffErrorsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'staff/errors',
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <StaffErrorsRouteView />
+    </Suspense>
+  ),
+})
 const staffFeedbackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'staff/feedback',

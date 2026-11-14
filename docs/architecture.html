@@ -898,6 +898,7 @@
           <li><a href="#http">HTTP surface</a></li>
           <li><a href="#lifecycle">Request lifecycle</a></li>
           <li><a href="#auth">Auth and scoping</a></li>
+          <li><a href="#error-reporting">Error reporting</a></li>
           <li class="grp">State</li>
           <li><a href="#data">Data model</a></li>
           <li><a href="#storage">Object storage</a></li>
@@ -4520,6 +4521,18 @@
             matter, client, redaction, or session data, and production health
             must never expose environment, version, or configuration detail.
           </div>
+        </section>
+
+        <section id="error-reporting">
+          <h2>First-party error reporting</h2>
+          <p>
+            POST /api/telemetry/errors accepts scrubbed client batches. GET
+            /api/staff/errors and GET /api/staff/errors/:fingerprint use the
+            staff and two-factor gate. The API records server failures.
+            Migration 0057_error_reports.sql stores reports indexed by
+            fingerprint and time. A daily single-flight purge enforces 90-day
+            retention. No external reporting service is used.
+          </p>
         </section>
 
         <section id="data">
@@ -8513,6 +8526,17 @@
             is worse than none.
           </p>
         </footer>
+        <section id="error-reporting">
+          <h2>First-party error reporting</h2>
+          <p>
+            POST /api/telemetry/errors accepts scrubbed client batches. GET
+            /api/staff/errors and GET /api/staff/errors/:fingerprint use the
+            staff and two-factor gate. The API also records server failures.
+            Migration 0057_error_reports.sql stores reports indexed by
+            fingerprint and time; a daily single-flight purge enforces 90-day
+            retention. No external reporting service is used.
+          </p>
+        </section>
       </main>
     </div>
 

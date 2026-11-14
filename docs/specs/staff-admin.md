@@ -251,3 +251,15 @@ Recorded 7 November 2026:
 2. A second factor is required for staff before testers from outside Obiter
    arrive.
 3. Suspension is per person; it never affects an organisation's matters.
+
+## Errors
+
+The Errors screen sits beside Overview, Usage and Feedback on web and desktop.
+It uses the existing staff and two-factor gate. A daily line chart covers the
+last 30 days. Groups are sorted by last seen and show kind, scrubbed message,
+count, distinct affected users and last seen. Selecting a group shows its last
+20 samples with scrubbed stack frames, route pattern, source and build commit.
+`GET /api/staff/errors?days=1..90` returns up to 500 groups and a daily series;
+`GET /api/staff/errors/:fingerprint` returns recent samples.
+`POST /api/telemetry/errors` accepts bounded signed-in or signed-out batches.
+See Data and Compliance for collection fields, exclusions and 90-day retention.

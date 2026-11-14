@@ -6,7 +6,7 @@ import ReactDOM from 'react-dom/client'
 import { createAppRouter } from './router'
 import './styles.css'
 
-startErrorReporting('desktop',__OBITER_BUILD_COMMIT__,import.meta.env.PROD)
+startErrorReporting('desktop', __OBITER_BUILD_COMMIT__, import.meta.env.PROD)
 
 const queryClient = new QueryClient()
 const router = createAppRouter(queryClient)
@@ -18,6 +18,8 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <QueryClientProvider client={queryClient}>
-    <ErrorReportingBoundary><RouterProvider router={router} /></ErrorReportingBoundary>
+    <ErrorReportingBoundary>
+      <RouterProvider router={router} />
+    </ErrorReportingBoundary>
   </QueryClientProvider>,
 )

@@ -1,5 +1,6 @@
 export function redactMessage(message: string): string {
   return message
+    .replace(/(?:https?:\/\/|file:\/\/)[^\s"'<>]+/gi, '[url]')
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
     .replace(
       /"[^"]*"|'[^']*'|\u201c[^\u201d]*\u201d|\u2018[^\u2019]*\u2019/g,
@@ -24,7 +25,11 @@ export function routePattern(raw: string): string {
     path
       .split('/')
       .filter(Boolean)
-      .map((part) => routeSegments.has(part) || /^[:$][a-zA-Z]+$/.test(part) ? part : ':value')
+      .map((part) =>
+        routeSegments.has(part) || /^[:$][a-zA-Z]+$/.test(part)
+          ? part
+          : ':value',
+      )
       .join('/')
   )
 }
@@ -32,4 +37,24 @@ export function routePattern(raw: string): string {
 export function sourceFile(raw: string): string {
   const file = raw.split(/[?#]/)[0]?.split(/[/\\]/).pop() ?? ''
   return /^[a-zA-Z0-9_.-]+\.(?:[cm]?js|tsx?)$/.test(file) ? file : '[file]'
+}
+
+export function errorFrames(error: unknown) {
+  if (!(error instanceof Error)) return []
+  return (error.stack ?? '')
+    .split('\n')
+    .slice(1, 31)
+    .flatMap((line) => {
+      const match = line.match(/(?:at\s+(.*?)\s+\()?([^\s()]+):(\d+):(\d+)\)?$/)
+      return match
+        ? [
+            {
+              function: redactMessage(match[1] ?? ''),
+              file: sourceFile(match[2] ?? ''),
+              line: Number(match[3]),
+              column: Number(match[4]),
+            },
+          ]
+        : []
+    })
 }

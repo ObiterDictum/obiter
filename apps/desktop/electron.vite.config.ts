@@ -25,7 +25,11 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
-    define: { __OBITER_BUILD_COMMIT__: JSON.stringify(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()) },
+    define: {
+      __OBITER_BUILD_COMMIT__: JSON.stringify(
+        execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+      ),
+    },
     build: {
       manifest: true,
       minify: true,
