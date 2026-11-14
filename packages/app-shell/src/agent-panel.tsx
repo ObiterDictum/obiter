@@ -1,3 +1,4 @@
+import { Robot } from '@obiter/ui/icons'
 import { useState } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { AgentRunView } from './agent-run-view'
@@ -69,6 +70,14 @@ function MatterAgent({
           />
         ) : null}
       </div>
+      {!id ? (
+        <div className="mt-3 flex flex-col items-center gap-2 text-center">
+          <Robot size={24} className="text-muted" aria-hidden />
+          <h2 className="text-body font-medium text-ink">
+            Ask about this matter
+          </h2>
+        </div>
+      ) : null}
       <MatterTextNote
         documentAttached={Boolean(documentId && includeDocument)}
       />

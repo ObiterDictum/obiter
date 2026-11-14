@@ -1,6 +1,6 @@
 import '@obiter/test-dom'
 import { afterEach, expect, it, mock, spyOn } from 'bun:test'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
@@ -9,6 +9,8 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
+import { TitleBar } from '../title-bar'
+import { PagePanelProvider } from '../page-panel'
 import { AgentWindowView } from './agent-window'
 import { AgentContents } from './agent-contents'
 
@@ -20,7 +22,16 @@ function setup(path = '/agent', live = false, missing = false) {
         if (url.endsWith('/api/agent-sessions'))
           return Response.json({
             sessions: [
-              { id: 'old', title: 'Older', updatedAt: '2026-11-10T10:00:00Z' },
+              {
+                id: 'old',
+                title: 'Older question',
+                updatedAt: '2026-11-10T10:00:00Z',
+              },
+              {
+                id: 'ancient',
+                title: 'Ancient question',
+                updatedAt: '2026-10-01T10:00:00Z',
+              },
               { id: 's1', title: 'Newest', updatedAt: '2026-11-14T10:00:00Z' },
             ],
           })
@@ -37,7 +48,11 @@ function setup(path = '/agent', live = false, missing = false) {
                 { status: 404 },
               )
             : Response.json({
-                session: { matterId: null, activeRunId: live ? 'r1' : null },
+                session: {
+                  title: 'Newest',
+                  matterId: null,
+                  activeRunId: live ? 'r1' : null,
+                },
                 runs: live
                   ? [{ id: 'r1', goal: 'A legal question', status: 'running' }]
                   : [],
@@ -56,8 +71,24 @@ function setup(path = '/agent', live = false, missing = false) {
           path,
           component: () => (
             <>
+              <TitleBar
+                platform="web"
+                focusMode={false}
+                onExitFocusMode={() => {}}
+                showSearch={false}
+                chrome="sidebar"
+              />
               <AgentContents pathname={router.state.location.pathname} />
-              <AgentWindowView />
+              <PagePanelProvider
+                panel={{
+                  name: 'conversations',
+                  expanded: false,
+                  controls: 'conversations',
+                  toggle: () => {},
+                }}
+              >
+                <AgentWindowView />
+              </PagePanelProvider>
             </>
           ),
         }),
@@ -109,4 +140,30 @@ it('shows the shell not-found state for an inaccessible conversation', async () 
     await screen.findByRole('heading', { name: /cannot find that page/i }),
   ).toBeTruthy()
   expect(screen.queryByRole('textbox')).toBeNull()
+})
+
+it('groups conversations by calendar day and the previous week', async () => {
+  spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-14T12:00:00Z'))
+  setup()
+  expect(
+    await screen.findByRole('heading', { name: 'Previous 7 days' }),
+  ).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'Today' })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'Older' })).toBeTruthy()
+})
+
+it('shows a slim conversation title and a collapsed conversations control', async () => {
+  setup('/agent/s1')
+  expect(await screen.findByRole('heading', { name: 'Newest' })).toBeTruthy()
+  expect(
+    screen.getByRole('button', { name: 'Show conversations' }),
+  ).toBeTruthy()
+})
+
+it('uses the conversation title as the last breadcrumb', async () => {
+  setup('/agent/s1')
+  const breadcrumb = await screen.findByRole('navigation', {
+    name: 'Breadcrumb',
+  })
+  expect(await within(breadcrumb).findByText('Newest')).toBeTruthy()
 })

@@ -106,3 +106,20 @@ it('trims conversation titles at a word boundary within eighty characters', () =
     'word '.repeat(15) + 'word',
   )
 })
+it('keeps the Message name with a hidden label and grows the editor up to eight lines', () => {
+  setup()
+  const message = screen.getByRole('textbox', { name: 'Message' })
+  expect(screen.getByText('Message').className).toBe('sr-only')
+  Object.defineProperty(message, 'scrollHeight', {
+    configurable: true,
+    value: 120,
+  })
+  fireEvent.change(message, { target: { value: 'A\nB\nC' } })
+  expect(message.style.height).toBe('120px')
+  Object.defineProperty(message, 'scrollHeight', {
+    configurable: true,
+    value: 400,
+  })
+  fireEvent.change(message, { target: { value: 'Longer question' } })
+  expect(message.style.height).toBe('192px')
+})

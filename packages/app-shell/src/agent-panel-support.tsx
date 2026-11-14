@@ -111,13 +111,7 @@ export function RunsList({
       </p>
     )
   }
-  if (runs.data.length === 0) {
-    return (
-      <p className="text-meta text-muted">
-        No runs on this matter yet. Each answer lists the sources it relied on.
-      </p>
-    )
-  }
+  if (runs.data.length === 0) return null
   return (
     <section aria-labelledby="agent-runs-heading">
       <h3 id="agent-runs-heading" className="text-meta font-medium text-ink">

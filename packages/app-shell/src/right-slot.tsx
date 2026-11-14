@@ -102,7 +102,13 @@ export function RightSlot({
         }}
         className="flex min-h-0 flex-1 flex-col"
       >
-        <div className="flex h-10 shrink-0 items-center border-b border-line px-2">
+        <div
+          className={
+            tabs.length === 1
+              ? 'hidden'
+              : 'flex h-10 shrink-0 items-center border-b border-line px-2'
+          }
+        >
           <TabsList
             aria-label="Panel tabs"
             className="w-full gap-1 bg-transparent p-0"

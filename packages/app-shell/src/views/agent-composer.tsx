@@ -4,7 +4,7 @@ import {
 } from '@obiter/contracts'
 import { useId, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Button } from '@obiter/ui'
+import { ArrowRight, CircleNotch } from '@obiter/ui/icons'
 import { ApiError } from '../api'
 import { createSession, postTurn, sessionKeys } from '../agent-sessions'
 
@@ -97,14 +97,21 @@ export function AgentComposer({
           event.preventDefault()
           submit()
         }}
-        className="flex flex-col gap-2"
+        className="flex flex-col gap-2 rounded-xl border border-line bg-raised p-3 focus-within:ring-1 focus-within:ring-[var(--obiter-ring)]"
       >
-        <label htmlFor={id} className="text-meta font-medium text-ink">
+        <label htmlFor={id} className="sr-only">
           Message
         </label>
         <textarea
           id={id}
-          rows={3}
+          rows={1}
+          placeholder="Ask about case law or legislation…"
+          ref={(node) => {
+            if (node) {
+              node.style.height = 'auto'
+              node.style.height = `${Math.min(node.scrollHeight, 192)}px`
+            }
+          }}
           maxLength={AGENT_GOAL_MAX_LENGTH}
           value={text}
           disabled={disabled}
@@ -123,22 +130,35 @@ export function AgentComposer({
               submit()
             }
           }}
-          className="w-full resize-y rounded-md border border-line bg-surface px-3 py-2 text-body text-ink focus-visible:outline-2 focus-visible:outline-ring"
+          className="max-h-48 min-h-8 w-full resize-none border-0 bg-transparent py-1 text-body text-ink outline-none"
         />
-        {live ? (
-          <p id={`${id}-reason`} className="text-meta text-muted">
-            Wait for the current answer before sending another message.
+        <div className="flex items-center justify-between gap-3">
+          <p id={`${id}-reason`} className="text-caption text-muted">
+            {live ? (
+              'Wait for the current answer before sending another message.'
+            ) : (
+              <span className="hidden sm:inline">
+                Enter to send · Shift+Enter for a new line
+              </span>
+            )}
           </p>
-        ) : null}
-        <Button
-          type="submit"
-          size="sm"
-          className="self-end"
-          disabled={disabled || !text.trim()}
-          loading={send.isPending}
-        >
-          Send
-        </Button>
+          <button
+            type="submit"
+            aria-label="Send"
+            disabled={disabled || !text.trim()}
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-surface disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {disabled ? (
+              <CircleNotch
+                size={16}
+                aria-hidden
+                className="motion-safe:animate-spin"
+              />
+            ) : (
+              <ArrowRight size={16} aria-hidden className="-rotate-90" />
+            )}
+          </button>
+        </div>
         {send.error ? (
           <p role="alert" className="text-meta text-danger">
             {send.error instanceof ApiError && send.error.status === 409
@@ -154,7 +174,7 @@ export function AgentComposer({
               key={prompt}
               type="button"
               onClick={() => setText(prompt)}
-              className="rounded-md border border-line px-3 py-2 text-meta text-muted hover:bg-hover hover:text-ink"
+              className="rounded-full border border-line px-3 py-1.5 text-meta text-muted hover:bg-hover hover:text-ink"
             >
               {prompt}
             </button>

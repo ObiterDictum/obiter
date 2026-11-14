@@ -1,3 +1,5 @@
+import { Robot } from '@obiter/ui/icons'
+import { PagePanelToggle } from '../page-panel'
 import { useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
@@ -17,10 +19,20 @@ export function AgentWindowView() {
       : undefined
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface px-4">
-      <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col py-8">
+      {!sessionId ? (
+        <div className="absolute pt-4">
+          <PagePanelToggle />
+        </div>
+      ) : null}
+      <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col py-6">
         {sessionId ? null : (
-          <header className="mb-8 mt-8 flex flex-col gap-3">
-            <h1 className="text-title text-ink">Research with Agent</h1>
+          <header className="mb-6 mt-auto flex flex-col items-center gap-3 text-center">
+            <div className="grid size-12 place-items-center rounded-full bg-fill text-muted">
+              <Robot size={24} aria-hidden />
+            </div>
+            <h1 className="text-title text-ink">
+              What would you like to research?
+            </h1>
             <p className="text-meta text-muted">
               Only you can see this conversation. It searches case law and
               legislation; matter documents are never used.
@@ -66,22 +78,37 @@ export function AgentConversation({
     return <ShellNotFound />
   if (detail.error) return <p role="alert">{detail.error.message}</p>
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className={
+        sessionId ? 'flex min-h-0 flex-1 flex-col' : 'mb-auto flex flex-col'
+      }
+    >
       <div className="flex-1">
         {detail.data ? (
-          <h1 className="text-title text-ink">{detail.data.session.title}</h1>
+          <header className="mb-4 flex min-w-0 items-center gap-2">
+            {matterId === null ? <PagePanelToggle /> : null}
+            <h1 className="truncate text-title text-ink">
+              {detail.data.session.title}
+            </h1>
+          </header>
         ) : null}
         {detail.data?.runs.map((run) => (
           <AgentTurn key={run.id} run={run} />
         ))}
       </div>
       <div ref={bottom} />
-      <div className="sticky bottom-0 bg-surface py-4">
+      <div
+        className={
+          sessionId
+            ? 'sticky bottom-0 bg-surface py-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:from-[var(--obiter-surface)] before:to-transparent'
+            : 'py-4'
+        }
+      >
         <AgentComposer
           sessionId={sessionId}
           matterId={detail.data?.session.matterId ?? matterId}
           live={Boolean(detail.data?.session.activeRunId)}
-          showStarters={!sessionId}
+          showStarters={!sessionId && matterId === null}
           onSent={(id) => {
             onSent(id)
             requestAnimationFrame(() =>
