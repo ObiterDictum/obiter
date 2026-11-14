@@ -8,6 +8,7 @@ import {
   SavedNotice,
   SectionHeading,
 } from './settings-fields'
+import { TwoFactorSection } from './settings-two-factor'
 
 export function SecuritySection({ active }: { active: boolean }) {
   const { changePassword } = useAuth()
@@ -123,6 +124,8 @@ export function SecuritySection({ active }: { active: boolean }) {
         </div>
         {error ? <ErrorNotice message={error} /> : null}
       </form>
+
+      <TwoFactorSection />
     </section>
   )
 }

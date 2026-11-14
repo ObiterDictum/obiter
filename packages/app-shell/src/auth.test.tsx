@@ -1,42 +1,18 @@
 import '@obiter/test-dom'
-import { describe, expect, it, beforeEach, mock as bunMock } from 'bun:test'
+import { describe, expect, it, beforeEach } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
-import type { ReactNode } from 'react'
-
-const mock = vi.hoisted(() => ({
-  signInEmail: vi.fn(),
-  signOutFn: vi.fn(),
-  sendVerificationEmail: vi.fn(),
-  useSession: vi.fn(),
-  refetch: vi.fn(),
-}))
-
-bunMock.module('better-auth/react', () => ({
-  createAuthClient: () => ({
-    useSession: mock.useSession,
-    signIn: { email: mock.signInEmail },
-    signOut: mock.signOutFn,
-    sendVerificationEmail: mock.sendVerificationEmail,
-  }),
-}))
-
-bunMock.module('better-auth/client/plugins', () => ({
-  magicLinkClient: () => ({}),
-}))
-
-const { useAuth } = await import('./auth')
-
-const { signInEmail, useSession, signOutFn, sendVerificationEmail, refetch } =
-  mock
-
-function createWrapper(client: QueryClient) {
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  }
-}
+import {
+  createWrapper,
+  refetch,
+  sendVerificationEmail,
+  signInEmail,
+  signOutFn,
+  useAuth,
+  useSession,
+} from './auth-test-support'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -180,6 +156,28 @@ describe('useAuth — sign-in success/failure', () => {
       message: 'Sign-in failed.',
       code: undefined,
     })
+  })
+
+  it('asks for the second factor when the server returns a two-factor redirect', async () => {
+    signInEmail.mockResolvedValueOnce({
+      error: null,
+      data: { twoFactorRedirect: true, twoFactorMethods: ['totp'] },
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.signInWithEmail({
+        email: 'staff@obiter.dev',
+        password: 'obiter-dev',
+      })
+    })
+
+    expect(outcome).toEqual({ ok: true, twoFactor: true })
+    expect(refetch).not.toHaveBeenCalled()
   })
 
   it('forwards EMAIL_NOT_VERIFIED so the sign-in screen can offer a resend', async () => {

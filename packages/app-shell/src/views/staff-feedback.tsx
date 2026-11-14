@@ -1,13 +1,12 @@
+import { StaffGate } from './staff-gate'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { Badge, Button, Skeleton } from '@obiter/ui'
 import type { BadgeTone } from '@obiter/ui'
 import type { StaffFeedbackItem } from '@obiter/contracts'
-import { useCurrentUser } from '../current-user'
 import { formatDateTime } from '../format'
 import { PageScaffold } from '../page-scaffold'
 import { SegmentedControl } from '../segmented-control'
-import { ShellNotFound } from '../shell-states'
 import {
   staffFeedbackHandledMutationOptions,
   staffFeedbackQueryOptions,
@@ -41,9 +40,11 @@ const KIND_TONES = {
 } as const satisfies Record<StaffFeedbackItem['kind'], BadgeTone>
 
 export function StaffFeedbackRouteView() {
-  const { data: me } = useCurrentUser()
-  if (!me.isStaff) return <ShellNotFound />
-  return <StaffFeedback />
+  return (
+    <StaffGate>
+      <StaffFeedback />
+    </StaffGate>
+  )
 }
 
 function StaffFeedback() {

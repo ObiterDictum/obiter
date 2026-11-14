@@ -28,6 +28,7 @@ bunMock.module('better-auth/react', () => ({
 
 bunMock.module('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
+  twoFactorClient: () => ({}),
 }))
 
 const { changePasswordFn, useSession, refetch } = mock

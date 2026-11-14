@@ -84,6 +84,7 @@ export const usage = {
 function staffUser(isStaff: boolean) {
   return {
     isStaff,
+    twoFactorEnabled: isStaff,
     user: {
       id: 'synthetic',
       name: 'Synthetic reviewer',

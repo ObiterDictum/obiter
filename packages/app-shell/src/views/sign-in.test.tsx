@@ -13,6 +13,7 @@ import { vi } from '../../../../scripts/test/vitest-compat'
 
 const authMocks = vi.hoisted(() => ({
   signInWithEmail: vi.fn(),
+  verifyTwoFactorSignIn: vi.fn(),
   requestMagicLink: vi.fn(),
   navigate: vi.fn(),
   resendVerificationEmail: vi.fn(),
@@ -33,6 +34,7 @@ mock.module('../auth', () =>
         session: null,
         isPending: false,
         signInWithEmail: authMocks.signInWithEmail,
+        verifyTwoFactorSignIn: authMocks.verifyTwoFactorSignIn,
         requestMagicLink: authMocks.requestMagicLink,
         requestPasswordReset: vi.fn(),
         resetPassword: vi.fn(),
@@ -111,7 +113,9 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('lex@obiter.dev', 'wrong-password')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Invalid email or password.')).toBeTruthy()
@@ -149,14 +153,18 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="web" />)
     fillPasswordForm('lex@obiter.dev', 'password123')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Email not verified')).toBeTruthy()
     })
-    fireEvent.click(
-      screen.getByRole('button', { name: /resend verification email/i }),
-    )
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /resend verification email/i }),
+      )
+    })
     await waitFor(() => {
       expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
         'lex@obiter.dev',
@@ -183,12 +191,173 @@ describe('SignInRouteView — password submit outcomes', () => {
 
     render(<SignInRouteView platform="desktop" />)
     fillPasswordForm('lex@obiter.dev', 'password123')
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Network down')).toBeTruthy()
     })
     expect(authMocks.navigate).not.toHaveBeenCalled()
+  })
+
+  it('moves to the second-factor step when the password sign-in needs one', async () => {
+    authMocks.signInWithEmail.mockResolvedValueOnce({
+      ok: true,
+      twoFactor: true,
+    })
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('staff@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Two-factor authentication' }),
+      ).toBeTruthy()
+    })
+    expect(authMocks.navigate).not.toHaveBeenCalled()
+    const codeInput = screen.getByLabelText('Authentication code')
+    expect(codeInput.getAttribute('autocomplete')).toBe('one-time-code')
+    expect(codeInput.getAttribute('inputmode')).toBe('numeric')
+  })
+
+  it('verifies a TOTP code on the second step and navigates home', async () => {
+    authMocks.signInWithEmail.mockResolvedValueOnce({
+      ok: true,
+      twoFactor: true,
+    })
+    authMocks.verifyTwoFactorSignIn.mockResolvedValueOnce({ ok: true })
+    authMocks.navigate.mockResolvedValueOnce(undefined)
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('staff@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+    await waitFor(() => {
+      expect(screen.getByLabelText('Authentication code')).toBeTruthy()
+    })
+
+    fireEvent.change(screen.getByLabelText('Authentication code'), {
+      target: { value: '123456' },
+    })
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Verify and sign in' }),
+      )
+    })
+
+    await waitFor(() => {
+      expect(authMocks.verifyTwoFactorSignIn).toHaveBeenCalledWith({
+        code: '123456',
+        backupCode: false,
+        trustDevice: false,
+      })
+    })
+    await waitFor(() => {
+      expect(authMocks.navigate).toHaveBeenCalledWith({ to: '/' })
+    })
+  })
+
+  it('sends a backup code through the backup-code path', async () => {
+    authMocks.signInWithEmail.mockResolvedValueOnce({
+      ok: true,
+      twoFactor: true,
+    })
+    authMocks.verifyTwoFactorSignIn.mockResolvedValueOnce({ ok: true })
+    authMocks.navigate.mockResolvedValueOnce(undefined)
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('staff@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+    await waitFor(() => {
+      expect(screen.getByLabelText('Authentication code')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Use a backup code' }))
+    fireEvent.change(screen.getByLabelText('Backup code'), {
+      target: { value: 'abcde-fghij' },
+    })
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Verify and sign in' }),
+      )
+    })
+
+    await waitFor(() => {
+      expect(authMocks.verifyTwoFactorSignIn).toHaveBeenCalledWith({
+        code: 'abcde-fghij',
+        backupCode: true,
+        trustDevice: false,
+      })
+    })
+  })
+
+  it('shows the verification error and stays on the second step', async () => {
+    authMocks.signInWithEmail.mockResolvedValueOnce({
+      ok: true,
+      twoFactor: true,
+    })
+    authMocks.verifyTwoFactorSignIn.mockResolvedValueOnce({
+      ok: false,
+      message: 'That code is not correct. Check it and try again.',
+    })
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('staff@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+    await waitFor(() => {
+      expect(screen.getByLabelText('Authentication code')).toBeTruthy()
+    })
+
+    fireEvent.change(screen.getByLabelText('Authentication code'), {
+      target: { value: '000000' },
+    })
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Verify and sign in' }),
+      )
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('That code is not correct. Check it and try again.'),
+      ).toBeTruthy()
+    })
+    expect(authMocks.navigate).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('heading', { name: 'Two-factor authentication' }),
+    ).toBeTruthy()
+  })
+
+  it('returns to the password step when sign-in restarts', async () => {
+    authMocks.signInWithEmail.mockResolvedValueOnce({
+      ok: true,
+      twoFactor: true,
+    })
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('staff@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+    await waitFor(() => {
+      expect(screen.getByLabelText('Authentication code')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start sign-in again' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: 'Email' })).toBeTruthy()
+    })
+    expect(screen.queryByLabelText('Authentication code')).toBeNull()
   })
 
   it('passes an invite accept callbackURL when magic-link sign-in has a token', async () => {
@@ -200,7 +369,11 @@ describe('SignInRouteView — password submit outcomes', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
       target: { value: 'lex@obiter.dev' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /send sign-in link/i }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /send sign-in link/i }),
+      )
+    })
 
     await waitFor(() => {
       expect(authMocks.requestMagicLink).toHaveBeenCalledWith(
@@ -218,7 +391,11 @@ describe('SignInRouteView — password submit outcomes', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
       target: { value: 'lex@obiter.dev' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /send sign-in link/i }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /send sign-in link/i }),
+      )
+    })
 
     await waitFor(() => {
       expect(authMocks.requestMagicLink).toHaveBeenCalledWith(

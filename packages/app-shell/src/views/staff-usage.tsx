@@ -1,11 +1,10 @@
+import { StaffGate } from './staff-gate'
 import { useState } from 'react'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Skeleton, cn } from '@obiter/ui'
-import { useCurrentUser } from '../current-user'
 import { PageScaffold } from '../page-scaffold'
 import { SegmentedControl } from '../segmented-control'
-import { ShellNotFound } from '../shell-states'
 import { staffUsageQueryOptions } from '../staff'
 import { staffUsageWeeks } from '../staff-search'
 import { ErrorNotice } from './settings-fields'
@@ -22,9 +21,11 @@ const WEEK_OPTIONS = [
 ] as const
 
 export function StaffUsageRouteView() {
-  const { data: me } = useCurrentUser()
-  if (!me.isStaff) return <ShellNotFound />
-  return <StaffUsage />
+  return (
+    <StaffGate>
+      <StaffUsage />
+    </StaffGate>
+  )
 }
 
 function StaffUsage() {

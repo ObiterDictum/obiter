@@ -1,12 +1,11 @@
+import { StaffGate } from './staff-gate'
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { CaretDown, CaretUp } from '@obiter/ui/icons'
 import { Skeleton, cn } from '@obiter/ui'
 import type { StaffOverviewResponse, StaffUsageWeek } from '@obiter/contracts'
-import { useCurrentUser } from '../current-user'
 import { formatRelativeTime } from '../format'
 import { PageScaffold } from '../page-scaffold'
-import { ShellNotFound } from '../shell-states'
 import { staffOverviewQueryOptions, staffUsageQueryOptions } from '../staff'
 import { ErrorNotice } from './settings-fields'
 import { SERIES_COLOURS, weekDelta } from './staff-chart-data'
@@ -15,9 +14,11 @@ import { Sparkline } from './staff-sparkline'
 const SPARKLINE_WEEKS = 12
 
 export function StaffOverviewRouteView() {
-  const { data: me } = useCurrentUser()
-  if (!me.isStaff) return <ShellNotFound />
-  return <StaffOverview />
+  return (
+    <StaffGate>
+      <StaffOverview />
+    </StaffGate>
+  )
 }
 
 interface OverviewDelta {

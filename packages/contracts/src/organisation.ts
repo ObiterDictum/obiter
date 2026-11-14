@@ -23,6 +23,12 @@ export type CurrentOrganisation = z.infer<typeof currentOrganisationSchema>
 
 export const meResponseSchema = z.object({
   isStaff: z.boolean().optional(),
+  twoFactorEnabled: z.boolean().optional(),
+  twoFactorEnabledAt: z
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .optional(),
   user: currentUserSchema,
   organisation: currentOrganisationSchema.nullable(),
 })

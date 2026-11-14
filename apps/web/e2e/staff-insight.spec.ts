@@ -2,7 +2,11 @@ import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
 import { createAccount } from './document-journey'
-import { signIn } from './e13-support'
+import {
+  confirmTwoFactorEnrolment,
+  signIn,
+  startTwoFactorEnrolment,
+} from './e13-support'
 
 const { apiOrigin, databaseName } = resolveJourneyTargets()
 function sql(statement: string) {
@@ -30,6 +34,12 @@ test('staff sees the insight screens and non-staff gets not found', async ({
   sql(`insert into organisations (id,name) values ('${staffOrganisation}','Synthetic staff') on conflict do nothing;
     update users set "organisationId" = '${staffOrganisation}', role = 'member' where email = '${staff.email}'`)
   await signIn(page, staff.email, staff.password)
+  await page.goto('/staff')
+  await expect(
+    page.getByText('Staff accounts need two-factor authentication'),
+  ).toBeVisible()
+  const totpSecret = await startTwoFactorEnrolment(page, staff.password)
+  await confirmTwoFactorEnrolment(page, totpSecret)
   await page.goto('/staff')
   await expect(
     page.getByRole('heading', { name: 'Overview', exact: true }),

@@ -1,5 +1,5 @@
 import { createAuthClient } from 'better-auth/react'
-import { magicLinkClient } from 'better-auth/client/plugins'
+import { magicLinkClient, twoFactorClient } from 'better-auth/client/plugins'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   MAX_PASSWORD_LENGTH,
@@ -51,7 +51,7 @@ if (desktopAuthFetchOptions) {
 
 export const authClient = createAuthClient({
   baseURL: authBaseURL(),
-  plugins: [magicLinkClient()],
+  plugins: [magicLinkClient(), twoFactorClient()],
   fetchOptions: desktopAuthFetchOptions,
 })
 
@@ -67,12 +67,22 @@ export interface SignUpEmailInput {
   callbackURL: string
 }
 
+export interface SignInResult {
+  ok: boolean
+  twoFactor?: boolean
+  message?: string
+  code?: string
+}
+
 export interface UseAuthReturn {
   session: AuthSessionPresence | null
   isPending: boolean
-  signInWithEmail: (
-    input: SignInEmailInput,
-  ) => Promise<{ ok: boolean; message?: string; code?: string }>
+  signInWithEmail: (input: SignInEmailInput) => Promise<SignInResult>
+  verifyTwoFactorSignIn: (input: {
+    code: string
+    backupCode?: boolean
+    trustDevice?: boolean
+  }) => Promise<SignInResult>
   signUpWithEmail: (input: SignUpEmailInput) => Promise<{
     ok: boolean
     message?: string
@@ -128,6 +138,23 @@ function changePasswordMessage(code: string | undefined): string {
   }
 }
 
+function twoFactorSignInMessage(code: string | undefined): string {
+  switch (code) {
+    case 'INVALID_CODE':
+      return 'That code is not correct. Check it and try again.'
+    case 'TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE':
+      return 'Too many incorrect attempts. Start sign-in again.'
+    case 'ACCOUNT_TEMPORARILY_LOCKED':
+      return 'Too many incorrect attempts. Try again later.'
+    case 'INVALID_TWO_FACTOR_COOKIE':
+      return 'Your sign-in timed out. Start again.'
+    case 'INVALID_BACKUP_CODE':
+      return 'That backup code is not valid or has already been used. Each backup code works once.'
+    default:
+      return 'Could not verify your second factor. Try again.'
+  }
+}
+
 export function useAuth(): UseAuthReturn {
   const realSession = authClient.useSession()
   const queryClient = useQueryClient()
@@ -146,6 +173,43 @@ export function useAuth(): UseAuthReturn {
         message: result.error.message ?? 'Sign-in failed.',
         code:
           typeof result.error.code === 'string' ? result.error.code : undefined,
+      }
+    }
+    const data: unknown = result.data
+    if (
+      data !== null &&
+      typeof data === 'object' &&
+      'twoFactorRedirect' in data &&
+      data.twoFactorRedirect === true
+    ) {
+      return { ok: true, twoFactor: true }
+    }
+    await refreshSessionAfterAuth()
+    return { ok: true }
+  }
+
+  async function verifyTwoFactorSignIn(input: {
+    code: string
+    backupCode?: boolean
+    trustDevice?: boolean
+  }) {
+    const trustDevice = input.trustDevice === true ? { trustDevice: true } : {}
+    const result = input.backupCode
+      ? await authClient.twoFactor.verifyBackupCode({
+          code: input.code,
+          ...trustDevice,
+        })
+      : await authClient.twoFactor.verifyTotp({
+          code: input.code,
+          ...trustDevice,
+        })
+    if (result.error) {
+      const code =
+        typeof result.error.code === 'string' ? result.error.code : undefined
+      return {
+        ok: false,
+        message: twoFactorSignInMessage(code),
+        code,
       }
     }
     await refreshSessionAfterAuth()
@@ -328,6 +392,7 @@ export function useAuth(): UseAuthReturn {
     session: realSession.data,
     isPending: realSession.isPending,
     signInWithEmail,
+    verifyTwoFactorSignIn,
     signUpWithEmail,
     requestMagicLink,
     requestPasswordReset,
