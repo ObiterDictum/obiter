@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@obiter/ui'
-import { ArrowsClockwise, ChatText, GridNine } from '@obiter/ui/icons'
+import { ArrowsClockwise, ChatText, GridNine, Warning } from '@obiter/ui/icons'
 import { CaretRight, ShieldCheck } from '@obiter/ui/icons/shell'
 import { useCurrentUser } from './current-user'
 import { rowClass } from './contents-sections'
@@ -12,7 +12,7 @@ const STAFF_SECTIONS = [
   { to: '/staff/access', label: 'Access review', icon: ShieldCheck },
   { to: '/staff/usage', label: 'Usage', icon: ArrowsClockwise },
   { to: '/staff/feedback', label: 'Feedback', icon: ChatText },
-  { to: '/staff/errors', label: 'Errors', icon: ArrowsClockwise },
+  { to: '/staff/errors', label: 'Errors', icon: Warning },
 ] as const
 
 export function StaffContents({ pathname }: { pathname: string }) {

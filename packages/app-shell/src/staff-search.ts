@@ -26,3 +26,8 @@ export function validateStaffFeedbackSearch(
 export function staffUsageWeeks(search: Record<string, unknown>): number {
   return validateStaffUsageSearch(search).weeks ?? 12
 }
+
+export function validateStaffErrorsSearch(search: Record<string, unknown>) {
+  const days = Number(search.days)
+  return [7, 30, 90].includes(days) ? { days } : {}
+}

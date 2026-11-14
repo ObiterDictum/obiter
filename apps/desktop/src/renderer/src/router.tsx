@@ -26,6 +26,7 @@ import {
   validateSettingsSearch,
   validateStaffFeedbackSearch,
   validateStaffUsageSearch,
+  validateStaffErrorsSearch,
 } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -400,6 +401,7 @@ const staffUsageRoute = createRoute({
 const staffErrorsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'staff/errors',
+  validateSearch: validateStaffErrorsSearch,
   component: () => (
     <Suspense fallback={<RouteLoading />}>
       <StaffErrorsRouteView />
