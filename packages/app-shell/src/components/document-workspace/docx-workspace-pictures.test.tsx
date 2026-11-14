@@ -23,8 +23,12 @@ import {
   commandOrNull,
   mountWorkspace,
 } from './docx-workspace-harness'
-import { openRibbonTab, setTrackChanges } from './editor-test-commands'
-import { clickParagraph } from './paragraph-selection-harness'
+import { bodyField, clickParagraph } from './paragraph-selection-harness'
+import {
+  commandDisabled,
+  openRibbonTab,
+  setTrackChanges,
+} from './editor-test-commands'
 
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -52,6 +56,35 @@ function stubImagePicker() {
   return () => {
     Object.assign(globalThis, { Image: image })
     Object.assign(URL, { createObjectURL, revokeObjectURL })
+  }
+}
+
+function stubHeldImagePicker() {
+  const image = globalThis.Image
+  const { createObjectURL, revokeObjectURL } = URL
+  const pending: Array<() => void> = []
+  class HeldImage {
+    naturalWidth = PICTURE_WIDTH_PX
+    naturalHeight = PICTURE_HEIGHT_PX
+    onload: (() => void) | null = null
+    onerror: (() => void) | null = null
+    set src(_value: string) {
+      pending.push(() => this.onload?.())
+    }
+  }
+  Object.assign(globalThis, { Image: HeldImage })
+  Object.assign(URL, {
+    createObjectURL: () => 'blob:pending-image',
+    revokeObjectURL: () => undefined,
+  })
+  return {
+    release() {
+      for (const fire of pending.splice(0)) fire()
+    },
+    restore() {
+      Object.assign(globalThis, { Image: image })
+      Object.assign(URL, { createObjectURL, revokeObjectURL })
+    },
   }
 }
 
@@ -681,6 +714,46 @@ describe('undo across a picture resize', () => {
       await waitFor(() => expect(pictureWidth()).toBe(PICTURE_WIDTH_PX))
     } finally {
       restorePicker()
+    }
+  })
+})
+
+describe('saving while a picture is still being read', () => {
+  it('keeps Save disabled until the image read lands, then saves the picture', async () => {
+    const picker = stubHeldImagePicker()
+    try {
+      const target = await server(['Page body'])
+      mountWorkspace({
+        editAsync: target.editAsync,
+        decideAsync: target.decideAsync,
+        modelFor: target.modelFor,
+      })
+      clickParagraph('para-000001', 0)
+      fireEvent.change(bodyField(), {
+        target: { value: 'Page body edited' },
+      })
+      openRibbonTab('Insert')
+      insertPictureFile()
+
+      await waitFor(() => expect(commandDisabled(command('Save'))).toBe(true))
+      fireEvent.click(command('Save'))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(target.editAsync).not.toHaveBeenCalled()
+
+      picker.release()
+      await waitFor(() =>
+        expect(document.querySelectorAll('[data-picture-run-id]')).toHaveLength(
+          2,
+        ),
+      )
+      await waitFor(() => expect(commandDisabled(command('Save'))).toBe(false))
+      await clickSaveAndSettle(target, 1)
+      const operations = target.editAsync.mock.calls[0]?.[0].operations ?? []
+      expect(
+        operations.some((operation) => operation.type === 'insert_image'),
+      ).toBe(true)
+    } finally {
+      picker.restore()
     }
   })
 })

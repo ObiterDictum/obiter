@@ -301,7 +301,15 @@ export function DocxWorkspace({
   const redo = withCaretRefocus(redoDocument)
   const print = withCaretRefocus(() => void forPrint(printDocument))
   const reload = useLatestCallback(withCaretRefocus(save.reload))
-  const exports = documentExportHandlers(documentId, filename, setBanner)
+  const exports = documentExportHandlers(
+    documentId,
+    filename,
+    setBanner,
+    async () => {
+      await insert.whenImageReadsIdle()
+      return save.flushSave()
+    },
+  )
   const citation = useLatestHandlers(
     usePendingCitation(documentId, (text) => {
       if (selectedParagraphId)

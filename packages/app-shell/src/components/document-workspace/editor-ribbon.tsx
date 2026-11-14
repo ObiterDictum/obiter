@@ -39,7 +39,7 @@ import type {
   EditorMenuGroup,
   EditorMenuId,
 } from './editor-commands'
-import { ALL_COMMANDS_SHORTCUT } from './editor-commands'
+import { ALL_COMMANDS_SHORTCUT, EDITING_HINT } from './editor-commands'
 
 const FILE_MENU_ID: EditorMenuId = 'file'
 const DEFAULT_TAB_ID: EditorMenuId = 'format'
@@ -210,6 +210,13 @@ function RibbonQuickAccess({ props }: { props: EditorChromeProps }) {
         label="Undo"
         hint={`Undo (${formatShortcut(['primary', 'Z'])})`}
         disabled={!props.canEdit || !props.canUndo}
+        disabledReason={
+          !props.canEdit
+            ? EDITING_HINT
+            : props.canUndo
+              ? undefined
+              : 'Nothing to undo'
+        }
         onClick={props.onUndo}
         icon={<ArrowCounterClockwise size={16} aria-hidden />}
       />
@@ -217,6 +224,13 @@ function RibbonQuickAccess({ props }: { props: EditorChromeProps }) {
         label="Redo"
         hint={`Redo (${formatShortcut(['primary', 'shift', 'Z'])})`}
         disabled={!props.canEdit || !props.canRedo}
+        disabledReason={
+          !props.canEdit
+            ? EDITING_HINT
+            : props.canRedo
+              ? undefined
+              : 'Nothing to redo'
+        }
         onClick={props.onRedo}
         icon={<ArrowClockwise size={16} aria-hidden />}
       />

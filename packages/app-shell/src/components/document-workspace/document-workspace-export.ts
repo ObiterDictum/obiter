@@ -28,12 +28,15 @@ export function documentExportHandlers(
   documentId: string,
   filename: string,
   onNotice: (notice: string) => void,
+  flushSave?: () => Promise<boolean>,
 ) {
   const run = (options?: { shareSafe?: boolean }) => () => {
     refocusCaretBeforeFlight()
-    void exportDocumentAsDocx(documentId, filename, options).then((message) => {
+    void (async () => {
+      if (flushSave && !(await flushSave())) return
+      const message = await exportDocumentAsDocx(documentId, filename, options)
       if (message) onNotice(message)
-    })
+    })()
   }
   return { onExportText: run(), onExportShareSafe: run({ shareSafe: true }) }
 }

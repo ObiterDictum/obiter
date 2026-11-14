@@ -94,6 +94,11 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   } | null>(null)
   const bundleRef = useRef(bundle)
   bundleRef.current = bundle
+  function applyBundle(recipe: (current: DraftBundle) => DraftBundle) {
+    const next = recipe(bundleRef.current)
+    bundleRef.current = next
+    setBundle(next)
+  }
   const baseline = useSaveBaseline({
     history,
     model: scope.model,
@@ -102,7 +107,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     modelError: scope.modelError ?? false,
     state: bundle.state,
     resolveState: (update) =>
-      setBundle((current) => ({ ...current, state: update(current.state) })),
+      applyBundle((current) => ({ ...current, state: update(current.state) })),
     onBlocked: setBlockedReason,
   })
   if (scope.model?.trackRevisions === committedToggle.current) {
@@ -141,13 +146,13 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       setStaleDraft(result.baseVersionId)
       setRecoverable(extras)
     } else if (result.status === 'restored') {
-      setBundle({
+      applyBundle(() => ({
         state: result.state,
         held: result.held,
         ...(result.trackChangesFlip !== undefined
           ? { trackChangesFlip: result.trackChangesFlip }
           : {}),
-      })
+      }))
       setRestored(true)
       setRecoverable(extras)
       if (extras.some((item) => item.status === 'parked')) {
@@ -253,7 +258,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   function resetDrafts() {
     committedToggle.current = undefined
     acknowledgedSlots.current = null
-    setBundle({ state: emptyDraftState(), held: [] })
+    applyBundle(() => ({ state: emptyDraftState(), held: [] }))
     history.clear()
     baseline.clear()
     setRestored(false)
@@ -262,7 +267,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setBlockedReason(null)
   }
   function setState(update: (current: DraftState) => DraftState) {
-    setBundle((current) => ({ ...current, state: update(current.state) }))
+    applyBundle((current) => ({ ...current, state: update(current.state) }))
   }
 
   const edits = createWorkspaceDraftEdits({
@@ -274,7 +279,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
 
   function clearSlots(slots: readonly DraftSlot[], sent?: DraftState) {
     if (slots.length === 0) return
-    setBundle((current) => ({
+    applyBundle((current) => ({
       ...current,
       state: removeDraftSlots(
         current.state,
@@ -285,7 +290,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
 
   function discardHeld(ids: readonly string[]) {
     const drop = new Set(ids)
-    setBundle((current) => ({
+    applyBundle((current) => ({
       ...current,
       held: current.held.filter((item) => !drop.has(item.id)),
     }))
@@ -306,13 +311,13 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     history.clear()
     baseline.clear()
     setBlockedReason(null)
-    setBundle({
+    applyBundle(() => ({
       state: result.state,
       held: result.held,
       ...(result.trackChangesFlip !== undefined
         ? { trackChangesFlip: result.trackChangesFlip }
         : {}),
-    })
+    }))
     setRestored(true)
     setRecoverable((current) =>
       current.filter((item) => item.draftId !== draftId),
@@ -327,16 +332,16 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   }
 
   function undoDraft() {
-    const snapshot = history.stepBack(bundle.state)
+    const snapshot = history.stepBack(bundleRef.current.state)
     if (!snapshot) return null
-    setState(() => snapshot)
+    applyBundle((current) => ({ ...current, state: snapshot }))
     return snapshot
   }
 
   function redoDraft() {
-    const snapshot = history.stepForward(bundle.state)
+    const snapshot = history.stepForward(bundleRef.current.state)
     if (!snapshot) return null
-    setState(() => snapshot)
+    applyBundle((current) => ({ ...current, state: snapshot }))
     return snapshot
   }
 
@@ -344,12 +349,14 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     key: K,
     update: (current: DraftState[K]) => DraftState[K],
   ) {
-    setBundle((current) => {
-      const next = update(current.state[key])
-      if (next === current.state[key]) return current
-      history.record(current.state)
-      return { ...current, state: { ...current.state, [key]: next } }
-    })
+    const current = bundleRef.current.state
+    const next = update(current[key])
+    if (next === current[key]) return
+    history.record(current)
+    applyBundle((bundle) => ({
+      ...bundle,
+      state: { ...bundle.state, [key]: next },
+    }))
   }
   const setFormat = (update: (current: FormatDrafts) => FormatDrafts) =>
     setField('format', update)
@@ -365,11 +372,21 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     drafts: { structures: bundle.state.structures, setStructures },
   })
   function setTrackChangesFlip(value: boolean | undefined) {
-    setBundle((current) =>
+    applyBundle((current) =>
       value === undefined
         ? { state: current.state, held: current.held }
         : { ...current, trackChangesFlip: value },
     )
+  }
+  function pendingTrackFlip() {
+    const flip = bundleRef.current.trackChangesFlip
+    return flip !== undefined &&
+      flip !== (committedToggle.current ?? scope.model?.trackRevisions)
+      ? flip
+      : undefined
+  }
+  function trackFlipPendingNow() {
+    return pendingTrackFlip() !== undefined
   }
 
   return {
@@ -418,5 +435,11 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     ...edits,
     canUndo: history.canUndo && blockedReason === null,
     canRedo: history.canRedo && blockedReason === null,
+    trackFlipPending:
+      bundle.trackChangesFlip !== undefined &&
+      bundle.trackChangesFlip !==
+        (committedToggle.current ?? scope.model?.trackRevisions),
+    trackFlipPendingNow,
+    pendingTrackFlip,
   }
 }

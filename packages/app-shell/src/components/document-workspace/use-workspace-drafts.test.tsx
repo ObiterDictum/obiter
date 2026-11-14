@@ -12,6 +12,7 @@ import type {
   DocumentVersionLineage,
 } from '@obiter/contracts'
 import { emptyDraftState } from '../../document-save-plan'
+import type { StructuralDraft } from '../../document-structural-drafts'
 import type { DraftSlot, DraftState } from '../../document-draft-state'
 import type { WorkspaceDraftScope } from './document-workspace-draft-scope'
 import {
@@ -251,6 +252,29 @@ describe('draft edits queued across the save boundary', () => {
     expect(result.current.boundaryPending).toBe(false)
     expect(result.current.lineageUnresolved).toBe(true)
     expect(result.current.blockedReason).toBe('newer-version')
+  })
+
+  it('keeps a structural draft through an undo and redo in the same tick', () => {
+    const { result } = renderHook(() =>
+      useWorkspaceDrafts(scopeFor(model('Hello'), 'ver_1', 1)),
+    )
+    const table: StructuralDraft = {
+      id: 'struct_1',
+      kind: 'table',
+      paragraphId: 'p1',
+      rows: 2,
+      columns: 2,
+    }
+    act(() => {
+      result.current.setDrafts(() => ({ r1: 'Hello world' }))
+    })
+    act(() => {
+      result.current.setStructures((current) => [...current, table])
+      result.current.undoDraft()
+      result.current.redoDraft()
+    })
+    expect(result.current.drafts).toEqual({ r1: 'Hello world' })
+    expect(result.current.structures).toEqual([table])
   })
 
   it('resolves a committed decision whose model projection is unchanged', () => {
