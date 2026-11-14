@@ -2,6 +2,8 @@ import { describe, expect, it } from 'bun:test'
 import {
   AGENT_PROVIDERS,
   agentModelChoiceSchema,
+  agentSessionSettingsSchema,
+  agentSessionSettingsUpdateSchema,
   organisationAgentSettingsSchema,
   organisationAgentSettingsUpdateSchema,
 } from './agent-settings'
@@ -129,5 +131,160 @@ describe('organisation agent settings update', () => {
     expect(organisationAgentSettingsUpdateSchema.safeParse({}).success).toBe(
       false,
     )
+  })
+})
+
+describe('agent session settings URLs', () => {
+  it('rejects credentials and raw control characters in model endpoints', () => {
+    for (const baseUrl of [
+      'https://user:pass@models.example/v1',
+      'https://models.example/v1\rpath',
+      'https://models.example/v1\npath',
+      'https://models.example/v1\tpath',
+      'https://models.example/v1\u0085path',
+    ]) {
+      expect(
+        agentSessionSettingsUpdateSchema.safeParse({ baseUrl }).success,
+      ).toBe(false)
+      expect(
+        agentSessionSettingsSchema.safeParse({
+          matterTextToModel: false,
+          model: null,
+          keyLastFour: null,
+          keySetAt: null,
+          baseUrl,
+        }).success,
+      ).toBe(false)
+    }
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        baseUrl: 'https://models.example/v1',
+      }).success,
+    ).toBe(true)
+  })
+})
+
+describe('agent session settings partial update invariants', () => {
+  it('rejects contradictory primary and fast model providers in one patch', () => {
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        model: {
+          provider: 'anthropic',
+          modelId: 'claude-sonnet-4-5',
+          snapshot: null,
+        },
+        fastModel: {
+          provider: 'openai',
+          modelId: 'gpt-fast',
+          snapshot: null,
+        },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('accepts compatible model patches and valid patches with an omitted side', () => {
+    const anthropicModel = {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-5',
+      snapshot: null,
+    }
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        model: anthropicModel,
+        fastModel: { ...anthropicModel, modelId: 'claude-haiku-4-5' },
+      }).success,
+    ).toBe(true)
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({ model: anthropicModel })
+        .success,
+    ).toBe(true)
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        fastModel: { ...anthropicModel, modelId: 'claude-haiku-4-5' },
+      }).success,
+    ).toBe(true)
+  })
+
+  it('rejects strict lockdown combined with BYOK access', () => {
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        strictLockdown: true,
+        accessMode: 'byok',
+      }).success,
+    ).toBe(false)
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        strictLockdown: true,
+        accessMode: 'managed_eu',
+      }).success,
+    ).toBe(true)
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        strictLockdown: true,
+      }).success,
+    ).toBe(true)
+  })
+
+  it('rejects model providers that contradict access mode and accepts omitted mode', () => {
+    const managedModel = {
+      provider: 'obiter_eu',
+      modelId: 'managed-small',
+      snapshot: null,
+    }
+    const externalModel = {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-5',
+      snapshot: null,
+    }
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        accessMode: 'managed_eu',
+        model: externalModel,
+      }).success,
+    ).toBe(false)
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        accessMode: 'byok',
+        model: managedModel,
+      }).success,
+    ).toBe(false)
+    expect(
+      agentSessionSettingsUpdateSchema.safeParse({
+        model: externalModel,
+      }).success,
+    ).toBe(true)
+  })
+})
+
+describe('legacy agent session settings normalization', () => {
+  it('normalizes legacy managed settings and derives consent without a model', () => {
+    const settings = agentSessionSettingsSchema.parse({
+      matterTextToModel: true,
+      model: null,
+      keyLastFour: null,
+      keySetAt: null,
+    })
+    expect(settings.accessMode).toBe('managed_eu')
+    expect(settings.managedMatterOptOut).toBe(false)
+    expect(settings.effectiveMatterTextAllowed).toBe(true)
+    expect(settings.baseUrl).toBeNull()
+    expect(settings.fastModel).toBeNull()
+    expect(settings.monthlyUsage).toBeNull()
+  })
+
+  it('normalizes legacy BYOK settings and derives consent with a model', () => {
+    const settings = agentSessionSettingsSchema.parse({
+      matterTextToModel: false,
+      model: {
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-4-5',
+        snapshot: null,
+      },
+      keyLastFour: 'x9Qa',
+      keySetAt: '2026-11-04T09:30:00.000Z',
+    })
+    expect(settings.accessMode).toBe('byok')
+    expect(settings.managedMatterOptOut).toBe(false)
+    expect(settings.effectiveMatterTextAllowed).toBe(false)
   })
 })

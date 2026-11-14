@@ -10,7 +10,7 @@ const specifier = (...parts) => parts.join('/')
 const moduleName = (...parts) => parts.join('-')
 
 function plantedTree(files) {
-  const root = mkdtempSync(path.join(tmpdir(), 'obiter-private-paths-'))
+  const root = mkdtempSync(path.join(tmpdir(), 'obiter private paths-'))
   roots.push(root)
   for (const [file, contents] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
@@ -24,6 +24,15 @@ afterEach(() => {
 })
 
 describe('private backend paths', () => {
+  test('rejects the isolated agent runtime package directory', () => {
+    const directory = ['services', 'harness-worker'].join('/')
+    const file = `${directory}/src/runner.ts`
+    const root = plantedTree({ [file]: 'export {}\n' })
+    expect(checkPrivatePaths({ root, files: [file] })).toEqual([
+      `${file}: backend path`,
+    ])
+  })
+
   test('rejects a tracked file under a moved backend path', () => {
     const root = plantedTree({
       'services/api/src/routes/search.ts': 'export {}\n',
@@ -63,6 +72,16 @@ describe('private backend paths', () => {
 })
 
 describe('private backend imports', () => {
+  test('rejects the isolated agent package and its subpaths', () => {
+    const name = ['@obiter', 'harness'].join('/')
+    const root = plantedTree({
+      'packages/ui/src/runtime.ts': `import type { Runtime } from '${name}/session'\n`,
+    })
+    expect(
+      checkPrivatePaths({ root, files: ['packages/ui/src/runtime.ts'] }),
+    ).toEqual([`packages/ui/src/runtime.ts: imports ${name} (${name}/session)`])
+  })
+
   test('rejects an import of a backend package name', () => {
     const name = specifier('@obiter', 'search-client')
     const root = plantedTree({
@@ -119,6 +138,19 @@ describe('private backend imports', () => {
           'packages/app-shell/src/search.ts',
           'packages/app-shell/src/provenance.ts',
         ],
+      }),
+    ).toEqual([])
+  })
+
+  test('resolves files under a Windows-style root path containing spaces', () => {
+    const root = plantedTree({
+      'packages/ui/src/safe.ts': "import { z } from 'zod'\n",
+    })
+    const windowsRoot = root.replaceAll('/', '\\')
+    expect(
+      checkPrivatePaths({
+        root: windowsRoot,
+        files: ['packages/ui/src/safe.ts'],
       }),
     ).toEqual([])
   })

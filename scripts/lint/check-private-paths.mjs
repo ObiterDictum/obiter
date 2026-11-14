@@ -5,6 +5,9 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const PRIVATE_PATHS = [
+  'harness/',
+  'services/harness-worker/',
+  'services/egress-proxy/',
   'services/api/',
   'services/legal-ingestor/',
   'services/atlas-ingestor/',
@@ -34,6 +37,7 @@ export const PRIVATE_PATHS = [
 ]
 
 export const PRIVATE_PACKAGES = [
+  '@obiter/harness',
   '@obiter/api',
   '@obiter/legal-ingestor',
   '@obiter/legal-source-provider',

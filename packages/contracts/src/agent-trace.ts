@@ -6,6 +6,7 @@ import {
   agentStopReasonSchema,
   agentToolErrorCodeSchema,
   agentToolIdSchema,
+  agentSessionToolIdSchema,
 } from './agent-run'
 
 export const AGENT_TRACE_VERSION = 'trace-v1'
@@ -123,3 +124,44 @@ export const agentTraceEventSchema = z.discriminatedUnion('event', [
 ])
 export type AgentTraceEvent = z.infer<typeof agentTraceEventSchema>
 export type AgentTraceEventKind = AgentTraceEvent['event']
+
+export const agentSessionTraceEventSchema = z.union([
+  agentTraceEventSchema,
+  z
+    .object({
+      ...traceBase,
+      event: z.literal('run_started'),
+      goalHash: idSchema,
+      matterId: idSchema.nullable(),
+      toolAllowList: z.array(agentSessionToolIdSchema),
+      matterTextAllowed: z.boolean(),
+      versions: agentRunVersionsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...traceBase,
+      event: z.literal('tool_called'),
+      tool: agentSessionToolIdSchema,
+      toolVersion: idSchema,
+      argsHash: idSchema,
+      status: z.enum(['ok', 'error']),
+      errorCode: agentToolErrorCodeSchema.nullable(),
+      evidenceIds: z.array(idSchema),
+      contentHash: idSchema.nullable(),
+      truncated: z.boolean(),
+      latencyMs: countSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...traceBase,
+      event: z.literal('step_started'),
+      kind: z.enum(['model', 'tool']),
+      tool: agentSessionToolIdSchema.nullable(),
+    })
+    .strict(),
+])
+export type AgentSessionTraceEvent = z.infer<
+  typeof agentSessionTraceEventSchema
+>
