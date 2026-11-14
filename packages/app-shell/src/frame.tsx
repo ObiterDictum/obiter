@@ -37,6 +37,7 @@ import {
   useStoredFlag,
   useStoredText,
 } from './shell-preferences'
+import { useShellLayout } from './shell-layout'
 import { useShellShortcuts } from './shell-shortcuts'
 import { useMediaQuery } from './use-media-query'
 
@@ -141,6 +142,8 @@ export function ShellFrame({
   )
   const [contentsOpen, setContentsOpen] = useState(false)
   const [focusMode, setFocusMode] = useState(false)
+  const layout = useShellLayout()
+  const chrome = layout === 'tabs' && bottomBar ? 'sidebar' : layout
 
   const rail = bottomBar || sidebarCollapsed
   const contentsVisible =
@@ -188,8 +191,10 @@ export function ShellFrame({
     setFocusMode(false)
   }
 
+  const toggleNav = chrome === 'sidebar' ? toggleSidebar : toggleContents
+
   useShellShortcuts({
-    'toggle-nav': toggleSidebar,
+    'toggle-nav': toggleNav,
     'toggle-right-slot': toggleRightSlot,
     'focus-mode': () => setFocusMode(!focusMode),
     'go-home': () => void navigate({ to: '/' }),
@@ -218,7 +223,6 @@ export function ShellFrame({
       ? {
           name: panelName,
           expanded: contentsExpanded,
-          overlay: narrow,
           controls: 'app-shell-contents',
           toggle: toggleContents,
           buttonRef: panelToggleRef,
@@ -227,14 +231,14 @@ export function ShellFrame({
 
   return (
     <CommandPaletteProvider
-      onToggleNav={() => setSidebarCollapsed(!sidebarCollapsed)}
+      onToggleNav={toggleNav}
       onToggleRightSlot={toggleRightSlot}
       onToggleFocusMode={() => setFocusMode(!focusMode)}
     >
       <PagePanelProvider panel={pagePanel}>
         <RightSlotPortalProvider onShow={showRightSlotTab}>
           <div className="flex h-dvh bg-canvas text-ink max-md:flex-col-reverse">
-            {focusMode ? null : rail ? (
+            {focusMode || chrome !== 'sidebar' ? null : rail ? (
               <SidebarRail
                 isStaff={me?.isStaff}
                 platform={platform}
@@ -258,7 +262,10 @@ export function ShellFrame({
                 platform={platform}
                 focusMode={focusMode}
                 onExitFocusMode={leaveFocusMode}
-                showSearch={rail || focusMode}
+                showSearch={chrome !== 'sidebar' || rail || focusMode}
+                chrome={chrome}
+                rightSlotOpen={rightSlotOpen}
+                onToggleRightSlot={toggleRightSlot}
               />
               <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
                 <div

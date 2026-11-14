@@ -129,6 +129,7 @@ describe('Account name form — in-flight save and canonical reconciliation', ()
   it('does not carry draft state across an identity switch', async () => {
     api.apiFetch.mockImplementation(async (path: string) => {
       if (path === '/api/me') return ME
+      if (path === '/api/auth/list-sessions') return []
       throw new Error(`Unexpected request: ${path}`)
     })
 
@@ -169,6 +170,7 @@ describe('Organisation name form — in-flight save and canonical reconciliation
   it('preserves a dirty form across an external change and resets to the latest baseline', async () => {
     api.apiFetch.mockImplementation(async (path: string) => {
       if (path === '/api/me') return ME
+      if (path === '/api/auth/list-sessions') return []
       throw new Error(`Unexpected request: ${path}`)
     })
 

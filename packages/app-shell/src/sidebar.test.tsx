@@ -161,6 +161,16 @@ function renderSidebar(
       path: '/matters',
       component: sidebar,
     }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/staff',
+      component: sidebar,
+    }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/settings',
+      component: sidebar,
+    }),
   ]
   const router = createRouter({
     routeTree: rootRoute.addChildren(routes),
@@ -465,5 +475,24 @@ for (const variant of ['full', 'rail'] as const) {
   it(`shows Staff to staff in the ${variant} sidebar`, async () => {
     renderSidebar('/', variant, false, true)
     expect(await screen.findByRole('link', { name: 'Staff' })).toBeTruthy()
+  })
+  it(`marks Staff current on a staff route in the ${variant} sidebar`, async () => {
+    renderSidebar('/staff', variant, false, true)
+    const staff = await screen.findByRole('link', { name: 'Staff' })
+    expect(staff.getAttribute('aria-current')).toBe('page')
+  })
+  it(`sits Staff at the bottom of the module column above Settings in the ${variant} sidebar`, async () => {
+    renderSidebar('/', variant, false, true)
+    const staff = await screen.findByRole('link', { name: 'Staff' })
+    const settings = screen.getByRole('link', { name: 'Settings' })
+    expect(
+      staff.compareDocumentPosition(settings) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    if (variant === 'full') {
+      const nav = screen.getByRole('navigation', { name: 'Workspace' })
+      expect(nav.contains(staff)).toBe(true)
+      expect(staff.className).toContain('text-meta')
+    }
   })
 }

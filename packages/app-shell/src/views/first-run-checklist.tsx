@@ -96,7 +96,7 @@ function stepAction(id: FirstRunStepId) {
       return (
         <Link
           to="/settings"
-          search={{ section: 'organisation' }}
+          search={{ section: 'members' }}
           className={buttonClassName({ variant: 'secondary', size: 'sm' })}
         >
           Invite in Settings

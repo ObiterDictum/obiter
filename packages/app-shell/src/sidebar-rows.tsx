@@ -12,7 +12,7 @@ type IconComponent = (props: {
   'aria-hidden'?: boolean
 }) => ReactNode
 
-function countNote(label: string, count?: number) {
+export function countNote(label: string, count?: number) {
   if (!count) return null
   if (label === 'Matters') return `${count} active`
   if (label === 'Verify')
@@ -21,7 +21,7 @@ function countNote(label: string, count?: number) {
   return `${count}`
 }
 
-function countToneClass(
+export function countToneClass(
   label: string,
   alertTone?: 'danger' | 'warning' | 'success',
 ) {
@@ -38,6 +38,7 @@ export function ModuleRow({
   count,
   alertTone,
   current,
+  onClick,
 }: {
   label: string
   to: string
@@ -45,12 +46,14 @@ export function ModuleRow({
   count?: number
   alertTone?: 'danger' | 'warning' | 'success'
   current?: boolean
+  onClick?: () => void
 }) {
   const note = countNote(label, count)
   const toneClass = countToneClass(label, alertTone)
   return (
     <Link
       to={to}
+      onClick={onClick}
       aria-label={note ? `${label}, ${note}` : label}
       aria-current={current ? 'page' : undefined}
       className={cn(
@@ -260,14 +263,17 @@ function RailTooltip({
 export function MatterRow({
   matter,
   current,
+  onClick,
 }: {
   matter: MatterRecord
   current: boolean
+  onClick?: () => void
 }) {
   return (
     <Link
       to="/matters/$matterId"
       params={{ matterId: matter.id }}
+      onClick={onClick}
       aria-label={
         matter.clientReference
           ? `${matter.name} — ${matter.clientReference}`

@@ -98,6 +98,19 @@ export function Sidebar({
             </ul>
           </div>
         ) : null}
+
+        {isStaff ? (
+          <ul className="mt-4 flex flex-col gap-px">
+            <li>
+              <ModuleRow
+                label="Staff"
+                to="/staff"
+                icon={ShieldCheck}
+                current={section === 'staff'}
+              />
+            </li>
+          </ul>
+        ) : null}
       </nav>
 
       <div className="flex h-8 items-center gap-1 px-0.5">
@@ -110,16 +123,6 @@ export function Sidebar({
           <GearSix size={16} aria-hidden />
         </Link>
         <ThemeToggle />
-        {isStaff && (
-          <Link
-            to="/staff"
-            aria-label="Staff"
-            aria-current={currentPath.startsWith('/staff') ? 'page' : undefined}
-            className="grid size-8 place-items-center rounded-md text-muted hover:bg-hover hover:text-ink"
-          >
-            <ShieldCheck size={16} aria-hidden />
-          </Link>
-        )}
         <SidebarCollapseToggle expanded onToggle={onCollapse} side="top" />
         <span className="ml-auto">
           <AccountMenu platform={platform} />

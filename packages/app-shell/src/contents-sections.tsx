@@ -18,6 +18,7 @@ import {
   type MatterTab,
 } from './matter-tabs'
 import { useMatterPreviewRef } from './matter-preview'
+import { useCurrentUser } from './current-user'
 import { SETTINGS_SECTIONS, useSettingsSection } from './settings-sections'
 import { getRecentLegalSearches } from './legal-search-recents'
 import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
@@ -424,13 +425,15 @@ export function SearchContents() {
 }
 
 export function SettingsContents() {
-  const settingsSection = useSettingsSection()
+  const { data: me } = useCurrentUser()
+  const settingsSection = useSettingsSection(me)
+  const sections = SETTINGS_SECTIONS.filter((item) => item.available(me))
   return (
     <nav
       aria-label="Settings sections"
       className="flex flex-col gap-px px-1.5 pt-1"
     >
-      {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => (
+      {sections.map(({ id, label, icon: Icon }) => (
         <Link
           key={id}
           to="/settings"
@@ -445,6 +448,30 @@ export function SettingsContents() {
           ) : null}
         </Link>
       ))}
+    </nav>
+  )
+}
+
+export function StaffContents({ pathname }: { pathname: string }) {
+  const { data: me } = useCurrentUser()
+  if (!me.isStaff) return null
+  const current = pathname === '/staff' || pathname.startsWith('/staff/')
+  return (
+    <nav
+      aria-label="Staff sections"
+      className="flex flex-col gap-px px-1.5 pt-1"
+    >
+      <Link
+        to="/staff/access"
+        aria-current={current ? 'page' : undefined}
+        className={cn(rowClass(current), 'gap-2.5')}
+      >
+        <ShieldCheck size={16} aria-hidden className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate">Access review</span>
+        {current ? (
+          <CaretRight size={12} aria-hidden className="text-subtle" />
+        ) : null}
+      </Link>
     </nav>
   )
 }

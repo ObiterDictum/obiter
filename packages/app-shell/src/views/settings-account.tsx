@@ -8,6 +8,7 @@ import {
   SavedNotice,
   SectionHeading,
 } from './settings-fields'
+import { SignedInDevices } from './settings-sessions'
 import { useCanonicalNameField } from './use-canonical-name-field'
 
 export function AccountSection({
@@ -31,18 +32,19 @@ export function AccountSection({
   return (
     <section
       hidden={!active}
-      aria-labelledby="settings-account-heading"
+      aria-label="Account"
       className="flex flex-col gap-8"
     >
       <div className="flex flex-col gap-6">
         <SectionHeading
-          id="settings-account-heading"
-          title="Account"
+          id="settings-profile-heading"
+          level="h3"
+          title="Profile"
           description="Your name is shown on comments, tracked changes and every matter you share."
         />
 
         <form
-          className="flex max-w-[420px] flex-col gap-4"
+          className="flex max-w-[480px] flex-col gap-4"
           onSubmit={field.submit}
           noValidate
         >
@@ -74,7 +76,7 @@ export function AccountSection({
             >
               Reset
             </Button>
-            <SavedNotice message="All changes saved" show={field.saved} />
+            <SavedNotice message="Saved" show={field.saved} />
           </div>
           {field.error ? <ErrorNotice message={field.error} /> : null}
         </form>
@@ -87,12 +89,16 @@ export function AccountSection({
           title="Sign-in email"
           description="The address used for sign-in, invitations and Verify notifications."
         />
-        <ReadOnlyField
-          label="Email"
-          value={user.email}
-          helper="Ask your firm administrator to change the email you sign in with."
-        />
+        <dl className="max-w-[480px]">
+          <ReadOnlyField
+            label="Email"
+            value={user.email}
+            helper="Ask your firm administrator to change the email you sign in with."
+          />
+        </dl>
       </div>
+
+      <SignedInDevices active={active} />
     </section>
   )
 }

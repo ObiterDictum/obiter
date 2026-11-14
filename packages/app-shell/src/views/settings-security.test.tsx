@@ -260,7 +260,7 @@ describe('SettingsRouteView — security', () => {
     ).toBe('')
     expect(await within(security).findByRole('status')).toHaveProperty(
       'textContent',
-      expect.stringContaining('Other devices have been signed out'),
+      'Saved',
     )
   })
 

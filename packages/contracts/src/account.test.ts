@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
   MIN_PASSWORD_LENGTH,
+  accountSessionsResponseSchema,
   USER_NAME_MAX_LENGTH,
   updateProfileInputSchema,
 } from './account'
@@ -78,5 +79,27 @@ describe('parseOrganisationName — same name rule as the account name', () => {
 describe('password policy constants', () => {
   it('states the policy the API is configured from', () => {
     expect(MIN_PASSWORD_LENGTH).toBe(8)
+  })
+})
+
+describe('account sessions response', () => {
+  it('reads a session the auth API sent without a user agent as having none', () => {
+    const [session] = accountSessionsResponseSchema.parse([
+      {
+        id: 's1',
+        token: 't1',
+        createdAt: '2026-11-01T09:00:00.000Z',
+        updatedAt: '2026-11-02T09:00:00.000Z',
+      },
+    ])
+    expect(session?.userAgent).toBeNull()
+  })
+
+  it('refuses a session list whose entries lack an id', () => {
+    expect(() =>
+      accountSessionsResponseSchema.parse([
+        { token: 't1', createdAt: 'x', updatedAt: 'x' },
+      ]),
+    ).toThrow()
   })
 })

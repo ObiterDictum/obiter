@@ -9,6 +9,13 @@ import {
   waitFor,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router'
 import { ToastProvider } from '@obiter/ui'
 import { StaffRouteView } from './staff'
 
@@ -112,3 +119,111 @@ for (const [label, target, decision] of [
     client.clear()
   })
 }
+
+function renderStaff(client: QueryClient) {
+  return render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <Suspense fallback={<p>Loading review…</p>}>
+          <StaffRouteView />
+        </Suspense>
+      </ToastProvider>
+    </QueryClientProvider>,
+  )
+}
+
+function staffUser(isStaff: boolean) {
+  return {
+    isStaff,
+    user: {
+      id: 'synthetic',
+      name: 'Synthetic reviewer',
+      email: 'staff@synthetic.test',
+      role: 'member',
+    },
+    organisation: null,
+  }
+}
+
+it('shows the shell not-found page to a user who is not staff', async () => {
+  spyOn(globalThis, 'fetch').mockImplementation(
+    Object.assign(
+      async () =>
+        new Response(JSON.stringify({ groups: [] }), {
+          headers: { 'content-type': 'application/json' },
+        }),
+      { preconnect: fetch.preconnect },
+    ),
+  )
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  client.setQueryData(['current-user'], staffUser(false))
+  const rootRoute = createRootRoute()
+  const indexRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: StaffRouteView,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([indexRoute]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
+  render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <RouterProvider router={router} />
+      </ToastProvider>
+    </QueryClientProvider>,
+  )
+  expect(await screen.findByText('We cannot find that page')).toBeTruthy()
+  client.clear()
+})
+
+it('lists past decisions in a table only once the Decisions view opens', async () => {
+  const paths: string[] = []
+  spyOn(globalThis, 'fetch').mockImplementation(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const path = String(input)
+        paths.push(path)
+        const body = path.endsWith('/decisions')
+          ? {
+              decisions: [
+                {
+                  id: 'sd_1',
+                  targetKind: 'domain',
+                  target: 'synthetic.test',
+                  decision: 'approve',
+                  staffName: 'Synthetic reviewer',
+                  createdAt: '2026-11-02T10:00:00Z',
+                },
+              ],
+            }
+          : path.endsWith('/organisations')
+            ? { organisations: [] }
+            : { groups: [], decisions: [] }
+        return new Response(JSON.stringify(body), {
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+      { preconnect: fetch.preconnect },
+    ),
+  )
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  client.setQueryData(['current-user'], staffUser(true))
+  renderStaff(client)
+  expect(
+    await screen.findByText('No requests are waiting for review.'),
+  ).toBeTruthy()
+  expect(paths.some((path) => path.endsWith('/decisions'))).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Decisions' }))
+  expect(
+    await screen.findByRole('cell', { name: /Domain: synthetic\.test/ }),
+  ).toBeTruthy()
+  expect(screen.getByRole('columnheader', { name: 'Target' })).toBeTruthy()
+  expect(screen.getByRole('columnheader', { name: 'When' })).toBeTruthy()
+  client.clear()
+})
