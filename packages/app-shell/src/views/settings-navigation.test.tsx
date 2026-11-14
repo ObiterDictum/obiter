@@ -37,6 +37,19 @@ mock.module('../organisation-membership', () =>
         mutateAsync: vi.fn(),
         isPending: false,
       }),
+      useUpdateOrganisationMemberRole: () => ({
+        mutate: vi.fn(),
+        isPending: false,
+        isError: false,
+      }),
+      useTransferOrganisationOwnership: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
+      useLeaveOrganisation: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
     }))(),
   ),
 )
@@ -185,7 +198,7 @@ describe('SettingsRouteView — addressable sections', () => {
     ])
   })
 
-  it('hides Members from a plain member but keeps Agent', async () => {
+  it('shows Members read-only to a plain member alongside Agent', async () => {
     signedIn(MEMBER_ME)
     renderSettings()
     const nav = await screen.findByRole('navigation', {
@@ -195,7 +208,14 @@ describe('SettingsRouteView — addressable sections', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Account', 'Security', 'Preferences', 'Organisation', 'Agent'])
+    ).toEqual([
+      'Account',
+      'Security',
+      'Preferences',
+      'Organisation',
+      'Members',
+      'Agent',
+    ])
   })
 
   it('offers only the organisation-free sections without an organisation', async () => {
@@ -217,7 +237,7 @@ describe('SettingsRouteView — addressable sections', () => {
   })
 
   it('opens Account for a section this user cannot see', async () => {
-    signedIn(MEMBER_ME)
+    signedIn(ORGLESS_ME)
     renderSettings('/settings?section=members')
     expect(await screen.findByRole('region', { name: 'Account' })).toBeTruthy()
   })

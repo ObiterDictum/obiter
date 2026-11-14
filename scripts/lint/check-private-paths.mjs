@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const PRIVATE_PATHS = [
   'services/api/',
@@ -109,7 +109,7 @@ function trackedFiles(root) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const root = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
+    path.dirname(fileURLToPath(import.meta.url)),
     '../..',
   )
   const violations = checkPrivatePaths({ root, files: trackedFiles(root) })

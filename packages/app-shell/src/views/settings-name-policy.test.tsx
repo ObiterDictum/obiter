@@ -55,6 +55,19 @@ mock.module('../organisation-membership', () =>
         mutateAsync: vi.fn(),
         isPending: false,
       }),
+      useUpdateOrganisationMemberRole: () => ({
+        mutate: vi.fn(),
+        isPending: false,
+        isError: false,
+      }),
+      useTransferOrganisationOwnership: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
+      useLeaveOrganisation: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
     }))(),
   ),
 )

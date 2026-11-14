@@ -27,7 +27,7 @@ export function InviteMemberForm({
   role,
 }: {
   organisationId: string
-  role: 'owner' | 'admin'
+  role: UserRole
 }) {
   const invite = useCreateOrganisationInvite(organisationId)
   const [email, setEmail] = useState('')

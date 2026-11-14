@@ -13,6 +13,7 @@ These folders hold the executable planning layer for the modules built in this r
 - [Matter Artefacts](matter-artefacts.md)
 - [Pi Agent Framework](pi-agent-framework.md)
 - [Staff Admin Panel](staff-admin.md) — the Obiter-only area for access review, usage and system health
+- [Account lifecycle](account-lifecycle.md) — email change, member roles, ownership transfer, leaving and account deletion
 
 Search, Atlas, Verify and Research are server modules. Their specs live in the
 private [`ObiterDictum/backend`](https://github.com/ObiterDictum/backend)

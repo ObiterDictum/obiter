@@ -44,6 +44,19 @@ mock.module('../organisation-membership', () =>
         mutateAsync: vi.fn(),
         isPending: false,
       }),
+      useUpdateOrganisationMemberRole: () => ({
+        mutate: vi.fn(),
+        isPending: false,
+        isError: false,
+      }),
+      useTransferOrganisationOwnership: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
+      useLeaveOrganisation: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
     }))(),
   ),
 )
@@ -100,7 +113,7 @@ describe('SettingsRouteView — account', () => {
     expect(within(account).queryByText('Your role')).toBeNull()
     expect(within(account).queryByText('Owner')).toBeNull()
     expect(
-      within(account).getByText(/change the email you sign in with/i),
+      within(account).getByRole('button', { name: 'Change email' }),
     ).toBeTruthy()
   })
 
