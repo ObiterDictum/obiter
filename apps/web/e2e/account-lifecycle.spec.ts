@@ -208,7 +208,6 @@ test('a change of email to an outside domain is refused with the contact message
   page,
   request,
 }) => {
-  const runId = randomUUID().slice(0, 8)
   const user = await createAccount(request, 'OutsideMail')
 
   await signIn(page, user.email, user.password)
