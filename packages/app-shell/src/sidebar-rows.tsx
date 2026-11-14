@@ -167,12 +167,15 @@ export function RailItem({
 export function AgentRow({
   expanded,
   onClick,
+  variant = 'row',
 }: {
   expanded: boolean
   onClick: () => void
+  variant?: 'row' | 'tab'
 }) {
   return (
     <RailTooltip
+      side={variant === 'tab' ? 'bottom' : 'right'}
       content={
         <span className="flex items-center gap-2">
           Agent
@@ -187,15 +190,23 @@ export function AgentRow({
         aria-controls="app-shell-right-slot"
         onClick={onClick}
         className={cn(
-          'flex h-8 items-center gap-2.5 rounded-lg px-2 text-meta',
-          'transition-colors duration-150',
+          'flex h-8 items-center text-meta transition-colors duration-150',
+          variant === 'tab'
+            ? 'shrink-0 gap-1.5 rounded-md px-2'
+            : 'w-full gap-2.5 rounded-lg px-2',
           expanded
             ? 'bg-fill font-medium text-ink'
             : 'text-muted hover:bg-hover hover:text-ink',
         )}
       >
         <Robot size={16} weight={expanded ? 'fill' : 'regular'} aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-left">Agent</span>
+        <span
+          className={cn(
+            variant === 'row' && 'min-w-0 flex-1 truncate text-left',
+          )}
+        >
+          Agent
+        </span>
       </button>
     </RailTooltip>
   )
@@ -246,14 +257,16 @@ export function SidebarCollapseToggle({
 function RailTooltip({
   content,
   children,
+  side = 'right',
 }: {
   content: ReactNode
   children: ReactElement<Record<string, unknown>>
+  side?: 'right' | 'bottom'
 }) {
   return (
     <Tooltip>
       <TooltipTrigger render={children} />
-      <TooltipContent side="right" className="max-md:hidden">
+      <TooltipContent side={side} className="max-md:hidden">
         {content}
       </TooltipContent>
     </Tooltip>

@@ -1,20 +1,15 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { cn } from '@obiter/ui'
-import { GearSix, ShieldCheck } from '@obiter/ui/icons'
 import { Suspense, lazy, type ReactNode } from 'react'
-import { currentUserQueryOptions } from './current-user'
 import { useMattersList } from './matters'
 import {
   MODULES,
   matterIdFromPath,
   resolveSection,
-  staffScreenLabel,
   type ModuleItem,
 } from './navigation'
-import { countNote, countToneClass } from './sidebar-rows'
+import { AgentRow, countNote, countToneClass } from './sidebar-rows'
 import { moduleTone, useSidebarData } from './sidebar-counts'
-import { SETTINGS_SECTIONS, useSettingsSection } from './settings-sections'
 import { useSourceTitle } from './source-title'
 
 const MatterSwitcherLazy = lazy(() =>
@@ -78,7 +73,13 @@ function TabDetail({ children }: { children: ReactNode }) {
   )
 }
 
-export function ModuleTabs() {
+export function ModuleTabs({
+  rightSlotOpen,
+  onToggleRightSlot,
+}: {
+  rightSlotOpen: boolean
+  onToggleRightSlot: () => void
+}) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
@@ -88,11 +89,6 @@ export function ModuleTabs() {
   const matterName =
     matters.find((matter) => matter.id === matterId)?.name ?? 'Matter'
   const sourceTitle = useSourceTitle(pathname)
-  const { data: me } = useQuery(currentUserQueryOptions())
-  const settingsSection = useSettingsSection(me)
-  const settingsLabel = SETTINGS_SECTIONS.find(
-    (item) => item.id === settingsSection,
-  )?.label
   const { counts, verifyTone } = useSidebarData()
 
   return (
@@ -125,18 +121,11 @@ export function ModuleTabs() {
           ) : null}
         </span>
       ))}
-      {section === 'settings' ? (
-        <span className="flex shrink-0 items-center gap-1">
-          <ModuleTab label="Settings" to="/settings" icon={GearSix} current />
-          {settingsLabel ? <TabDetail>{settingsLabel}</TabDetail> : null}
-        </span>
-      ) : null}
-      {section === 'staff' && me?.isStaff ? (
-        <span className="flex shrink-0 items-center gap-1">
-          <ModuleTab label="Staff" to="/staff" icon={ShieldCheck} current />
-          <TabDetail>{staffScreenLabel(pathname)}</TabDetail>
-        </span>
-      ) : null}
+      <AgentRow
+        variant="tab"
+        expanded={rightSlotOpen}
+        onClick={onToggleRightSlot}
+      />
     </nav>
   )
 }

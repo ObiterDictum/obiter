@@ -596,6 +596,28 @@ describe('shell layout modes', () => {
     ).toBeTruthy()
   })
 
+  it('keeps the Agent tab with the module tabs in tabs layout', async () => {
+    window.localStorage.setItem('obiter.layout', 'tabs')
+    renderShell('/')
+    const tabs = await screen.findByRole('navigation', { name: 'Modules' })
+    const agent = within(tabs).getByRole('button', { name: 'Agent' })
+    const redact = within(tabs).getByRole('link', { name: /^Redact/ })
+    expect(
+      redact.compareDocumentPosition(agent) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('shows settings only through the title bar cog in tabs layout', async () => {
+    window.localStorage.setItem('obiter.layout', 'tabs')
+    renderShell('/settings')
+    const tabs = await screen.findByRole('navigation', { name: 'Modules' })
+    expect(within(tabs).queryByRole('link', { name: 'Settings' })).toBeNull()
+    const header = document.querySelector('header') as HTMLElement
+    const cogs = within(header).getAllByRole('link', { name: 'Settings' })
+    expect(cogs).toHaveLength(1)
+    expect(cogs[0]?.getAttribute('aria-current')).toBe('page')
+  })
+
   it('moves the matter switcher beside the Matters tab inside a matter', async () => {
     window.localStorage.setItem('obiter.layout', 'tabs')
     renderShell('/matters/mtr_1')

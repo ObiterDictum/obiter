@@ -332,6 +332,7 @@ describe('Sidebar', () => {
 
     const agent = screen.getByRole('button', { name: 'Agent' })
     expect(agent.textContent).toBe('Agent')
+    expect(agent.classList.contains('w-full')).toBe(true)
     expect(agent.getAttribute('aria-expanded')).toBe('false')
     expect(agent.getAttribute('aria-controls')).toBe('app-shell-right-slot')
     fireEvent.click(agent)
