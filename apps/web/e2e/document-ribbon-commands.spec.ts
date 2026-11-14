@@ -2,14 +2,13 @@ import { expect, test, type Page } from '@playwright/test'
 import { createAccount, openFixtureDocument } from './document-journey'
 import {
   runCommand,
-  saveButton,
   undoButton,
   redoButton,
   ribbonCommand,
   commandRefusal,
 } from './editor-chrome'
 import { openMatter } from './support'
-import { signIn } from './e13-support'
+import { signIn, saveAndWait as save } from './e13-support'
 import path from 'node:path'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -43,11 +42,6 @@ async function shape(page: Page, rows: number, columns: number) {
 async function focusCell(page: Page) {
   await page.locator('td [data-paragraph-id]').first().click()
   await expect(page.getByLabel('Paragraph text', { exact: true })).toBeFocused()
-}
-
-async function save(page: Page) {
-  await saveButton(page).click()
-  await expect(saveButton(page)).toBeDisabled({ timeout: 30_000 })
 }
 
 test.use({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' })
