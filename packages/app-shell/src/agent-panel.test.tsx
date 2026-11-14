@@ -19,7 +19,6 @@ import {
 } from '@tanstack/react-router'
 import type { AgentRun, AgentRunDetailResponse } from '@obiter/contracts'
 import { AgentTab } from './agent-panel'
-
 const baseRun = {
   id: 'arun_1',
   organisationId: 'org_1',
@@ -52,7 +51,6 @@ const baseRun = {
   startedAt: '2026-11-03T10:00:00.000Z',
   finishedAt: '2026-11-03T10:00:12.000Z',
 } as const
-
 const completed: AgentRun = {
   ...baseRun,
   toolAllowList: [...baseRun.toolAllowList],
@@ -78,7 +76,6 @@ const completed: AgentRun = {
     droppedSentenceCount: 1,
   },
 }
-
 const refused: AgentRun = {
   ...baseRun,
   toolAllowList: [...baseRun.toolAllowList],
@@ -96,7 +93,6 @@ const refused: AgentRun = {
     },
   },
 }
-
 const running: AgentRun = {
   ...baseRun,
   toolAllowList: [...baseRun.toolAllowList],
@@ -104,10 +100,8 @@ const running: AgentRun = {
   status: 'running',
   stopReason: null,
 }
-
 let runs: AgentRun[] = []
 const requests: Array<{ url: string; method: string }> = []
-
 function detail(run: AgentRun): AgentRunDetailResponse {
   return { run, steps: [], toolCalls: [], events: [] }
 }
