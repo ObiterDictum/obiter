@@ -51,13 +51,19 @@ function renderContents(isStaff: boolean, pathname: string) {
   const contents = () => <StaffContents pathname={pathname} />
   const router = createRouter({
     routeTree: rootRoute.addChildren(
-      ['/', '/staff', '/staff/access', '/staff/usage', '/staff/feedback'].map(
-        (path) =>
-          createRoute({
-            getParentRoute: () => rootRoute,
-            path,
-            component: contents,
-          }),
+      [
+        '/',
+        '/staff',
+        '/staff/access',
+        '/staff/usage',
+        '/staff/feedback',
+        '/staff/errors',
+      ].map((path) =>
+        createRoute({
+          getParentRoute: () => rootRoute,
+          path,
+          component: contents,
+        }),
       ),
     ),
     history: createMemoryHistory({ initialEntries: [pathname] }),
@@ -79,7 +85,7 @@ afterEach(() => {
   mock.restore()
 })
 
-it('lists the four staff screens in order with their counts', async () => {
+it('lists the five staff screens in order with their counts', async () => {
   const client = renderContents(true, '/staff/usage')
   const nav = await screen.findByRole('navigation', {
     name: 'Staff sections',
@@ -87,7 +93,7 @@ it('lists the four staff screens in order with their counts', async () => {
   const links = screen.getAllByRole('link')
   expect(
     links.map((link) => link.textContent?.replace(/\d+$/, '').trim()),
-  ).toEqual(['Overview', 'Access review', 'Usage', 'Feedback'])
+  ).toEqual(['Overview', 'Access review', 'Usage', 'Feedback', 'Errors'])
   await waitFor(() => {
     expect(withinLink(links[1])).toContain('3')
     expect(withinLink(links[3])).toContain('2')

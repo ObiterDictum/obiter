@@ -1,3 +1,4 @@
+import { reportError } from './error-reporting'
 import { Link } from '@tanstack/react-router'
 import { Button, ObiterMark, Skeleton, cn } from '@obiter/ui'
 import {
@@ -215,6 +216,7 @@ export function ShellError({
   error: unknown
   reset?: () => void
 }) {
+  reportError(error)
   const failure = classifyShellFailure(error)
   if (failure === 'not-found') return <ShellNotFound />
   if (failure === 'forbidden') return <ShellPermissionDenied />

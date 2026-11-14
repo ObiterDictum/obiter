@@ -1,3 +1,4 @@
+import { ErrorReportingBoundary } from '@obiter/app-shell'
 import {
   AppShellLayout,
   ShellError,
@@ -74,7 +75,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body style={{ margin: 0 }}>
-        {children}
+        <ErrorReportingBoundary>{children}</ErrorReportingBoundary>
         <Scripts />
       </body>
     </html>

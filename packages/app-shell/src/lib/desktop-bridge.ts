@@ -1,6 +1,9 @@
 import type { AppPlatform } from '@obiter/contracts'
 
 export interface DesktopBridge {
+  onMainError?(
+    listener: (error: { kind: string; message: string; stack: string }) => void,
+  ): () => void
   platform: 'desktop'
   osPlatform: string
   shellVersion: string

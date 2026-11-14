@@ -20,7 +20,9 @@
     "./views/staff-overview": "./src/views/staff-overview.tsx",
     "./views/staff-usage": "./src/views/staff-usage.tsx",
     "./views/staff-feedback": "./src/views/staff-feedback.tsx",
-    "./views/agent-window": "./src/views/agent-window.tsx"
+    "./views/agent-window": "./src/views/agent-window.tsx",
+    "./error-reporting": "./src/error-reporting.ts",
+    "./views/staff-errors": "./src/views/staff-errors.tsx"
   },
   "dependencies": {
     "@obiter/contracts": "workspace:*",
@@ -31,7 +33,8 @@
     "better-auth": "^1.6.8",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@obiter/config": "workspace:*"
   },
   "scripts": {
     "test": "bun test --isolate --parallel=2 --preload ../../scripts/test/vitest-compat.ts --preload ../../scripts/test/dom-preload.ts",

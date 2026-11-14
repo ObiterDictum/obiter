@@ -100,6 +100,7 @@ export { validateSettingsSearch } from './settings-sections'
 export {
   validateStaffFeedbackSearch,
   validateStaffUsageSearch,
+  validateStaffErrorsSearch,
 } from './staff-search'
 export { DocumentDetailLayoutView } from './views/document-detail'
 export { caseResultLocation } from './case-navigation'
@@ -148,3 +149,5 @@ export {
 } from './legal-search-recents'
 
 export { AccessSetupRouteView } from './views/access-setup'
+
+export { ErrorReportingBoundary } from './error-boundary'

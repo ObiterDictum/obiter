@@ -189,3 +189,29 @@ It should not silently "learn" from client matter data. Retrieval over trusted l
 ## Risk Posture
 
 Obiter should make conservative claims. For example, citation treatment detection should be framed as citation context or possible treatment until the system has enough validation to make stronger assertions safely.
+
+## First-party error reports
+
+Obiter always collects bounded diagnostic error reports to find and repair failures.
+Reports stay on Obiter's own EU-hosted servers in the API's PostgreSQL database;
+no third-party error SDK or external reporting endpoint is used. Staff can view
+reports only after passing the same staff and two-factor gate as Insight.
+
+Collected fields are source (web, desktop or API), build commit, error kind,
+scrubbed message (up to 300 characters), up to 30 scrubbed stack frames (function,
+code file basename, line and column), route pattern with identifiers replaced,
+HTTP method and status for failed requests, internal user and organisation ids
+from the server session, a fingerprint hashing kind, top frame and route pattern,
+and server receipt time. Signed-out reports have no user or organisation attached.
+
+Reports do not collect document or matter text, request bodies, headers, cookies,
+query strings, fragments, local variables, console output or emails. Quoted strings,
+long digit runs and long words are scrubbed. The API reapplies the scrubber and
+rejects unknown fields. Developers must never put matter text in error messages.
+Collection is disabled in the development server. Each page deduplicates reports
+and caps collection at 20; ingestion accepts at most 20 reports and 32 KB per batch
+and 30 reports per minute per authenticated user or direct peer IP. IPs are used
+only in an ephemeral rate-limit map, never stored with reports.
+
+Retention is 90 days. A single-flight in-process job runs at startup and daily,
+permanently deleting reports older than 90 days.

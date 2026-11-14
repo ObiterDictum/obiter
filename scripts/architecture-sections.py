@@ -28,7 +28,7 @@ import re
 GROUPS = [
     ("Orientation", ["overview", "stack", "runtime", "graph"]),
     ("Workspaces", ["clients", "services", "packages", "scripts"]),
-    ("Interfaces", ["http", "lifecycle", "auth"]),
+    ("Interfaces", ["http", "lifecycle", "auth", "error-reporting"]),
     ("State", ["data", "storage", "fixtures", "config"]),
     ("Behaviour", ["search-flow", "redact-flow", "corpus"]),
     ("Delivery", ["testing", "ci", "infra"]),
@@ -48,6 +48,7 @@ LABELS = {
     "http": "HTTP surface",
     "lifecycle": "Request lifecycle",
     "auth": "Auth and scoping",
+    "error-reporting": "Error reporting",
     "data": "Data model",
     "storage": "Object storage",
     "fixtures": "Fixtures and benchmarks",

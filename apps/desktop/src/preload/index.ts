@@ -4,6 +4,18 @@ const rawApiOrigin: unknown = ipcRenderer.sendSync('obiter:get-api-origin')
 const apiOrigin = typeof rawApiOrigin === 'string' ? rawApiOrigin : null
 
 contextBridge.exposeInMainWorld('obiterDesktop', {
+  onMainError: (
+    listener: (error: { kind: string; message: string; stack: string }) => void,
+  ) => {
+    const receive = (
+      _event: unknown,
+      error: { kind: string; message: string; stack: string },
+    ) => listener(error)
+    ipcRenderer.on('obiter:main-error', receive)
+    return () => {
+      ipcRenderer.removeListener('obiter:main-error', receive)
+    }
+  },
   platform: 'desktop' as const,
   osPlatform: process.platform,
   shellVersion: 'phase-0.1',

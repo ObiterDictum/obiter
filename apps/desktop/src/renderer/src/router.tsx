@@ -26,6 +26,7 @@ import {
   validateSettingsSearch,
   validateStaffFeedbackSearch,
   validateStaffUsageSearch,
+  validateStaffErrorsSearch,
 } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -122,6 +123,10 @@ const StaffUsageRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/staff-usage'))
     .StaffUsageRouteView,
 }))
+const StaffErrorsRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/staff-errors'))
+    .StaffErrorsRouteView,
+}))
 const StaffFeedbackRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/staff-feedback'))
     .StaffFeedbackRouteView,
@@ -153,6 +158,7 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/staff/access',
   '/staff/usage',
   '/staff/feedback',
+  '/staff/errors',
   '/request-access/setup',
   '/settings',
   '/verify',
@@ -389,6 +395,16 @@ const staffUsageRoute = createRoute({
   component: () => (
     <Suspense fallback={<RouteLoading />}>
       <StaffUsageRouteView />
+    </Suspense>
+  ),
+})
+const staffErrorsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'staff/errors',
+  validateSearch: validateStaffErrorsSearch,
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <StaffErrorsRouteView />
     </Suspense>
   ),
 })
@@ -737,6 +753,7 @@ const routeTree = rootRoute.addChildren([
   staffAccessRoute,
   staffUsageRoute,
   staffFeedbackRoute,
+  staffErrorsRoute,
   accessSetupRoute,
   settingsRoute,
   agentRoute,
