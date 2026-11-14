@@ -19,16 +19,12 @@ export function TabsTitleBar({
   loadedBuild,
   me,
   section,
-  rightSlotOpen,
-  onToggleRightSlot,
   clearsTrafficLights,
 }: {
   platform: AppPlatform
   loadedBuild: string | null
   me: MeResponse | undefined
   section: ShellSection
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
   clearsTrafficLights: boolean
 }) {
   return (
@@ -47,10 +43,7 @@ export function TabsTitleBar({
         >
           <ObiterMark className="size-6" title="" />
         </Link>
-        <ModuleTabs
-          rightSlotOpen={rightSlotOpen}
-          onToggleRightSlot={onToggleRightSlot}
-        />
+        <ModuleTabs />
       </div>
       <div className="app-no-drag flex shrink-0 items-center gap-1">
         <TitleBarActions
@@ -90,8 +83,6 @@ export function CleanTitleBar({
   me,
   trail,
   orgName,
-  rightSlotOpen,
-  onToggleRightSlot,
   clearsTrafficLights,
 }: {
   platform: AppPlatform
@@ -99,8 +90,6 @@ export function CleanTitleBar({
   me: MeResponse | undefined
   trail: Crumb[]
   orgName?: string | null
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
   clearsTrafficLights: boolean
 }) {
   return (
@@ -112,10 +101,7 @@ export function CleanTitleBar({
       )}
     >
       <div className="app-no-drag flex min-w-0 flex-1 items-center gap-1">
-        <ShellMenuButton
-          rightSlotOpen={rightSlotOpen}
-          onToggleRightSlot={onToggleRightSlot}
-        />
+        <ShellMenuButton />
         <BreadcrumbNav trail={trail} orgName={orgName} />
       </div>
       <TitleBarActions

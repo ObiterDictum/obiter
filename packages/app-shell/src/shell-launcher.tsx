@@ -14,17 +14,11 @@ import { useState } from 'react'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
 import { MODULES, matterIdFromPath, resolveSection } from './navigation'
-import { AgentRow, MatterRow, ModuleRow } from './sidebar-rows'
+import { MatterRow, ModuleRow } from './sidebar-rows'
 import { moduleTone, useSidebarData } from './sidebar-counts'
 import { ThemeToggle } from './theme-toggle'
 
-export function ShellMenuButton({
-  rightSlotOpen,
-  onToggleRightSlot,
-}: {
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
-}) {
+export function ShellMenuButton() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   const { signOut } = useAuth()
@@ -78,13 +72,6 @@ export function ShellMenuButton({
                   onClick={close}
                 />
               ))}
-              <AgentRow
-                expanded={rightSlotOpen}
-                onClick={() => {
-                  onToggleRightSlot()
-                  close()
-                }}
-              />
               {me?.isStaff ? (
                 <ModuleRow
                   label="Staff"

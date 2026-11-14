@@ -1,3 +1,4 @@
+import { AgentPanelToggle } from './agent-panel-toggle'
 import type { AppPlatform } from '@obiter/contracts'
 import {
   Menu,
@@ -119,6 +120,7 @@ export function MatterTabStrip({
         />
       )}
       <SplitControls />
+      <AgentPanelToggle />
       {deletingId ? (
         <DeleteDocumentDialog
           documentId={deletingId}

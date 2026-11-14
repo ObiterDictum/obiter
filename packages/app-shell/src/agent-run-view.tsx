@@ -1,9 +1,6 @@
+import { EvidenceLink, evidenceLabel } from './agent-evidence'
 import { Link } from '@tanstack/react-router'
-import {
-  isAgentRunLive,
-  type AgentEvidence,
-  type AgentRun,
-} from '@obiter/contracts'
+import { isAgentRunLive, type AgentRun } from '@obiter/contracts'
 import { Button, Skeleton, cn } from '@obiter/ui'
 import {
   CheckCircle,
@@ -261,49 +258,5 @@ function AgentAnswerView({
         </ol>
       </div>
     </section>
-  )
-}
-
-export function evidenceLabel(item: AgentEvidence): string {
-  if (item.kind === 'corpus_paragraph') {
-    const citation = item.neutralCitation ? ` ${item.neutralCitation}` : ''
-    return `${item.title}${citation}, para ${item.paragraphNumber}`
-  }
-  return `${item.documentName}, characters ${item.start}–${item.end}`
-}
-
-function EvidenceLink({
-  matterId,
-  evidence,
-  className,
-  children,
-}: {
-  matterId: string
-  evidence: AgentEvidence
-  className?: string
-  children: ReactNode
-}) {
-  if (evidence.kind === 'corpus_paragraph') {
-    return (
-      <Link
-        to="/cases/$caseId"
-        params={{ caseId: evidence.authorityId }}
-        hash={`para-${evidence.paragraphNumber}`}
-        className={className}
-        aria-label={`Open ${evidenceLabel(evidence)}`}
-      >
-        {children}
-      </Link>
-    )
-  }
-  return (
-    <Link
-      to="/matters/$matterId/documents/$documentId"
-      params={{ matterId, documentId: evidence.documentId }}
-      className={className}
-      aria-label={`Open ${evidenceLabel(evidence)}`}
-    >
-      {children}
-    </Link>
   )
 }

@@ -169,8 +169,10 @@ export function CommandPaletteProvider({
     },
     {
       id: 'action-toggle-right-slot',
-      label: 'Toggle agent panel',
-      hint: 'Open the right-hand panel',
+      label: currentMatterId ? 'Toggle agent panel' : 'Open Agent',
+      hint: currentMatterId
+        ? 'Show or hide the matter agent'
+        : 'Research case law and legislation',
       shortcut: 'toggle-right-slot',
       target: { kind: 'action', id: 'toggle-right-slot' },
     },

@@ -19,7 +19,8 @@
     "./views/staff": "./src/views/staff.tsx",
     "./views/staff-overview": "./src/views/staff-overview.tsx",
     "./views/staff-usage": "./src/views/staff-usage.tsx",
-    "./views/staff-feedback": "./src/views/staff-feedback.tsx"
+    "./views/staff-feedback": "./src/views/staff-feedback.tsx",
+    "./views/agent-window": "./src/views/agent-window.tsx"
   },
   "dependencies": {
     "@obiter/contracts": "workspace:*",

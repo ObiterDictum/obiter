@@ -4,10 +4,12 @@ import {
   MagnifyingGlass,
   PencilSimple,
   ShieldCheck,
+  Robot,
 } from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 
-export type ModuleId = 'home' | 'search' | 'matters' | 'verify' | 'redact'
+export type ModuleId =
+  'home' | 'search' | 'matters' | 'verify' | 'redact' | 'agent'
 export type ShellSection = ModuleId | 'settings' | 'staff' | 'other'
 
 export interface ModuleItem {
@@ -28,6 +30,7 @@ export const MODULES: ModuleItem[] = [
   { id: 'search', label: 'Search', to: '/search', icon: MagnifyingGlass },
   { id: 'verify', label: 'Verify', to: '/verify', icon: ShieldCheck },
   { id: 'redact', label: 'Redact', to: '/redact', icon: PencilSimple },
+  { id: 'agent', label: 'Agent', to: '/agent', icon: Robot },
 ]
 
 export function resolveSection(path: string): ShellSection {
@@ -42,6 +45,7 @@ export function resolveSection(path: string): ShellSection {
   if (path === '/matters' || path.startsWith('/matters/')) return 'matters'
   if (path === '/verify' || path.startsWith('/verify/')) return 'verify'
   if (path === '/redact' || path.startsWith('/redact/')) return 'redact'
+  if (path === '/agent' || path.startsWith('/agent/')) return 'agent'
   if (path === '/staff' || path.startsWith('/staff/')) return 'staff'
   if (path === '/settings' || path.startsWith('/settings/')) return 'settings'
   return 'other'
@@ -53,6 +57,7 @@ const SECTION_LABELS = {
   matters: 'Matters',
   verify: 'Verify',
   redact: 'Redact',
+  agent: 'Agent',
   settings: 'Settings',
   staff: 'Staff',
   other: 'Obiter',

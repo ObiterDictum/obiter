@@ -149,6 +149,7 @@ beforeEach(() => {
             keySetAt: null,
           })
         }
+        if (url.includes('/api/agent-sessions')) return json({ sessions: [] })
         if (url.endsWith('/api/matters/mtr_1/agent-runs')) return json({ runs })
         if (url.endsWith('/cancel')) {
           return json({
@@ -232,11 +233,9 @@ function renderTab(path = '/matters/mtr_1') {
 }
 
 describe('agent tab', () => {
-  it('asks the user to open a matter, because a run works on exactly one', async () => {
+  it('renders no agent panel content outside matters', async () => {
     renderTab('/')
-    expect(
-      await screen.findByText(/Open a matter to ask the agent/),
-    ).toBeTruthy()
+    await new Promise((resolve) => setTimeout(resolve, 20))
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
@@ -285,12 +284,12 @@ describe('agent tab', () => {
     })
   })
 
-  it('labels the ask shortcut for the platform it runs on', async () => {
+  it('offers a Message composer for a new matter conversation', async () => {
     runs = []
     renderTab()
-    const ask = await screen.findByRole('button', { name: /Ask/ })
-    expect(ask.textContent).toContain(
-      /mac/i.test(navigator.platform) ? '⌘Enter' : 'Ctrl+Enter',
-    )
+    expect(await screen.findByRole('textbox', { name: 'Message' })).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled'),
+    ).toBe(true)
   })
 })

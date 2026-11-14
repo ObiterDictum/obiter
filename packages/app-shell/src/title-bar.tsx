@@ -21,8 +21,6 @@ export function TitleBar({
   onExitFocusMode,
   showSearch,
   chrome,
-  rightSlotOpen,
-  onToggleRightSlot,
 }: {
   platform: AppPlatform
   loadedBuild?: string | null
@@ -30,8 +28,6 @@ export function TitleBar({
   onExitFocusMode: () => void
   showSearch: boolean
   chrome: ShellLayout
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
 }) {
   const router = useRouter()
   const { data: me } = useQuery(currentUserQueryOptions())
@@ -65,8 +61,7 @@ export function TitleBar({
         loadedBuild={loadedBuild}
         me={me}
         section={section}
-        rightSlotOpen={rightSlotOpen}
-        onToggleRightSlot={onToggleRightSlot}
+
         clearsTrafficLights={clearsTrafficLights}
       />
     )
@@ -80,8 +75,7 @@ export function TitleBar({
         me={me}
         trail={trail}
         orgName={me?.organisation?.name}
-        rightSlotOpen={rightSlotOpen}
-        onToggleRightSlot={onToggleRightSlot}
+
         clearsTrafficLights={clearsTrafficLights}
       />
     )

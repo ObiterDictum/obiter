@@ -8,7 +8,7 @@ import {
   resolveSection,
   type ModuleItem,
 } from './navigation'
-import { AgentRow, countNote, countToneClass } from './sidebar-rows'
+import { countNote, countToneClass } from './sidebar-rows'
 import { moduleTone, useSidebarData } from './sidebar-counts'
 import { useSourceTitle } from './source-title'
 
@@ -73,13 +73,7 @@ function TabDetail({ children }: { children: ReactNode }) {
   )
 }
 
-export function ModuleTabs({
-  rightSlotOpen,
-  onToggleRightSlot,
-}: {
-  rightSlotOpen: boolean
-  onToggleRightSlot: () => void
-}) {
+export function ModuleTabs() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   })
@@ -121,11 +115,6 @@ export function ModuleTabs({
           ) : null}
         </span>
       ))}
-      <AgentRow
-        variant="tab"
-        expanded={rightSlotOpen}
-        onClick={onToggleRightSlot}
-      />
     </nav>
   )
 }

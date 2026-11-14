@@ -125,6 +125,7 @@ function renderSidebar(
   rightSlotOpen = false,
   isStaff = false,
 ) {
+  window.localStorage.setItem('obiter.rightSlot.open', String(rightSlotOpen))
   const rootRoute = createRootRoute()
   const sidebar = () =>
     variant === 'full' ? (
@@ -132,16 +133,12 @@ function renderSidebar(
         isStaff={isStaff}
         orgName="Harrington Vale LLP"
         platform="web"
-        rightSlotOpen={rightSlotOpen}
-        onToggleRightSlot={() => toggleClicks.push('agent')}
         onCollapse={() => collapseClicks.push('collapse')}
       />
     ) : (
       <SidebarRail
         isStaff={isStaff}
         platform="web"
-        rightSlotOpen={rightSlotOpen}
-        onToggleRightSlot={() => toggleClicks.push('agent')}
         onExpand={() => collapseClicks.push('expand')}
       />
     )
@@ -315,7 +312,7 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: 'Redact, 1 waiting' })).toBeTruthy()
   })
 
-  it('orders the modules with Home first and toggles the agent panel from its own row', async () => {
+  it('orders the modules with Home first and links Agent to its window', async () => {
     renderSidebar('/')
     const nav = await screen.findByRole('navigation', { name: 'Workspace' })
     const rows = Array.from(nav.querySelectorAll('ul:first-of-type > li')).map(
@@ -330,19 +327,18 @@ describe('Sidebar', () => {
       'Agent',
     ])
 
-    const agent = screen.getByRole('button', { name: 'Agent' })
+    const agent = screen.getByRole('link', { name: 'Agent' })
     expect(agent.textContent).toBe('Agent')
-    expect(agent.classList.contains('w-full')).toBe(true)
-    expect(agent.getAttribute('aria-expanded')).toBe('false')
-    expect(agent.getAttribute('aria-controls')).toBe('app-shell-right-slot')
+    expect(agent.getAttribute('href')).toBe('/agent')
+    expect(agent.getAttribute('aria-controls')).toBeNull()
     fireEvent.click(agent)
-    expect(toggleClicks).toEqual(['agent'])
+    expect(toggleClicks).toEqual([])
   })
 
-  it('marks the agent row as expanded while the right slot is open', async () => {
+  it('keeps Agent as a link while the stored right slot is open', async () => {
     renderSidebar('/', 'full', true)
-    const agent = await screen.findByRole('button', { name: 'Agent' })
-    expect(agent.getAttribute('aria-expanded')).toBe('true')
+    const agent = await screen.findByRole('link', { name: 'Agent' })
+    expect(agent.getAttribute('href')).toBe('/agent')
   })
 
   it('collapses from the toggle beside Settings rather than a title bar button', async () => {
@@ -445,7 +441,7 @@ describe('SidebarRail', () => {
 
   it('keeps Agent with the modules at the top of the rail', async () => {
     renderSidebar('/matters', 'rail')
-    const agent = await screen.findByRole('button', { name: 'Agent' })
+    const agent = await screen.findByRole('link', { name: 'Agent' })
     const redact = screen.getByRole('link', { name: 'Redact' })
     expect(
       redact.compareDocumentPosition(agent) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -457,13 +453,13 @@ describe('SidebarRail', () => {
     ).toBeTruthy()
   })
 
-  it('toggles the agent panel from the rail', async () => {
+  it('links to the Agent window from the rail', async () => {
     renderSidebar('/matters', 'rail', true)
-    const agent = await screen.findByRole('button', { name: 'Agent' })
-    expect(agent.getAttribute('aria-expanded')).toBe('true')
-    expect(agent.getAttribute('aria-controls')).toBe('app-shell-right-slot')
+    const agent = await screen.findByRole('link', { name: 'Agent' })
+    expect(agent.getAttribute('href')).toBe('/agent')
+    expect(agent.getAttribute('aria-controls')).toBeNull()
     fireEvent.click(agent)
-    expect(toggleClicks).toEqual(['agent'])
+    expect(toggleClicks).toEqual([])
   })
 })
 

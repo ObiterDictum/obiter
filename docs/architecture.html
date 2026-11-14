@@ -2154,6 +2154,15 @@
             <code>@obiter/app-shell</code> so web and desktop share one
             implementation.
           </p>
+          <p>
+            Agent routes in both clients: <code>/agent</code> starts private
+            law-only research and <code>/agent/$sessionId</code> continues a
+            conversation. Shared views load lazily. The Conversations contents
+            panel lists the caller’s matterless sessions. The right slot renders
+            only inside matters, where the tab-strip control opens the latest
+            matter session; Primary+J opens Agent elsewhere. Session detail
+            polls the API every two seconds while a run is active.
+          </p>
           <div class="modules">
             <article class="module">
               <header>
@@ -2240,15 +2249,15 @@
                     One labelled column drawn straight on the canvas on every
                     route above the mobile breakpoint: the Obiter monogram with
                     the organisation name, Home, Matters, Search, Verify and
-                    Redact with their counts and alert dots, an Agent row that
-                    toggles the right slot, recent matters, and settings, theme,
-                    the collapse toggle and account at the foot. Counts come
-                    from queries the frame already runs — active matters,
-                    findings waiting on a person across completed Verify runs,
-                    redaction runs awaiting a decision. It spans the window's
-                    full height, becomes an icon rail only when a person
-                    collapses it from that foot toggle (persisted in local
-                    storage), and at 767px and under becomes the bottom bar.
+                    Redact and Agent as module links with their counts and alert
+                    dots, recent matters, and settings, theme, the collapse
+                    toggle and account at the foot. Counts come from queries the
+                    frame already runs — active matters, findings waiting on a
+                    person across completed Verify runs, redaction runs awaiting
+                    a decision. It spans the window's full height, becomes an
+                    icon rail only when a person collapses it from that foot
+                    toggle (persisted in local storage), and at 767px and under
+                    becomes the bottom bar.
                   </td>
                 </tr>
                 <tr>
@@ -2298,11 +2307,13 @@
                     tooltip. The ribbon's Review commands open the Comments and
                     Checks tabs rather than docked panels of their own. A tab
                     appears only on routes the shell registry registers it for:
-                    Agent everywhere, Comments, Checks and History on matter
-                    document routes, where the open document renders into them
-                    through a portal. ⌘J / Ctrl+J toggles it, as does the Agent
-                    row in the sidebar or rail, and at 767px and under it opens
-                    as a bottom sheet above the bottom bar.
+                    Agent on matter routes, Comments, Checks and History on
+                    matter document routes, where the open document renders into
+                    them through a portal. Outside matters the slot is absent.
+                    ⌘J / Ctrl+J toggles it inside matters, as does the agent
+                    control at the far right of the matter tab strip, and at
+                    767px and under it opens as a bottom sheet above the bottom
+                    bar.
                   </td>
                 </tr>
                 <tr>
@@ -2371,13 +2382,15 @@
                   <td>
                     One module (<code>shell-shortcuts.tsx</code>): ⌘K / Ctrl+K
                     command palette, ⌘\ / Ctrl+\ sidebar toggle, ⌘J / Ctrl+J
-                    right slot, ⌘. / Ctrl+. focus mode, and a
+                    matter agent panel (opens /agent elsewhere), ⌘. / Ctrl+.
+                    focus mode, and a
                     <code>g</code> then <code>h</code>, <code>m</code>,
-                    <code>v</code>, <code>r</code> or <code>s</code> sequence
-                    for Home, Matters, Verify, Redact and Search. Bare letters
-                    are ignored while typing and any key the editor or a dialog
-                    has already claimed is left alone. Focus mode hides the
-                    rail, contents panel and slot, and Escape leaves it.
+                    <code>v</code>, <code>r</code>, <code>s</code> or
+                    <code>a</code> sequence for Home, Matters, Verify, Redact,
+                    Search and Agent. Bare letters are ignored while typing and
+                    any key the editor or a dialog has already claimed is left
+                    alone. Focus mode hides the rail, contents panel and slot,
+                    and Escape leaves it.
                   </td>
                 </tr>
                 <tr>

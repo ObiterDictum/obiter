@@ -1,3 +1,4 @@
+import { AgentPanelContext } from './agent-panel-toggle'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, useNavigate, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
@@ -178,6 +179,12 @@ export function ShellFrame({
   }
 
   function toggleRightSlot() {
+    if (!matterId) {
+      void navigate({ to: '/agent' })
+      return
+    }
+    setRightSlotTab('agent')
+    setFocusMode(false)
     setRightSlotOpen(!rightSlotOpen)
   }
 
@@ -201,6 +208,7 @@ export function ShellFrame({
     'go-matters': () => void navigate({ to: '/matters' }),
     'go-verify': () => void navigate({ to: '/verify' }),
     'go-redact': () => void navigate({ to: '/redact' }),
+    'go-agent': () => void navigate({ to: '/agent' }),
     'go-search': () => void navigate({ to: '/search' }),
   })
 
@@ -242,8 +250,6 @@ export function ShellFrame({
               <SidebarRail
                 isStaff={me?.isStaff}
                 platform={platform}
-                rightSlotOpen={rightSlotOpen}
-                onToggleRightSlot={toggleRightSlot}
                 onExpand={toggleSidebar}
               />
             ) : (
@@ -251,8 +257,6 @@ export function ShellFrame({
                 isStaff={me?.isStaff}
                 orgName={me?.organisation?.name}
                 platform={platform}
-                rightSlotOpen={rightSlotOpen}
-                onToggleRightSlot={toggleRightSlot}
                 onCollapse={toggleSidebar}
               />
             )}
@@ -264,32 +268,37 @@ export function ShellFrame({
                 onExitFocusMode={leaveFocusMode}
                 showSearch={chrome !== 'sidebar' || rail || focusMode}
                 chrome={chrome}
-                rightSlotOpen={rightSlotOpen}
-                onToggleRightSlot={toggleRightSlot}
               />
               <div className="relative flex min-h-0 flex-1 flex-col-reverse gap-2 pr-2 pb-2 max-md:pb-0 max-md:pl-2 md:flex-row">
                 <div
                   id="app-shell-pane"
                   className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-raised"
                 >
-                  <MatterPreviewProvider>
-                    <ShellPane
-                      section={section}
-                      pathname={pathname}
-                      narrow={narrow}
-                      contentsVisible={contentsVisible}
-                      matterTabs={matterId !== null && me !== undefined}
-                      matterId={matterId}
-                      userId={me?.user.id ?? ''}
-                      platform={platform}
-                      compact={bottomBar}
-                      onCloseContents={closeContentsOverlay}
-                    >
-                      {children}
-                    </ShellPane>
-                  </MatterPreviewProvider>
+                  <AgentPanelContext.Provider
+                    value={{
+                      open: rightSlotOpen && !focusMode,
+                      toggle: toggleRightSlot,
+                    }}
+                  >
+                    <MatterPreviewProvider>
+                      <ShellPane
+                        section={section}
+                        pathname={pathname}
+                        narrow={narrow}
+                        contentsVisible={contentsVisible}
+                        matterTabs={matterId !== null && me !== undefined}
+                        matterId={matterId}
+                        userId={me?.user.id ?? ''}
+                        platform={platform}
+                        compact={bottomBar}
+                        onCloseContents={closeContentsOverlay}
+                      >
+                        {children}
+                      </ShellPane>
+                    </MatterPreviewProvider>
+                  </AgentPanelContext.Provider>
                 </div>
-                {rightSlotOpen && !focusMode ? (
+                {matterId && rightSlotOpen && !focusMode ? (
                   <div id="app-shell-right-slot" className="contents">
                     <Suspense fallback={null}>
                       <RightSlotLazy
