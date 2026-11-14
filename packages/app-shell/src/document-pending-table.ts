@@ -58,7 +58,52 @@ export function pendingTableChange(
         : 0)
   if (operation.type === 'delete_table' || rows === 0 || columns === 0)
     return structures.filter((item) => item.id !== draft.id)
-  const updated = { ...draft, rows, columns }
+  const story = withStructuralDrafts(model, structures).stories.find(
+    (item) => item.kind === 'document',
+  )
+  const table =
+    story &&
+    storyTables(story).find((item) =>
+      item.paragraphIds.includes(operation.paragraphId),
+    )
+  if (!table) throw new Error('Missing pending table')
+  const cells = table.rows.map((row) =>
+    row.cells.map((cell) => {
+      const paragraph = story.paragraphs.find(
+        (item) => item.id === cell.paragraphIds[0],
+      )
+      if (!paragraph?.sourceParaId)
+        throw new Error('Missing pending cell identity')
+      return paragraph.sourceParaId
+    }),
+  )
+  const rowIndex = table.rows.findIndex((row) =>
+    row.cells.some((cell) => cell.paragraphIds.includes(operation.paragraphId)),
+  )
+  const columnIndex = table.rows[rowIndex]?.cells.findIndex((cell) =>
+    cell.paragraphIds.includes(operation.paragraphId),
+  )
+  if (rowIndex < 0 || columnIndex === undefined || columnIndex < 0)
+    throw new Error('Missing pending cell coordinates')
+  const newId = () =>
+    crypto.randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()
+  if (operation.type === 'insert_table_row')
+    cells.splice(
+      rowIndex + (operation.position === 'after' ? 1 : 0),
+      0,
+      Array.from({ length: columns }, newId),
+    )
+  if (operation.type === 'delete_table_row') cells.splice(rowIndex, 1)
+  if (operation.type === 'insert_table_column')
+    for (const row of cells)
+      row.splice(
+        columnIndex + (operation.position === 'after' ? 1 : 0),
+        0,
+        newId(),
+      )
+  if (operation.type === 'delete_table_column')
+    for (const row of cells) row.splice(columnIndex, 1)
+  const updated = { ...draft, rows, columns, cellParaIds: cells.flat() }
   structuralDraftSchema.parse(updated)
   return structures.map((item) => (item.id === draft.id ? updated : item))
 }

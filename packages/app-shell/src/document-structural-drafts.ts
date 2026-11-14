@@ -23,6 +23,7 @@ type StructuralTableDraft = {
   paragraphId: string
   rows: number
   columns: number
+  cellParaIds?: string[]
 }
 
 export type StructuralImageDraft = {
@@ -161,6 +162,7 @@ export const structuralDraftSchema = z.discriminatedUnion('kind', [
       paragraphId: z.string().min(1),
       rows: z.number().int().min(1).max(DOCUMENT_EDIT_TABLE_MAX_ROWS),
       columns: z.number().int().min(1).max(DOCUMENT_EDIT_TABLE_MAX_COLUMNS),
+      cellParaIds: z.array(z.string().regex(/^[0-9A-F]{8}$/u)).optional(),
     })
     .strict(),
   z

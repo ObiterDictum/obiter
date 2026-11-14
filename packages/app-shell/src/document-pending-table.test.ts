@@ -1,3 +1,4 @@
+import { pendingTableChange } from './document-pending-table'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { PageTable } from './components/document-workspace/page-table'
@@ -31,7 +32,7 @@ for (const edited of [false, true]) {
     if (edited && type !== 'insert_table_row') continue
     it(
       edited
-        ? 'text in new table cells must be saved before their structure changes'
+        ? 'text keeps its cell identity when a pending table gains a row'
         : `${type} updates a pending table, paints its shape, saves it and supports one-step undo and redo`,
       async () => {
         const { model } = await parseDocx(await createSyntheticDocx(['Anchor']))
@@ -85,11 +86,6 @@ for (const edited of [false, true]) {
             },
           }
           hook.rerender()
-          expect(
-            hook.result.current.ribbon.structure.tableStructureUnavailable,
-          ).toBe('Save text in new table cells before changing table structure')
-          hook.unmount()
-          return
         }
         const before = structuredClone(state)
         act(() => {
@@ -120,11 +116,17 @@ for (const edited of [false, true]) {
         }
         const plan = planDocumentSave(model, state)
         expect(plan.blocked).toEqual([])
-        expect(plan.operations).toEqual(
-          rows
-            ? [{ type: 'insert_table', paragraphId: anchor, rows, columns }]
-            : [],
-        )
+        if (edited) {
+          expect(table?.paragraphIds[0]).toBe(hook.result.current.target)
+          expect(plan.operations[0]).toMatchObject({
+            cellEdits: [{ row: 0, column: 0, text: 'Cell text' }],
+          })
+        } else
+          expect(plan.operations).toEqual(
+            rows
+              ? [{ type: 'insert_table', paragraphId: anchor, rows, columns }]
+              : [],
+          )
         act(() => {
           state = hook.result.current.history.stepBack(state) ?? state
         })
@@ -187,5 +189,52 @@ for (const cellEdits of [
         { type: 'insert_table', paragraphId, rows: 2, columns: 2, cellEdits },
       ]),
     ).toThrow()
+  })
+}
+
+for (const type of ['insert_table_row', 'insert_table_column'] as const) {
+  it(`${type} before typed cells preserves their identities and saved coordinates`, async () => {
+    const document = await parseDocx(await createSyntheticDocx(['Anchor']))
+    const anchor = document.model.stories[0]?.paragraphs[0]?.id
+    if (!anchor) throw new Error('Missing anchor')
+    const state = emptyDraftState()
+    state.structures = [
+      { id: 'table', kind: 'table', paragraphId: anchor, rows: 2, columns: 2 },
+    ]
+    const target = storyTables(
+      withStructuralDrafts(document.model, state.structures).stories[0],
+    )[0]?.paragraphIds[0]
+    if (!target) throw new Error('Missing cell')
+    state.extraRuns[target] = [
+      { id: 'typed', text: 'Stay with cell', preservedXmlFragments: [] },
+    ]
+    const changed = pendingTableChange(document.model, state.structures, {
+      type,
+      paragraphId: target,
+      position: 'before',
+    })
+    if (!changed) throw new Error('Missing changed table')
+    state.structures = changed
+    const table = storyTables(
+      withStructuralDrafts(document.model, state.structures).stories[0],
+    )[0]
+    const row = type === 'insert_table_row' ? 1 : 0
+    const column = type === 'insert_table_column' ? 1 : 0
+    expect(table?.rows[row]?.cells[column]?.paragraphIds[0]).toBe(target)
+    const plan = planDocumentSave(document.model, state)
+    expect(plan.blocked).toEqual([])
+    expect(plan.operations[0]).toMatchObject({
+      cellEdits: [{ row, column, text: 'Stay with cell' }],
+    })
+    applyDocumentEdits(document, plan.operations)
+    const saved = await parseDocx(await serialiseDocx(document))
+    const savedTable = storyTables(saved.model.stories[0])[0]
+    const savedId = savedTable?.rows[row]?.cells[column]?.paragraphIds[0]
+    const paragraph = saved.model.stories[0]?.paragraphs.find(
+      (item) => item.id === savedId,
+    )
+    expect(paragraph?.runs.map((run) => run.text).join('')).toBe(
+      'Stay with cell',
+    )
   })
 }

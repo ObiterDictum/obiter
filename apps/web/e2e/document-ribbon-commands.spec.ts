@@ -1,12 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { createAccount, openFixtureDocument } from './document-journey'
-import {
-  runCommand,
-  undoButton,
-  redoButton,
-  ribbonCommand,
-  commandRefusal,
-} from './editor-chrome'
+import { runCommand, undoButton, redoButton } from './editor-chrome'
 import { openMatter } from './support'
 import { signIn, saveAndWait as save } from './e13-support'
 import path from 'node:path'
@@ -115,13 +109,6 @@ for (const saved of [false, true]) {
     if (!saved) {
       await focusCell(page)
       await page.keyboard.type('Cell text')
-      const command = await ribbonCommand(page, 'Insert row below')
-      await expect(command).toBeDisabled()
-      await expect
-        .poll(() => commandRefusal(page, 'Insert row below'))
-        .toBe('Save text in new table cells before changing table structure')
-      await page.keyboard.press('Escape')
-      await save(page)
     }
     await focusCell(page)
     await runCommand(page, 'Insert row below')

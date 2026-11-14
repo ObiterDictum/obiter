@@ -71,12 +71,6 @@ export function useInsertRibbon(
   const baselineIds = new Set(
     model?.stories.flatMap((item) => item.paragraphs.map((p) => p.id)),
   )
-  const pendingCellText = [...cellParagraphIds].some(
-    (id) => !baselineIds.has(id) && Boolean(drafts.extraRuns[id]?.length),
-  )
-  const pendingCellUnavailable = pendingCellText
-    ? 'Save text in new table cells before changing table structure'
-    : undefined
   const paragraphId = (caret.kind === 'caret' && caret.paragraphId) || null
   const selectionActive = caret.kind === 'selection'
   const selectionRange =
@@ -126,14 +120,10 @@ export function useInsertRibbon(
         ? 'Table structure changes are not recorded as tracked changes'
         : !paragraphId || !cellParagraphIds.has(paragraphId)
           ? 'Place the cursor in a table cell'
-          : pendingCellUnavailable,
+          : undefined,
       onTableStructure: (operation) => {
         const targetId = operation.paragraphId || paragraphId
         if (trackChanges || !targetId || !cellParagraphIds.has(targetId)) return
-        if (pendingCellUnavailable) {
-          onImageError(pendingCellUnavailable)
-          return
-        }
         const story = (painted ?? model)?.stories.find(
           (item) => item.kind === 'document',
         )

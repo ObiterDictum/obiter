@@ -1,3 +1,4 @@
+import { pendingTableIdentities } from './document-pending-table-identities'
 import { foldTableStructure } from './document-table-structure-fold'
 import type {
   DocumentModelWire,
@@ -176,23 +177,16 @@ function foldStory(
         placement.chainAfterPendingTail && pendingTail
           ? pendingTail
           : anchorWire
-      const cellParaIds = Array.from(
-        { length: draft.rows * draft.columns },
-        () => nextParaId(),
-      )
+      const { cellParaIds, separatorId, tailId } = pendingTableIdentities(draft)
       const wires: DocumentParagraphWire[] = []
       if (placement.needsSeparatorParagraph) {
-        wires.push(paragraphWire(nextParaId()))
+        wires.push(paragraphWire(separatorId))
       }
       wires.push(...cellParaIds.map(paragraphWire))
       const spliceAt = paragraphs.indexOf(anchor)
       paragraphs.splice(spliceAt + 1, 0, ...wires)
       if (placement.needsTrailingParagraph) {
-        paragraphs.splice(
-          spliceAt + 1 + wires.length,
-          0,
-          paragraphWire(nextParaId()),
-        )
+        paragraphs.splice(spliceAt + 1 + wires.length, 0, paragraphWire(tailId))
       }
       for (const id of cellParaIds) tableCellIds.add(`para-w14-${id}`)
       fragments.push(buildTableXml(draft.rows, draft.columns, cellParaIds))
