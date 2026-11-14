@@ -84,7 +84,7 @@ export function AgentConversation({
       }
     >
       <div className="flex-1">
-        {detail.data ? (
+        {detail.data && matterId === null ? (
           <header className="mb-4 flex min-w-0 items-center gap-2">
             {matterId === null ? <PagePanelToggle /> : null}
             <h1 className="truncate text-title text-ink">

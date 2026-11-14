@@ -39,7 +39,7 @@ function MatterAgent({
   const [includeDocument, setIncludeDocument] = useState(true)
   const id = fresh ? undefined : (selected ?? sessions.data?.[0]?.id)
   return (
-    <div className="flex min-h-0 flex-col gap-4">
+    <div className="flex min-h-full flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"

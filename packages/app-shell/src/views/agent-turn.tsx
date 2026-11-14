@@ -5,10 +5,10 @@ import { EvidenceLink, evidenceLabel } from '../agent-evidence'
 export function AgentTurn({ run }: { run: AgentSessionRun }) {
   return (
     <article className="flex flex-col gap-5 py-4">
-      <p className="ml-auto max-w-[80%] whitespace-pre-wrap rounded-xl bg-fill px-4 py-3 text-body text-ink">
+      <p className="ml-auto max-w-[80%] whitespace-pre-wrap break-words rounded-xl bg-fill px-4 py-3 text-body text-ink">
         {run.goal}
       </p>
-      <div className="min-h-12 text-body text-ink">
+      <div className="min-h-12 break-words text-body text-ink">
         <div className="mb-3 flex items-center gap-1.5 text-caption text-muted">
           <Robot size={14} aria-hidden />
           Agent
