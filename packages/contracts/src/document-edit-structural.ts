@@ -1,3 +1,11 @@
+import { tableCellEditsSchema } from './document-edit-table'
+export {
+  insertTableRowOperationSchema,
+  insertTableColumnOperationSchema,
+  deleteTableRowOperationSchema,
+  deleteTableColumnOperationSchema,
+  deleteTableOperationSchema,
+} from './document-edit-table'
 import { z } from 'zod'
 
 import { isValidXmlText } from './xml-text'
@@ -97,11 +105,18 @@ const imageDimensionSchema = z
 export const insertTableOperationSchema = z
   .object({
     type: z.literal('insert_table'),
+    cellEdits: tableCellEditsSchema,
     paragraphId: editIdSchema,
     rows: z.number().int().min(1).max(DOCUMENT_EDIT_TABLE_MAX_ROWS),
     columns: z.number().int().min(1).max(DOCUMENT_EDIT_TABLE_MAX_COLUMNS),
   })
   .strict()
+  .refine(
+    (value) =>
+      value.cellEdits?.every(
+        (cell) => cell.row < value.rows && cell.column < value.columns,
+      ) ?? true,
+  )
 export type DocumentEditInsertTableOperation = z.infer<
   typeof insertTableOperationSchema
 >
@@ -264,64 +279,3 @@ export const updateTableOfAuthoritiesOperationSchema = z
 export type DocumentEditUpdateTableOfAuthoritiesOperation = z.infer<
   typeof updateTableOfAuthoritiesOperationSchema
 >
-
-const tableCellEditsSchema = z
-  .array(
-    z
-      .object({
-        row: z.number().int().min(0).max(1000),
-        column: z.number().int().min(0).max(1000),
-        text: z.string().max(100000),
-      })
-      .strict(),
-  )
-  .max(10000)
-  .optional()
-
-export const insertTableRowOperationSchema = z
-  .object({
-    type: z.literal('insert_table_row'),
-    paragraphId: editIdSchema,
-    cellEdits: tableCellEditsSchema,
-    rowIndex: z.number().int().min(0).max(1000).optional(),
-    columnIndex: z.number().int().min(0).max(1000).optional(),
-    position: z.enum(['before', 'after']),
-  })
-  .strict()
-export const insertTableColumnOperationSchema = z
-  .object({
-    type: z.literal('insert_table_column'),
-    paragraphId: editIdSchema,
-    cellEdits: tableCellEditsSchema,
-    rowIndex: z.number().int().min(0).max(1000).optional(),
-    columnIndex: z.number().int().min(0).max(1000).optional(),
-    position: z.enum(['before', 'after']),
-  })
-  .strict()
-export const deleteTableRowOperationSchema = z
-  .object({
-    type: z.literal('delete_table_row'),
-    paragraphId: editIdSchema,
-    cellEdits: tableCellEditsSchema,
-    rowIndex: z.number().int().min(0).max(1000).optional(),
-    columnIndex: z.number().int().min(0).max(1000).optional(),
-  })
-  .strict()
-export const deleteTableColumnOperationSchema = z
-  .object({
-    type: z.literal('delete_table_column'),
-    paragraphId: editIdSchema,
-    cellEdits: tableCellEditsSchema,
-    rowIndex: z.number().int().min(0).max(1000).optional(),
-    columnIndex: z.number().int().min(0).max(1000).optional(),
-  })
-  .strict()
-export const deleteTableOperationSchema = z
-  .object({
-    type: z.literal('delete_table'),
-    paragraphId: editIdSchema,
-    cellEdits: tableCellEditsSchema,
-    rowIndex: z.number().int().min(0).max(1000).optional(),
-    columnIndex: z.number().int().min(0).max(1000).optional(),
-  })
-  .strict()

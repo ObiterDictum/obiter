@@ -1,4 +1,7 @@
-import type { DocumentStyleWire } from '@obiter/contracts'
+import type {
+  DocumentEditInsertTableOperation,
+  DocumentStyleWire,
+} from '@obiter/contracts'
 
 import { escapeXmlAttribute } from './parts/overlay'
 import { WORD_NAMESPACE } from './parts/xml-elements'
@@ -72,12 +75,23 @@ export function buildTableXml(
   rows: number,
   columns: number,
   cellParaIds: readonly string[],
+  cellEdits: DocumentEditInsertTableOperation['cellEdits'] = [],
 ) {
   const columnWidth = Math.floor(TABLE_WIDTH_TWIPS / columns)
   const grid = `<w:gridCol w:w="${String(columnWidth)}"/>`.repeat(columns)
   let cursor = 0
-  const cell = () =>
-    `<w:tc><w:tcPr><w:tcW w:w="${String(columnWidth)}" w:type="dxa"/></w:tcPr>${buildTableParagraphXml(cellParaIds[cursor++] ?? '', false)}</w:tc>`
+  const textByCell = new Map(
+    cellEdits.map((edit) => [edit.row * columns + edit.column, edit.text]),
+  )
+  const cell = () => {
+    const index = cursor++
+    const text = textByCell.get(index)
+    const paragraph =
+      text === undefined
+        ? buildTableParagraphXml(cellParaIds[index] ?? '', false)
+        : `<w:p w14:paraId="${cellParaIds[index] ?? ''}"><w:r>${wordRunInnerTextXml('w', text)}</w:r></w:p>`
+    return `<w:tc><w:tcPr><w:tcW w:w="${String(columnWidth)}" w:type="dxa"/></w:tcPr>${paragraph}</w:tc>`
+  }
   const row = () =>
     `<w:tr>${Array.from({ length: columns }, cell).join('')}</w:tr>`
   return (

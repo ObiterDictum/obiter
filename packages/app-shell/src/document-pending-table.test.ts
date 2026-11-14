@@ -4,7 +4,12 @@ import { PageTable } from './components/document-workspace/page-table'
 import '@obiter/test-dom'
 import { act, renderHook } from '@testing-library/react'
 import { expect, it } from 'bun:test'
-import { createSyntheticDocx, parseDocx } from '@obiter/ooxml'
+import {
+  createSyntheticDocx,
+  parseDocx,
+  applyDocumentEdits,
+  serialiseDocx,
+} from '@obiter/ooxml'
 import { useInsertRibbon } from './components/document-workspace/use-insert-ribbon'
 import { useWorkspaceDraftHistory } from './document-editor-history'
 import {
@@ -132,4 +137,55 @@ for (const edited of [false, true]) {
       },
     )
   }
+}
+
+it('saving a newly inserted table preserves text in its cells', async () => {
+  const document = await parseDocx(await createSyntheticDocx(['Anchor']))
+  const paragraphId = document.model.stories[0]?.paragraphs[0]?.id
+  if (!paragraphId) throw new Error('Missing anchor')
+  const state = emptyDraftState()
+  state.structures = [
+    { id: 'table', kind: 'table', paragraphId, rows: 2, columns: 2 },
+  ]
+  const cell = storyTables(
+    withStructuralDrafts(document.model, state.structures).stories[0],
+  )[0]?.paragraphIds[0]
+  if (!cell) throw new Error('Missing cell')
+  state.extraRuns[cell] = [
+    { id: 'cell-run', text: 'Cell text <&>', preservedXmlFragments: [] },
+  ]
+  const plan = planDocumentSave(document.model, state)
+  applyDocumentEdits(document, plan.operations)
+  const saved = await parseDocx(await serialiseDocx(document))
+  expect(
+    saved.model.stories
+      .flatMap((story) => story.paragraphs)
+      .flatMap((p) => p.runs)
+      .map((run) => run.text),
+  ).toContain('Cell text <&>')
+  expect(plan.operations).toEqual([
+    {
+      type: 'insert_table',
+      paragraphId,
+      rows: 2,
+      columns: 2,
+      cellEdits: [{ row: 0, column: 0, text: 'Cell text <&>' }],
+    },
+  ])
+})
+
+for (const cellEdits of [
+  [{ row: 2, column: 0, text: 'Outside the table' }],
+  [{ row: 0, column: 0, text: '\u0000' }],
+]) {
+  it(`table cell edits reject ${cellEdits[0]?.row === 2 ? 'coordinates beyond the inserted table' : 'invalid XML text'}`, async () => {
+    const document = await parseDocx(await createSyntheticDocx(['Anchor']))
+    const paragraphId = document.model.stories[0]?.paragraphs[0]?.id
+    if (!paragraphId) throw new Error('Missing anchor')
+    expect(() =>
+      applyDocumentEdits(document, [
+        { type: 'insert_table', paragraphId, rows: 2, columns: 2, cellEdits },
+      ]),
+    ).toThrow()
+  })
 }

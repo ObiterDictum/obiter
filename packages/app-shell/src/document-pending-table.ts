@@ -7,11 +7,11 @@ import {
   type StructuralDraft,
 } from './document-structural-drafts'
 
-export function pendingTableChange(
+export function pendingTableDraft(
   model: DocumentModelWire,
   structures: StructuralDraft[],
-  operation: TableStructureOperation,
-): StructuralDraft[] | undefined {
+  paragraphId: string,
+) {
   for (const [index, draft] of structures.entries()) {
     if (draft.kind !== 'table') continue
     const before = withStructuralDrafts(
@@ -26,29 +26,39 @@ export function pendingTableChange(
     const oldIds = new Set(before?.paragraphs.map((p) => p.id))
     const table = storyTables(after).find(
       (t) =>
-        t.paragraphIds.includes(operation.paragraphId) &&
+        t.paragraphIds.includes(paragraphId) &&
         t.paragraphIds.every((id) => !oldIds.has(id)),
     )
     if (!table) continue
-    const rows =
-      draft.rows +
-      (operation.type === 'insert_table_row'
-        ? 1
-        : operation.type === 'delete_table_row'
-          ? -1
-          : 0)
-    const columns =
-      draft.columns +
-      (operation.type === 'insert_table_column'
-        ? 1
-        : operation.type === 'delete_table_column'
-          ? -1
-          : 0)
-    if (operation.type === 'delete_table' || rows === 0 || columns === 0)
-      return structures.filter((item) => item.id !== draft.id)
-    const updated = { ...draft, rows, columns }
-    structuralDraftSchema.parse(updated)
-    return structures.map((item) => (item.id === draft.id ? updated : item))
+    return draft
   }
   return undefined
+}
+
+export function pendingTableChange(
+  model: DocumentModelWire,
+  structures: StructuralDraft[],
+  operation: TableStructureOperation,
+): StructuralDraft[] | undefined {
+  const draft = pendingTableDraft(model, structures, operation.paragraphId)
+  if (!draft) return undefined
+  const rows =
+    draft.rows +
+    (operation.type === 'insert_table_row'
+      ? 1
+      : operation.type === 'delete_table_row'
+        ? -1
+        : 0)
+  const columns =
+    draft.columns +
+    (operation.type === 'insert_table_column'
+      ? 1
+      : operation.type === 'delete_table_column'
+        ? -1
+        : 0)
+  if (operation.type === 'delete_table' || rows === 0 || columns === 0)
+    return structures.filter((item) => item.id !== draft.id)
+  const updated = { ...draft, rows, columns }
+  structuralDraftSchema.parse(updated)
+  return structures.map((item) => (item.id === draft.id ? updated : item))
 }
