@@ -30,9 +30,7 @@ describe('staff usage query', () => {
 
   it('refuses a window outside one to fifty-two weeks', () => {
     expect(staffUsageQuerySchema.safeParse({ weeks: '0' }).success).toBe(false)
-    expect(staffUsageQuerySchema.safeParse({ weeks: '53' }).success).toBe(
-      false,
-    )
+    expect(staffUsageQuerySchema.safeParse({ weeks: '53' }).success).toBe(false)
     expect(staffUsageQuerySchema.safeParse({ weeks: 'x' }).success).toBe(false)
   })
 })
@@ -63,8 +61,8 @@ describe('staff feedback', () => {
 
   it('requires an explicit handled boolean', () => {
     expect(staffFeedbackHandledInputSchema.safeParse({}).success).toBe(false)
-    expect(
-      staffFeedbackHandledInputSchema.parse({ handled: true }),
-    ).toEqual({ handled: true })
+    expect(staffFeedbackHandledInputSchema.parse({ handled: true })).toEqual({
+      handled: true,
+    })
   })
 })
