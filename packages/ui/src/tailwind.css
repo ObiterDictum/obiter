@@ -101,6 +101,11 @@
   --color-reviewer-6: var(--obiter-reviewer-6);
   --color-reviewer-6-surface: var(--obiter-reviewer-6-surface);
 
+  --color-chart-1: var(--obiter-chart-1);
+  --color-chart-2: var(--obiter-chart-2);
+  --color-chart-3: var(--obiter-chart-3);
+  --color-chart-4: var(--obiter-chart-4);
+
   --color-span-person-name: var(--obiter-span-person-name-bg);
   --color-span-person-name-fg: var(--obiter-span-person-name-fg);
   --color-span-email: var(--obiter-span-email-bg);

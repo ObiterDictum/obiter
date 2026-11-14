@@ -97,6 +97,10 @@ export { MatterRouteView } from './views/matter-detail'
 export { VerifyRouteView } from './views/verify'
 export { SettingsRouteView } from './views/settings'
 export { validateSettingsSearch } from './settings-sections'
+export {
+  validateStaffFeedbackSearch,
+  validateStaffUsageSearch,
+} from './staff-search'
 export { DocumentDetailLayoutView } from './views/document-detail'
 export { caseResultLocation } from './case-navigation'
 export { provisionResultLocation } from './legislation-navigation'

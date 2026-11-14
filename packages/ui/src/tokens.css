@@ -84,6 +84,11 @@
   --obiter-reviewer-6: hsl(330 55% 37%);
   --obiter-reviewer-6-surface: hsl(330 55% 94%);
 
+  --obiter-chart-1: #2a78d6;
+  --obiter-chart-2: #eb6834;
+  --obiter-chart-3: #6250d6;
+  --obiter-chart-4: #e34948;
+
   --obiter-span-person-name: var(--obiter-span-person-name-bg);
   --obiter-span-email: var(--obiter-span-email-bg);
   --obiter-span-phone: var(--obiter-span-phone-bg);
@@ -201,6 +206,11 @@
   --obiter-reviewer-5-surface: hsl(186 45% 22%);
   --obiter-reviewer-6: hsl(330 55% 82%);
   --obiter-reviewer-6-surface: hsl(330 40% 26%);
+
+  --obiter-chart-1: #3987e5;
+  --obiter-chart-2: #d95926;
+  --obiter-chart-3: #9085e9;
+  --obiter-chart-4: #e66767;
 
   --obiter-span-person-name-bg: hsl(352 40% 28%);
   --obiter-span-person-name-fg: hsl(352 60% 82%);

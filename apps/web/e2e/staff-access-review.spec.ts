@@ -45,6 +45,7 @@ test('staff approves an unknown domain and the applicant sets up an account', as
   ).toBeVisible()
   await signIn(page, staff.email, staff.password)
   await page.getByRole('link', { name: 'Staff', exact: true }).click()
+  await page.getByRole('link', { name: 'Access review', exact: true }).click()
   const group = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: domain, exact: true }) })

@@ -1,5 +1,5 @@
 import { Skeleton, cn } from '@obiter/ui'
-import type { ReactNode } from 'react'
+import { Suspense, lazy, type ReactNode } from 'react'
 import { useCurrentUser } from './current-user'
 import { matterIdFromPath, type ShellSection } from './navigation'
 import { PagePanelToggle } from './page-panel'
@@ -10,9 +10,14 @@ import {
   RedactContents,
   SearchContents,
   SettingsContents,
-  StaffContents,
   VerifyContents,
 } from './contents-sections'
+
+const StaffContents = lazy(() =>
+  import('./staff-contents').then((module) => ({
+    default: module.StaffContents,
+  })),
+)
 
 const SECTION_TITLES = {
   home: 'Home',
@@ -77,7 +82,11 @@ function ContentsBody({
     case 'search':
       return <SearchContents />
     case 'staff':
-      return <StaffContents pathname={pathname} />
+      return (
+        <Suspense fallback={null}>
+          <StaffContents pathname={pathname} />
+        </Suspense>
+      )
     case 'settings':
       return <SettingsContents />
     default:
