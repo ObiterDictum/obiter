@@ -1,7 +1,11 @@
 import '@obiter/test-dom'
 import { afterEach, expect, it, mock } from 'bun:test'
 import { cleanup, fireEvent, screen, within } from '@testing-library/react'
-import { renderUsage, section, tableWithHeaders } from './staff-usage-test-support'
+import {
+  renderUsage,
+  section,
+  tableWithHeaders,
+} from './staff-usage-test-support'
 
 afterEach(() => {
   cleanup()
