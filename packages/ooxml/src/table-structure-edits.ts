@@ -12,7 +12,8 @@ import {
   type XmlElement,
 } from './parts/xml-elements'
 import { nextSyntheticParaId } from './structure-package'
-import { escapeXmlText } from './parts/overlay'
+import { tableCellEditContentXml } from './structure-xml'
+import { resolveCellEditNumbering } from './numbering-edits'
 
 export type TableStructureOperation = Extract<
   DocumentEditOperation,
@@ -90,13 +91,21 @@ export function editTableStructure(
       'model-node-not-editable',
       'The selected cell no longer exists',
     )
+  const resolvedOperation = operation.cellEdits?.length
+    ? {
+        ...operation,
+        cellEdits: operation.cellEdits.map((edit) =>
+          resolveCellEditNumbering(document, edit),
+        ),
+      }
+    : operation
   const result = transformTableXml(
     currentSource,
     currentElements,
     currentTable,
     currentRow,
     currentCell,
-    operation,
+    resolvedOperation,
     () => nextSyntheticParaId(part.overlay),
   )
   const story = document.model.stories.find(
@@ -389,7 +398,7 @@ export function transformTableXml(
         end: paragraph.end - table.start,
         value: original.replace(
           /\/\s*>$/u,
-          `><w:r><w:t xml:space="preserve">${escapeXmlText(edit.text)}</w:t></w:r></w:p>`,
+          `>${tableCellEditContentXml(edit)}</w:p>`,
         ),
       }
     })

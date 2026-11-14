@@ -11,6 +11,7 @@ import {
   emptyFormatDrafts,
   type FormatDrafts,
 } from './document-format-edits'
+import { paragraphFormatFields } from './document-paragraph-format'
 import type { HighlightValue, VertAlignValue } from './document-format-types'
 import { editableStories, runsText } from './document-model-text'
 import {
@@ -194,6 +195,8 @@ export function collectEditOperations(
     const insert = insertById.get(id)
     if (!insert) continue
     const style = format.paragraphStyles[insert.clientId]
+    const numbering = format.numbering[insert.clientId]
+    const paragraphFormat = format.paragraphFormats[insert.clientId]
     const anchor = resolveInsertAnchor(insert, insertById, realIds)
     const before = insert.beforeParagraphId !== undefined
     operations.push({
@@ -202,6 +205,18 @@ export function collectEditOperations(
       intentId: insert.clientId,
       ...insertPayload(insert),
       ...(style ? { styleId: style } : {}),
+      ...(numbering?.numId
+        ? {
+            numbering: {
+              numId: numbering.numId,
+              ilvl: numbering.ilvl ?? 0,
+              ...(numbering.startOverride != null
+                ? { startOverride: numbering.startOverride }
+                : {}),
+            },
+          }
+        : {}),
+      ...(paragraphFormat ? paragraphFormatFields(paragraphFormat) : {}),
     })
   }
 

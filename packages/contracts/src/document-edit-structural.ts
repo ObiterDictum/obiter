@@ -6,6 +6,7 @@ export {
   deleteTableColumnOperationSchema,
   deleteTableOperationSchema,
 } from './document-edit-table'
+export type { TableCellEdit } from './document-edit-table'
 import { z } from 'zod'
 
 import { isValidXmlText } from './xml-text'

@@ -174,6 +174,18 @@ export type EditorChromeActions = {
 }
 
 const EDITING_HINT = 'Requires an editable document.'
+const NO_LIST_NUMBERING = 'The document has no matching list numbering.'
+const NOT_IN_LIST = 'The current paragraph is not in a list.'
+
+function listKindReason(editing: boolean, available: boolean | undefined) {
+  if (!editing) return EDITING_HINT
+  return available ? undefined : NO_LIST_NUMBERING
+}
+
+function listContextReason(editing: boolean, available: boolean | undefined) {
+  if (!editing) return EDITING_HINT
+  return available ? undefined : NOT_IN_LIST
+}
 
 export function editorMenus(
   props: EditorChromeProps,
@@ -733,6 +745,7 @@ export function editorMenus(
               icon: <ListBullets size={16} aria-hidden />,
               pressed: format?.listKind === 'bullet',
               disabled: !editing || !format?.canApplyBullet,
+              disabledReason: listKindReason(editing, format?.canApplyBullet),
               run: () => format?.onToggleList('bullet'),
             },
             {
@@ -741,6 +754,7 @@ export function editorMenus(
               icon: <ListNumbers size={16} aria-hidden />,
               pressed: format?.listKind === 'number',
               disabled: !editing || !format?.canApplyNumber,
+              disabledReason: listKindReason(editing, format?.canApplyNumber),
               run: () => format?.onToggleList('number'),
             },
             {
@@ -749,6 +763,10 @@ export function editorMenus(
               host: 'font-panel',
               pressed: format?.listKind === 'multilevel',
               disabled: !editing || !format?.canApplyMultilevel,
+              disabledReason: listKindReason(
+                editing,
+                format?.canApplyMultilevel,
+              ),
               run: () => format?.onToggleList('multilevel'),
             },
             {
@@ -756,6 +774,7 @@ export function editorMenus(
               label: 'Increase list indent',
               host: 'font-panel',
               disabled: !editing || !format?.canIndent,
+              disabledReason: listContextReason(editing, format?.canIndent),
               run: format?.onIndent,
             },
             {
@@ -763,6 +782,7 @@ export function editorMenus(
               label: 'Decrease list indent',
               host: 'font-panel',
               disabled: !editing || !format?.canOutdent,
+              disabledReason: listContextReason(editing, format?.canOutdent),
               run: format?.onOutdent,
             },
             {
@@ -770,6 +790,7 @@ export function editorMenus(
               label: 'Continue list',
               host: 'font-panel',
               disabled: !editing || !format?.canContinue,
+              disabledReason: listContextReason(editing, format?.canContinue),
               run: format?.onContinueList,
             },
             {
@@ -778,6 +799,7 @@ export function editorMenus(
               host: 'font-panel',
               pressed: format?.listRestarted,
               disabled: !editing || !format?.canRestart,
+              disabledReason: listContextReason(editing, format?.canRestart),
               run: format?.onRestartList,
             },
           ],

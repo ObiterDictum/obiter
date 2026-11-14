@@ -1,5 +1,6 @@
 import type {
   DocumentModelWire,
+  DocumentParagraphWire,
   DocumentStoryWire,
   DocumentTextRunWire,
 } from '@obiter/contracts'
@@ -41,6 +42,16 @@ export function insertRuns(insert: LocalInsert): DocumentTextRunWire[] {
       preservedXmlFragments: [],
     },
   ]
+}
+
+export function insertParagraphWire(
+  insert: LocalInsert,
+): DocumentParagraphWire {
+  return {
+    id: insert.clientId,
+    runs: insertRuns(insert),
+    preservedXmlFragments: [],
+  }
 }
 
 export function removeInsert(
