@@ -53,8 +53,8 @@ import { useSplitScale } from '../../matter-split-scale'
 import { usePublishDocumentTabStatus } from '../../document-tab-status'
 import { useOffline } from '../../shell-states'
 import {
+  DocumentLoadError,
   LoadingBlock,
-  QueryError,
   WorkspaceShell,
   type DocumentWorkspaceLayout,
 } from './workspace-chrome'
@@ -406,10 +406,10 @@ export function DocxWorkspace({
         />
         {modelQuery.isLoading ? (
           <LoadingBlock label="Loading document model" />
-        ) : modelQuery.isError && !model ? (
-          <QueryError
+        ) : !model ? (
+          <DocumentLoadError
             error={modelQuery.error}
-            fallback="The document model could not be loaded."
+            onRetry={() => void modelQuery.refetch()}
           />
         ) : model ? (
           <>

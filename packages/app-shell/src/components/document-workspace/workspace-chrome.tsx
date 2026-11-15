@@ -75,6 +75,33 @@ export function QueryError({
   )
 }
 
+export function DocumentLoadError({
+  error,
+  onRetry,
+}: {
+  error: unknown
+  onRetry: () => void
+}) {
+  const requestId = error instanceof ApiError ? error.requestId : undefined
+  return (
+    <EmptyState
+      title="This document could not be loaded"
+      body={
+        requestId
+          ? `Request id: ${requestId}`
+          : error instanceof ApiError
+            ? error.message
+            : 'The document model request failed.'
+      }
+      action={
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          Retry
+        </Button>
+      }
+    />
+  )
+}
+
 export function ConflictBanner({
   body,
   actionLabel,
