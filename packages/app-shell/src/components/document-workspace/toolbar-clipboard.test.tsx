@@ -223,18 +223,22 @@ describe('the clipboard ribbon controls', () => {
     ).toContain('Hello')
   })
 
-  it('refuses a multi-line ribbon paste into a table cell', async () => {
+  it('keeps each pasted line as a line break inside a table cell', async () => {
     stubClipboard({ readText: vi.fn().mockResolvedValue('A\nB') })
     mountWorkspace({ models: { doc_1: tabledBodyModel() } })
     clickParagraph('para-w14-CELL0001')
     const before = renderedParagraphIds().length
 
     fireEvent.click(control('Paste'))
-    await waitFor(() =>
-      expect(selectionStatus()).toMatch(/cannot cross a table/),
-    )
+    await waitFor(() => {
+      const cell = document.querySelector(
+        '[data-paragraph-id="para-w14-CELL0001"] textarea',
+      )
+      expect(cell instanceof HTMLTextAreaElement ? cell.value : '').toContain(
+        'A\nB',
+      )
+    })
     expect(renderedParagraphIds()).toHaveLength(before)
-    expect(screen.queryByLabelText('Pending paragraph text')).toBeNull()
   })
 
   it('says why when the clipboard read is denied', async () => {
