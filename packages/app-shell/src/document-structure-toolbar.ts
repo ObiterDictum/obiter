@@ -30,6 +30,13 @@ export { storyTableCellIds } from './document-page-tables'
 export type StructuralInsertOutcome =
   { inserted: true } | { inserted: false; reason: string }
 
+export type DeferredStructuralAnchor = {
+  paragraphId: string
+  offset: number
+}
+
+const SAVE_NEW_PARAGRAPH = 'Save the new paragraph before inserting into it'
+
 export type FootnoteInsertOutcome =
   | { inserted: true; noteParagraphId: string }
   | { inserted: false; reason: string }
@@ -107,6 +114,13 @@ export function documentStructureToolbar({
     (paragraph) => paragraph.id === paragraphId,
   )
   const inTableCell = Boolean(paragraphId && cellParagraphIds.has(paragraphId))
+  const pendingCellParagraph = Boolean(
+    paragraphId &&
+    inTableCell &&
+    !anchor &&
+    model !== undefined &&
+    editableParagraph(model, paragraphId) === undefined,
+  )
   const baseUnavailable = trackChanges
     ? 'Insertions are not recorded as a tracked change'
     : selectionActive
@@ -116,13 +130,29 @@ export function documentStructureToolbar({
         : !anchor
           ? model && editableParagraph(model, paragraphId)
             ? 'Only the document body can hold this insertion'
-            : 'Save the new paragraph before inserting into it'
+            : SAVE_NEW_PARAGRAPH
           : undefined
+  const insertBase =
+    pendingCellParagraph && baseUnavailable === SAVE_NEW_PARAGRAPH
+      ? undefined
+      : baseUnavailable
+  const deferredAnchorBlock = (
+    at: DeferredStructuralAnchor,
+    kind: 'image' | 'cross-reference' | 'page-number',
+  ) => {
+    if (!model || editableParagraph(model, at.paragraphId) === undefined) {
+      return SAVE_NEW_PARAGRAPH
+    }
+    return conflictWith({
+      kind,
+      paragraphId: at.paragraphId,
+      offset: at.offset,
+    })
+  }
   const tableUnavailable =
-    baseUnavailable ??
-    (inTableCell ? 'A table cell cannot hold a table' : undefined)
+    insertBase ?? (inTableCell ? 'A table cell cannot hold a table' : undefined)
   const pictureUnavailable =
-    baseUnavailable ??
+    insertBase ??
     (offset == null || !paragraphId
       ? 'Place the cursor in the paragraph text to insert a picture'
       : conflictWith({ kind: 'image', paragraphId, offset }))
@@ -145,12 +175,12 @@ export function documentStructureToolbar({
             to: selectionRange.to,
           })
   const crossReferenceUnavailable =
-    baseUnavailable ??
+    insertBase ??
     (offset == null || !paragraphId
       ? 'Place the cursor in the paragraph text to insert a cross-reference'
       : conflictWith({ kind: 'cross-reference', paragraphId, offset }))
   const footnoteUnavailable =
-    baseUnavailable ??
+    insertBase ??
     (inTableCell
       ? 'A table cell cannot hold a footnote'
       : offset == null || !paragraphId
@@ -171,7 +201,11 @@ export function documentStructureToolbar({
         : anchorStory && !PAGE_STORY_KINDS.has(anchorStory.kind)
           ? 'A page number needs a page of its own: the body, a header or a footer.'
           : !anchorStory
-            ? 'Save the new paragraph before inserting into it'
+            ? pendingCellParagraph
+              ? offset == null || !paragraphId
+                ? 'Place the cursor in the paragraph text to insert a page number'
+                : undefined
+              : SAVE_NEW_PARAGRAPH
             : offset == null
               ? 'Place the cursor in the paragraph text to insert a page number'
               : conflictWith({ kind: 'page-number', paragraphId, offset })
@@ -198,7 +232,7 @@ export function documentStructureToolbar({
           model?.changes ?? [],
         )
   const tableOfContentsUnavailable =
-    baseUnavailable ??
+    insertBase ??
     (inTableCell
       ? 'A table cell cannot hold a table of contents'
       : offset == null || !paragraphId
@@ -221,7 +255,7 @@ export function documentStructureToolbar({
     selectionRange,
     trackChanges,
     structures,
-    baseUnavailable,
+    baseUnavailable: insertBase,
     inTableCell,
     anchorWire,
     cellParagraphIds,
@@ -271,15 +305,25 @@ export function documentStructureToolbar({
         },
       ])
     },
-    insertImage(fields: ImageInsertFields): StructuralInsertOutcome {
-      if (pictureUnavailable || !paragraphId || offset == null) {
-        return { inserted: false, reason: pictureUnavailable ?? 'No anchor' }
+    insertImage(
+      fields: ImageInsertFields,
+      anchor?: DeferredStructuralAnchor,
+    ): StructuralInsertOutcome {
+      const targetParagraphId = anchor?.paragraphId ?? paragraphId
+      const targetOffset = anchor?.offset ?? offset
+      const unavailable = anchor
+        ? deferredAnchorBlock(anchor, 'image')
+        : pendingCellParagraph
+          ? SAVE_NEW_PARAGRAPH
+          : pictureUnavailable
+      if (unavailable || !targetParagraphId || targetOffset == null) {
+        return { inserted: false, reason: unavailable ?? 'No anchor' }
       }
       const draft: StructuralDraft = {
         id: crypto.randomUUID(),
         kind: 'image',
-        paragraphId,
-        offset,
+        paragraphId: targetParagraphId,
+        offset: targetOffset,
         ...fields,
       }
       if (!structuralDraftSchema.safeParse(draft).success) {
@@ -318,14 +362,21 @@ export function documentStructureToolbar({
     markDefinedTerm: legal.markDefinedTerm,
     insertTableOfAuthorities: legal.insertTableOfAuthorities,
     updateTableOfAuthorities: legal.updateTableOfAuthorities,
-    insertCrossReference(targetParagraphId: string): StructuralInsertOutcome {
-      if (crossReferenceUnavailable || !paragraphId || offset == null) {
-        return {
-          inserted: false,
-          reason: crossReferenceUnavailable ?? 'No anchor',
-        }
+    insertCrossReference(
+      targetParagraphId: string,
+      anchor?: DeferredStructuralAnchor,
+    ): StructuralInsertOutcome {
+      const hostParagraphId = anchor?.paragraphId ?? paragraphId
+      const hostOffset = anchor?.offset ?? offset
+      const unavailable = anchor
+        ? deferredAnchorBlock(anchor, 'cross-reference')
+        : pendingCellParagraph
+          ? SAVE_NEW_PARAGRAPH
+          : crossReferenceUnavailable
+      if (unavailable || !hostParagraphId || hostOffset == null) {
+        return { inserted: false, reason: unavailable ?? 'No anchor' }
       }
-      if (targetParagraphId === paragraphId) {
+      if (targetParagraphId === hostParagraphId) {
         return {
           inserted: false,
           reason: 'A reference cannot point at the paragraph holding it.',
@@ -342,8 +393,8 @@ export function documentStructureToolbar({
       const draft: StructuralDraft = {
         id: crypto.randomUUID(),
         kind: 'cross-reference',
-        paragraphId,
-        offset,
+        paragraphId: hostParagraphId,
+        offset: hostOffset,
         targetParagraphId,
       }
       if (!structuralDraftSchema.safeParse(draft).success) {
@@ -380,18 +431,24 @@ export function documentStructureToolbar({
         noteParagraphId: footnoteNoteParagraphId(draft),
       }
     },
-    insertPageNumber(): StructuralInsertOutcome {
-      if (pageNumberUnavailable || !paragraphId || offset == null) {
-        return {
-          inserted: false,
-          reason: pageNumberUnavailable ?? 'No anchor',
-        }
+    insertPageNumber(
+      anchor?: DeferredStructuralAnchor,
+    ): StructuralInsertOutcome {
+      const targetParagraphId = anchor?.paragraphId ?? paragraphId
+      const targetOffset = anchor?.offset ?? offset
+      const unavailable = anchor
+        ? deferredAnchorBlock(anchor, 'page-number')
+        : pendingCellParagraph
+          ? SAVE_NEW_PARAGRAPH
+          : pageNumberUnavailable
+      if (unavailable || !targetParagraphId || targetOffset == null) {
+        return { inserted: false, reason: unavailable ?? 'No anchor' }
       }
       const draft: StructuralDraft = {
         id: crypto.randomUUID(),
         kind: 'page-number',
-        paragraphId,
-        offset,
+        paragraphId: targetParagraphId,
+        offset: targetOffset,
       }
       if (!structuralDraftSchema.safeParse(draft).success) {
         return {

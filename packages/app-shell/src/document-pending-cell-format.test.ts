@@ -12,6 +12,8 @@ import { useWorkspaceDraftHistory } from './document-editor-history'
 import { emptyDraftState, planDocumentSave } from './document-save-plan'
 import { withStructuralDrafts } from './document-structure-fold'
 import { storyTables } from './document-page-tables'
+import { documentFormatToolbar } from './document-format-toolbar'
+import { emptyFormatDrafts } from './document-format-types'
 
 async function pendingTableCellIds(
   document: Awaited<ReturnType<typeof parseDocx>>,
@@ -122,6 +124,59 @@ it('carries numbering drafts for new table cells and inserted paragraphs into th
     throw new Error('Missing insert_paragraph_after')
   expect(paragraphOp.numbering).toEqual({ numId: '3', ilvl: 1 })
   expect(paragraphOp).toMatchObject({ alignment: 'right' })
+})
+
+it('applies indent and line spacing to a new cell through the format toolbar and persists them', async () => {
+  const document = await parseDocx(await createSyntheticDocx(['Anchor']))
+  const paragraphId = document.model.stories[0]?.paragraphs[0]?.id
+  if (!paragraphId) throw new Error('Missing anchor')
+  const state = emptyDraftState()
+  state.structures = [
+    { id: 'table', kind: 'table', paragraphId, rows: 1, columns: 1 },
+  ]
+  const painted = withStructuralDrafts(document.model, state.structures)
+  const [cell] = await pendingTableCellIds(document, state)
+  if (!cell) throw new Error('Missing cell')
+
+  let format = emptyFormatDrafts
+  const toolbar = documentFormatToolbar(
+    painted,
+    format,
+    cell,
+    (update) => {
+      format = update(format)
+    },
+    { kind: 'caret', paragraphId: cell, from: 0, to: 0 },
+  )
+  toolbar.onLineSpacing('1.5')
+  toolbar.onIndentKind('first')
+  expect(format.paragraphFormats[cell]).toMatchObject({
+    lineSpacing: { line: 360, lineRule: 'auto' },
+    indentation: { firstLine: 720 },
+  })
+
+  state.format = format
+  const plan = planDocumentSave(document.model, state)
+  expect(plan.blocked).toEqual([])
+  const insert = plan.operations.find(
+    (operation) => operation.type === 'insert_table',
+  )
+  if (insert?.type !== 'insert_table') throw new Error('Missing insert_table')
+  expect(insert.cellEdits?.[0]?.paragraph).toMatchObject({
+    indentation: { firstLine: 720 },
+    lineSpacing: { line: 360, lineRule: 'auto' },
+  })
+
+  applyDocumentEdits(document, plan.operations)
+  const saved = await parseDocx(await serialiseDocx(document))
+  const savedCell = saved.model.stories
+    .flatMap((story) => story.paragraphs)
+    .find((paragraph) =>
+      paragraph.preservedXmlFragments.join('').includes('w:spacing'),
+    )
+  const fragments = savedCell?.preservedXmlFragments.join('') ?? ''
+  expect(fragments).toContain('w:spacing')
+  expect(fragments).toContain('w:ind')
 })
 
 it('restores pending-cell format drafts on undo and redo', async () => {

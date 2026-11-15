@@ -152,7 +152,6 @@ export function DocxWorkspace({
     onSaved: handleSaved,
   })
   const chromeSave = useLatestHandlers(chromeSaveOf(save))
-
   usePublishDocumentDirty(save.saveState.status !== 'saved')
 
   const offline = useOffline()
@@ -261,6 +260,7 @@ export function DocxWorkspace({
       offset: formatRange?.to ?? null,
       trackChanges,
       onImageError: setBanner,
+      flushSave: save.flushSave,
       editingStory: editingKind === 'document' ? undefined : editingStory,
       paragraphId: selectedParagraphId,
       margin: {

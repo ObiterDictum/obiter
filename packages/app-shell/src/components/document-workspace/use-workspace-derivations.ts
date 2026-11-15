@@ -133,6 +133,7 @@ export function useWorkspaceDerivations({
     offset: number | null
     trackChanges: boolean
     onImageError: (message: string) => void
+    flushSave?: () => Promise<boolean>
     editingStory?: DocumentStoryWire
     paragraphId: string | null
     margin: {
@@ -336,6 +337,7 @@ export function useWorkspaceDerivations({
     { ...drafts, deletedParagraphIds: deletions.effective },
     toaFacts,
     insert.onImageError,
+    insert.flushSave,
   )
   return {
     painted,

@@ -139,6 +139,79 @@ for (const edited of [false, true]) {
   }
 }
 
+it('inserts a page number into a pending cell after the table saves', async () => {
+  const document = await parseDocx(await createSyntheticDocx(['Anchor']))
+  const anchor = document.model.stories[0]?.paragraphs[0]?.id
+  if (!anchor) throw new Error('Missing anchor')
+  let model = document.model
+  let state = emptyDraftState()
+  state.structures = [
+    { id: 'table', kind: 'table', paragraphId: anchor, rows: 1, columns: 1 },
+  ]
+  const painted = withStructuralDrafts(model, state.structures)
+  const cell = storyTables(painted.stories[0])[0]?.paragraphIds[0]
+  if (!cell) throw new Error('Missing cell')
+  let savedCellId: string | undefined
+  const flushSave = async () => {
+    const plan = planDocumentSave(model, state)
+    applyDocumentEdits(document, plan.operations)
+    const saved = await parseDocx(await serialiseDocx(document))
+    model = saved.model
+    state = emptyDraftState()
+    savedCellId = storyTables(saved.model.stories[0])[0]?.paragraphIds[0]
+    return true
+  }
+  const hook = renderHook(() => {
+    const history = useWorkspaceDraftHistory()
+    const currentPainted = withStructuralDrafts(model, state.structures)
+    const ribbon = useInsertRibbon(
+      model,
+      currentPainted,
+      { kind: 'caret', paragraphId: cell, from: 0, to: 0 },
+      0,
+      false,
+      { editingKind: 'document', onOpen: () => {}, onClose: () => {} },
+      {
+        ...state,
+        deletedParagraphIds: new Set<string>(),
+        setBreaks: () => {},
+        setStructures: (update) => {
+          history.record(state)
+          state = { ...state, structures: update(state.structures) }
+        },
+      },
+      {
+        occurrences: [],
+        entries: [],
+        citingWires: [],
+        fields: new Map(),
+      },
+      () => {},
+      flushSave,
+    )
+    return { history, ribbon }
+  })
+  act(() => {
+    hook.result.current.ribbon.structure.onInsertPageNumber()
+  })
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 120))
+  })
+  act(() => {
+    hook.rerender()
+  })
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 120))
+  })
+  const draft = state.structures.find((item) => item.kind === 'page-number')
+  expect(draft?.paragraphId).toBe(savedCellId)
+  const plan = planDocumentSave(model, state)
+  expect(plan.operations.map((operation) => operation.type)).toContain(
+    'insert_page_number',
+  )
+  hook.unmount()
+})
+
 it('saving a newly inserted table preserves text in its cells', async () => {
   const document = await parseDocx(await createSyntheticDocx(['Anchor']))
   const paragraphId = document.model.stories[0]?.paragraphs[0]?.id
