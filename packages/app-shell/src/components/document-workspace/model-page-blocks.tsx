@@ -148,6 +148,7 @@ export function renderBlock(
                 onWordEdit={ctx.onWordEdit}
                 onMoveCaret={ctx.onMoveCaret ?? ctx.onSelectParagraph}
                 onTextSelection={ctx.onTextSelection}
+                onFocusParagraph={ctx.onFocusParagraph}
                 neighbors={ctx.neighbors}
                 restoreCaret={ctx.restoreCaret}
                 verticalCaret={ctx.verticalCaret}

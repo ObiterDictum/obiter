@@ -536,7 +536,7 @@ describe('the footnote insert control', () => {
     ).toContain('Save the new paragraph')
   })
 
-  it('refuses outside the body and inside a table cell', () => {
+  it('refuses outside the body but holds a footnote inside a table cell', () => {
     const margin = model([
       bodyStory([paragraph('p1', 'text')]),
       {
@@ -567,10 +567,15 @@ describe('the footnote insert control', () => {
       ],
     }
     const cells = model([cellStory])
-    expect(
-      toolbar({ paragraphId: 'para-w14-AABB0001' }, cells).api
-        .footnoteUnavailable,
-    ).toContain('cell')
+    const cellToolbar = toolbar({ paragraphId: 'para-w14-AABB0001' }, cells)
+    expect(cellToolbar.api.footnoteUnavailable).toBeUndefined()
+    expect(cellToolbar.api.insertFootnote().inserted).toBe(true)
+    expect(cellToolbar.structures).toEqual([
+      expect.objectContaining({
+        kind: 'footnote',
+        paragraphId: 'para-w14-AABB0001',
+      }),
+    ])
   })
 
   it('refuses a page number with the caret in a note paragraph', () => {

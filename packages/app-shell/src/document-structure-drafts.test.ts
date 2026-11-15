@@ -566,6 +566,35 @@ describe('documentStructureToolbar', () => {
     expect(api.pictureUnavailable).toBeUndefined()
   })
 
+  it('holds a footnote draft in a saved table cell through the save plan', () => {
+    const cells = cellModel()
+    const { api, structures } = toolbar({
+      paragraphId: 'para-w14-AABB0001',
+      model: cells,
+      cellParagraphIds: storyTableCellIds(documentStory(cells)),
+      offset: 0,
+    })
+    expect(api.footnoteUnavailable).toBeUndefined()
+    const outcome = api.insertFootnote()
+    expect(outcome.inserted).toBe(true)
+    expect(structures.map((item) => item.kind)).toEqual(['footnote'])
+
+    const state: DraftState = {
+      ...emptyDraftState(),
+      structures: [...structures],
+    }
+    const plan = planDocumentSave(cells, state)
+    expect(plan.blocked).toEqual([])
+    expect(plan.operations).toEqual([
+      {
+        type: 'insert_footnote',
+        paragraphId: 'para-w14-AABB0001',
+        offset: 0,
+        text: '',
+      },
+    ])
+  })
+
   it('refuses a picture whose fields build an invalid draft', () => {
     const { api, structures } = toolbar()
     const outcome = api.insertImage({
@@ -600,8 +629,8 @@ describe('documentStructureToolbar', () => {
     expect(api.crossReferenceUnavailable).toBeUndefined()
     expect(api.pictureUnavailable).toBeUndefined()
     expect(api.pageNumberUnavailable).toBeUndefined()
+    expect(api.footnoteUnavailable).toBeUndefined()
     expect(api.tableUnavailable).toContain('cell')
-    expect(api.footnoteUnavailable).toContain('footnote')
     expect(api.tableOfContentsUnavailable).toContain('contents')
     expect(api.tableOfAuthoritiesUnavailable).toContain('authorities')
 
@@ -620,6 +649,7 @@ describe('documentStructureToolbar', () => {
     ).toEqual(saveFirst)
     expect(api.insertCrossReference('p2')).toEqual(saveFirst)
     expect(api.insertPageNumber()).toEqual(saveFirst)
+    expect(api.insertFootnote()).toEqual(saveFirst)
     api.insertTable(1, 1)
     expect(drafts).toEqual([])
   })
@@ -656,10 +686,13 @@ describe('documentStructureToolbar', () => {
     expect(api.insertPageNumber({ paragraphId: 'p1', offset: 1 })).toEqual({
       inserted: true,
     })
+    const footnote = api.insertFootnote({ paragraphId: 'p1', offset: 1 })
+    expect(footnote.inserted).toBe(true)
     expect(drafts.map((item) => [item.kind, item.paragraphId])).toEqual([
       ['image', 'p1'],
       ['cross-reference', 'p1'],
       ['page-number', 'p1'],
+      ['footnote', 'p1'],
     ])
     expect(
       api.insertImage(

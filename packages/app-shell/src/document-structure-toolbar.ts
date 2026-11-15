@@ -138,7 +138,7 @@ export function documentStructureToolbar({
       : baseUnavailable
   const deferredAnchorBlock = (
     at: DeferredStructuralAnchor,
-    kind: 'image' | 'cross-reference' | 'page-number',
+    kind: 'image' | 'cross-reference' | 'page-number' | 'footnote',
   ) => {
     if (!model || editableParagraph(model, at.paragraphId) === undefined) {
       return SAVE_NEW_PARAGRAPH
@@ -181,11 +181,9 @@ export function documentStructureToolbar({
       : conflictWith({ kind: 'cross-reference', paragraphId, offset }))
   const footnoteUnavailable =
     insertBase ??
-    (inTableCell
-      ? 'A table cell cannot hold a footnote'
-      : offset == null || !paragraphId
-        ? 'Place the cursor in the paragraph text to insert a footnote'
-        : conflictWith({ kind: 'footnote', paragraphId, offset }))
+    (offset == null || !paragraphId
+      ? 'Place the cursor in the paragraph text to insert a footnote'
+      : conflictWith({ kind: 'footnote', paragraphId, offset }))
   const anchorStory =
     paragraphId && model
       ? model.stories.find((story) =>
@@ -406,18 +404,25 @@ export function documentStructureToolbar({
       setStructures((current) => [...current, draft])
       return { inserted: true }
     },
-    insertFootnote(): FootnoteInsertOutcome {
-      if (footnoteUnavailable || !paragraphId || offset == null) {
+    insertFootnote(anchor?: DeferredStructuralAnchor): FootnoteInsertOutcome {
+      const targetParagraphId = anchor?.paragraphId ?? paragraphId
+      const targetOffset = anchor?.offset ?? offset
+      const unavailable = anchor
+        ? deferredAnchorBlock(anchor, 'footnote')
+        : pendingCellParagraph
+          ? SAVE_NEW_PARAGRAPH
+          : footnoteUnavailable
+      if (unavailable || !targetParagraphId || targetOffset == null) {
         return {
           inserted: false,
-          reason: footnoteUnavailable ?? 'No anchor',
+          reason: unavailable ?? 'No anchor',
         }
       }
       const draft: StructuralDraft = {
         id: crypto.randomUUID(),
         kind: 'footnote',
-        paragraphId,
-        offset,
+        paragraphId: targetParagraphId,
+        offset: targetOffset,
       }
       if (!structuralDraftSchema.safeParse(draft).success) {
         return {

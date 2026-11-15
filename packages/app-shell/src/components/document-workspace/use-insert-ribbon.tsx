@@ -309,6 +309,16 @@ export function useInsertRibbon(
         if (!outcome.inserted) onImageError(outcome.reason)
       },
       onInsertFootnote: () => {
+        if (pendingInsert && offset != null) {
+          void flushPendingCellInsert(pendingInsert, offset, (anchor) => {
+            const outcome = structure.insertFootnote(anchor)
+            if (outcome.inserted) {
+              margin.onOpen('footnotes', outcome.noteParagraphId)
+            }
+            return outcome
+          })
+          return
+        }
         const outcome = structure.insertFootnote()
         if (!outcome.inserted) {
           onImageError(outcome.reason)

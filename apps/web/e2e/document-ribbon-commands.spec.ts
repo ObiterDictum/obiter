@@ -140,3 +140,49 @@ for (const saved of [false, true]) {
       await expect(page.locator('td').first()).toContainText('Cell text')
   })
 }
+
+test('a cross-reference inserted into a new table cell survives save and reload', async ({
+  page,
+}) => {
+  const { email, password } = await createAccount(page.request, 'RibbonCellRef')
+  await signIn(page, email, password)
+  await openMatter(page, `Ribbon cell ref ${crypto.randomUUID()}`)
+  await page.getByRole('button', { name: 'New document', exact: true }).click()
+  await page
+    .getByRole('link', { name: 'Untitled.docx', exact: true })
+    .first()
+    .click()
+  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+    timeout: 30_000,
+  })
+  const anchor = page.locator('[data-paragraph-id]').first()
+  await anchor.click()
+  await page.keyboard.type('Reference target')
+  await page.keyboard.press('Enter')
+  await save(page)
+  await page.locator('[data-paragraph-id]').nth(1).click()
+  await runCommand(page, 'Insert table')
+  await page.getByLabel('Rows', { exact: true }).fill('2')
+  await page.getByLabel('Columns', { exact: true }).fill('2')
+  await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
+  await focusCell(page)
+  await page.keyboard.type('Cell text')
+  await page.keyboard.press('Home')
+  await runCommand(page, 'Cross-reference')
+  await page
+    .getByRole('option', { name: /Reference target/u })
+    .first()
+    .click()
+  await page.getByRole('button', { name: 'Insert', exact: true }).last().click()
+  const marker = page.locator('td [data-field-marker]').first()
+  await expect(marker).toBeVisible({ timeout: 30_000 })
+  await undoButton(page).click()
+  await expect(page.locator('td [data-field-marker]')).toHaveCount(0)
+  await redoButton(page).click()
+  await expect(page.locator('td [data-field-marker]')).not.toHaveCount(0)
+  await save(page)
+  await page.reload()
+  await expect(page.locator('td').first()).toContainText('Reference target', {
+    timeout: 30_000,
+  })
+})
