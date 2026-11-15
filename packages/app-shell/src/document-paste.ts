@@ -11,6 +11,9 @@ import {
   type EditorCaret,
   type EditorState,
 } from './document-word-edits'
+import type { StructuralDraft } from './document-structural-drafts'
+import { withStructuralDrafts } from './document-structure-fold'
+import { storyTableCellIds } from './document-page-tables'
 
 export type PasteTarget =
   | { kind: 'caret'; caret: EditorCaret }
@@ -27,13 +30,19 @@ export function splitPasteLines(text: string): string[] {
 
 export function applyPasteText(
   model: DocumentModelWire,
-  state: EditorState,
+  state: EditorState & { structures?: readonly StructuralDraft[] },
   target: PasteTarget,
   text: string,
   newParagraphId: () => string,
 ): PasteOutcome {
   if (text.length === 0) return { status: 'empty' }
   const lines = splitPasteLines(text)
+  if (lines.length > 1 && pasteLandsInCell(model, state, target)) {
+    const first = replaceTarget(model, state, target, lines.join('\n'))
+    return first.applied
+      ? { status: 'applied', state: first.state, caret: first.caret }
+      : { status: 'refused', refusal: first.refusal }
+  }
   const first = replaceTarget(model, state, target, lines[0] ?? '')
   if (!first.applied) return { status: 'refused', refusal: first.refusal }
   let current = first.state
@@ -51,6 +60,31 @@ export function applyPasteText(
     }
   }
   return { status: 'applied', state: current, caret }
+}
+
+function pasteLandsInCell(
+  model: DocumentModelWire,
+  state: EditorState & { structures?: readonly StructuralDraft[] },
+  target: PasteTarget,
+): boolean {
+  const ids = [
+    target.kind === 'caret'
+      ? target.caret.paragraphId
+      : target.from.paragraphId,
+    ...(target.kind === 'range' &&
+    target.to.paragraphId !== target.from.paragraphId
+      ? [target.to.paragraphId]
+      : []),
+  ]
+  const structures = state.structures ?? []
+  const painted = structures.length
+    ? withStructuralDrafts(model, [...structures])
+    : model
+  const cells = new Set<string>()
+  for (const story of painted.stories) {
+    for (const id of storyTableCellIds(story)) cells.add(id)
+  }
+  return ids.some((id) => cells.has(id))
 }
 
 type TargetResult =

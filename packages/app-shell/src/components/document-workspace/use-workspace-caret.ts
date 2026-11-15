@@ -8,6 +8,8 @@ import {
   type DocumentRangeRefusal,
 } from '../../document-range-edits'
 import { storyBodyParagraphIds } from '../../document-story-flow'
+import { storyTableCellIds } from '../../document-page-tables'
+import { withStructuralDrafts } from '../../document-structure-fold'
 import {
   orderedSelection,
   reconcileSelection,
@@ -117,6 +119,16 @@ export function useWorkspaceCaret({
   const structuralIds = new Set(
     order.filter((id) => !bodyIds.has(id) && !insertIds.has(id)),
   )
+  const isTableCellParagraph = (paragraphId: string) => {
+    if (!model) return false
+    const painted =
+      drafts.structures.length > 0
+        ? withStructuralDrafts(model, drafts.structures)
+        : model
+    return painted.stories.some((story) =>
+      storyTableCellIds(story).has(paragraphId),
+    )
+  }
   const resolvedSelection = reconcileSelection(context, selection)
   const segments = resolvedSelection
     ? selectionSegmentMap(context, resolvedSelection)
@@ -137,7 +149,8 @@ export function useWorkspaceCaret({
     replaceSelection: replaceSelectionRange,
     selectedParagraphId,
     selectionParagraphIds: new Set(segments.keys()),
-    isStructuralParagraph: (paragraphId) => structuralIds.has(paragraphId),
+    isStructuralParagraph: (paragraphId) =>
+      structuralIds.has(paragraphId) && !isTableCellParagraph(paragraphId),
     formatRange,
     restoreCaret,
     placeCaret: selectParagraph,

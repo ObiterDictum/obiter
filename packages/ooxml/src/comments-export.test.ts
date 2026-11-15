@@ -367,6 +367,55 @@ describe('product comment DOCX export', () => {
     expect(reply?.parentId).toBe(exported?.id)
   })
 
+  it('keeps tracked insertions, deletions and comment anchors when exported bytes are parsed again', async () => {
+    const document = await fixtureDocument()
+    const paragraph = document.model.stories[0]?.paragraphs[0]
+    const imported = document.model.comments.find(({ id }) => id === 'ooxml-0')
+    if (!paragraph || !imported?.anchor) {
+      throw new Error('Fixture comment anchor is missing.')
+    }
+
+    const reparsed = await parseDocx(
+      await serialiseDocxWithComments(document, [
+        comment('cmt_round_trip', paragraph.id, 0, 5, 'Round-trip review'),
+      ]),
+    )
+
+    expect(reparsed.model.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          elementName: 'ins',
+          kind: 'insert',
+          text: 'Inserted',
+        }),
+        expect.objectContaining({
+          elementName: 'del',
+          kind: 'delete',
+          text: 'Deleted',
+        }),
+      ]),
+    )
+    const importedAgain = reparsed.model.comments.find(
+      ({ id }) => id === imported.id,
+    )
+    expect(importedAgain?.anchor).toEqual(imported.anchor)
+    const anchoredParagraph = reparsed.model.stories
+      .flatMap((story) => story.paragraphs)
+      .find(({ id }) => id === imported.anchor?.paragraphId)
+    const anchoredText =
+      anchoredParagraph?.runs.map((run) => run.text).join('') ?? ''
+    expect(
+      anchoredText.slice(
+        imported.anchor.startOffset,
+        imported.anchor.endOffset,
+      ),
+    ).toBe('Commented text')
+    expect(
+      reparsed.model.comments.find(({ body }) => body === 'Round-trip review')
+        ?.anchor,
+    ).not.toBeNull()
+  })
+
   it('threads a product reply under an imported comment head', async () => {
     const document = await fixtureDocument()
     const imported = document.model.comments.find(

@@ -288,6 +288,8 @@ export function mountWorkspace(
     markingsAsync?: ReturnType<typeof vi.fn>
     changes?: import('@obiter/contracts').DocumentChangeWire[]
     modelError?: () => boolean
+    modelFailure?: { error?: unknown }
+    modelRefetch?: ReturnType<typeof vi.fn>
     comments?: {
       comments?: import('@obiter/contracts').DocumentComment[]
       importedComments?: import('@obiter/contracts').DocumentImportedCommentThread[]
@@ -321,7 +323,17 @@ export function mountWorkspace(
       organisation: { id: 'org_1', name: 'Chambers', plan: 'private_beta' },
     },
   })
+  const modelRefetch = options.modelRefetch ?? vi.fn()
   hooks.useDocumentModel.mockImplementation((id: string) => {
+    if (options.modelFailure) {
+      return {
+        isLoading: false,
+        isError: true,
+        error: options.modelFailure.error,
+        data: undefined,
+        refetch: modelRefetch,
+      }
+    }
     const current = options.modelFor?.(id) ?? {
       versionId: 'ver_1',
       versionNumber: 1,
@@ -331,6 +343,7 @@ export function mountWorkspace(
       isLoading: false,
       isError: options.modelError?.() ?? false,
       data: { documentId: id, ...current },
+      refetch: modelRefetch,
     }
   })
   hooks.useDocumentComments.mockReturnValue({

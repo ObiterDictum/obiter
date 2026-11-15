@@ -5,6 +5,7 @@ import { blockedSummary, refusedSummary } from './document-save-messages'
 import type { ChromeSave } from './use-document-save'
 import type { ChromeDrafts } from './use-workspace-drafts'
 import { DiscardWorkDialog } from './discard-work-dialog'
+import { ParkedDraftsDialog } from './parked-draft-dialog'
 import { UnsavedNavigationGuard } from './unsaved-navigation-guard'
 
 export function DocumentSaveBanners({
@@ -17,6 +18,9 @@ export function DocumentSaveBanners({
   const blocked = blockedSummary(save.blocked)
   const refused = refusedSummary(save.refused)
   const plural = save.blocked.length === 1 ? 'change' : 'changes'
+  const parkedDrafts = drafts.recoverable.filter(
+    (item) => item.status === 'parked',
+  )
   return (
     <div className="flex flex-col gap-2 px-3 pb-2">
       <UnsavedNavigationGuard saveState={save.saveState} />
@@ -62,6 +66,9 @@ export function DocumentSaveBanners({
           tone="warning"
           body="Unsaved changes recorded against an earlier version of this document were not applied, because applying them to a newer version could corrupt it."
         >
+          {parkedDrafts.length > 0 ? (
+            <ParkedDraftsDialog drafts={drafts} items={parkedDrafts} />
+          ) : null}
           <DiscardWorkDialog
             triggerLabel="Discard unsaved changes"
             title="Discard stored work from an earlier version?"
