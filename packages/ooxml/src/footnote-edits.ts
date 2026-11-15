@@ -29,7 +29,7 @@ import {
   appendRelationship,
   ensureMediaContentType,
   insertRootChildXml,
-  nextSyntheticParaId,
+  nextPackageSyntheticParaId,
   relationshipsPartName,
 } from './structure-package'
 import { spliceInlineXml, spliceRunWires } from './structure-splice'
@@ -67,7 +67,7 @@ export function insertFootnote(
     document.model.stories,
     footnotes.part.overlay,
   )
-  const paraId = nextSyntheticParaId(footnotes.part.overlay)
+  const paraId = nextPackageSyntheticParaId(document)
   const entryXml = withDeclaredNamespaces(
     footnotes.part,
     buildFootnoteXml(footnoteId, text, paraId),
@@ -252,7 +252,7 @@ function ensureFootnotesStory(
     unanchoredFieldParagraphIds: [],
   }
   for (const entry of SEPARATOR_ENTRIES) {
-    const paraId = nextSyntheticParaId(part.overlay)
+    const paraId = nextPackageSyntheticParaId(document)
     const entryXml = buildFootnoteSeparatorXml(
       entry.footnoteId,
       entry.kind,

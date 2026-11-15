@@ -9,6 +9,7 @@ import {
   type SaveBaseline,
 } from '../../document-history-baseline'
 import type { DraftSlot, DraftState } from '../../document-save-plan'
+import { pendingCellIdMap } from '../../document-pending-cell-map'
 import type { useWorkspaceDraftHistory } from '../../document-editor-history'
 
 type DraftHistory = ReturnType<typeof useWorkspaceDraftHistory>
@@ -100,7 +101,12 @@ export function useSaveBaseline({
         (current) => remapLiveDraftState(current, resolved).state,
       )
       if (resolved.lineage) {
-        setParagraphRemap(paragraphMapFromLineage(resolved.lineage))
+        setParagraphRemap(
+          new Map([
+            ...paragraphMapFromLineage(resolved.lineage),
+            ...pendingCellIdMap(resolved.fromModel, resolved.sent, model),
+          ]),
+        )
       }
       pending.current = null
       setPendingVersion(null)

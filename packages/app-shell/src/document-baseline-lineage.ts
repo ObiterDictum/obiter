@@ -9,6 +9,10 @@ import {
   editableStoryOf,
 } from './document-model-text'
 import { emphasisSlotKey, type DraftSlot } from './document-save-plan'
+import {
+  pendingCellIdMap,
+  pendingCellSlotIds,
+} from './document-pending-cell-map'
 import type {
   SaveBaseline,
   SavedIdentities,
@@ -70,6 +74,7 @@ export function lineageCoversCoveredSlots(
     ),
   )
   const insertedRunIds = sentInsertRunIds(baseline)
+  const pendingCells = pendingCellSlotIds(baseline.fromModel, baseline.sent)
   for (const slot of baseline.covered) {
     if (slot.kind === 'insert') {
       const entry = lineage.paragraphs.find(
@@ -98,6 +103,7 @@ export function lineageCoversCoveredSlots(
       slot.kind === 'numbering' ||
       slot.kind === 'paragraph-format'
     ) {
+      if (pendingCells.paragraphIds.has(slot.paragraphId)) continue
       if (reversedParagraphs.has(slot.paragraphId)) continue
       if (paragraphIds.has(slot.paragraphId)) continue
       if (
@@ -113,6 +119,15 @@ export function lineageCoversCoveredSlots(
       const sent = baseline.sent.format.emphasis.find(
         (item) => emphasisSlotKey(item) === slot.key,
       )
+      if (
+        sent &&
+        (sent.runId !== undefined
+          ? pendingCells.runIds.has(sent.runId)
+          : sent.paragraphId !== undefined &&
+            pendingCells.paragraphIds.has(sent.paragraphId))
+      ) {
+        continue
+      }
       if (sent?.runId) {
         if (!runAddresses.has(sent.runId) && !reversedRuns.has(sent.runId)) {
           return false
@@ -186,6 +201,16 @@ export function lineageIdentities(
         })
         runContinuations.set(fromRunId, continuations)
       }
+    }
+  }
+
+  if (toModel) {
+    for (const [fromId, toId] of pendingCellIdMap(
+      baseline.fromModel,
+      baseline.sent,
+      toModel,
+    )) {
+      paragraphIds.set(fromId, toId)
     }
   }
 

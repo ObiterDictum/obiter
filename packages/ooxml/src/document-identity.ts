@@ -66,6 +66,7 @@ export function canonicaliseParagraphIdentities(
       if (!document.sourceParts.has(story.partName)) continue
       const part = requireEditablePart(document, story.partName)
       const anchor = document.paragraphAnchors.get(paragraph.id)
+      if (anchor && anchor.partName !== story.partName) continue
       if (anchor) {
         const tableReplacement = [...part.overlay.replacements.entries()].find(
           ([key, replacement]) =>

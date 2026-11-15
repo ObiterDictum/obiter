@@ -12,7 +12,7 @@ import {
   imagePartNameForDrawing,
   paragraphImageXml,
 } from './document-page-media'
-import { storyBlocks } from './document-page-tables'
+import { storyBlocks, storyTables } from './document-page-tables'
 import { documentStory } from './document-model-text'
 import { withStructuralDrafts } from './document-structure-fold'
 import {
@@ -566,6 +566,35 @@ describe('documentStructureToolbar', () => {
     expect(api.pictureUnavailable).toBeUndefined()
   })
 
+  it('holds a footnote draft in a saved table cell through the save plan', () => {
+    const cells = cellModel()
+    const { api, structures } = toolbar({
+      paragraphId: 'para-w14-AABB0001',
+      model: cells,
+      cellParagraphIds: storyTableCellIds(documentStory(cells)),
+      offset: 0,
+    })
+    expect(api.footnoteUnavailable).toBeUndefined()
+    const outcome = api.insertFootnote()
+    expect(outcome.inserted).toBe(true)
+    expect(structures.map((item) => item.kind)).toEqual(['footnote'])
+
+    const state: DraftState = {
+      ...emptyDraftState(),
+      structures: [...structures],
+    }
+    const plan = planDocumentSave(cells, state)
+    expect(plan.blocked).toEqual([])
+    expect(plan.operations).toEqual([
+      {
+        type: 'insert_footnote',
+        paragraphId: 'para-w14-AABB0001',
+        offset: 0,
+        text: '',
+      },
+    ])
+  })
+
   it('refuses a picture whose fields build an invalid draft', () => {
     const { api, structures } = toolbar()
     const outcome = api.insertImage({
@@ -580,6 +609,106 @@ describe('documentStructureToolbar', () => {
       reason: 'That image cannot be held as a draft.',
     })
     expect(structures).toEqual([])
+  })
+
+  it('enables deferred inserts in a pending table cell and refuses cell-impossible ones', () => {
+    const baseModel = model([paragraph('p1'), paragraph('p2')])
+    const tableStructures: StructuralDraft[] = [tableDraft('t1', 'p1')]
+    const painted = withStructuralDrafts(baseModel, tableStructures)
+    const cellId = storyTables(painted.stories[0])[0]?.rows[0]?.cells[0]
+      ?.paragraphIds[0]
+    if (!cellId) throw new Error('Missing pending cell')
+    const { api, structures: drafts } = toolbar({
+      model: baseModel,
+      painted,
+      paragraphId: cellId,
+      cellParagraphIds: new Set([cellId]),
+      offset: 2,
+      structures: tableStructures,
+    })
+    expect(api.crossReferenceUnavailable).toBeUndefined()
+    expect(api.pictureUnavailable).toBeUndefined()
+    expect(api.pageNumberUnavailable).toBeUndefined()
+    expect(api.footnoteUnavailable).toBeUndefined()
+    expect(api.tableUnavailable).toContain('cell')
+    expect(api.tableOfContentsUnavailable).toContain('contents')
+    expect(api.tableOfAuthoritiesUnavailable).toContain('authorities')
+
+    const saveFirst = {
+      inserted: false,
+      reason: 'Save the new paragraph before inserting into it',
+    }
+    expect(
+      api.insertImage({
+        contentType: 'image/png',
+        dataBase64: PNG_BASE64,
+        widthPx: 10,
+        heightPx: 10,
+        name: 'Figure',
+      }),
+    ).toEqual(saveFirst)
+    expect(api.insertCrossReference('p2')).toEqual(saveFirst)
+    expect(api.insertPageNumber()).toEqual(saveFirst)
+    expect(api.insertFootnote()).toEqual(saveFirst)
+    api.insertTable(1, 1)
+    expect(drafts).toEqual([])
+  })
+
+  it('accepts a resolved anchor for inserts deferred out of a pending cell', () => {
+    const baseModel = model([paragraph('p1'), paragraph('p2')])
+    const tableStructures: StructuralDraft[] = [tableDraft('t1', 'p1')]
+    const painted = withStructuralDrafts(baseModel, tableStructures)
+    const cellId = storyTables(painted.stories[0])[0]?.rows[0]?.cells[0]
+      ?.paragraphIds[0]
+    if (!cellId) throw new Error('Missing pending cell')
+    const { api, structures: drafts } = toolbar({
+      model: baseModel,
+      painted,
+      paragraphId: cellId,
+      cellParagraphIds: new Set([cellId]),
+      offset: 2,
+      structures: tableStructures,
+    })
+    const image = api.insertImage(
+      {
+        contentType: 'image/png',
+        dataBase64: PNG_BASE64,
+        widthPx: 10,
+        heightPx: 10,
+        name: 'Figure',
+      },
+      { paragraphId: 'p1', offset: 1 },
+    )
+    expect(image.inserted).toBe(true)
+    expect(
+      api.insertCrossReference('p2', { paragraphId: 'p1', offset: 1 }),
+    ).toEqual({ inserted: true })
+    expect(api.insertPageNumber({ paragraphId: 'p1', offset: 1 })).toEqual({
+      inserted: true,
+    })
+    const footnote = api.insertFootnote({ paragraphId: 'p1', offset: 1 })
+    expect(footnote.inserted).toBe(true)
+    expect(drafts.map((item) => [item.kind, item.paragraphId])).toEqual([
+      ['image', 'p1'],
+      ['cross-reference', 'p1'],
+      ['page-number', 'p1'],
+      ['footnote', 'p1'],
+    ])
+    expect(
+      api.insertImage(
+        {
+          contentType: 'image/png',
+          dataBase64: PNG_BASE64,
+          widthPx: 10,
+          heightPx: 10,
+          name: 'Figure',
+        },
+        { paragraphId: 'ghost', offset: 0 },
+      ),
+    ).toEqual({
+      inserted: false,
+      reason: 'Save the new paragraph before inserting into it',
+    })
   })
 })
 

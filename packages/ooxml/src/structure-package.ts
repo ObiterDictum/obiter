@@ -354,6 +354,28 @@ export function nextSyntheticParaId(source: CounterSource) {
   }
 }
 
+const packageParaIdCounters = new WeakMap<object, number>()
+
+export function nextPackageSyntheticParaId(document: OoxmlDocument) {
+  const used = new Set<string>()
+  for (const part of document.sourceParts.values()) {
+    if (part.kind !== 'xml' || !part.overlay) continue
+    for (const id of sourceParaIds(part.overlay)) used.add(id)
+    for (const pending of part.overlay.replacements.values()) {
+      for (const match of pending.value.matchAll(PENDING_PARA_ID)) {
+        if (match[1]) used.add(match[1].toUpperCase())
+      }
+    }
+  }
+  let id = packageParaIdCounters.get(document) ?? 0
+  for (;;) {
+    id += 1
+    packageParaIdCounters.set(document, id)
+    const candidate = syntheticParaId(id)
+    if (!used.has(candidate)) return candidate
+  }
+}
+
 const PENDING_PARA_ID = /\b[\w.-]+:paraId\s*=\s*["']([0-9A-Fa-f]{8})["']/gu
 const PARA_ID_VALUE = /^[0-9A-Fa-f]{8}$/u
 

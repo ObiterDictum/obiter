@@ -1,3 +1,8 @@
+import {
+  pendingCellInsert,
+  savedCellAnchor,
+  type PendingCellInsert,
+} from '../../document-pending-cell-map'
 import { pendingTableChange } from '../../document-pending-table'
 import { storyTables } from '../../document-page-tables'
 import { foldTableStructure } from '../../document-table-structure-fold'
@@ -16,6 +21,8 @@ import { marginStories } from '../../document-page-layout'
 import {
   documentStructureToolbar,
   storyTableCellIds,
+  type DeferredStructuralAnchor,
+  type StructuralInsertOutcome,
 } from '../../document-structure-toolbar'
 import { readImageInsert } from '../../document-image-inserts'
 import type { TableOfAuthoritiesFacts } from '../../document-legal-toolbar'
@@ -57,6 +64,7 @@ export function useInsertRibbon(
   },
   toaFacts: TableOfAuthoritiesFacts,
   onImageError: (message: string) => void,
+  flushSave?: () => Promise<boolean>,
 ): InsertRibbonProps {
   const pictureInput = useRef<HTMLInputElement>(null)
   const imageReadCount = useRef(0)
@@ -101,6 +109,40 @@ export function useInsertRibbon(
     ? 'Save text in new table cells before changing table structure'
     : undefined
   const paragraphId = (caret.kind === 'caret' && caret.paragraphId) || null
+  const pendingInsert = useMemo(
+    () =>
+      trackChanges
+        ? undefined
+        : pendingCellInsert(model, painted, drafts.structures, paragraphId),
+    [model, painted, drafts.structures, paragraphId, trackChanges],
+  )
+  const latestModel = useRef(model)
+  latestModel.current = model
+  async function flushPendingCellInsert(
+    pending: PendingCellInsert,
+    at: number,
+    run: (anchor: DeferredStructuralAnchor) => StructuralInsertOutcome,
+  ) {
+    if (!flushSave) {
+      onImageError('Save the new table before inserting into it.')
+      return
+    }
+    if (!(await flushSave())) {
+      onImageError('The new table could not be saved, so nothing was inserted.')
+      return
+    }
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const current = latestModel.current
+      const anchor = current ? savedCellAnchor(current, pending) : undefined
+      if (anchor) {
+        const outcome = run({ paragraphId: anchor.paragraphId, offset: at })
+        if (!outcome.inserted) onImageError(outcome.reason)
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    onImageError('The new table cell could not be found after saving.')
+  }
   const selectionActive = caret.kind === 'selection'
   const selectionRange =
     caret.kind === 'selection' && caret.ranges.length === 1
@@ -231,13 +273,26 @@ export function useInsertRibbon(
       onCloseStory: margin.onClose,
       onInsertTable: (rows, columns) => structure.insertTable(rows, columns),
       onInsertLink: (target) => structure.insertLink(target),
-      onInsertCrossReference: (targetParagraphId) =>
-        structure.insertCrossReference(targetParagraphId),
+      onInsertCrossReference: (targetParagraphId) => {
+        if (pendingInsert && offset != null) {
+          void flushPendingCellInsert(pendingInsert, offset, (anchor) =>
+            structure.insertCrossReference(targetParagraphId, anchor),
+          )
+          return { inserted: true }
+        }
+        return structure.insertCrossReference(targetParagraphId)
+      },
       onMarkDefinedTerm: () => {
         const outcome = structure.markDefinedTerm()
         if (!outcome.inserted) onImageError(outcome.reason)
       },
       onInsertPageNumber: () => {
+        if (pendingInsert && offset != null) {
+          void flushPendingCellInsert(pendingInsert, offset, (anchor) =>
+            structure.insertPageNumber(anchor),
+          )
+          return
+        }
         const outcome = structure.insertPageNumber()
         if (!outcome.inserted) onImageError(outcome.reason)
       },
@@ -254,6 +309,16 @@ export function useInsertRibbon(
         if (!outcome.inserted) onImageError(outcome.reason)
       },
       onInsertFootnote: () => {
+        if (pendingInsert && offset != null) {
+          void flushPendingCellInsert(pendingInsert, offset, (anchor) => {
+            const outcome = structure.insertFootnote(anchor)
+            if (outcome.inserted) {
+              margin.onOpen('footnotes', outcome.noteParagraphId)
+            }
+            return outcome
+          })
+          return
+        }
         const outcome = structure.insertFootnote()
         if (!outcome.inserted) {
           onImageError(outcome.reason)
@@ -282,8 +347,14 @@ export function useInsertRibbon(
                   onImageError(result.error)
                   return
                 }
-                const outcome = structure.insertImage(result)
-                if (!outcome.inserted) onImageError(outcome.reason)
+                if (pendingInsert && offset != null) {
+                  void flushPendingCellInsert(pendingInsert, offset, (anchor) =>
+                    structure.insertImage(result, anchor),
+                  )
+                } else {
+                  const outcome = structure.insertImage(result)
+                  if (!outcome.inserted) onImageError(outcome.reason)
+                }
               } catch {
                 onImageError('That image could not be read.')
               } finally {

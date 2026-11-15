@@ -163,8 +163,8 @@ export function paragraphCss(face: ParagraphFace): CSSProperties {
     marginTop: face.marginTopPx,
     marginBottom: face.marginBottomPx,
     textAlign: face.align,
-    paddingLeft: face.indentLeftPx,
-    paddingRight: face.indentRightPx,
+    paddingLeft: face.indentLeftPx ?? 0,
+    paddingRight: face.indentRightPx ?? 0,
     textIndent: paragraphTextIndentPx(face) || undefined,
     fontWeight:
       face.run.bold === undefined ? undefined : face.run.bold ? 700 : 400,

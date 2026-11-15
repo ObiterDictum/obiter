@@ -1,5 +1,5 @@
 import '@obiter/test-dom'
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
 import { openFindBar } from './editor-test-commands'
 import {
@@ -9,6 +9,7 @@ import {
   rerenderWorkspace,
   command,
 } from './docx-workspace-harness'
+import { clickParagraph } from './paragraph-selection-harness'
 
 describe('DocxWorkspace vertical caret delivery', () => {
   const marker = 'ZXQMARK'
@@ -80,5 +81,26 @@ describe('DocxWorkspace vertical caret delivery', () => {
     fireEvent.keyDown(switched, { key: 'ArrowDown' })
     expect(field().value).toBe('Z'.repeat(40))
     expect(field().selectionStart).toBe(10)
+  })
+
+  it('keeps the caret offset in a pending table cell when its editor regains focus', () => {
+    mountWorkspace({
+      models: { doc_1: multiParagraphModel([paragraph('p1', 'Hello')]) },
+    })
+    clickParagraph('p1')
+    fireEvent.click(command('Insert table'))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Insert' }))
+
+    const cellRoot = document.querySelector('td [data-paragraph-id]')
+    const cellId = cellRoot?.getAttribute('data-paragraph-id')
+    if (!cellId) throw new Error('expected a pending table cell paragraph')
+    clickParagraph(cellId, 0)
+    const editor = field()
+    editor.setSelectionRange(0, 0)
+    fireEvent.select(editor)
+    fireEvent.focus(editor)
+
+    expect(command('Picture').hasAttribute('disabled')).toBe(false)
   })
 })
