@@ -39,6 +39,7 @@ import type {
   WorkspaceDraftScope,
 } from './document-workspace-draft-scope'
 import { createWorkspaceDraftEdits } from './workspace-draft-edits'
+import { useParkedDraftReview } from './use-parked-draft-review'
 
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
 
@@ -50,6 +51,9 @@ export type ChromeDrafts = Pick<
   | 'restoreRecoverable'
   | 'discardRecoverable'
   | 'discardStaleDraft'
+  | 'reviewParkedDraft'
+  | 'applyParkedDraft'
+  | 'documentId'
 >
 
 export function chromeDraftsOf(drafts: WorkspaceDrafts): ChromeDrafts {
@@ -60,6 +64,9 @@ export function chromeDraftsOf(drafts: WorkspaceDrafts): ChromeDrafts {
     restoreRecoverable: drafts.restoreRecoverable,
     discardRecoverable: drafts.discardRecoverable,
     discardStaleDraft: drafts.discardStaleDraft,
+    reviewParkedDraft: drafts.reviewParkedDraft,
+    applyParkedDraft: drafts.applyParkedDraft,
+    documentId: drafts.documentId,
   }
 }
 
@@ -276,6 +283,34 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setState,
     checkpoint,
   })
+  const { reviewParkedDraft, applyParkedDraft } = useParkedDraftReview({
+    storage,
+    storedScope,
+    model: scope.model,
+    currentState: () => bundleRef.current.state,
+    mergeAppliable: (appliable) => {
+      checkpoint()
+      setState((current) => ({
+        ...current,
+        drafts: { ...current.drafts, ...appliable.drafts },
+        deletedParagraphIds: [
+          ...new Set([
+            ...current.deletedParagraphIds,
+            ...appliable.deletedParagraphIds,
+          ]),
+        ],
+        inserts: [
+          ...current.inserts,
+          ...appliable.inserts.filter(
+            (item) =>
+              !current.inserts.some(
+                (existing) => existing.clientId === item.clientId,
+              ),
+          ),
+        ],
+      }))
+    },
+  })
 
   function clearSlots(slots: readonly DraftSlot[], sent?: DraftState) {
     if (slots.length === 0) return
@@ -429,6 +464,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     recoverable,
     restoreRecoverable,
     discardRecoverable,
+    reviewParkedDraft,
+    applyParkedDraft,
+    documentId: scope.documentId,
     undoDraft,
     redoDraft,
     picture,

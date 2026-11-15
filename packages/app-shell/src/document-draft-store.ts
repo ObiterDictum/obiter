@@ -173,6 +173,30 @@ export function readDocumentDraft(
   }
 }
 
+export function readDocumentDraftSnapshot(
+  storage: DraftStorage,
+  scope: DraftScope,
+  draftId: string,
+):
+  | {
+      baseVersionId: string
+      state: DraftState
+      held: HeldChange[]
+      updatedAt: string
+    }
+  | undefined {
+  const record = scanPayloads(storage, scope).find(
+    (item) => item.draftId === draftId,
+  )
+  if (!record || expired(record.snapshot.updatedAt)) return undefined
+  return {
+    baseVersionId: record.snapshot.baseVersionId,
+    state: record.snapshot.state,
+    held: record.snapshot.held,
+    updatedAt: record.snapshot.updatedAt,
+  }
+}
+
 export function adoptDocumentDraft(
   storage: DraftStorage,
   scope: DraftScope,
