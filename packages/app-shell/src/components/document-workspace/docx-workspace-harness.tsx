@@ -289,6 +289,7 @@ export function mountWorkspace(
     changes?: import('@obiter/contracts').DocumentChangeWire[]
     modelError?: () => boolean
     modelFailure?: { error?: unknown }
+    modelLoading?: boolean
     modelRefetch?: ReturnType<typeof vi.fn>
     comments?: {
       comments?: import('@obiter/contracts').DocumentComment[]
@@ -325,6 +326,14 @@ export function mountWorkspace(
   })
   const modelRefetch = options.modelRefetch ?? vi.fn()
   hooks.useDocumentModel.mockImplementation((id: string) => {
+    if (options.modelLoading) {
+      return {
+        isLoading: true,
+        isError: false,
+        data: undefined,
+        refetch: modelRefetch,
+      }
+    }
     if (options.modelFailure) {
       return {
         isLoading: false,

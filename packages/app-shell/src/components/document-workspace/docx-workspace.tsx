@@ -404,18 +404,16 @@ export function DocxWorkspace({
           onSelect={caret.revealFinding}
           comments={commentsPanel}
         />
-        {modelQuery.isLoading ? (
-          <LoadingBlock label="Loading document model" />
-        ) : !model ? (
+        {!modelQuery.isLoading && !model ? (
           <DocumentLoadError
             error={modelQuery.error}
             onRetry={() => void modelQuery.refetch()}
           />
-        ) : model ? (
+        ) : (
           <>
-            <DocumentPrintStyle box={printBox} />
+            {model ? <DocumentPrintStyle box={printBox} /> : null}
             <DocxWorkspaceChrome
-              props={chrome}
+              props={model ? chrome : { ...chrome, canEdit: false }}
               save={chromeSave}
               drafts={chromeDrafts}
               remoteChange={remoteChange}
@@ -432,67 +430,71 @@ export function DocxWorkspace({
               citationCanInsert={selectedParagraphId !== null}
               versions={versions}
             />
-            <DocxWorkspaceDesk
-              compareOpen={compareOpen}
-              onCloseCompare={() => setCompareOpen(false)}
-              documentId={documentId}
-              zoom={pageZoom}
-              pages={{
-                zoom: pageZoom,
-                view,
-                model,
-                painted,
-                pendingRedlines,
-                pages,
-                editingKind,
-                selectedParagraphId,
-                restoreCaret,
-                verticalCaret,
-                drafts,
-                presence,
-                currentUserId: me?.user.id,
-                imageUrls,
-                selectionSegments,
-                linkOverlays,
-                selectionHandlers,
-                selectParagraph,
-                setFormatRange,
-                mirrorSelection,
-                focusParagraph,
-                moveCaret,
-                reportJoinRefusal,
-              }}
-              navOpen={navOpen}
-              outline={outline}
-              activeParagraphId={selectedParagraphId}
-              onSelectOutline={onSelectOutline}
-              onCloseNav={toggleNavigation}
-              columnRef={columnRef}
-              spelling={spelling}
-              rulerOn={rulerOn}
-              ruler={ruler}
-              paperWidth={pages[0]?.box.widthPx ?? null}
-              onExitMarginEditing={closeEditingStory}
-              onOpenNoteEditing={(paragraphId) =>
-                openEditingStory('footnotes', paragraphId)
-              }
-              panel={panels.active}
-              onClosePanel={panels.close}
-              popout={panels.popout}
-              documentRecord={documentRecord}
-              versions={versions}
-              matterLink={headerLinks?.matter}
-              onViewVersion={onViewVersion}
-              comments={commentsPanel.props}
-              changeReview={changeReview}
-              currentVersionNumber={
-                modelQuery.data?.versionNumber ?? versionNumber
-              }
-              authorities={authorities}
-              onSelectAuthority={caret.revealFinding}
-            />
+            {model ? (
+              <DocxWorkspaceDesk
+                compareOpen={compareOpen}
+                onCloseCompare={() => setCompareOpen(false)}
+                documentId={documentId}
+                zoom={pageZoom}
+                pages={{
+                  zoom: pageZoom,
+                  view,
+                  model,
+                  painted,
+                  pendingRedlines,
+                  pages,
+                  editingKind,
+                  selectedParagraphId,
+                  restoreCaret,
+                  verticalCaret,
+                  drafts,
+                  presence,
+                  currentUserId: me?.user.id,
+                  imageUrls,
+                  selectionSegments,
+                  linkOverlays,
+                  selectionHandlers,
+                  selectParagraph,
+                  setFormatRange,
+                  mirrorSelection,
+                  focusParagraph,
+                  moveCaret,
+                  reportJoinRefusal,
+                }}
+                navOpen={navOpen}
+                outline={outline}
+                activeParagraphId={selectedParagraphId}
+                onSelectOutline={onSelectOutline}
+                onCloseNav={toggleNavigation}
+                columnRef={columnRef}
+                spelling={spelling}
+                rulerOn={rulerOn}
+                ruler={ruler}
+                paperWidth={pages[0]?.box.widthPx ?? null}
+                onExitMarginEditing={closeEditingStory}
+                onOpenNoteEditing={(paragraphId) =>
+                  openEditingStory('footnotes', paragraphId)
+                }
+                panel={panels.active}
+                onClosePanel={panels.close}
+                popout={panels.popout}
+                documentRecord={documentRecord}
+                versions={versions}
+                matterLink={headerLinks?.matter}
+                onViewVersion={onViewVersion}
+                comments={commentsPanel.props}
+                changeReview={changeReview}
+                currentVersionNumber={
+                  modelQuery.data?.versionNumber ?? versionNumber
+                }
+                authorities={authorities}
+                onSelectAuthority={caret.revealFinding}
+              />
+            ) : (
+              <LoadingBlock label="Loading document model" />
+            )}
           </>
-        ) : null}
+        )}
       </WorkspaceShell>
     </WorkspaceTableSurface>
   )
