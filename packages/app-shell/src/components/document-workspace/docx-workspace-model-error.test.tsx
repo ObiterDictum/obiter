@@ -38,4 +38,16 @@ describe('document model load failure', () => {
     expect(screen.getByText("This document's file is missing")).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
+
+  it('shows the ribbon at once while the document content loads', () => {
+    mountWorkspace({ modelLoading: true })
+    expect(
+      screen.getByRole('toolbar', { name: 'Document toolbar' }),
+    ).toBeTruthy()
+    expect(screen.getByLabelText('Loading document model')).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: /^Undo/ }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
+  })
 })
