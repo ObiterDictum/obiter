@@ -3,8 +3,10 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from './api'
 import { currentUserQueryOptions } from './current-user'
+import { workspaceKind } from './document-kind'
+import { documentModelQueryOptions } from './document-workspace-queries'
 import { documentQueryOptions } from './documents'
-import { mattersListQueryOptions } from './matters'
+import { matterQueryOptions, mattersListQueryOptions } from './matters'
 import { invitePreviewQueryOptions } from './organisation-membership'
 import {
   organisationVerificationRunDocumentIds,
@@ -32,6 +34,40 @@ export async function prefetchHomeData(
     queryClient.ensureQueryData(currentUserQueryOptions()),
   )
   await queryClient.prefetchQuery(mattersListQueryOptions())
+}
+
+const DOCUMENT_PREFETCH_STALE_MS = 30_000
+
+export async function prefetchDocumentRouteData(
+  queryClient: QueryClient,
+  matterId: string,
+  documentId: string,
+): Promise<void> {
+  await guardAuth(queryClient, () =>
+    queryClient.ensureQueryData(currentUserQueryOptions()),
+  )
+  void queryClient.prefetchQuery({
+    ...matterQueryOptions(matterId),
+    staleTime: DOCUMENT_PREFETCH_STALE_MS,
+  })
+  void queryClient
+    .fetchQuery({
+      ...documentQueryOptions(documentId),
+      staleTime: DOCUMENT_PREFETCH_STALE_MS,
+    })
+    .then(async (detail) => {
+      const current = detail.document.currentVersion
+      if (
+        current?.documentStatus !== 'ready' ||
+        workspaceKind(current.fileType) !== 'docx'
+      )
+        return
+      await queryClient.prefetchQuery({
+        ...documentModelQueryOptions(documentId),
+        staleTime: DOCUMENT_PREFETCH_STALE_MS,
+      })
+    })
+    .catch(() => undefined)
 }
 
 export async function prefetchVerifyData(

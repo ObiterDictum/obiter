@@ -23,4 +23,19 @@ describe('document model load failure', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(refetch).toHaveBeenCalled()
   })
+
+  it('explains a missing stored file without offering a retry', () => {
+    mountWorkspace({
+      modelFailure: {
+        error: new ApiError(
+          'document_file_missing',
+          'The stored file for this document is missing.',
+          410,
+          'req_43',
+        ),
+      },
+    })
+    expect(screen.getByText("This document's file is missing")).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
 })
