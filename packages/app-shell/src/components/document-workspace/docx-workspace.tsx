@@ -97,6 +97,7 @@ export function DocxWorkspace({
   const syncQuery = useDocumentCollaborationSync(documentId, baseVersionId)
   const decideChange = useTrackedChangeDecision(documentId, matterId)
   const model = modelQuery.data?.model
+  const shownVersionNumber = modelQuery.data?.versionNumber ?? versionNumber
   const drafts = useWorkspaceDrafts({
     organisationId: me?.organisation?.id ?? 'no-organisation',
     userId: me?.user.id ?? 'anonymous',
@@ -316,6 +317,7 @@ export function DocxWorkspace({
     if (!navOpen) panels.dismiss()
     toggleNavPane()
   }
+  const openNoteEditing = (id: string) => openEditingStory('footnotes', id)
   const commentSelection = useLatestCallback(() => panels.tabs.open('comments'))
   const reviewPanel = useLatestCallback(() => togglePanel('review'))
 
@@ -472,9 +474,7 @@ export function DocxWorkspace({
                 ruler={ruler}
                 paperWidth={pages[0]?.box.widthPx ?? null}
                 onExitMarginEditing={closeEditingStory}
-                onOpenNoteEditing={(paragraphId) =>
-                  openEditingStory('footnotes', paragraphId)
-                }
+                onOpenNoteEditing={openNoteEditing}
                 panel={panels.active}
                 onClosePanel={panels.close}
                 popout={panels.popout}
@@ -484,9 +484,7 @@ export function DocxWorkspace({
                 onViewVersion={onViewVersion}
                 comments={commentsPanel.props}
                 changeReview={changeReview}
-                currentVersionNumber={
-                  modelQuery.data?.versionNumber ?? versionNumber
-                }
+                currentVersionNumber={shownVersionNumber}
                 authorities={authorities}
                 onSelectAuthority={caret.revealFinding}
               />
