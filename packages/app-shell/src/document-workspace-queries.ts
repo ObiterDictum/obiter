@@ -8,7 +8,7 @@ import type {
   DocumentTextResponse,
   DocumentTrackedChangeListResponse,
 } from '@obiter/contracts'
-import { apiFetch } from './api'
+import { ApiError, apiFetch } from './api'
 import { documentsKeys } from './documents'
 
 const CURRENT_VERSION_KEY = 'current'
@@ -57,6 +57,11 @@ export const workspaceKeys = {
     [...documentsKeys.all, 'compare', documentId] as const,
 }
 
+export function retryUnlessClientError(failureCount: number, error: Error) {
+  if (error instanceof ApiError && error.status < 500) return false
+  return failureCount < 3
+}
+
 export function versionQuery(versionId: string | undefined) {
   return versionId === undefined
     ? ''
@@ -73,6 +78,7 @@ export function documentModelQueryOptions(
       apiFetch<DocumentModelResponse>(
         `/api/documents/${documentId}/model${versionQuery(versionId)}`,
       ),
+    retry: retryUnlessClientError,
   })
 }
 
@@ -130,6 +136,7 @@ export function documentCommentsQueryOptions(documentId: string) {
       apiFetch<DocumentCommentListResponse>(
         `/api/documents/${documentId}/comments`,
       ),
+    retry: retryUnlessClientError,
   })
 }
 
@@ -143,6 +150,7 @@ export function documentTrackedChangesQueryOptions(
       apiFetch<DocumentTrackedChangeListResponse>(
         `/api/documents/${documentId}/tracked-changes${versionQuery(versionId)}`,
       ),
+    retry: retryUnlessClientError,
   })
 }
 

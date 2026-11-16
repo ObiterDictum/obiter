@@ -20,6 +20,7 @@ export {
 } from './current-user'
 export {
   guardAuth,
+  prefetchDocumentRouteData,
   prefetchHomeData,
   prefetchInviteAcceptData,
   prefetchVerifyData,

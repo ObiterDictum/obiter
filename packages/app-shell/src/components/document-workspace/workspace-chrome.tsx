@@ -82,6 +82,14 @@ export function DocumentLoadError({
   error: unknown
   onRetry: () => void
 }) {
+  if (error instanceof ApiError && error.code === 'document_file_missing') {
+    return (
+      <EmptyState
+        title="This document's file is missing"
+        body="The stored file for this version is no longer available. Upload the document again, or restore an earlier version from History."
+      />
+    )
+  }
   const requestId = error instanceof ApiError ? error.requestId : undefined
   return (
     <EmptyState

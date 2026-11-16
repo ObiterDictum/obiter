@@ -7,6 +7,7 @@ import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from './api'
 import {
   guardAuth,
+  prefetchDocumentRouteData,
   prefetchHomeData,
   prefetchVerifyData,
 } from './route-loaders'
@@ -198,5 +199,76 @@ describe('prefetchVerifyData', () => {
       const opts = (error as { options?: { to?: string } }).options
       return opts?.to === '/sign-in'
     })
+  })
+})
+
+describe('prefetchDocumentRouteData', () => {
+  const detail = (fileType: string, documentStatus = 'ready') => ({
+    document: { currentVersion: { fileType, documentStatus } },
+  })
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('resolves without waiting for the document or matter requests', async () => {
+    const queryClient = new QueryClient()
+    vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(ORG_ME)
+    vi.spyOn(queryClient, 'fetchQuery').mockReturnValue(new Promise(() => {}))
+    vi.spyOn(queryClient, 'prefetchQuery').mockReturnValue(
+      new Promise(() => {}),
+    )
+
+    await expect(
+      prefetchDocumentRouteData(queryClient, 'mtr_1', 'doc_1'),
+    ).resolves.toBeUndefined()
+  })
+
+  it('starts the model request for a ready Word document', async () => {
+    const queryClient = new QueryClient()
+    vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(ORG_ME)
+    vi.spyOn(queryClient, 'fetchQuery').mockResolvedValue(detail('docx'))
+    const prefetchQuery = vi
+      .spyOn(queryClient, 'prefetchQuery')
+      .mockResolvedValue(undefined)
+
+    await prefetchDocumentRouteData(queryClient, 'mtr_1', 'doc_1')
+    await settle()
+
+    expect(prefetchQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ['documents', 'model', 'doc_1', 'current'],
+        staleTime: 30_000,
+      }),
+    )
+  })
+
+  it('skips the model request for a PDF or a document still processing', async () => {
+    for (const result of [detail('pdf'), detail('docx', 'processing')]) {
+      const queryClient = new QueryClient()
+      vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(ORG_ME)
+      vi.spyOn(queryClient, 'fetchQuery').mockResolvedValue(result)
+      const prefetchQuery = vi
+        .spyOn(queryClient, 'prefetchQuery')
+        .mockResolvedValue(undefined)
+
+      await prefetchDocumentRouteData(queryClient, 'mtr_1', 'doc_1')
+      await settle()
+
+      expect(prefetchQuery).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          queryKey: ['documents', 'model', 'doc_1', 'current'],
+        }),
+      )
+    }
+  })
+
+  it('redirects to /sign-in when the current-user fetch is unauthenticated', async () => {
+    const queryClient = new QueryClient()
+    vi.spyOn(queryClient, 'ensureQueryData').mockRejectedValueOnce(
+      new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_8'),
+    )
+
+    await expectRejection(
+      prefetchDocumentRouteData(queryClient, 'mtr_1', 'doc_1'),
+      (error: unknown) => isRedirect(error),
+    )
   })
 })

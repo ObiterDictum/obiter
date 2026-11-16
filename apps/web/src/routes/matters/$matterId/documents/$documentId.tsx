@@ -1,9 +1,6 @@
 import {
   DocumentDetailLayoutView,
-  currentUserQueryOptions,
-  documentQueryOptions,
-  guardAuth,
-  matterQueryOptions,
+  prefetchDocumentRouteData,
   useMatterTabsOptional,
   useRecordDocumentOpen,
 } from '@obiter/app-shell'
@@ -13,19 +10,12 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 export const Route = createFileRoute(
   '/matters/$matterId/documents/$documentId',
 )({
-  loader: async ({ context, params }) => {
-    await guardAuth(context.queryClient, () =>
-      context.queryClient.ensureQueryData(currentUserQueryOptions()),
-    )
-    await guardAuth(context.queryClient, () =>
-      context.queryClient.prefetchQuery(
-        documentQueryOptions(params.documentId),
-      ),
-    )
-    await guardAuth(context.queryClient, () =>
-      context.queryClient.prefetchQuery(matterQueryOptions(params.matterId)),
-    )
-  },
+  loader: ({ context, params }) =>
+    prefetchDocumentRouteData(
+      context.queryClient,
+      params.matterId,
+      params.documentId,
+    ),
   component: DocumentDetailRouteComponent,
 })
 

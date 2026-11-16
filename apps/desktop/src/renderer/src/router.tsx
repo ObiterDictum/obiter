@@ -12,12 +12,12 @@ import {
   caseLawDocumentQueryOptions,
   legislationProvisionQueryOptions,
   createCanonicalCasePath,
-  documentQueryOptions,
   guardAuth,
   matterDocumentsQueryOptions,
   matterQueryOptions,
   mattersListQueryOptions,
   currentUserQueryOptions,
+  prefetchDocumentRouteData,
   prefetchHomeData,
   prefetchInviteAcceptData,
   prefetchVerifyData,
@@ -256,19 +256,12 @@ const matterDetailRoute = createRoute({
 const documentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId/documents/$documentId',
-  loader: async ({ context, params }) => {
-    await guardAuth(context.queryClient, () =>
-      context.queryClient.ensureQueryData(currentUserQueryOptions()),
-    )
-    await guardAuth(context.queryClient, () =>
-      context.queryClient.prefetchQuery(
-        documentQueryOptions(params.documentId),
-      ),
-    )
-    await guardAuth(context.queryClient, () =>
-      context.queryClient.prefetchQuery(matterQueryOptions(params.matterId)),
-    )
-  },
+  loader: ({ context, params }) =>
+    prefetchDocumentRouteData(
+      context.queryClient,
+      params.matterId,
+      params.documentId,
+    ),
   component: DesktopDocumentDetailRoute,
 })
 

@@ -23,6 +23,7 @@ export const API_ERROR_CODES = [
   'matter_share_not_found',
   'document_not_found',
   'document_version_not_found',
+  'document_file_missing',
   'comment_anchor_unresolved',
   'comment_client_key_conflict',
   'output_not_found',
