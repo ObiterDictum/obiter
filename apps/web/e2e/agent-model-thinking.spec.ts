@@ -94,8 +94,7 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
   ).toBeVisible()
   await shot('matter-panel-popover')
   await page.keyboard.press('Escape')
-  await page.goto('/settings?tab=agent')
-  await page.getByRole('button', { name: 'Agent', exact: true }).click()
+  await page.goto('/settings?section=agent')
   await expect(
     page.getByRole('combobox', { name: 'Default thinking', exact: true }),
   ).toBeVisible()

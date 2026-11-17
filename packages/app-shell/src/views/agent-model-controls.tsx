@@ -84,7 +84,7 @@ export function AgentModelControls({
     <Popover>
       <PopoverTrigger
         disabled={disabled}
-        className="rounded-md px-2 py-1 text-caption text-muted hover:bg-hover disabled:opacity-50"
+        className="min-w-0 truncate rounded-md px-2 py-1 text-caption text-muted hover:bg-hover disabled:opacity-50"
       >
         {model.label} · {thinking}
       </PopoverTrigger>
