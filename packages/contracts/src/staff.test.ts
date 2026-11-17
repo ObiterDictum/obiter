@@ -5,6 +5,9 @@ import {
   staffFeedbackQuerySchema,
   staffUsageQuerySchema,
   staffUsageResponseSchema,
+  staffBuzzAgents,
+  staffBuzzKeyInputSchema,
+  staffBuzzRolesInputSchema,
 } from './staff'
 
 describe('staff decisions', () => {
@@ -64,5 +67,44 @@ describe('staff feedback', () => {
     expect(staffFeedbackHandledInputSchema.parse({ handled: true })).toEqual({
       handled: true,
     })
+  })
+})
+
+describe('staff Buzz access', () => {
+  it('gives every staff member the staff agents and roles the rest', () => {
+    expect(staffBuzzAgents([])).toEqual([
+      'Clerk',
+      'Reporter',
+      'Scribe',
+      'Examiner',
+    ])
+    expect(staffBuzzAgents(['operations', 'corpus'])).toEqual([
+      'Clerk',
+      'Reporter',
+      'Scribe',
+      'Examiner',
+      'Registrar',
+      'Archivist',
+    ])
+  })
+
+  it('accepts a pasted npub and refuses anything else', () => {
+    const npub =
+      'npub1gutgpl9302edr9ch7mg90z5fxk962mgkdx7xxcyu57fr5a7j0ydqvucky8'
+    expect(
+      staffBuzzKeyInputSchema.parse({ npub: ` ${npub.toUpperCase()} ` }).npub,
+    ).toBe(npub)
+    expect(
+      staffBuzzKeyInputSchema.safeParse({ npub: 'nsec1abc' }).success,
+    ).toBe(false)
+  })
+
+  it('accepts only known roles', () => {
+    expect(
+      staffBuzzRolesInputSchema.safeParse({ roles: ['operations'] }).success,
+    ).toBe(true)
+    expect(
+      staffBuzzRolesInputSchema.safeParse({ roles: ['owner'] }).success,
+    ).toBe(false)
   })
 })
