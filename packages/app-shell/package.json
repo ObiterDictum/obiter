@@ -22,7 +22,8 @@
     "./views/staff-feedback": "./src/views/staff-feedback.tsx",
     "./views/agent-window": "./src/views/agent-window.tsx",
     "./error-reporting": "./src/error-reporting.ts",
-    "./views/staff-errors": "./src/views/staff-errors.tsx"
+    "./views/staff-errors": "./src/views/staff-errors.tsx",
+    "./views/staff-buzz": "./src/views/staff-buzz.tsx"
   },
   "dependencies": {
     "@obiter/contracts": "workspace:*",

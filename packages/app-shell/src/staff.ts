@@ -14,10 +14,16 @@ import {
   staffUsageResponseSchema,
   staffFeedbackListResponseSchema,
   staffFeedbackHandledResponseSchema,
+  staffBuzzResponseSchema,
+  staffBuzzInviteResponseSchema,
   type MeResponse,
   type StaffFeedbackHandledResponse,
   type StaffFeedbackListResponse,
   type StaffFeedbackQuery,
+  type StaffBuzzKeyInput,
+  type StaffBuzzInviteResponse,
+  type StaffBuzzResponse,
+  type StaffBuzzRole,
 } from '@obiter/contracts'
 import { apiFetch, ApiError } from './api'
 
@@ -150,5 +156,84 @@ export function staffFeedbackHandledMutationOptions(): MutationOptions<
       void queryClient.invalidateQueries({ queryKey: ['staff', 'feedback'] })
       void queryClient.invalidateQueries({ queryKey: ['staff', 'overview'] })
     },
+  }
+}
+
+const STAFF_BUZZ_QUERY_KEY = ['staff', 'buzz'] as const
+
+export function staffBuzzQueryOptions() {
+  return queryOptions({
+    queryKey: STAFF_BUZZ_QUERY_KEY,
+    queryFn: async () =>
+      staffBuzzResponseSchema.parse(await apiFetch('/api/staff/buzz')),
+  })
+}
+
+export function staffBuzzInviteMutationOptions(): MutationOptions<
+  StaffBuzzInviteResponse,
+  ApiError,
+  void
+> {
+  return {
+    mutationFn: async () =>
+      staffBuzzInviteResponseSchema.parse(
+        await apiFetch('/api/staff/buzz/invite', { method: 'POST' }),
+      ),
+  }
+}
+
+export function staffBuzzKeyMutationOptions(): MutationOptions<
+  StaffBuzzResponse,
+  ApiError,
+  StaffBuzzKeyInput
+> {
+  const queryClient = useQueryClient()
+  return {
+    mutationFn: async (input) =>
+      staffBuzzResponseSchema.parse(
+        await apiFetch('/api/staff/buzz/key', {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        }),
+      ),
+    onSuccess: (data) => queryClient.setQueryData(STAFF_BUZZ_QUERY_KEY, data),
+  }
+}
+
+export function staffBuzzUnlinkMutationOptions(): MutationOptions<
+  StaffBuzzResponse,
+  ApiError,
+  void
+> {
+  const queryClient = useQueryClient()
+  return {
+    mutationFn: async () =>
+      staffBuzzResponseSchema.parse(
+        await apiFetch('/api/staff/buzz/key', { method: 'DELETE' }),
+      ),
+    onSuccess: (data) => queryClient.setQueryData(STAFF_BUZZ_QUERY_KEY, data),
+  }
+}
+
+export interface StaffBuzzRolesVariables {
+  userId: string
+  roles: StaffBuzzRole[]
+}
+
+export function staffBuzzRolesMutationOptions(): MutationOptions<
+  StaffBuzzResponse,
+  ApiError,
+  StaffBuzzRolesVariables
+> {
+  const queryClient = useQueryClient()
+  return {
+    mutationFn: async (input) =>
+      staffBuzzResponseSchema.parse(
+        await apiFetch(`/api/staff/buzz/members/${input.userId}/roles`, {
+          method: 'PUT',
+          body: JSON.stringify({ roles: input.roles }),
+        }),
+      ),
+    onSuccess: (data) => queryClient.setQueryData(STAFF_BUZZ_QUERY_KEY, data),
   }
 }
