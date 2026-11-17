@@ -194,7 +194,12 @@ export function AgentComposer({
                   : 'Set up a model and API key in Settings → Agent.'}
             </p>
           )}
-          <p id={`${id}-reason`} className="text-caption text-muted">
+          <p
+            id={`${id}-reason`}
+            className={
+              matterId !== null ? 'sr-only' : 'text-caption text-muted'
+            }
+          >
             {live ? (
               'Wait for the current answer before sending another message.'
             ) : (
