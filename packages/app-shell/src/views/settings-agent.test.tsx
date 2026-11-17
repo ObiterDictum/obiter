@@ -59,6 +59,8 @@ beforeEach(() => {
         input: Parameters<typeof fetch>[0],
         init?: Parameters<typeof fetch>[1],
       ) => {
+        if (String(input).endsWith('/api/agent/connections'))
+          return json({ connections: [] })
         if (!String(input).endsWith('/api/organisations/org_1/agent-settings'))
           return json(
             { error: { code: 'not_found', message: 'No.', requestId: 'r' } },
