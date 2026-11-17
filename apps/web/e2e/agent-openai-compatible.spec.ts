@@ -33,6 +33,7 @@ test('compatible connections discover models, retry unsupported thinking and per
     .getByLabel('Base URL', { exact: true })
     .fill('http://127.0.0.1:8967/v1')
   await page
+    .getByRole('dialog')
     .getByLabel('API key', { exact: true })
     .fill('synthetic-provider-secret')
   await page
@@ -52,6 +53,7 @@ test('compatible connections discover models, retry unsupported thinking and per
     .getByLabel('Base URL', { exact: true })
     .fill('http://127.0.0.1:8967/v1')
   await page
+    .getByRole('dialog')
     .getByLabel('API key', { exact: true })
     .fill('synthetic-provider-secret')
   await page

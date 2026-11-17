@@ -4,7 +4,7 @@ export const agentThinkingLevelSchema = z.enum(['off', 'low', 'medium', 'high'])
 export type AgentThinkingLevel = z.infer<typeof agentThinkingLevelSchema>
 export const agentAvailableModelSchema = z
   .object({
-    id: z.string().min(1).max(128),
+    id: z.string().min(1).max(200),
     source: z.enum(['anthropic', 'connection']).optional(),
     recommended: z.boolean().optional(),
     provider: z.enum(['anthropic', 'openai_compatible']),
