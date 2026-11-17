@@ -48,7 +48,7 @@ export function AgentModelControls({
         <CaretDown size={12} aria-hidden className="shrink-0" />
       </PopoverTrigger>
       <PopoverPortal>
-        <PopoverPositioner side="top" align="start" sideOffset={8}>
+        <PopoverPositioner side="bottom" align="start" sideOffset={8}>
           <PopoverPopup
             aria-label="Model and thinking"
             className="flex w-72 flex-col p-2"
