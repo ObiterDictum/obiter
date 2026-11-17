@@ -2,7 +2,7 @@ import {
   Folders,
   GearSix,
   Lock,
-  Robot,
+  Ratio,
   ShareNetwork,
   User,
   Users,
@@ -63,7 +63,7 @@ export const SETTINGS_SECTIONS = [
   {
     id: 'agent',
     label: 'Agent',
-    icon: Robot,
+    icon: Ratio,
     description:
       "The model provider your organisation's agent uses and what it may send.",
     available: inOrganisation,

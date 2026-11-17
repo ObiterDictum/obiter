@@ -1,4 +1,4 @@
-import { Robot } from '@obiter/ui/icons'
+import { Ratio } from '@obiter/ui/icons'
 import { PagePanelToggle } from '../page-panel'
 import { useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -28,7 +28,7 @@ export function AgentWindowView() {
         {sessionId ? null : (
           <header className="mb-6 mt-auto flex flex-col items-center gap-3 text-center">
             <div className="grid size-12 place-items-center rounded-full bg-fill text-muted">
-              <Robot size={24} aria-hidden />
+              <Ratio size={24} aria-hidden />
             </div>
             <h1 className="text-title text-ink">
               What would you like to research?

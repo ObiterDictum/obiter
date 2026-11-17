@@ -5,7 +5,7 @@ import { createAccount } from './document-journey'
 import { signIn } from './e13-support'
 import { openMatter } from './support'
 
-test('model and thinking selection is sent, recorded, remembered and shown on answers', async ({
+test('one menu carries the model and Think longer, and the answer records the level', async ({
   page,
   request,
 }) => {
@@ -22,13 +22,34 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
         path: `${directory}/${name}.png`,
       })
   }
+  const workspace = page.getByRole('navigation', { name: 'Workspace' })
+  await shot('sidebar-agent-active')
+  if (directory)
+    await workspace.screenshot({
+      animations: 'disabled',
+      path: `${directory}/sidebar-icon-active.png`,
+    })
   await page.getByRole('button', { name: 'Test model', exact: true }).click()
-  await expect(agentModelOption(page, /Test model/)).toBeVisible()
-  await shot('composer-model-menu')
+  await expect(
+    page.getByRole('dialog', { name: 'Model and thinking' }),
+  ).toBeVisible()
+  await expect(agentModelOption(page, /Test model/)).toBeChecked()
+  await shot('composer-menu-light')
+  const thinkLonger = page.getByRole('switch', { name: 'Think longer' })
+  await expect(thinkLonger).not.toBeChecked()
+  await thinkLonger.click()
+  await expect(thinkLonger).toBeChecked()
+  await expect(
+    page.getByRole('dialog', { name: 'Model and thinking' }),
+  ).toBeVisible()
+  await shot('composer-menu-think-longer')
   await page.keyboard.press('Escape')
-  await page.getByRole('combobox', { name: 'Thinking', exact: true }).click()
-  await shot('thinking-control')
-  await page.getByRole('option', { name: 'High thinking', exact: true }).click()
+  await expect(
+    page.getByRole('button', {
+      name: 'Test model · Think longer',
+      exact: true,
+    }),
+  ).toBeVisible()
   await page
     .getByRole('textbox', { name: 'Message' })
     .fill('Explain the duty of care')
@@ -42,7 +63,7 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
     thinking: 'high',
   })
   await expect(
-    page.getByText('Test model · Thinking high', { exact: true }),
+    page.getByText('Test model · Thought longer', { exact: true }),
   ).toBeVisible({ timeout: 60000 })
   await expect(page.getByRole('list', { name: 'Sources' })).toBeVisible({
     timeout: 60000,
@@ -50,7 +71,7 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
   await expect(
     page.getByRole('button', { name: 'Send', exact: true }),
   ).toBeDisabled()
-  await shot('turn-footer')
+  await shot('answer-footer')
   const id = new URL(page.url()).pathname.split('/').at(-1)
   const detail = await (
     await page.request.get(`/api/agent-sessions/${id}`)
@@ -79,24 +100,41 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
   })
   await page.reload()
   await expect(
-    page.getByRole('combobox', { name: 'Thinking', exact: true }),
-  ).toContainText('High')
+    page.getByRole('button', {
+      name: 'Test model · Think longer',
+      exact: true,
+    }),
+  ).toBeVisible()
   await page.getByRole('button', { name: 'Switch to dark theme' }).click()
-  await shot('dark-composer')
-  await page.getByRole('button', { name: 'Switch to light theme' }).click()
-  await openMatter(page, 'Model selection synthetic matter')
-  await page.getByRole('button', { name: 'Show agent panel' }).click()
-  await page
-    .getByRole('button', { name: 'Test model · medium thinking', exact: true })
-    .click()
+  await page.getByRole('button', { name: 'Test model · Think longer' }).click()
   await expect(
     page.getByRole('dialog', { name: 'Model and thinking' }),
   ).toBeVisible()
-  await shot('matter-panel-popover')
+  await shot('composer-menu-dark')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Switch to light theme' }).click()
+  await openMatter(page, 'Model selection synthetic matter')
+  await shot('sidebar-agent-normal')
+  if (directory)
+    await workspace.screenshot({
+      animations: 'disabled',
+      path: `${directory}/sidebar-icon-normal.png`,
+    })
+  await page.getByRole('button', { name: 'Show agent panel' }).click()
+  await page.getByRole('button', { name: 'Test model', exact: true }).click()
+  await expect(
+    page.getByRole('dialog', { name: 'Model and thinking' }),
+  ).toBeVisible()
+  await shot('matter-panel-menu')
   await page.keyboard.press('Escape')
   await page.goto('/settings?section=agent')
-  await expect(
-    page.getByRole('combobox', { name: 'Default thinking', exact: true }),
-  ).toBeVisible()
+  await page.getByLabel('Model', { exact: true }).fill('e2e-scripted')
+  const thinkLongerByDefault = page.getByRole('switch', {
+    name: 'Think longer by default',
+    exact: true,
+  })
+  await expect(thinkLongerByDefault).not.toBeChecked()
+  await thinkLongerByDefault.click()
+  await expect(thinkLongerByDefault).toBeChecked()
   await shot('settings-agent')
 })

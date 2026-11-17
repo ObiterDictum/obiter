@@ -7,8 +7,13 @@ import {
   type OrganisationAgentSettings,
   type AgentThinkingLevel,
 } from '@obiter/contracts'
-import { Button, Input, Select } from '@obiter/ui'
-import { agentModelsQueryOptions } from '../agent-models'
+import { Button, Input, Select, Switch } from '@obiter/ui'
+import {
+  agentModelsQueryOptions,
+  offersThinking,
+  thinksLonger,
+  thinkingFor,
+} from '../agent-models'
 import { useUpdateOrganisationAgentSettings } from '../agent-runs'
 import { formatDate } from '../format'
 import { ErrorNotice } from './settings-fields'
@@ -41,6 +46,9 @@ export function AgentModelForm({
   const [key, setKey] = useState('')
   const [replacing, setReplacing] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
+  const selectedModel = catalogue.data?.models.find(
+    (model) => model.id === modelId,
+  )
   const stored =
     settings.keyLastFour && settings.keySetAt
       ? { lastFour: settings.keyLastFour, setAt: settings.keySetAt }
@@ -100,24 +108,6 @@ export function AgentModelForm({
           disabled={busy}
         />
       ) : null}
-      <Select
-        label="Default thinking"
-        value={thinking}
-        options={(
-          catalogue.data?.models.find((model) => model.id === modelId)
-            ?.thinkingLevels ?? ['off']
-        ).map((value) => ({ value, label: value }))}
-        onValueChange={(value) => {
-          if (
-            value === 'off' ||
-            value === 'low' ||
-            value === 'medium' ||
-            value === 'high'
-          )
-            setThinking(value)
-        }}
-        disabled={busy}
-      />
       <Input
         label="Model"
         value={modelId}
@@ -152,6 +142,25 @@ export function AgentModelForm({
         }
         onChange={(event) => setSnapshot(event.target.value)}
       />
+      {selectedModel && offersThinking(selectedModel) ? (
+        <div className="flex items-center gap-3">
+          <span className="flex min-w-0 flex-col">
+            <span className="text-meta text-ink">Think longer by default</span>
+            <span className="text-caption text-muted">
+              Every new conversation starts slower and more careful.
+            </span>
+          </span>
+          <Switch
+            label="Think longer by default"
+            checked={thinksLonger(thinking)}
+            disabled={busy}
+            className="ml-auto shrink-0"
+            onCheckedChange={(checked) =>
+              setThinking(thinkingFor(selectedModel, checked))
+            }
+          />
+        </div>
+      ) : null}
       {stored && !replacing ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-meta text-ink">

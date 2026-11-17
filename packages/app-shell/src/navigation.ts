@@ -4,7 +4,7 @@ import {
   MagnifyingGlass,
   PencilSimple,
   ShieldCheck,
-  Robot,
+  Ratio,
 } from '@obiter/ui/icons/shell'
 import type { ReactNode } from 'react'
 
@@ -30,7 +30,7 @@ export const MODULES: ModuleItem[] = [
   { id: 'search', label: 'Search', to: '/search', icon: MagnifyingGlass },
   { id: 'verify', label: 'Verify', to: '/verify', icon: ShieldCheck },
   { id: 'redact', label: 'Redact', to: '/redact', icon: PencilSimple },
-  { id: 'agent', label: 'Agent', to: '/agent', icon: Robot },
+  { id: 'agent', label: 'Agent', to: '/agent', icon: Ratio },
 ]
 
 export function resolveSection(path: string): ShellSection {

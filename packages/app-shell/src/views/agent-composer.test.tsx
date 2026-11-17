@@ -13,6 +13,23 @@ import { conversationTitle } from '../agent-sessions'
 
 let calls: Array<{ url: string; body: unknown }> = []
 let conflict = false
+const sonnet = {
+  id: 'claude-sonnet-5-5',
+  provider: 'anthropic',
+  label: 'Claude Sonnet 5.5',
+  description: 'Balanced research',
+  thinkingLevels: ['off', 'low', 'medium', 'high'],
+  defaultThinking: 'medium',
+} as const
+const opus = {
+  id: 'claude-opus-5-5',
+  provider: 'anthropic',
+  label: 'Claude Opus 5.5',
+  description: 'Deep analysis',
+  thinkingLevels: ['low', 'medium', 'high'],
+  defaultThinking: 'medium',
+} as const
+let models: Array<typeof sonnet | typeof opus> = [sonnet]
 function setup(matterId: string | null = null, live = false) {
   calls = []
   spyOn(globalThis, 'fetch').mockImplementation(
@@ -21,16 +38,7 @@ function setup(matterId: string | null = null, live = false) {
         const url = String(input)
         if (url.endsWith('/api/agent/models'))
           return Response.json({
-            models: [
-              {
-                id: 'claude-sonnet-5-5',
-                provider: 'anthropic',
-                label: 'Sonnet',
-                description: 'Balanced research',
-                thinkingLevels: ['off', 'low', 'medium', 'high'],
-                defaultThinking: 'medium',
-              },
-            ],
+            models,
             default: 'claude-sonnet-5-5',
             defaultThinking: 'medium',
           })
@@ -68,6 +76,7 @@ afterEach(() => {
   cleanup()
   mock.restore()
   conflict = false
+  models = [sonnet]
 })
 it('creates a private session and posts its first turn before handing off to the thread', async () => {
   const sent = setup()
@@ -100,10 +109,15 @@ it('creates a private session and posts its first turn before handing off to the
     },
   ])
 })
-it('disables messages while a run is live and explains why', () => {
+it('disables messages while a run is live and explains why', async () => {
   setup(null, true)
   expect(
     screen.getByRole('textbox', { name: 'Message' }).hasAttribute('disabled'),
+  ).toBe(true)
+  expect(
+    (await screen.findByRole('button', { name: 'Sonnet 5.5' })).hasAttribute(
+      'disabled',
+    ),
   ).toBe(true)
   expect(screen.getByText(/Wait for the current answer/)).toBeTruthy()
 })
@@ -134,6 +148,45 @@ it('shows conflicts inline and reuses the turn key on retry without recreating t
   expect(calls).toHaveLength(3)
   expect(calls[2]?.body).toEqual(first)
 })
+it('opens one menu with a model row and a Think longer switch that leaves the menu open', async () => {
+  setup()
+  fireEvent.click(await screen.findByRole('button', { name: 'Sonnet 5.5' }))
+  const menu = await screen.findByRole('dialog', {
+    name: 'Model and thinking',
+  })
+  expect(
+    screen
+      .getByRole('radio', { name: /Sonnet 5.5/ })
+      .getAttribute('aria-checked'),
+  ).toBe('true')
+  const toggle = screen.getByRole('switch', { name: 'Think longer' })
+  expect(toggle.getAttribute('aria-checked')).toBe('false')
+  fireEvent.click(toggle)
+  expect(toggle.getAttribute('aria-checked')).toBe('true')
+  expect(menu.isConnected).toBe(true)
+  expect(
+    screen.getByRole('button', { name: 'Sonnet 5.5 · Think longer' }),
+  ).toBeTruthy()
+})
+
+it('keeps Think longer on when the model changes and sends high for the new model', async () => {
+  models = [sonnet, opus]
+  const sent = setup()
+  fireEvent.click(await screen.findByRole('button', { name: 'Sonnet 5.5' }))
+  fireEvent.click(await screen.findByRole('switch', { name: 'Think longer' }))
+  fireEvent.click(await screen.findByRole('radio', { name: /Opus 5.5/ }))
+  await screen.findByRole('button', { name: 'Opus 5.5 · Think longer' })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
+    target: { value: 'Explain negligence' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(sent).toHaveBeenCalledWith('s1'))
+  expect(calls[0]?.body).toMatchObject({
+    model: 'claude-opus-5-5',
+    thinking: 'high',
+  })
+})
+
 it('trims conversation titles at a word boundary within eighty characters', () => {
   expect(conversationTitle('  short title  ')).toBe('short title')
   expect(conversationTitle('word '.repeat(20))).toBe(

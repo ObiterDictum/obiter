@@ -7,7 +7,7 @@ import {
   TooltipTrigger,
   cn,
 } from '@obiter/ui'
-import { ChatText, Clock, Robot, ShieldCheck } from '@obiter/ui/icons'
+import { ChatText, Clock, Ratio, ShieldCheck } from '@obiter/ui/icons'
 import { Suspense, lazy, type ComponentType, type ReactNode } from 'react'
 import { documentIdFromPath } from './navigation'
 import { RightSlotOutlet } from './right-slot-portal'
@@ -41,7 +41,7 @@ const RIGHT_SLOT_TABS: readonly RightSlotTab[] = [
   {
     id: 'agent',
     label: 'Agent',
-    icon: Robot,
+    icon: Ratio,
     appliesTo: () => true,
     content: AgentTab,
   },
