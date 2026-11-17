@@ -215,3 +215,33 @@ limit. See [Anthropic thinking](https://platform.claude.com/docs/en/build-with-c
 
 This covers Anthropic with the organisation's own key and the stand-in.
 Managed EU models and other providers arrive with the harness gateway.
+
+## OpenAI-compatible connections
+
+Owners and admins can add named OpenAI-compatible connections alongside the
+Anthropic key, edit or remove them, and test their `/models` endpoint. Keys are
+write-only and encrypted; settings show only the last four characters. Model ids
+may be supplied explicitly, otherwise discovery is cached for ten minutes.
+The menu identifies each connection model by `connectionId:modelId`, with the raw
+model id separate. Models include `source` (`anthropic` or `connection`) and
+`recommended: false`. A future Obiter group can precede provider groups.
+
+Only HTTPS public endpoints are allowed. DNS addresses are checked at save and
+request time, requests pin the checked address, redirects are refused, and calls
+have deadlines and response-size limits. Explicit disposable local end-to-end
+runs can enable a loopback-only HTTP exception; production cannot enable it.
+
+Off omits reasoning effort. Other levels send `reasoning_effort` when supported.
+A 400 naming that parameter retries once without it and records Off. Connections
+without reasoning support offer only Off. The answer footer identifies the
+connection, model and actual thinking level.
+
+Obiter can't check what this provider keeps. Only connect providers with zero
+data retention if matter documents may be sent. The existing organisation
+permission to send matter documents applies to every connection.
+
+Per-call usage is stored in database columns with provider, connection identity
+and name, raw model, actual thinking, prompt/completion/reasoning tokens and
+request/completion timestamps. Session detail exposes these records. First-token
+time for the non-streaming compatible transport measures the first response body
+byte, not model generation. Managed models, curation and billing are still to come.
