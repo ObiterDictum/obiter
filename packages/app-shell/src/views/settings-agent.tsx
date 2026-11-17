@@ -1,4 +1,5 @@
-import { AgentModelForm } from './settings-agent-model'
+import { AgentConnections } from './settings-agent-connections'
+import { AnthropicBlock } from './settings-agent-anthropic'
 import {
   AGENT_PROVIDERS,
   type MeResponse,
@@ -51,28 +52,17 @@ export function OrganisationAgentSettingsSection({
       className="flex flex-col gap-8"
     >
       <div className="flex max-w-[480px] flex-col gap-6">
-        <SectionHeading
-          id="settings-agent-heading"
-          level="h3"
-          title="Model"
-          description="The provider account your organisation's agent runs on."
-        />
         {settings.isPending ? (
           <Skeleton className="h-10" />
         ) : settings.error ? (
           <ErrorNotice message={settings.error.message} />
         ) : canChange ? (
           <>
-            <AgentModelForm
-              key={[
-                settings.data.model?.provider,
-                settings.data.model?.modelId,
-                settings.data.model?.snapshot,
-                settings.data.keySetAt,
-              ].join('|')}
+            <AnthropicBlock
               organisationId={organisationId}
               settings={settings.data}
             />
+            <AgentConnections organisationId={organisationId} />
             <div className="flex flex-col gap-4 border-t border-line pt-6">
               <SectionHeading
                 id="settings-agent-sharing-heading"

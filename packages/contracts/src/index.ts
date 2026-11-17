@@ -514,3 +514,5 @@ export {
 } from './legal-search'
 
 export * from './error-reports'
+
+export * from './agent-connections'

@@ -1,5 +1,5 @@
 import type { AgentAvailableModel, AgentThinkingLevel } from '@obiter/contracts'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
   Popover,
   PopoverPortal,
@@ -54,42 +54,64 @@ export function AgentModelControls({
             className="flex w-72 flex-col p-2"
           >
             <div role="radiogroup" aria-label="Model" className="flex flex-col">
-              {models.map((option) => {
-                const selected = option.id === model.id
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => {
-                      onChange(option.id, thinkingForModel(option, thinking))
-                      setOpen(false)
-                    }}
-                    className={cn(
-                      'flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring',
-                      selected && 'bg-brand-soft',
-                    )}
-                  >
-                    <span className="flex min-w-0 flex-col">
-                      <span className="text-item text-ink">
-                        {shortModelLabel(option.label)}
-                      </span>
-                      <span className="text-caption text-muted">
-                        {option.description}
-                      </span>
-                    </span>
-                    {selected ? (
-                      <Check
-                        size={14}
-                        weight="bold"
-                        aria-hidden
-                        className="ml-auto shrink-0 text-brand"
-                      />
-                    ) : null}
-                  </button>
+              {[...models]
+                .sort((a, b) =>
+                  a.group === 'Obiter'
+                    ? -1
+                    : b.group === 'Obiter'
+                      ? 1
+                      : (a.group ?? 'Anthropic').localeCompare(
+                          b.group ?? 'Anthropic',
+                        ),
                 )
-              })}
+                .map((option, index, ordered) => {
+                  const selected = option.id === model.id
+                  return (
+                    <Fragment key={option.id}>
+                      {index === 0 ||
+                      ordered[index - 1]?.group !== option.group ? (
+                        <span className="px-2 pb-1 pt-2 text-caption text-muted">
+                          {option.group ?? 'Anthropic'}
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => {
+                          onChange(
+                            option.id,
+                            thinkingForModel(option, thinking),
+                          )
+                          setOpen(false)
+                        }}
+                        className={cn(
+                          'flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring',
+                          selected && 'bg-brand-soft',
+                        )}
+                      >
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-item text-ink">
+                            {shortModelLabel(option.label)}
+                          </span>
+                          {option.description !== option.group ? (
+                            <span className="text-caption text-muted">
+                              {option.description}
+                            </span>
+                          ) : null}
+                        </span>
+                        {selected ? (
+                          <Check
+                            size={14}
+                            weight="bold"
+                            aria-hidden
+                            className="ml-auto shrink-0 text-brand"
+                          />
+                        ) : null}
+                      </button>
+                    </Fragment>
+                  )
+                })}
             </div>
             {offersThinking(model) ? (
               <>
