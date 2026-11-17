@@ -28,9 +28,11 @@ type FieldErrors = Partial<Record<'modelId' | 'snapshot' | 'key', string>>
 export function AgentModelForm({
   organisationId,
   settings,
+  onDone,
 }: {
   organisationId: string
   settings: OrganisationAgentSettings
+  onDone?: () => void
 }) {
   const save = useUpdateOrganisationAgentSettings(organisationId)
   const remove = useUpdateOrganisationAgentSettings(organisationId)
@@ -73,7 +75,7 @@ export function AgentModelForm({
       return
     }
     setErrors({})
-    save.mutate(parsed.data)
+    save.mutate(parsed.data, { onSuccess: () => onDone?.() })
   }
 
   return (
@@ -205,6 +207,16 @@ export function AgentModelForm({
         <Button type="submit" loading={save.isPending} disabled={busy}>
           Save model
         </Button>
+        {onDone ? (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            onClick={onDone}
+          >
+            Cancel
+          </Button>
+        ) : null}
         {replacing ? (
           <Button
             type="button"

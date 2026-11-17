@@ -94,9 +94,11 @@ export function AgentModelControls({
                           <span className="text-item text-ink">
                             {shortModelLabel(option.label)}
                           </span>
-                          <span className="text-caption text-muted">
-                            {option.description}
-                          </span>
+                          {option.description !== option.group ? (
+                            <span className="text-caption text-muted">
+                              {option.description}
+                            </span>
+                          ) : null}
                         </span>
                         {selected ? (
                           <Check

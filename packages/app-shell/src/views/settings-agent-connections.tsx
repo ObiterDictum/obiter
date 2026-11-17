@@ -4,6 +4,7 @@ import type { AgentConnection } from '@obiter/contracts'
 import {
   Button,
   Dialog,
+  DialogClose,
   DialogContent,
   DialogTitle,
   DialogDescription,
@@ -53,13 +54,15 @@ export function AgentConnections({
       {connections.data?.connections.map((connection) => (
         <div
           key={connection.id}
-          className="flex flex-col gap-2 border-b border-line pb-4"
+          className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4"
         >
-          <div className="text-item text-ink">{connection.name}</div>
-          <div className="text-caption text-muted">
-            {new URL(connection.baseUrl).host} · Key ending{' '}
-            {connection.keyLastFour} ·{' '}
-            {`${connection.modelCount ?? connection.modelIds.length} ${(connection.modelCount ?? connection.modelIds.length) === 1 ? 'model' : 'models'}`}
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="text-item text-ink">{connection.name}</div>
+            <div className="text-caption text-muted">
+              {new URL(connection.baseUrl).host} · Key ending{' '}
+              {connection.keyLastFour} ·{' '}
+              {`${connection.modelCount ?? connection.modelIds.length} ${(connection.modelCount ?? connection.modelIds.length) === 1 ? 'model' : 'models'}`}
+            </div>
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setEditing(connection)}>
@@ -198,6 +201,7 @@ function ConnectionForm({
         </Switch>
         {save.error ? <ErrorNotice message={save.error.message} /> : null}
         <DialogFooter>
+          <DialogClose render={<Button variant="ghost">Cancel</Button>} />
           <Button type="submit" disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save connection'}
           </Button>

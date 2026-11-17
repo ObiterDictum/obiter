@@ -100,6 +100,12 @@ function renderSection(role: UserRole) {
   return screen.findByRole('region', { name: 'Agent' })
 }
 
+async function renderEditing(role: UserRole) {
+  const section = await renderSection(role)
+  fireEvent.click(await within(section).findByRole('button', { name: 'Edit' }))
+  return section
+}
+
 describe('settings agent model, empty', () => {
   it('an owner with nothing configured is asked for a model and a key', async () => {
     const section = await renderSection('owner')
@@ -156,8 +162,18 @@ describe('settings agent model, stored key', () => {
     current = STORED
   })
 
-  it('shows only the last four characters and the date the key was set', async () => {
+  it('a configured account shows a one-line summary until Edit', async () => {
     const section = await renderSection('owner')
+    expect(await within(section).findByText(/Key ending x9Qa/)).toBeTruthy()
+    expect(within(section).queryByLabelText('Model')).toBeNull()
+    fireEvent.click(within(section).getByRole('button', { name: 'Edit' }))
+    expect(await within(section).findByLabelText('Model')).toBeTruthy()
+    fireEvent.click(within(section).getByRole('button', { name: 'Cancel' }))
+    expect(within(section).queryByLabelText('Model')).toBeNull()
+  })
+
+  it('shows only the last four characters and the date the key was set', async () => {
+    const section = await renderEditing('owner')
     expect(
       await within(section).findByText('Key ending x9Qa, set 4 Nov 2026'),
     ).toBeTruthy()
@@ -165,7 +181,7 @@ describe('settings agent model, stored key', () => {
   })
 
   it('Replace opens an empty password field for the new key', async () => {
-    const section = await renderSection('owner')
+    const section = await renderEditing('owner')
     fireEvent.click(
       await within(section).findByRole('button', { name: 'Replace key' }),
     )
@@ -175,7 +191,7 @@ describe('settings agent model, stored key', () => {
   })
 
   it('saving the model without a new key leaves the stored key alone', async () => {
-    const section = await renderSection('owner')
+    const section = await renderEditing('owner')
     fireEvent.change(await within(section).findByLabelText('Model'), {
       target: { value: 'claude-opus-4-1' },
     })
@@ -193,7 +209,7 @@ describe('settings agent model, stored key', () => {
 
   it('Remove clears the stored key', async () => {
     putResponse = () => json({ ...STORED, keyLastFour: null, keySetAt: null })
-    const section = await renderSection('owner')
+    const section = await renderEditing('owner')
     fireEvent.click(
       await within(section).findByRole('button', { name: 'Remove key' }),
     )
