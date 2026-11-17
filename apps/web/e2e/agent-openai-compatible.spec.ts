@@ -19,6 +19,7 @@ test('compatible connections discover models, retry unsupported thinking and per
         animations: 'disabled',
       })
   }
+  expect((await page.request.get('/api/agent/models')).ok()).toBe(true)
   await page.goto('/settings?section=agent')
   await page
     .getByRole('button', { name: 'Add connection', exact: true })
@@ -72,7 +73,6 @@ test('compatible connections discover models, retry unsupported thinking and per
     provider: 'openai_compatible',
   })
   await page.goto('/agent')
-  await page.getByRole('button', { name: 'New session', exact: true }).count()
   const pill = page.getByRole('button', { name: /reasoning-model · Medium/ })
   await pill.click()
   await expect(

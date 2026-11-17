@@ -56,9 +56,13 @@ export function AgentModelControls({
             <div role="radiogroup" aria-label="Model" className="flex flex-col">
               {[...models]
                 .sort((a, b) =>
-                  (a.group ?? 'Anthropic').localeCompare(
-                    b.group ?? 'Anthropic',
-                  ),
+                  a.group === 'Obiter'
+                    ? -1
+                    : b.group === 'Obiter'
+                      ? 1
+                      : (a.group ?? 'Anthropic').localeCompare(
+                          b.group ?? 'Anthropic',
+                        ),
                 )
                 .map((option, index, ordered) => {
                   const selected = option.id === model.id
