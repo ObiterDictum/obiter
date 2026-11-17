@@ -131,6 +131,10 @@ const StaffFeedbackRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/staff-feedback'))
     .StaffFeedbackRouteView,
 }))
+const StaffBuzzRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/staff-buzz'))
+    .StaffBuzzRouteView,
+}))
 
 function RouteLoading() {
   return (
@@ -159,6 +163,7 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/staff/usage',
   '/staff/feedback',
   '/staff/errors',
+  '/staff/buzz',
   '/request-access/setup',
   '/settings',
   '/verify',
@@ -413,6 +418,20 @@ const staffFeedbackRoute = createRoute({
   component: () => (
     <Suspense fallback={<RouteLoading />}>
       <StaffFeedbackRouteView />
+    </Suspense>
+  ),
+})
+const staffBuzzRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'staff/buzz',
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
+  },
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <StaffBuzzRouteView />
     </Suspense>
   ),
 })
@@ -747,6 +766,7 @@ const routeTree = rootRoute.addChildren([
   staffUsageRoute,
   staffFeedbackRoute,
   staffErrorsRoute,
+  staffBuzzRoute,
   accessSetupRoute,
   settingsRoute,
   agentRoute,

@@ -26,6 +26,7 @@ import { Route as MattersIndexRouteImport } from './routes/matters/index'
 import { Route as StaffUsageRouteImport } from './routes/staff_.usage'
 import { Route as StaffFeedbackRouteImport } from './routes/staff_.feedback'
 import { Route as StaffErrorsRouteImport } from './routes/staff_.errors'
+import { Route as StaffBuzzRouteImport } from './routes/staff_.buzz'
 import { Route as StaffAccessRouteImport } from './routes/staff_.access'
 import { Route as RequestAccessSetupRouteImport } from './routes/request-access/setup'
 import { Route as RequestAccessConfirmRouteImport } from './routes/request-access/confirm'
@@ -128,6 +129,11 @@ const StaffErrorsRoute = StaffErrorsRouteImport.update({
   path: '/staff/errors',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/staff_.errors.lazy').then((d) => d.Route))
+const StaffBuzzRoute = StaffBuzzRouteImport.update({
+  id: '/staff_/buzz',
+  path: '/staff/buzz',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/staff_.buzz.lazy').then((d) => d.Route))
 const StaffAccessRoute = StaffAccessRouteImport.update({
   id: '/staff_/access',
   path: '/staff/access',
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/request-access/setup': typeof RequestAccessSetupRoute
   '/staff/access': typeof StaffAccessRoute
+  '/staff/buzz': typeof StaffBuzzRoute
   '/staff/errors': typeof StaffErrorsRoute
   '/staff/feedback': typeof StaffFeedbackRoute
   '/staff/usage': typeof StaffUsageRoute
@@ -257,6 +264,7 @@ export interface FileRoutesByTo {
   '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/request-access/setup': typeof RequestAccessSetupRoute
   '/staff/access': typeof StaffAccessRoute
+  '/staff/buzz': typeof StaffBuzzRoute
   '/staff/errors': typeof StaffErrorsRoute
   '/staff/feedback': typeof StaffFeedbackRoute
   '/staff/usage': typeof StaffUsageRoute
@@ -291,6 +299,7 @@ export interface FileRoutesById {
   '/request-access/confirm': typeof RequestAccessConfirmRoute
   '/request-access/setup': typeof RequestAccessSetupRoute
   '/staff_/access': typeof StaffAccessRoute
+  '/staff_/buzz': typeof StaffBuzzRoute
   '/staff_/errors': typeof StaffErrorsRoute
   '/staff_/feedback': typeof StaffFeedbackRoute
   '/staff_/usage': typeof StaffUsageRoute
@@ -326,6 +335,7 @@ export interface FileRouteTypes {
     | '/request-access/confirm'
     | '/request-access/setup'
     | '/staff/access'
+    | '/staff/buzz'
     | '/staff/errors'
     | '/staff/feedback'
     | '/staff/usage'
@@ -358,6 +368,7 @@ export interface FileRouteTypes {
     | '/request-access/confirm'
     | '/request-access/setup'
     | '/staff/access'
+    | '/staff/buzz'
     | '/staff/errors'
     | '/staff/feedback'
     | '/staff/usage'
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
     | '/request-access/confirm'
     | '/request-access/setup'
     | '/staff_/access'
+    | '/staff_/buzz'
     | '/staff_/errors'
     | '/staff_/feedback'
     | '/staff_/usage'
@@ -425,6 +437,7 @@ export interface RootRouteChildren {
   RequestAccessConfirmRoute: typeof RequestAccessConfirmRoute
   RequestAccessSetupRoute: typeof RequestAccessSetupRoute
   StaffAccessRoute: typeof StaffAccessRoute
+  StaffBuzzRoute: typeof StaffBuzzRoute
   StaffErrorsRoute: typeof StaffErrorsRoute
   StaffFeedbackRoute: typeof StaffFeedbackRoute
   StaffUsageRoute: typeof StaffUsageRoute
@@ -552,6 +565,13 @@ declare module '@tanstack/react-router' {
       path: '/staff/errors'
       fullPath: '/staff/errors'
       preLoaderRoute: typeof StaffErrorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff_/buzz': {
+      id: '/staff_/buzz'
+      path: '/staff/buzz'
+      fullPath: '/staff/buzz'
+      preLoaderRoute: typeof StaffBuzzRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/staff_/access': {
@@ -696,6 +716,7 @@ const rootRouteChildren: RootRouteChildren = {
   RequestAccessConfirmRoute: RequestAccessConfirmRoute,
   RequestAccessSetupRoute: RequestAccessSetupRoute,
   StaffAccessRoute: StaffAccessRoute,
+  StaffBuzzRoute: StaffBuzzRoute,
   StaffErrorsRoute: StaffErrorsRoute,
   StaffFeedbackRoute: StaffFeedbackRoute,
   StaffUsageRoute: StaffUsageRoute,
