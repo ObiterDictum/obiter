@@ -203,17 +203,14 @@ export const staffBuzzAgentSchema = z.enum([
   'Archivist',
 ])
 export type StaffBuzzAgent = z.infer<typeof staffBuzzAgentSchema>
-export const STAFF_BUZZ_AGENT_ACCESS: Record<
-  StaffBuzzAgent,
-  StaffBuzzRole | 'staff'
-> = {
+export const STAFF_BUZZ_AGENT_ACCESS = {
   Clerk: 'staff',
   Reporter: 'staff',
   Scribe: 'staff',
   Examiner: 'staff',
   Registrar: 'operations',
   Archivist: 'corpus',
-}
+} as const satisfies Record<StaffBuzzAgent, StaffBuzzRole | 'staff'>
 export function staffBuzzAgents(roles: readonly StaffBuzzRole[]) {
   return staffBuzzAgentSchema.options.filter((agent) => {
     const access = STAFF_BUZZ_AGENT_ACCESS[agent]
