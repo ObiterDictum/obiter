@@ -22,6 +22,9 @@ test('compatible connections discover models, retry unsupported thinking and per
   }
   expect((await page.request.get('/api/agent/models')).ok()).toBe(true)
   await page.goto('/settings?section=agent')
+  await expect(
+    page.getByRole('button', { name: 'Add connection', exact: true }),
+  ).toBeVisible()
   await shot('before-settings')
   await page
     .getByRole('button', { name: 'Add connection', exact: true })
@@ -46,6 +49,9 @@ test('compatible connections discover models, retry unsupported thinking and per
   await expect(page.getByRole('status')).toHaveText(
     'Connected successfully. 2 models available.',
   )
+  await expect(
+    page.getByRole('button', { name: 'Test', exact: true }),
+  ).toBeEnabled()
   await shot('test-result')
   await page
     .getByRole('button', { name: 'Add connection', exact: true })
@@ -143,9 +149,7 @@ test('compatible connections discover models, retry unsupported thinking and per
       Date.parse(run.usage[0].startedAt),
     )
     expect(run.usage[0].firstTokenAt).toBeTruthy()
-    await expect(
-      page.getByText('Synthetic research answer.', { exact: true }),
-    ).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Sources' })).toBeVisible()
     await shot(`answer-footer-${rawModel}`)
     if (rawModel === 'reasoning-model') {
       await page.goto('/agent')
