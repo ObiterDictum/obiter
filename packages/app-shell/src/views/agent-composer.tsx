@@ -1,10 +1,14 @@
 import {
   AGENT_GOAL_MAX_LENGTH,
   type AgentSessionDetailResponse,
+  type AgentSession,
+  type AgentThinkingLevel,
 } from '@obiter/contracts'
 import { useId, useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, CircleNotch } from '@obiter/ui/icons'
+import { agentModelsQueryOptions } from '../agent-models'
+import { AgentModelControls } from './agent-model-controls'
 import { ApiError } from '../api'
 import { createSession, postTurn, sessionKeys } from '../agent-sessions'
 
@@ -16,12 +20,14 @@ const starters = [
 
 export function AgentComposer({
   sessionId,
+  session,
   matterId,
   live = false,
   onSent,
   showStarters = false,
 }: {
   sessionId?: string
+  session?: AgentSession
   matterId: string | null
   live?: boolean
   onSent: (id: string) => void
@@ -29,8 +35,30 @@ export function AgentComposer({
 }) {
   const id = useId()
   const [text, setText] = useState('')
+  const catalogue = useQuery(agentModelsQueryOptions)
+  const [selection, setSelection] = useState<{
+    model: string
+    thinking: AgentThinkingLevel
+  } | null>(null)
+  const models = catalogue.data?.models ?? []
+  const model =
+    models.find(
+      (item) =>
+        item.id ===
+        (selection?.model ?? session?.model ?? catalogue.data?.default),
+    ) ?? models[0]
+  const preferredThinking =
+    selection?.thinking ?? session?.thinking ?? catalogue.data?.defaultThinking
+  const thinking =
+    model &&
+    preferredThinking &&
+    model.thinkingLevels.includes(preferredThinking)
+      ? preferredThinking
+      : (model?.defaultThinking ?? 'off')
+  const choice = model ? { model: model.id, thinking } : undefined
   const submission = useRef<{
     text: string
+    choice: typeof choice
     createKey: string
     turnKey: string
     sessionId?: string
@@ -42,6 +70,7 @@ export function AgentComposer({
       if (!submission.current || submission.current.text !== message) {
         submission.current = {
           text: message,
+          choice,
           createKey: crypto.randomUUID(),
           turnKey: crypto.randomUUID(),
           sessionId,
@@ -50,12 +79,18 @@ export function AgentComposer({
       const pending = submission.current
       if (!pending.sessionId)
         pending.sessionId = (
-          await createSession(matterId, pending.text, pending.createKey)
+          await createSession(
+            matterId,
+            pending.text,
+            pending.createKey,
+            pending.choice,
+          )
         ).id
       const { run } = await postTurn(
         pending.sessionId,
         pending.text,
         pending.turnKey,
+        pending.choice,
       )
       return { id: pending.sessionId, run }
     },
@@ -87,8 +122,9 @@ export function AgentComposer({
     },
   })
   const disabled = live || send.isPending
+  const unavailable = catalogue.isPending || !model
   function submit() {
-    if (!disabled && text.trim()) send.mutate()
+    if (!disabled && !unavailable && text.trim()) send.mutate()
   }
   return (
     <div className="flex flex-col gap-3">
@@ -137,6 +173,27 @@ export function AgentComposer({
           className="max-h-48 min-h-8 w-full resize-none border-0 bg-transparent py-1 text-body text-ink outline-none"
         />
         <div className="flex items-center justify-between gap-3">
+          {model ? (
+            <AgentModelControls
+              models={models}
+              model={model}
+              thinking={thinking}
+              disabled={disabled}
+              compact={matterId !== null}
+              onChange={(model, thinking) => {
+                setSelection({ model, thinking })
+                submission.current = null
+              }}
+            />
+          ) : (
+            <p className="text-caption text-muted">
+              {catalogue.isPending
+                ? 'Loading models…'
+                : catalogue.error
+                  ? catalogue.error.message
+                  : 'Set up a model and API key in Settings → Agent.'}
+            </p>
+          )}
           <p id={`${id}-reason`} className="text-caption text-muted">
             {live ? (
               'Wait for the current answer before sending another message.'
@@ -149,7 +206,7 @@ export function AgentComposer({
           <button
             type="submit"
             aria-label="Send"
-            disabled={disabled || !text.trim()}
+            disabled={disabled || unavailable || !text.trim()}
             className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-surface disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-ring"
           >
             {disabled ? (

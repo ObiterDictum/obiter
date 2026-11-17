@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { agentThinkingLevelSchema } from './agent-models'
 import { secureHttpsUrlSchema } from './agent-secure-url'
 
 export const agentProviderSchema = z.enum(['anthropic'])
@@ -47,6 +48,7 @@ export const agentApiKeySchema = z
 
 export const organisationAgentSettingsSchema = z
   .object({
+    thinking: agentThinkingLevelSchema.optional(),
     matterTextToModel: z.boolean(),
     model: agentModelChoiceSchema.nullable(),
     keyLastFour: z.string().length(4).nullable(),
@@ -70,6 +72,7 @@ export type AgentKeyChange = z.infer<typeof agentKeyChangeSchema>
 
 export const organisationAgentSettingsUpdateSchema = z
   .object({
+    thinking: agentThinkingLevelSchema.optional(),
     matterTextToModel: z.boolean().optional(),
     model: agentModelChoiceSchema.optional(),
     key: agentKeyChangeSchema.optional(),
@@ -224,6 +227,7 @@ export const agentSessionSettingsSchema = z
 export type AgentSessionSettings = z.infer<typeof agentSessionSettingsSchema>
 export const agentSessionSettingsUpdateSchema = z
   .object({
+    thinking: agentThinkingLevelSchema.optional(),
     matterTextToModel: z.boolean().optional(),
     model: agentSessionModelChoiceSchema.optional(),
     key: agentKeyChangeSchema.optional(),

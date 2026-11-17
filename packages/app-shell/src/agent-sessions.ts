@@ -1,5 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import type {
+  AgentThinkingLevel,
   AgentSessionListResponse,
   AgentSessionDetailResponse,
   AgentSessionResponse,
@@ -48,11 +49,13 @@ export async function createSession(
   matterId: string | null,
   text: string,
   idempotencyKey: string,
+  choice?: { model: string; thinking: AgentThinkingLevel },
 ) {
   return (
     await apiFetch<AgentSessionResponse>('/api/agent-sessions', {
       method: 'POST',
       body: JSON.stringify({
+        ...choice,
         matterId,
         title: conversationTitle(text),
         mode: 'supervised',
@@ -61,12 +64,22 @@ export async function createSession(
     })
   ).session
 }
-export function postTurn(id: string, text: string, idempotencyKey: string) {
+export function postTurn(
+  id: string,
+  text: string,
+  idempotencyKey: string,
+  choice?: { model: string; thinking: AgentThinkingLevel },
+) {
   return apiFetch<AgentSessionTurnResponse>(
     `/api/agent-sessions/${encodeURIComponent(id)}/turns`,
     {
       method: 'POST',
-      body: JSON.stringify({ kind: 'follow_up', text, idempotencyKey }),
+      body: JSON.stringify({
+        kind: 'follow_up',
+        text,
+        idempotencyKey,
+        ...choice,
+      }),
     },
   )
 }

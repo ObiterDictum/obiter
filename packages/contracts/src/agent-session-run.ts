@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { agentThinkingLevelSchema } from './agent-models'
 import {
   agentAnswerSentenceSchema,
   agentEvidenceSchema,
@@ -42,6 +43,8 @@ export type AgentSessionTaint = z.infer<typeof agentSessionTaintSchema>
 
 export const agentSessionSchema = z
   .object({
+    model: z.string().min(1).optional(),
+    thinking: agentThinkingLevelSchema.optional(),
     id: idSchema,
     matterId: idSchema.nullable(),
     title: z.string().min(1),
@@ -62,6 +65,8 @@ export type AgentSession = z.infer<typeof agentSessionSchema>
 
 export const pendingApprovalSummarySchema = z
   .object({
+    model: z.string().min(1).optional(),
+    thinking: agentThinkingLevelSchema.optional(),
     id: idSchema,
     kind: z.enum(['document_changes', 'mcp_egress']),
     payloadSha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -138,6 +143,8 @@ export type AgentSessionEvidence = z.infer<typeof agentSessionEvidenceSchema>
 const sessionRunBaseSchema = agentRunBaseSchema.extend({
   matterId: idSchema.nullable(),
   sessionId: idSchema,
+  modelLabel: z.string().min(1).optional(),
+  thinking: agentThinkingLevelSchema.optional(),
   budget: agentSessionRunBudgetSchema,
   mode: agentSessionModeSchema,
   toolAllowList: z.array(agentSessionToolIdSchema),

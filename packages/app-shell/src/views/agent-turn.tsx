@@ -105,6 +105,11 @@ export function AgentTurn({ run }: { run: AgentSessionRun }) {
                 : 'Researching your question…'}
           </p>
         )}
+        {run.thinking && run.modelLabel ? (
+          <p className="mt-3 text-caption text-muted">
+            {run.modelLabel} · Thinking {run.thinking}
+          </p>
+        ) : null}
       </div>
     </article>
   )

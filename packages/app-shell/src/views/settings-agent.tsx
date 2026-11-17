@@ -1,3 +1,6 @@
+import { useQuery } from '@tanstack/react-query'
+import { agentModelsQueryOptions } from '../agent-models'
+import type { AgentThinkingLevel } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
 import {
   AGENT_PROVIDERS,
@@ -155,6 +158,10 @@ function AgentModelForm({
   const [provider, setProvider] = useState<AgentProvider>(
     settings.model?.provider ?? 'anthropic',
   )
+  const catalogue = useQuery(agentModelsQueryOptions)
+  const [thinking, setThinking] = useState<AgentThinkingLevel>(
+    settings.thinking ?? 'off',
+  )
   const [modelId, setModelId] = useState(settings.model?.modelId ?? '')
   const [snapshot, setSnapshot] = useState(settings.model?.snapshot ?? '')
   const [key, setKey] = useState('')
@@ -169,6 +176,7 @@ function AgentModelForm({
   function submit(event: FormEvent) {
     event.preventDefault()
     const parsed = organisationAgentSettingsUpdateSchema.safeParse({
+      thinking,
       model: { provider, modelId, snapshot: snapshot.trim() || null },
       ...(key ? { key: { action: 'replace', value: key } } : {}),
     })
@@ -194,6 +202,45 @@ function AgentModelForm({
         value={provider}
         onValueChange={(value) => {
           if (isProvider(value)) setProvider(value)
+        }}
+        disabled={busy}
+      />
+      {catalogue.data?.models.length ? (
+        <Select
+          label="Suggested model"
+          value={modelId}
+          options={catalogue.data.models.map((model) => ({
+            value: model.id,
+            label: model.label,
+          }))}
+          onValueChange={(value) => {
+            const model = catalogue.data.models.find(
+              (model) => model.id === value,
+            )
+            if (model) {
+              setModelId(model.id)
+              setSnapshot('')
+              setThinking(model.defaultThinking)
+            }
+          }}
+          disabled={busy}
+        />
+      ) : null}
+      <Select
+        label="Default thinking"
+        value={thinking}
+        options={(
+          catalogue.data?.models.find((model) => model.id === modelId)
+            ?.thinkingLevels ?? ['off']
+        ).map((value) => ({ value, label: value }))}
+        onValueChange={(value) => {
+          if (
+            value === 'off' ||
+            value === 'low' ||
+            value === 'medium' ||
+            value === 'high'
+          )
+            setThinking(value)
         }}
         disabled={busy}
       />

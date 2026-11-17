@@ -43,6 +43,7 @@ export function AgentWindowView() {
         <AgentConversation
           key={sessionId ?? 'new'}
           sessionId={sessionId}
+          session={detail.data?.session}
           matterId={null}
           onSent={(id) =>
             void navigate({
@@ -106,6 +107,7 @@ export function AgentConversation({
       >
         <AgentComposer
           sessionId={sessionId}
+          session={detail.data?.session}
           matterId={detail.data?.session.matterId ?? matterId}
           live={Boolean(detail.data?.session.activeRunId)}
           showStarters={!sessionId && matterId === null}
