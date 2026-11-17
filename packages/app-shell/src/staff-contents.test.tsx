@@ -85,7 +85,7 @@ afterEach(() => {
   mock.restore()
 })
 
-it('lists the six staff screens in order with their counts', async () => {
+it('lists the five staff screens in order with their counts', async () => {
   const client = renderContents(true, '/staff/usage')
   const nav = await screen.findByRole('navigation', {
     name: 'Staff sections',
@@ -93,14 +93,7 @@ it('lists the six staff screens in order with their counts', async () => {
   const links = screen.getAllByRole('link')
   expect(
     links.map((link) => link.textContent?.replace(/\d+$/, '').trim()),
-  ).toEqual([
-    'Overview',
-    'Access review',
-    'Usage',
-    'Feedback',
-    'Errors',
-    'Buzz',
-  ])
+  ).toEqual(['Overview', 'Access review', 'Usage', 'Feedback', 'Errors'])
   await waitFor(() => {
     expect(withinLink(links[1])).toContain('3')
     expect(withinLink(links[3])).toContain('2')

@@ -1,48 +1,20 @@
-import { useQuery } from '@tanstack/react-query'
-import { Skeleton } from '@obiter/ui'
 import type { StaffBuzzAgent, StaffBuzzResponse } from '@obiter/contracts'
-import { PageScaffold } from '../page-scaffold'
-import { staffBuzzQueryOptions } from '../staff'
 import { buzzAgentLines } from '../staff-buzz-data'
 import { ErrorNotice, SectionHeading } from './settings-fields'
 import { JoinWorkspace, LinkKey, LinkedKey } from './staff-buzz-access'
-import { StaffBuzzMembers } from './staff-buzz-members'
-import { StaffGate } from './staff-gate'
 
-export function StaffBuzzRouteView() {
+export function BuzzAccess({
+  view,
+  onCheckAgain,
+}: {
+  view: StaffBuzzResponse
+  onCheckAgain: () => void
+}) {
   return (
-    <StaffGate>
-      <StaffBuzz />
-    </StaffGate>
-  )
-}
-
-function StaffBuzz() {
-  const view = useQuery(staffBuzzQueryOptions())
-  return (
-    <PageScaffold
-      title="Buzz"
-      description="Join the team's Buzz workspace, see the agents you can reach and set Buzz roles."
-    >
-      {view.isPending ? (
-        <Skeleton className="h-28" />
-      ) : view.isError ? (
-        <ErrorNotice message="Could not load Buzz access." />
-      ) : !view.data.available ? (
-        <p className="text-meta text-muted">Buzz access isn't set up yet.</p>
-      ) : (
-        <div className="@container flex flex-col gap-10">
-          <YourAccess
-            view={view.data}
-            onCheckAgain={() => void view.refetch()}
-          />
-          <YourAgents agents={view.data.me.agents} />
-          {view.data.canManage ? (
-            <StaffBuzzMembers members={view.data.members} />
-          ) : null}
-        </div>
-      )}
-    </PageScaffold>
+    <div className="flex flex-col gap-10">
+      <YourAccess view={view} onCheckAgain={onCheckAgain} />
+      <YourAgents agents={view.me.agents} />
+    </div>
   )
 }
 

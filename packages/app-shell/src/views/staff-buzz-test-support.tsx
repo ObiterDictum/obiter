@@ -2,17 +2,67 @@ import '@obiter/test-dom'
 import { spyOn } from 'bun:test'
 import { render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router'
 import { ToastProvider, Toaster } from '@obiter/ui'
 import {
   staffBuzzAgents,
+  type MeResponse,
   type StaffBuzzAgent,
   type StaffBuzzMember,
   type StaffBuzzResponse,
 } from '@obiter/contracts'
-import { StaffBuzzRouteView } from './staff-buzz'
+import { validateSettingsSearch } from '../settings-sections'
+import { IntegrationsSection } from './settings-integrations'
 
 export const NPUB =
   'npub1gutgpl9302edr9ch7mg90z5fxk962mgkdx7xxcyu57fr5a7j0ydqvucky8'
+
+export const STAFF_OWNER_ME: MeResponse = {
+  isStaff: true,
+  twoFactorEnabled: true,
+  user: {
+    id: 'u_me',
+    name: 'Karl Staff',
+    email: 'karl@synthetic.test',
+    role: 'owner',
+  },
+  organisation: {
+    id: 'org_1',
+    name: 'Ashcombe Chambers',
+    plan: 'private_beta',
+  },
+}
+
+export const STAFF_MEMBER_ME: MeResponse = {
+  ...STAFF_OWNER_ME,
+  user: {
+    ...STAFF_OWNER_ME.user,
+    id: 'u_sam',
+    name: 'Sam Member',
+    role: 'member',
+  },
+}
+
+export const MEMBER_ME: MeResponse = {
+  isStaff: false,
+  user: {
+    id: 'u_sam',
+    name: 'Sam Member',
+    email: 'sam@synthetic.test',
+    role: 'member',
+  },
+  organisation: {
+    id: 'org_1',
+    name: 'Ashcombe Chambers',
+    plan: 'private_beta',
+  },
+}
 
 export interface BuzzRequest {
   method: string
@@ -69,8 +119,16 @@ function apiError(status: number, code: string, message: string) {
   )
 }
 
-export function renderBuzz(initial: StaffBuzzResponse) {
-  const server: BuzzServer = { view: initial, requests: [] }
+export function renderIntegrations({
+  buzz = buzzView({ available: false }),
+  me = STAFF_OWNER_ME,
+  path = '/settings?section=integrations',
+}: {
+  buzz?: StaffBuzzResponse
+  me?: MeResponse
+  path?: string
+} = {}) {
+  const server: BuzzServer = { view: buzz, requests: [] }
   spyOn(globalThis, 'fetch').mockImplementation(
     Object.assign(
       async (
@@ -146,24 +204,31 @@ export function renderBuzz(initial: StaffBuzzResponse) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  client.setQueryData(['current-user'], {
-    isStaff: true,
-    twoFactorEnabled: true,
-    user: {
-      id: 'u_me',
-      name: 'Karl Staff',
-      email: 'karl@synthetic.test',
-      role: 'staff',
-    },
-    organisation: null,
+  const rootRoute = createRootRoute()
+  const settingsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/settings',
+    validateSearch: validateSettingsSearch,
+    component: () => <IntegrationsSection me={me} />,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([settingsRoute]),
+    history: createMemoryHistory({ initialEntries: [path] }),
   })
   render(
     <QueryClientProvider client={client}>
       <ToastProvider>
         <Toaster />
-        <StaffBuzzRouteView />
+        <RouterProvider router={router} />
       </ToastProvider>
     </QueryClientProvider>,
   )
   return { server, client }
+}
+
+export function renderBuzz(initial: StaffBuzzResponse) {
+  return renderIntegrations({
+    buzz: initial,
+    path: '/settings?section=integrations&integration=buzz',
+  })
 }

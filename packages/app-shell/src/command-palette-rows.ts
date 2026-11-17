@@ -12,6 +12,7 @@ export type PaletteActionId =
   | 'settings-organisation'
   | 'settings-preferences'
   | 'settings-members'
+  | 'settings-integrations'
   | 'settings-agent'
   | 'layout-sidebar'
   | 'layout-tabs'

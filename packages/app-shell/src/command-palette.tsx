@@ -140,6 +140,7 @@ export function CommandPaletteProvider({
       organisation: 'settings-organisation',
       preferences: 'settings-preferences',
       members: 'settings-members',
+      integrations: 'settings-integrations',
       agent: 'settings-agent',
     } satisfies Record<SettingsSectionId, PaletteActionId>
     return {
@@ -243,6 +244,9 @@ export function CommandPaletteProvider({
         return
       case 'settings-members':
         openSettings('members')
+        return
+      case 'settings-integrations':
+        openSettings('integrations')
         return
       case 'settings-agent':
         openSettings('agent')

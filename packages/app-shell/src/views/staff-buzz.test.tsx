@@ -21,9 +21,9 @@ afterEach(() => {
   mock.restore()
 })
 
-it('hides every action when Buzz access is not set up', async () => {
+it('shows Buzz as planned, with no action, when the API says it is unavailable', async () => {
   renderBuzz(buzzView({ available: false }))
-  expect(await screen.findByText("Buzz access isn't set up yet.")).toBeTruthy()
+  expect(await screen.findByText('Planned. Not available yet.')).toBeTruthy()
   expect(screen.queryByRole('button', { name: 'Get an invite' })).toBeNull()
   expect(screen.queryByRole('button', { name: 'Link' })).toBeNull()
   expect(screen.queryByLabelText('npub')).toBeNull()
@@ -131,13 +131,15 @@ it('shows the shortened npub and unlinks it only after confirmation', async () =
   expect(await screen.findByText(shortNpub(NPUB))).toBeTruthy()
   expect(screen.queryByText(NPUB)).toBeNull()
   expect(screen.getByRole('button', { name: `Copy ${NPUB}` })).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Unlink' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }))
   const dialog = await screen.findByRole('dialog')
-  expect(within(dialog).getByText('Unlink Buzz key?')).toBeTruthy()
+  expect(within(dialog).getByText('Disconnect Buzz?')).toBeTruthy()
   expect(server.requests.some((request) => request.method === 'DELETE')).toBe(
     false,
   )
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Unlink key' }))
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Disconnect key' }),
+  )
   await waitFor(() =>
     expect(server.requests.some((request) => request.method === 'DELETE')).toBe(
       true,

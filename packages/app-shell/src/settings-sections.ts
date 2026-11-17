@@ -1,4 +1,12 @@
-import { Folders, GearSix, Lock, Robot, User, Users } from '@obiter/ui/icons'
+import {
+  Folders,
+  GearSix,
+  Lock,
+  Robot,
+  ShareNetwork,
+  User,
+  Users,
+} from '@obiter/ui/icons'
 import { useRouterState } from '@tanstack/react-router'
 import type { MeResponse } from '@obiter/contracts'
 
@@ -45,6 +53,14 @@ export const SETTINGS_SECTIONS = [
     available: inOrganisation,
   },
   {
+    id: 'integrations',
+    label: 'Integrations',
+    icon: ShareNetwork,
+    description:
+      'Connect the tools your team already uses so the agent can work where you do.',
+    available: inOrganisation,
+  },
+  {
     id: 'agent',
     label: 'Agent',
     icon: Robot,
@@ -67,11 +83,17 @@ export function settingsSectionFrom(
   )
 }
 
-export function validateSettingsSearch(search: Record<string, unknown>): {
-  section?: SettingsSectionId
-} {
+export function validateSettingsSearch(search: Record<string, unknown>) {
   const section = SETTINGS_SECTIONS.find((item) => item.id === search.section)
-  return section ? { section: section.id } : {}
+  const integration =
+    typeof search.integration === 'string' &&
+    /^[a-z0-9-]{1,64}$/.test(search.integration)
+      ? search.integration
+      : undefined
+  return {
+    ...(section ? { section: section.id } : {}),
+    ...(integration ? { integration } : {}),
+  }
 }
 
 export function useSettingsSection(

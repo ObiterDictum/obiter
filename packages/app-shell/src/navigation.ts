@@ -90,7 +90,6 @@ const STAFF_SCREENS = new Map([
   ['/staff/usage', 'Usage'],
   ['/staff/feedback', 'Feedback'],
   ['/staff/errors', 'Errors'],
-  ['/staff/buzz', 'Buzz'],
 ])
 
 export function staffScreenLabel(path: string): string {

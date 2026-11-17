@@ -1,3 +1,5 @@
+import { lazy, Suspense } from 'react'
+import { Skeleton } from '@obiter/ui'
 import { useCurrentUser } from '../current-user'
 import { PageScaffold } from '../page-scaffold'
 import { SETTINGS_SECTIONS, useSettingsSection } from '../settings-sections'
@@ -7,6 +9,12 @@ import { MembersSection } from './settings-members'
 import { OrganisationSection } from './settings-organisation'
 import { PreferencesSection } from './settings-preferences'
 import { SecuritySection } from './settings-security'
+
+const IntegrationsSection = lazy(() =>
+  import('./settings-integrations').then((module) => ({
+    default: module.IntegrationsSection,
+  })),
+)
 
 export function SettingsRouteView() {
   const { data: me } = useCurrentUser()
@@ -22,6 +30,11 @@ export function SettingsRouteView() {
       <PreferencesSection active={section === 'preferences'} />
       <OrganisationSection me={me} active={section === 'organisation'} />
       <MembersSection me={me} active={section === 'members'} />
+      {section === 'integrations' ? (
+        <Suspense fallback={<Skeleton className="h-40" />}>
+          <IntegrationsSection me={me} />
+        </Suspense>
+      ) : null}
       <AgentSection me={me} active={section === 'agent'} />
     </PageScaffold>
   )
