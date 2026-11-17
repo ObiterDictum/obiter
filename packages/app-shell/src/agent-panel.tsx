@@ -1,7 +1,8 @@
-import { Ratio } from '@obiter/ui/icons'
+import { RatioMascot } from '@obiter/ui/ratio-mascot'
 import { useState } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { AgentRunView } from './agent-run-view'
+import { useSessionPresence } from './agent-presence'
 import { useSessions } from './agent-sessions'
 import { documentIdFromPath, matterIdFromPath } from './navigation'
 import {
@@ -38,19 +39,23 @@ function MatterAgent({
   const [earlier, setEarlier] = useState<string | null>(null)
   const [includeDocument, setIncludeDocument] = useState(true)
   const id = fresh ? undefined : (selected ?? sessions.data?.[0]?.id)
+  const presence = useSessionPresence(id)
   return (
     <div className="flex min-h-full flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setFresh(true)
-            setSelected(null)
-          }}
-          className="text-meta text-brand"
-        >
-          New conversation
-        </button>
+        <div className="flex min-w-0 items-center gap-2">
+          <RatioMascot state={presence} size={28} />
+          <button
+            type="button"
+            onClick={() => {
+              setFresh(true)
+              setSelected(null)
+            }}
+            className="text-meta text-brand"
+          >
+            New conversation
+          </button>
+        </div>
         {id ? (
           <Link
             to="/agent/$sessionId"
@@ -72,9 +77,9 @@ function MatterAgent({
       </div>
       {!id ? (
         <div className="mt-3 flex flex-col items-center gap-2 text-center">
-          <Ratio size={24} className="text-muted" aria-hidden />
+          <RatioMascot state="idle" size={56} />
           <h2 className="text-body font-medium text-ink">
-            Ask about this matter
+            Ask Ratio about this matter
           </h2>
         </div>
       ) : null}

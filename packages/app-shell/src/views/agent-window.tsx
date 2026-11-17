@@ -1,5 +1,5 @@
-import { Ratio } from '@obiter/ui/icons'
 import { PagePanelToggle } from '../page-panel'
+import { RatioMascot } from '@obiter/ui/ratio-mascot'
 import { useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
@@ -27,11 +27,9 @@ export function AgentWindowView() {
       <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col py-6">
         {sessionId ? null : (
           <header className="mb-6 mt-auto flex flex-col items-center gap-3 text-center">
-            <div className="grid size-12 place-items-center rounded-full bg-fill text-muted">
-              <Ratio size={24} aria-hidden />
-            </div>
+            <RatioMascot state="idle" size={112} />
             <h1 className="text-title text-ink">
-              What would you like to research?
+              Ask Ratio about the law of England and Wales
             </h1>
             <p className="text-meta text-muted">
               Only you can see this conversation. It searches case law and
@@ -92,8 +90,8 @@ export function AgentConversation({
             </h1>
           </header>
         ) : null}
-        {detail.data?.runs.map((run) => (
-          <AgentTurn key={run.id} run={run} />
+        {detail.data?.runs.map((run, index, runs) => (
+          <AgentTurn key={run.id} run={run} live={index === runs.length - 1} />
         ))}
       </div>
       <div ref={bottom} />

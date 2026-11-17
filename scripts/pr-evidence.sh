@@ -115,8 +115,9 @@ entries=$(jq -n --arg p README.md --arg s "$(gh api -X POST "repos/$repo/git/blo
 for f in "${files[@]}"; do
   name=$(basename "$f")
   path=$(uri_path "$namespace/$name")
-  blob=$(gh api -X POST "repos/$repo/git/blobs" \
-    -f content="$(base64 < "$f" | tr -d '\n')" -f encoding=base64 --jq .sha)
+  blob=$(base64 < "$f" | tr -d '\n' \
+    | jq -Rs '{content: ., encoding: "base64"}' \
+    | gh api -X POST "repos/$repo/git/blobs" --input - --jq .sha)
   entries=$(jq -c --arg p "$path" --arg s "$blob" \
     '. + [{path:$p,mode:"100644",type:"blob",sha:$s}]' <<<"$entries")
 done

@@ -1,0 +1,256 @@
+@keyframes ratio-pose-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ratio-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.012, 1.028);
+  }
+}
+
+@keyframes ratio-blink {
+  0%,
+  90%,
+  96%,
+  100% {
+    transform: scaleY(1);
+  }
+  93% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes ratio-sway {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  30% {
+    transform: rotate(3.5deg) translateY(-2px);
+  }
+  70% {
+    transform: rotate(-2.5deg) translateY(-1px);
+  }
+}
+
+@keyframes ratio-wave {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(-9deg) translateY(-2px);
+  }
+}
+
+@keyframes ratio-ponder {
+  0%,
+  100% {
+    transform: rotate(10deg) translateY(-2px);
+  }
+  50% {
+    transform: rotate(13deg) translateY(-4px);
+  }
+}
+
+@keyframes ratio-lookup {
+  0%,
+  100% {
+    transform: translate(2.5px, -3px);
+  }
+  50% {
+    transform: translate(3.5px, -3.5px);
+  }
+}
+
+@keyframes ratio-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes ratio-tap {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes ratio-read {
+  0%,
+  100% {
+    transform: rotate(0) translateY(2px);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(3px);
+  }
+}
+
+@keyframes ratio-scan {
+  0%,
+  100% {
+    transform: translate(-3px, 3px);
+  }
+  45% {
+    transform: translate(3px, 3px);
+  }
+  50% {
+    transform: translate(-3px, 4px);
+  }
+}
+
+@keyframes ratio-lines {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  25% {
+    opacity: 1;
+  }
+}
+
+@keyframes ratio-eager {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes ratio-offer {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.04);
+  }
+}
+
+@keyframes ratio-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes ratio-nod {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(-2deg) translateY(4px);
+  }
+  30% {
+    transform: rotate(0) translateY(0);
+  }
+  45% {
+    transform: translateY(3px);
+  }
+  60% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes ratio-pop {
+  0% {
+    transform: scale(0);
+  }
+  12% {
+    transform: scale(1.2);
+  }
+  20%,
+  85% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ratio-spark {
+  0%,
+  10% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50%,
+  100% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+}
+
+@keyframes ratio-puzzled {
+  0%,
+  100% {
+    transform: rotate(-9deg);
+  }
+  50% {
+    transform: rotate(-12deg) translateY(1px);
+  }
+}
+
+@keyframes ratio-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes ratio-glance {
+  0%,
+  40% {
+    transform: translate(-2px, 2px);
+  }
+  50%,
+  90% {
+    transform: translate(2px, 2px);
+  }
+  100% {
+    transform: translate(-2px, 2px);
+  }
+}

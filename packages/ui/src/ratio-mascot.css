@@ -1,0 +1,139 @@
+@import './ratio-mascot-keyframes.css';
+
+.ratio-mascot {
+  display: block;
+  overflow: visible;
+}
+
+.ratio-mascot .ratio-body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+.ratio-mascot .ratio-head {
+  transform-box: view-box;
+  transform-origin: 100px 165px;
+}
+
+.ratio-mascot .ratio-eyes,
+.ratio-mascot .ratio-pupils,
+.ratio-mascot .ratio-paw,
+.ratio-mascot .ratio-offer,
+.ratio-mascot .ratio-ring,
+.ratio-mascot .ratio-tick,
+.ratio-mascot .ratio-spark,
+.ratio-mascot .ratio-dot,
+.ratio-mascot .ratio-drop {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ratio-mascot .ratio-brief {
+  transform-box: fill-box;
+  transform-origin: 15% 90%;
+}
+
+.ratio-mascot .ratio-page-line {
+  opacity: 0.35;
+}
+
+.ratio-mascot .ratio-pose {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ratio-mascot .ratio-spark {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ratio-mascot--live .ratio-pose {
+    animation: ratio-pose-in 0.45s ease-out both;
+  }
+
+  .ratio-mascot--live .ratio-body {
+    animation: ratio-breathe 3.4s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='idle'] .ratio-head {
+    animation: ratio-sway 4.2s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='idle'] .ratio-eyes {
+    animation: ratio-blink 5s infinite;
+  }
+
+  .ratio-mascot--live[data-state='idle'] .ratio-brief {
+    animation: ratio-wave 2.8s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='thinking'] .ratio-head {
+    animation: ratio-ponder 3.6s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='thinking'] .ratio-pupils {
+    animation: ratio-lookup 3.6s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='thinking'] .ratio-dot {
+    animation: ratio-dot 1.4s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='thinking'] .ratio-paw {
+    animation: ratio-tap 0.7s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='working'] .ratio-head {
+    animation: ratio-read 2.4s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='working'] .ratio-pupils {
+    animation: ratio-scan 2.4s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='working'] .ratio-page-line {
+    animation: ratio-lines 2.4s linear infinite;
+  }
+
+  .ratio-mascot--live[data-state='needs_approval'] .ratio-head {
+    animation: ratio-eager 1.8s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='needs_approval'] .ratio-offer {
+    animation: ratio-offer 1.8s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='needs_approval'] .ratio-ring {
+    animation: ratio-ring 1.8s ease-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='needs_approval'] .ratio-eyes {
+    animation: ratio-blink 4s infinite;
+  }
+
+  .ratio-mascot--live[data-state='done'] .ratio-head {
+    animation:
+      ratio-nod 2.6s ease-in-out 2,
+      ratio-sway 4.2s ease-in-out 5.2s infinite;
+  }
+
+  .ratio-mascot--live[data-state='done'] .ratio-tick {
+    animation: ratio-pop 2.6s ease-out 2;
+  }
+
+  .ratio-mascot--live[data-state='done'] .ratio-spark {
+    animation: ratio-spark 2.6s ease-out 2;
+  }
+
+  .ratio-mascot--live[data-state='stuck'] .ratio-head {
+    animation: ratio-puzzled 4s ease-in-out infinite;
+  }
+
+  .ratio-mascot--live[data-state='stuck'] .ratio-drop {
+    animation: ratio-drop 2.4s ease-in infinite;
+  }
+
+  .ratio-mascot--live[data-state='stuck'] .ratio-pupils {
+    animation: ratio-glance 4s ease-in-out infinite;
+  }
+}
