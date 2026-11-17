@@ -35,7 +35,7 @@ export function AgentComposer({
 }) {
   const id = useId()
   const [text, setText] = useState('')
-  const catalogue = useQuery(agentModelsQueryOptions)
+  const catalogue = useQuery(agentModelsQueryOptions())
   const [selection, setSelection] = useState<{
     model: string
     thinking: AgentThinkingLevel

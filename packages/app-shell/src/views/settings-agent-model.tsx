@@ -37,7 +37,7 @@ export function AgentModelForm({
   const [provider, setProvider] = useState<AgentProvider>(
     settings.model?.provider ?? 'anthropic',
   )
-  const catalogue = useQuery(agentModelsQueryOptions)
+  const catalogue = useQuery(agentModelsQueryOptions())
   const [thinking, setThinking] = useState<AgentThinkingLevel>(
     settings.thinking ?? 'off',
   )
@@ -46,7 +46,7 @@ export function AgentModelForm({
   const [key, setKey] = useState('')
   const [replacing, setReplacing] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
-  const selectedModel = catalogue.data?.models.find(
+  const selectedModel = catalogue.data?.models?.find(
     (model) => model.id === modelId,
   )
   const stored =
@@ -87,7 +87,7 @@ export function AgentModelForm({
         }}
         disabled={busy}
       />
-      {catalogue.data?.models.length ? (
+      {catalogue.data?.models?.length ? (
         <Select
           label="Suggested model"
           value={modelId}
@@ -123,7 +123,9 @@ export function AgentModelForm({
         onChange={(event) => {
           const value = event.target.value
           setModelId(value)
-          const model = catalogue.data?.models.find((item) => item.id === value)
+          const model = catalogue.data?.models?.find(
+            (item) => item.id === value,
+          )
           setThinking(model ? thinkingForModel(model, thinking) : 'off')
         }}
       />

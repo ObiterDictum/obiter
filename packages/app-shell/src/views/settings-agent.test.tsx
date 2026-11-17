@@ -129,6 +129,7 @@ describe('settings agent model, empty', () => {
         modelId: 'claude-sonnet-4-5',
         snapshot: null,
       },
+      thinking: 'off',
       key: { action: 'replace', value: 'sk-ant-api03-abcdefghijklmnop' },
     })
   })
@@ -184,6 +185,7 @@ describe('settings agent model, stored key', () => {
         modelId: 'claude-opus-4-1',
         snapshot: 'claude-sonnet-4-5-20250929',
       },
+      thinking: 'off',
     })
   })
 

@@ -6,10 +6,11 @@ import type {
 } from '@obiter/contracts'
 import { apiFetch } from './api'
 
-export const agentModelsQueryOptions = queryOptions({
-  queryKey: ['agent-models'],
-  queryFn: () => apiFetch<AgentModelsResponse>('/api/agent/models'),
-})
+export const agentModelsQueryOptions = () =>
+  queryOptions({
+    queryKey: ['agent-models'],
+    queryFn: () => apiFetch<AgentModelsResponse>('/api/agent/models'),
+  })
 
 const LEVEL_NAMES = {
   off: 'Off',

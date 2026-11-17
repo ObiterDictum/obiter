@@ -78,8 +78,8 @@ export function MatterTextNote({
   const settings = useOrganisationAgentSettings(
     me.data?.organisation?.id ?? null,
   )
-  const catalogue = useQuery(agentModelsQueryOptions)
-  if (!catalogue.data) return <span />
+  const catalogue = useQuery(agentModelsQueryOptions())
+  if (!catalogue.data?.models) return <span />
   if (catalogue.data.models.length === 0)
     return (
       <p className="text-caption text-muted">
