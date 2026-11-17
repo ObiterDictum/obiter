@@ -21,6 +21,7 @@ test('compatible connections discover models, retry unsupported thinking and per
   }
   expect((await page.request.get('/api/agent/models')).ok()).toBe(true)
   await page.goto('/settings?section=agent')
+  await shot('before-settings')
   await page
     .getByRole('button', { name: 'Add connection', exact: true })
     .click()
@@ -112,6 +113,17 @@ test('compatible connections discover models, retry unsupported thinking and per
       ),
     ).toBeVisible({ timeout: 60000 })
     const id = new URL(page.url()).pathname.split('/').at(-1)
+    await expect
+      .poll(
+        async () => {
+          const detail = await (
+            await page.request.get(`/api/agent-sessions/${id}`)
+          ).json()
+          return detail.runs.at(-1).status
+        },
+        { timeout: 60000 },
+      )
+      .toBe('completed')
     const detail = await (
       await page.request.get(`/api/agent-sessions/${id}`)
     ).json()
