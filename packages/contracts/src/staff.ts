@@ -185,3 +185,82 @@ export const staffFeedbackHandledResponseSchema = z.object({
 export type StaffFeedbackHandledResponse = z.infer<
   typeof staffFeedbackHandledResponseSchema
 >
+
+export const staffBuzzRoleSchema = z.enum(['operations', 'corpus'])
+export type StaffBuzzRole = z.infer<typeof staffBuzzRoleSchema>
+export const staffBuzzStatusSchema = z.enum([
+  'unlinked',
+  'not_member',
+  'active',
+])
+export type StaffBuzzStatus = z.infer<typeof staffBuzzStatusSchema>
+export const staffBuzzAgentSchema = z.enum([
+  'Clerk',
+  'Reporter',
+  'Scribe',
+  'Examiner',
+  'Registrar',
+  'Archivist',
+])
+export type StaffBuzzAgent = z.infer<typeof staffBuzzAgentSchema>
+export const STAFF_BUZZ_AGENT_ACCESS = {
+  Clerk: 'staff',
+  Reporter: 'staff',
+  Scribe: 'staff',
+  Examiner: 'staff',
+  Registrar: 'operations',
+  Archivist: 'corpus',
+} as const satisfies Record<StaffBuzzAgent, StaffBuzzRole | 'staff'>
+export function staffBuzzAgents(roles: readonly StaffBuzzRole[]) {
+  return staffBuzzAgentSchema.options.filter((agent) => {
+    const access = STAFF_BUZZ_AGENT_ACCESS[agent]
+    return access === 'staff' || roles.includes(access)
+  })
+}
+export const staffBuzzNpubSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(
+    /^npub1[02-9ac-hj-np-z]{58}$/,
+    'Paste the npub from your Buzz profile.',
+  )
+const staffBuzzMemberSchema = z.object({
+  userId: z.string(),
+  name: z.string(),
+  email: z.string(),
+  npub: z.string().nullable(),
+  status: staffBuzzStatusSchema,
+  roles: z.array(staffBuzzRoleSchema),
+})
+export type StaffBuzzMember = z.infer<typeof staffBuzzMemberSchema>
+export const staffBuzzResponseSchema = z.object({
+  available: z.boolean(),
+  me: staffBuzzMemberSchema.extend({ agents: z.array(staffBuzzAgentSchema) }),
+  canManage: z.boolean(),
+  members: z.array(staffBuzzMemberSchema),
+})
+export type StaffBuzzResponse = z.infer<typeof staffBuzzResponseSchema>
+export const staffBuzzInviteResponseSchema = z.object({
+  url: z.string().url(),
+  expiresAt: z.string(),
+})
+export type StaffBuzzInviteResponse = z.infer<
+  typeof staffBuzzInviteResponseSchema
+>
+export const staffBuzzKeyInputSchema = z.object({ npub: staffBuzzNpubSchema })
+export type StaffBuzzKeyInput = z.infer<typeof staffBuzzKeyInputSchema>
+export const staffBuzzRolesInputSchema = z.object({
+  roles: z.array(staffBuzzRoleSchema).max(2),
+})
+export type StaffBuzzRolesInput = z.infer<typeof staffBuzzRolesInputSchema>
+export const buzzRosterResponseSchema = z.object({
+  members: z.array(
+    z.object({
+      userId: z.string(),
+      pubkey: z.string().regex(/^[0-9a-f]{64}$/),
+      roles: z.array(staffBuzzRoleSchema),
+    }),
+  ),
+})
+export type BuzzRosterResponse = z.infer<typeof buzzRosterResponseSchema>
