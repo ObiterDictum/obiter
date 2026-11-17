@@ -142,6 +142,9 @@ test('compatible connections discover models, retry unsupported thinking and per
       Date.parse(run.usage[0].startedAt),
     )
     expect(run.usage[0].firstTokenAt).toBeTruthy()
+    await expect(
+      page.getByText('Synthetic research answer.', { exact: true }),
+    ).toBeVisible()
     await shot(`answer-footer-${rawModel}`)
     if (rawModel === 'reasoning-model') {
       await page.goto('/agent')
