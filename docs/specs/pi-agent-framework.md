@@ -156,17 +156,19 @@ its synthetic stand-in instead.
 Session creation and turns accept optional `model` and `thinking` fields.
 Thinking is `off`, `low`, `medium` or `high`; unsupported combinations return
 400 `validation_failed`. Sessions remember the last choice. Each run preserves
-its model identity, label and thinking level: the answer footer names the
-model and adds `Thought longer` when the level was `high`.
+its model identity, label and thinking level: the answer footer reads
+`Sonnet 5.5 · High thinking`, or `No thinking` for `off`.
 
-The composer and the matter panel share one pill that opens a single menu: the
-models with their descriptions, then a Think longer switch, hidden when the
-model offers one level. Think longer on sends `high`; off sends the model's
-`defaultThinking`, or the next lower supported level when that default is
-already `high`. The pill is disabled during a live turn, and the setup note
-appears only when the catalogue has no models. Settings sets the same choice
-as Think longer by default and retains free-text Anthropic model IDs for
-organisations using their own key.
+The composer and the matter panel share one pill that names the model and the
+level (`Sonnet 5.5 · Medium`) and opens a single menu: the models with their
+descriptions, then a Thinking row holding a segmented control over exactly the
+levels the selected model supports, in the order Off, Low, Medium, High. The
+row is hidden when the model offers one level, and picking a level leaves the
+menu open. A model change keeps the level when the new model supports it and
+uses its `defaultThinking` otherwise. The pill is disabled during a live turn,
+and the setup note appears only when the catalogue has no models. Settings
+sets the organisation default with the same segmented control and retains
+free-text Anthropic model IDs for organisations using their own key.
 
 Opus 5.5 and Fable 5.2 require thinking and offer Low, Medium and High.
 Sonnet 5.5 uses `between_tools` for Off; Haiku 5.5 uses `disabled`.

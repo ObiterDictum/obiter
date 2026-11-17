@@ -5,7 +5,7 @@ import { createAccount } from './document-journey'
 import { signIn } from './e13-support'
 import { openMatter } from './support'
 
-test('one menu carries the model and Think longer, and the answer records the level', async ({
+test('one menu carries the model and thinking level, and the answer records it', async ({
   page,
   request,
 }) => {
@@ -29,26 +29,31 @@ test('one menu carries the model and Think longer, and the answer records the le
       animations: 'disabled',
       path: `${directory}/sidebar-icon-active.png`,
     })
-  await page.getByRole('button', { name: 'Test model', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Test model · Medium', exact: true })
+    .click()
   await expect(
     page.getByRole('dialog', { name: 'Model and thinking' }),
   ).toBeVisible()
   await expect(agentModelOption(page, /Test model/)).toBeChecked()
   await shot('composer-menu-light')
-  const thinkLonger = page.getByRole('switch', { name: 'Think longer' })
-  await expect(thinkLonger).not.toBeChecked()
-  await thinkLonger.click()
-  await expect(thinkLonger).toBeChecked()
+  const thinking = page.getByRole('radiogroup', { name: 'Thinking' })
+  await expect(thinking.getByRole('radio')).toHaveText([
+    'Off',
+    'Low',
+    'Medium',
+    'High',
+  ])
+  await expect(thinking.getByRole('radio', { name: 'Medium' })).toBeChecked()
+  await thinking.getByRole('radio', { name: 'High' }).click()
+  await expect(thinking.getByRole('radio', { name: 'High' })).toBeChecked()
   await expect(
     page.getByRole('dialog', { name: 'Model and thinking' }),
   ).toBeVisible()
-  await shot('composer-menu-think-longer')
+  await shot('composer-menu-levels')
   await page.keyboard.press('Escape')
   await expect(
-    page.getByRole('button', {
-      name: 'Test model · Think longer',
-      exact: true,
-    }),
+    page.getByRole('button', { name: 'Test model · High', exact: true }),
   ).toBeVisible()
   await page
     .getByRole('textbox', { name: 'Message' })
@@ -63,7 +68,7 @@ test('one menu carries the model and Think longer, and the answer records the le
     thinking: 'high',
   })
   await expect(
-    page.getByText('Test model · Thought longer', { exact: true }),
+    page.getByText('Test model · High thinking', { exact: true }),
   ).toBeVisible({ timeout: 60000 })
   await expect(page.getByRole('list', { name: 'Sources' })).toBeVisible({
     timeout: 60000,
@@ -100,13 +105,10 @@ test('one menu carries the model and Think longer, and the answer records the le
   })
   await page.reload()
   await expect(
-    page.getByRole('button', {
-      name: 'Test model · Think longer',
-      exact: true,
-    }),
+    page.getByRole('button', { name: 'Test model · High', exact: true }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Switch to dark theme' }).click()
-  await page.getByRole('button', { name: 'Test model · Think longer' }).click()
+  await page.getByRole('button', { name: 'Test model · High' }).click()
   await expect(
     page.getByRole('dialog', { name: 'Model and thinking' }),
   ).toBeVisible()
@@ -121,7 +123,9 @@ test('one menu carries the model and Think longer, and the answer records the le
       path: `${directory}/sidebar-icon-normal.png`,
     })
   await page.getByRole('button', { name: 'Show agent panel' }).click()
-  await page.getByRole('button', { name: 'Test model', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Test model · Medium', exact: true })
+    .click()
   await expect(
     page.getByRole('dialog', { name: 'Model and thinking' }),
   ).toBeVisible()
@@ -129,12 +133,15 @@ test('one menu carries the model and Think longer, and the answer records the le
   await page.keyboard.press('Escape')
   await page.goto('/settings?section=agent')
   await page.getByLabel('Model', { exact: true }).fill('e2e-scripted')
-  const thinkLongerByDefault = page.getByRole('switch', {
-    name: 'Think longer by default',
-    exact: true,
+  const defaultThinking = page.getByRole('radiogroup', {
+    name: 'Default thinking',
   })
-  await expect(thinkLongerByDefault).not.toBeChecked()
-  await thinkLongerByDefault.click()
-  await expect(thinkLongerByDefault).toBeChecked()
+  await expect(
+    defaultThinking.getByRole('radio', { name: 'Off' }),
+  ).toBeChecked()
+  await defaultThinking.getByRole('radio', { name: 'High' }).click()
+  await expect(
+    defaultThinking.getByRole('radio', { name: 'High' }),
+  ).toBeChecked()
   await shot('settings-agent')
 })

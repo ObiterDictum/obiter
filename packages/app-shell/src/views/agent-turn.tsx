@@ -1,6 +1,6 @@
 import { Ratio } from '@obiter/ui/icons'
 import type { AgentSessionRun } from '@obiter/contracts'
-import { shortModelLabel, thinksLonger } from '../agent-models'
+import { shortModelLabel, thinkingFooterLabel } from '../agent-models'
 import { EvidenceLink, evidenceLabel } from '../agent-evidence'
 
 export function AgentTurn({ run }: { run: AgentSessionRun }) {
@@ -106,10 +106,9 @@ export function AgentTurn({ run }: { run: AgentSessionRun }) {
                 : 'Researching your question…'}
           </p>
         )}
-        {run.modelLabel ? (
+        {run.modelLabel && run.thinking ? (
           <p className="mt-3 text-caption text-muted">
-            {shortModelLabel(run.modelLabel)}
-            {thinksLonger(run.thinking) ? ' · Thought longer' : ''}
+            {`${shortModelLabel(run.modelLabel)} · ${thinkingFooterLabel(run.thinking)}`}
           </p>
         ) : null}
       </div>

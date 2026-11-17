@@ -3,8 +3,10 @@ import type { AgentAvailableModel } from '@obiter/contracts'
 import {
   offersThinking,
   shortModelLabel,
-  thinksLonger,
-  thinkingFor,
+  thinkingFooterLabel,
+  thinkingForModel,
+  thinkingName,
+  thinkingPillLabel,
 } from './agent-models'
 
 const model = (
@@ -19,46 +21,49 @@ const model = (
   defaultThinking,
 })
 
-describe('agent thinking mapping', () => {
-  it('treats only the high level as thinking longer', () => {
-    expect(thinksLonger('high')).toBe(true)
-    expect(thinksLonger('medium')).toBe(false)
-    expect(thinksLonger('low')).toBe(false)
-    expect(thinksLonger('off')).toBe(false)
-    expect(thinksLonger(undefined)).toBe(false)
+describe('agent thinking labels', () => {
+  it('names each level for the segmented control', () => {
+    expect(
+      (['off', 'low', 'medium', 'high'] as const).map(thinkingName),
+    ).toEqual(['Off', 'Low', 'Medium', 'High'])
   })
 
-  it('sends high when thinking longer is on', () => {
+  it('reads no thinking as words in the pill and the footer', () => {
+    expect(thinkingPillLabel('off')).toBe('No thinking')
+    expect(thinkingFooterLabel('off')).toBe('No thinking')
+  })
+
+  it('keeps the pill to the level name and the footer to the full phrase', () => {
+    expect(thinkingPillLabel('medium')).toBe('Medium')
+    expect(thinkingFooterLabel('medium')).toBe('Medium thinking')
+    expect(thinkingFooterLabel('high')).toBe('High thinking')
+  })
+})
+
+describe('agent thinking choice', () => {
+  it('keeps the level when the new model supports it', () => {
     expect(
-      thinkingFor(model(['off', 'low', 'medium', 'high'], 'medium'), true),
+      thinkingForModel(
+        model(['off', 'low', 'medium', 'high'], 'medium'),
+        'high',
+      ),
     ).toBe('high')
-    expect(thinkingFor(model(['low', 'medium', 'high'], 'medium'), true)).toBe(
-      'high',
-    )
+    expect(
+      thinkingForModel(model(['low', 'medium', 'high'], 'medium'), 'low'),
+    ).toBe('low')
   })
 
-  it('keeps the model default when thinking longer is off and it is not high', () => {
+  it('falls back to the model default when the level is unsupported', () => {
     expect(
-      thinkingFor(model(['off', 'low', 'medium', 'high'], 'medium'), false),
+      thinkingForModel(model(['low', 'medium', 'high'], 'medium'), 'off'),
     ).toBe('medium')
-    expect(
-      thinkingFor(model(['off', 'low', 'medium', 'high'], 'off'), false),
-    ).toBe('off')
   })
 
-  it('steps down to the next supported level when the model default is high', () => {
-    expect(thinkingFor(model(['low', 'medium', 'high'], 'high'), false)).toBe(
-      'medium',
-    )
-    expect(thinkingFor(model(['low', 'high'], 'high'), false)).toBe('low')
-    expect(thinkingFor(model(['high'], 'high'), false)).toBe('off')
-  })
-
-  it('offers thinking longer only when a model has more than one level', () => {
+  it('offers a thinking choice only when a model has more than one level', () => {
     expect(
       offersThinking(model(['off', 'low', 'medium', 'high'], 'medium')),
     ).toBe(true)
-    expect(offersThinking(model(['high'], 'high'))).toBe(false)
+    expect(offersThinking(model(['off'], 'off'))).toBe(false)
   })
 
   it('drops the Claude prefix so the pill fits', () => {

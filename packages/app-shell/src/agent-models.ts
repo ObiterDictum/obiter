@@ -11,19 +11,27 @@ export const agentModelsQueryOptions = queryOptions({
   queryFn: () => apiFetch<AgentModelsResponse>('/api/agent/models'),
 })
 
-type ThinkingModel = Pick<
-  AgentAvailableModel,
-  'thinkingLevels' | 'defaultThinking'
->
-
-const DEEPEST_FIRST = ['high', 'medium', 'low', 'off'] as const
+const LEVEL_NAMES = {
+  off: 'Off',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+} satisfies Record<AgentThinkingLevel, string>
 
 export function shortModelLabel(label: string): string {
   return label.replace(/^Claude\s+/i, '')
 }
 
-export function thinksLonger(level: AgentThinkingLevel | undefined): boolean {
-  return level === 'high'
+export function thinkingName(level: AgentThinkingLevel): string {
+  return LEVEL_NAMES[level]
+}
+
+export function thinkingPillLabel(level: AgentThinkingLevel): string {
+  return level === 'off' ? 'No thinking' : LEVEL_NAMES[level]
+}
+
+export function thinkingFooterLabel(level: AgentThinkingLevel): string {
+  return level === 'off' ? 'No thinking' : `${LEVEL_NAMES[level]} thinking`
 }
 
 export function offersThinking(
@@ -32,14 +40,11 @@ export function offersThinking(
   return model.thinkingLevels.length > 1
 }
 
-export function thinkingFor(
-  model: ThinkingModel,
-  longer: boolean,
+export function thinkingForModel(
+  model: Pick<AgentAvailableModel, 'thinkingLevels' | 'defaultThinking'>,
+  thinking: AgentThinkingLevel,
 ): AgentThinkingLevel {
-  const supported = DEEPEST_FIRST.filter((level) =>
-    model.thinkingLevels.includes(level),
-  )
-  if (longer) return supported[0] ?? 'off'
-  if (model.defaultThinking !== 'high') return model.defaultThinking
-  return supported.find((level) => level !== 'high') ?? 'off'
+  return model.thinkingLevels.includes(thinking)
+    ? thinking
+    : model.defaultThinking
 }

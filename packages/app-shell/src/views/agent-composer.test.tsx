@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AgentComposer } from './agent-composer'
@@ -115,9 +116,9 @@ it('disables messages while a run is live and explains why', async () => {
     screen.getByRole('textbox', { name: 'Message' }).hasAttribute('disabled'),
   ).toBe(true)
   expect(
-    (await screen.findByRole('button', { name: 'Sonnet 5.5' })).hasAttribute(
-      'disabled',
-    ),
+    (
+      await screen.findByRole('button', { name: 'Sonnet 5.5 · Medium' })
+    ).hasAttribute('disabled'),
   ).toBe(true)
   expect(screen.getByText(/Wait for the current answer/)).toBeTruthy()
 })
@@ -148,9 +149,11 @@ it('shows conflicts inline and reuses the turn key on retry without recreating t
   expect(calls).toHaveLength(3)
   expect(calls[2]?.body).toEqual(first)
 })
-it('opens one menu with a model row and a Think longer switch that leaves the menu open', async () => {
+it('shows the level in the pill and offers every supported level in one menu', async () => {
   setup()
-  fireEvent.click(await screen.findByRole('button', { name: 'Sonnet 5.5' }))
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Sonnet 5.5 · Medium' }),
+  )
   const menu = await screen.findByRole('dialog', {
     name: 'Model and thinking',
   })
@@ -159,23 +162,39 @@ it('opens one menu with a model row and a Think longer switch that leaves the me
       .getByRole('radio', { name: /Sonnet 5.5/ })
       .getAttribute('aria-checked'),
   ).toBe('true')
-  const toggle = screen.getByRole('switch', { name: 'Think longer' })
-  expect(toggle.getAttribute('aria-checked')).toBe('false')
-  fireEvent.click(toggle)
-  expect(toggle.getAttribute('aria-checked')).toBe('true')
-  expect(menu.isConnected).toBe(true)
+  const levels = within(screen.getByRole('radiogroup', { name: 'Thinking' }))
   expect(
-    screen.getByRole('button', { name: 'Sonnet 5.5 · Think longer' }),
-  ).toBeTruthy()
+    levels
+      .getAllByRole('radio')
+      .map((level) => [level.textContent, level.getAttribute('aria-checked')]),
+  ).toEqual([
+    ['Off', 'false'],
+    ['Low', 'false'],
+    ['Medium', 'true'],
+    ['High', 'false'],
+  ])
+  fireEvent.click(levels.getByRole('radio', { name: 'High' }))
+  expect(
+    levels.getByRole('radio', { name: 'High' }).getAttribute('aria-checked'),
+  ).toBe('true')
+  expect(menu.isConnected).toBe(true)
+  expect(screen.getByRole('button', { name: 'Sonnet 5.5 · High' })).toBeTruthy()
 })
 
-it('keeps Think longer on when the model changes and sends high for the new model', async () => {
+it('keeps the level when the model changes and sends it with the new model', async () => {
   models = [sonnet, opus]
   const sent = setup()
-  fireEvent.click(await screen.findByRole('button', { name: 'Sonnet 5.5' }))
-  fireEvent.click(await screen.findByRole('switch', { name: 'Think longer' }))
-  fireEvent.click(await screen.findByRole('radio', { name: /Opus 5.5/ }))
-  await screen.findByRole('button', { name: 'Opus 5.5 · Think longer' })
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Sonnet 5.5 · Medium' }),
+  )
+  fireEvent.click(
+    within(screen.getByRole('radiogroup', { name: 'Thinking' })).getByRole(
+      'radio',
+      { name: 'High' },
+    ),
+  )
+  fireEvent.click(screen.getByRole('radio', { name: /Opus 5.5/ }))
+  await screen.findByRole('button', { name: 'Opus 5.5 · High' })
   fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
     target: { value: 'Explain negligence' },
   })

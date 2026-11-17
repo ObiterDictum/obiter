@@ -6,16 +6,16 @@ import {
   PopoverPopup,
   PopoverPositioner,
   PopoverTrigger,
-  Switch,
   cn,
 } from '@obiter/ui'
 import { CaretDown, Check } from '@obiter/ui/icons'
 import {
   offersThinking,
   shortModelLabel,
-  thinksLonger,
-  thinkingFor,
+  thinkingForModel,
+  thinkingPillLabel,
 } from '../agent-models'
+import { ThinkingChoice } from './agent-thinking-choice'
 
 export function AgentModelControls({
   models,
@@ -33,7 +33,6 @@ export function AgentModelControls({
   onChange: (model: string, thinking: AgentThinkingLevel) => void
 }) {
   const [open, setOpen] = useState(false)
-  const longer = thinksLonger(thinking)
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -44,8 +43,7 @@ export function AgentModelControls({
         )}
       >
         <span className="truncate">
-          {shortModelLabel(model.label)}
-          {longer ? ' · Think longer' : ''}
+          {shortModelLabel(model.label)} · {thinkingPillLabel(thinking)}
         </span>
         <CaretDown size={12} aria-hidden className="shrink-0" />
       </PopoverTrigger>
@@ -65,7 +63,7 @@ export function AgentModelControls({
                     role="radio"
                     aria-checked={selected}
                     onClick={() => {
-                      onChange(option.id, thinkingFor(option, longer))
+                      onChange(option.id, thinkingForModel(option, thinking))
                       setOpen(false)
                     }}
                     className={cn(
@@ -96,20 +94,14 @@ export function AgentModelControls({
             {offersThinking(model) ? (
               <>
                 <span aria-hidden className="my-1 h-px bg-line" />
-                <div className="flex items-center gap-3 rounded-md px-2 py-1.5">
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-item text-ink">Think longer</span>
-                    <span className="text-caption text-muted">
-                      Slower, more careful answers
-                    </span>
-                  </span>
-                  <Switch
-                    label="Think longer"
-                    checked={longer}
-                    className="ml-auto shrink-0"
-                    onCheckedChange={(next) =>
-                      onChange(model.id, thinkingFor(model, next))
-                    }
+                <div className="flex items-center gap-3 px-2 py-1.5">
+                  <span className="text-item text-ink">Thinking</span>
+                  <ThinkingChoice
+                    label="Thinking"
+                    className="ml-auto"
+                    levels={model.thinkingLevels}
+                    value={thinking}
+                    onChange={(level) => onChange(model.id, level)}
                   />
                 </div>
               </>

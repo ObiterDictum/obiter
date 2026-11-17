@@ -278,7 +278,7 @@ describe('agent tab', () => {
       },
     ]
     renderTab()
-    await screen.findByRole('button', { name: 'Sonnet 5.5' })
+    await screen.findByRole('button', { name: 'Sonnet 5.5 · No thinking' })
     expect(
       screen.queryByText(/No agent model is set for this organisation/),
     ).toBeNull()
