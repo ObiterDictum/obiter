@@ -84,4 +84,5 @@ export {
 } from './person-name'
 export { KeyboardHint } from './keyboard-hint'
 export { ObiterMark } from './brand/obiter-mark'
+export { RatioMascot, type RatioMascotProps } from './ratio-mascot'
 export type { IconProps, IconWeight } from './icon-base'

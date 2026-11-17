@@ -12,6 +12,7 @@
     "bench:guard": "bun scripts/bench-guard.ts",
     "perf:bundle-budget": "bun scripts/perf/bundle-budget.mjs",
     "perf:desktop-budget": "bun scripts/perf/desktop-budget.mjs",
+    "ratio:avatars": "bun scripts/ratio-avatars.ts",
     "synthetic-v2:smoke": "bun scripts/synthetic-v2/smoke.ts",
     "synthetic-v2:canary": "bun scripts/synthetic-v2/smoke.ts --profile=tournament-canary",
     "synthetic-v2:tournament": "bun scripts/synthetic-v2/run.ts --stage=tournament",
@@ -34,6 +35,8 @@
     "eslint": "^9.30.0",
     "oxlint": "1.73.0",
     "prettier": "^3.9.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "simple-icons": "11",
     "typescript": "^5.7.2"
   },

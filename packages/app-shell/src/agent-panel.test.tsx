@@ -287,13 +287,14 @@ describe('agent tab', () => {
     ).toBe(true)
   })
 })
-it('offers a matter question without law starter prompts in an empty panel', async () => {
+it('offers a Ratio question without law starter prompts in an empty panel', async () => {
   runs = []
   renderTab()
   expect(
-    await screen.findByRole('heading', { name: 'Ask about this matter' }),
+    await screen.findByRole('heading', { name: 'Ask Ratio about this matter' }),
   ).toBeTruthy()
   expect(await screen.findByRole('textbox', { name: 'Message' })).toBeTruthy()
   expect(screen.queryByText('What are the elements of negligence?')).toBeNull()
   expect(screen.queryByText(/No runs on this matter yet/)).toBeNull()
+  expect(screen.getAllByRole('img', { name: 'Ratio, idle' })).toHaveLength(2)
 })
