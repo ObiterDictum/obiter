@@ -75,6 +75,12 @@ test('compatible connections discover models, retry unsupported thinking and per
     provider: 'openai_compatible',
   })
   await page.goto('/agent')
+  await page
+    .getByRole('button', {
+      name: /Test model · Medium|reasoning-model · Medium/,
+    })
+    .click()
+  await page.getByRole('radio', { name: /reasoning-model OpenCode Go/ }).click()
   const pill = page.getByRole('button', { name: /reasoning-model · Medium/ })
   await pill.click()
   await expect(
@@ -125,7 +131,17 @@ test('compatible connections discover models, retry unsupported thinking and per
     )
     expect(run.usage[0].firstTokenAt).toBeTruthy()
     await shot(`answer-footer-${rawModel}`)
-    if (rawModel === 'reasoning-model') await page.goto('/agent')
+    if (rawModel === 'reasoning-model') {
+      await page.goto('/agent')
+      await page
+        .getByRole('button', {
+          name: /Test model · Medium|reasoning-model · Medium/,
+        })
+        .click()
+      await page
+        .getByRole('radio', { name: /reasoning-model OpenCode Go/ })
+        .click()
+    }
   }
   const refused = await page.request.post('/api/agent/connections', {
     data: {
