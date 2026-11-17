@@ -15,7 +15,11 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
   const directory = process.env.OBITER_MODEL_SCREENSHOTS
   if (directory) await mkdir(directory, { recursive: true })
   async function shot(name: string) {
-    if (directory) await page.screenshot({ path: `${directory}/${name}.png` })
+    if (directory)
+      await page.screenshot({
+        animations: 'disabled',
+        path: `${directory}/${name}.png`,
+      })
   }
   await page.getByRole('button', { name: 'Test model', exact: true }).click()
   await expect(page.getByRole('menuitem', { name: /Test model/ })).toBeVisible()
@@ -39,6 +43,12 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
   await expect(
     page.getByText('Test model · Thinking high', { exact: true }),
   ).toBeVisible({ timeout: 60000 })
+  await expect(page.getByRole('list', { name: 'Sources' })).toBeVisible({
+    timeout: 60000,
+  })
+  await expect(
+    page.getByRole('button', { name: 'Send', exact: true }),
+  ).toBeDisabled()
   await shot('turn-footer')
   const id = new URL(page.url()).pathname.split('/').at(-1)
   const detail = await (

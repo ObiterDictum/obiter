@@ -29,7 +29,8 @@ export function AgentModelControls({
 }) {
   const thinkingControl = (
     <Select
-      label="Thinking"
+      ariaLabel="Thinking"
+      size="compact"
       value={thinking}
       options={model.thinkingLevels.map((value) => ({
         value,
