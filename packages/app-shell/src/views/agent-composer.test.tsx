@@ -19,6 +19,21 @@ function setup(matterId: string | null = null, live = false) {
     Object.assign(
       async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
         const url = String(input)
+        if (url.endsWith('/api/agent/models'))
+          return Response.json({
+            models: [
+              {
+                id: 'claude-sonnet-5-5',
+                provider: 'anthropic',
+                label: 'Sonnet',
+                description: 'Balanced research',
+                thinkingLevels: ['off', 'low', 'medium', 'high'],
+                defaultThinking: 'medium',
+              },
+            ],
+            default: 'claude-sonnet-5-5',
+            defaultThinking: 'medium',
+          })
         calls.push({
           url,
           body: init?.body ? JSON.parse(String(init.body)) : null,
@@ -60,16 +75,25 @@ it('creates a private session and posts its first turn before handing off to the
   fireEvent.change(message, { target: { value: 'Explain negligence' } })
   fireEvent.keyDown(message, { key: 'Enter', shiftKey: true })
   expect(calls).toHaveLength(0)
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled'),
+    ).toBe(false),
+  )
   fireEvent.keyDown(message, { key: 'Enter' })
   await waitFor(() => expect(sent).toHaveBeenCalledWith('s1'))
   expect(calls.map((call) => call.body)).toEqual([
     {
+      model: 'claude-sonnet-5-5',
+      thinking: 'medium',
       matterId: null,
       title: 'Explain negligence',
       mode: 'supervised',
       idempotencyKey: expect.any(String),
     },
     {
+      model: 'claude-sonnet-5-5',
+      thinking: 'medium',
       kind: 'follow_up',
       text: 'Explain negligence',
       idempotencyKey: expect.any(String),
@@ -89,12 +113,22 @@ it('shows conflicts inline and reuses the turn key on retry without recreating t
   fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
     target: { value: 'Explain negligence' },
   })
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled'),
+    ).toBe(false),
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   expect((await screen.findByRole('alert')).textContent).toContain(
     'An answer is already in progress',
   )
   const first = calls[1]?.body
   conflict = false
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled'),
+    ).toBe(false),
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   await waitFor(() => expect(sent).toHaveBeenCalledWith('s1'))
   expect(calls).toHaveLength(3)

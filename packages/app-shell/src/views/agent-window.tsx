@@ -43,7 +43,6 @@ export function AgentWindowView() {
         <AgentConversation
           key={sessionId ?? 'new'}
           sessionId={sessionId}
-          session={detail.data?.session}
           matterId={null}
           onSent={(id) =>
             void navigate({

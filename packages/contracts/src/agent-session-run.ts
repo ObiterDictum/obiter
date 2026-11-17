@@ -65,8 +65,6 @@ export type AgentSession = z.infer<typeof agentSessionSchema>
 
 export const pendingApprovalSummarySchema = z
   .object({
-    model: z.string().min(1).optional(),
-    thinking: agentThinkingLevelSchema.optional(),
     id: idSchema,
     kind: z.enum(['document_changes', 'mcp_egress']),
     payloadSha256: z.string().regex(/^[a-f0-9]{64}$/),
