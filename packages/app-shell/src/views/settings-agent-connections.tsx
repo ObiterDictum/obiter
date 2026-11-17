@@ -59,9 +59,7 @@ export function AgentConnections({
           <div className="text-caption text-muted">
             {new URL(connection.baseUrl).host} · Key ending{' '}
             {connection.keyLastFour} ·{' '}
-            {connection.modelIds.length
-              ? `${connection.modelIds.length} models`
-              : 'Models discovered automatically'}
+            {`${connection.modelCount ?? connection.modelIds.length} models`}
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setEditing(connection)}>

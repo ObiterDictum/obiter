@@ -21,6 +21,7 @@ export const agentConnectionSchema = z
     ...fields,
     id: z.string().uuid(),
     keyLastFour: z.string().length(4),
+    modelCount: z.number().int().nonnegative().optional(),
   })
   .strict()
 export type AgentConnection = z.infer<typeof agentConnectionSchema>
