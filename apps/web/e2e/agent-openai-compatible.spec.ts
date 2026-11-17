@@ -6,6 +6,7 @@ import { signIn } from './e13-support'
 test('compatible connections discover models, retry unsupported thinking and persist usage', async ({
   page,
   request,
+  browser,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   const account = await createAccount(request, 'Compatible')
@@ -168,4 +169,22 @@ test('compatible connections discover models, retry unsupported thinking and per
     },
   })
   expect(refused.status()).toBe(400)
+  const otherAccount = await createAccount(request, 'OtherCompatible')
+  const otherContext = await browser.newContext({
+    baseURL: new URL(page.url()).origin,
+  })
+  try {
+    const otherPage = await otherContext.newPage()
+    await signIn(otherPage, otherAccount.email, otherAccount.password)
+    const listing = await otherPage.request.get('/api/agent/connections')
+    expect(listing.status()).toBe(200)
+    expect(await listing.json()).toEqual({ connections: [] })
+    const denied = await otherPage.request.patch(
+      `/api/agent/connections/${models[0].connectionId}`,
+      { data: { name: 'Cross-organisation edit' } },
+    )
+    expect(denied.status()).toBe(404)
+  } finally {
+    await otherContext.close()
+  }
 })
