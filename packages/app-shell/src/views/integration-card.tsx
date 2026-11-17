@@ -51,7 +51,7 @@ export function IntegrationCard({
       </div>
       <p
         className={cn(
-          'pointer-events-none relative z-[2] line-clamp-1 text-caption',
+          'pointer-events-none relative z-[2] line-clamp-2 min-h-[2lh] text-caption',
           planned ? 'text-subtle' : 'text-muted',
         )}
       >

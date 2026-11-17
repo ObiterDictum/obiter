@@ -89,7 +89,7 @@ function ConnectedCard({
             ))}
           </p>
         ) : null}
-        <p className="mt-1 line-clamp-1 text-caption text-subtle">
+        <p className="mt-1 line-clamp-2 text-caption text-subtle">
           {integration.summary}
         </p>
       </div>
