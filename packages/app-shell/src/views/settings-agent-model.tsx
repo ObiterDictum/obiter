@@ -130,7 +130,14 @@ export function AgentModelForm({
             ? undefined
             : `The provider's model id, for example ${AGENT_PROVIDERS[provider].modelIdExample}.`
         }
-        onChange={(event) => setModelId(event.target.value)}
+        onChange={(event) => {
+          const value = event.target.value
+          setModelId(value)
+          setThinking(
+            catalogue.data?.models.find((model) => model.id === value)
+              ?.defaultThinking ?? 'off',
+          )
+        }}
       />
       <Input
         label="Snapshot (optional)"
