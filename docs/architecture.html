@@ -7485,6 +7485,17 @@
 
         <section id="agents">
           <h2>Agent workflow</h2>
+          <p>
+            <code>GET /api/agent/models</code> supplies the organisation’s
+            Anthropic catalogue and default thinking. Session create and turn
+            requests accept model and thinking choices; runs record the selected
+            identity and thinking. The composer and the matter panel share one
+            pill that opens the models and a segmented control over the levels
+            the selected model supports. API migration
+            <code>0059_agent_model_thinking.sql</code> adds the default thinking
+            setting and backfills existing records. Managed EU models and other
+            providers arrive with the harness gateway.
+          </p>
           <p class="lede">
             Much of this repository is written by coding agents, and the
             conventions governing that are themselves versioned.

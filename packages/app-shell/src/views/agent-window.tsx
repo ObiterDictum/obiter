@@ -104,6 +104,7 @@ export function AgentConversation({
       >
         <AgentComposer
           sessionId={sessionId}
+          session={detail.data?.session}
           matterId={detail.data?.session.matterId ?? matterId}
           live={Boolean(detail.data?.session.activeRunId)}
           showStarters={!sessionId && matterId === null}

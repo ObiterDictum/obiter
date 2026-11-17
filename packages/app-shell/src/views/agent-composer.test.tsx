@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AgentComposer } from './agent-composer'
@@ -13,12 +14,35 @@ import { conversationTitle } from '../agent-sessions'
 
 let calls: Array<{ url: string; body: unknown }> = []
 let conflict = false
+const sonnet = {
+  id: 'claude-sonnet-5-5',
+  provider: 'anthropic',
+  label: 'Claude Sonnet 5.5',
+  description: 'Balanced research',
+  thinkingLevels: ['off', 'low', 'medium', 'high'],
+  defaultThinking: 'medium',
+} as const
+const opus = {
+  id: 'claude-opus-5-5',
+  provider: 'anthropic',
+  label: 'Claude Opus 5.5',
+  description: 'Deep analysis',
+  thinkingLevels: ['low', 'medium', 'high'],
+  defaultThinking: 'medium',
+} as const
+let models: Array<typeof sonnet | typeof opus> = [sonnet]
 function setup(matterId: string | null = null, live = false) {
   calls = []
   spyOn(globalThis, 'fetch').mockImplementation(
     Object.assign(
       async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
         const url = String(input)
+        if (url.endsWith('/api/agent/models'))
+          return Response.json({
+            models,
+            default: 'claude-sonnet-5-5',
+            defaultThinking: 'medium',
+          })
         calls.push({
           url,
           body: init?.body ? JSON.parse(String(init.body)) : null,
@@ -53,6 +77,7 @@ afterEach(() => {
   cleanup()
   mock.restore()
   conflict = false
+  models = [sonnet]
 })
 it('creates a private session and posts its first turn before handing off to the thread', async () => {
   const sent = setup()
@@ -60,26 +85,40 @@ it('creates a private session and posts its first turn before handing off to the
   fireEvent.change(message, { target: { value: 'Explain negligence' } })
   fireEvent.keyDown(message, { key: 'Enter', shiftKey: true })
   expect(calls).toHaveLength(0)
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled'),
+    ).toBe(false),
+  )
   fireEvent.keyDown(message, { key: 'Enter' })
   await waitFor(() => expect(sent).toHaveBeenCalledWith('s1'))
   expect(calls.map((call) => call.body)).toEqual([
     {
+      model: 'claude-sonnet-5-5',
+      thinking: 'medium',
       matterId: null,
       title: 'Explain negligence',
       mode: 'supervised',
       idempotencyKey: expect.any(String),
     },
     {
+      model: 'claude-sonnet-5-5',
+      thinking: 'medium',
       kind: 'follow_up',
       text: 'Explain negligence',
       idempotencyKey: expect.any(String),
     },
   ])
 })
-it('disables messages while a run is live and explains why', () => {
+it('disables messages while a run is live and explains why', async () => {
   setup(null, true)
   expect(
     screen.getByRole('textbox', { name: 'Message' }).hasAttribute('disabled'),
+  ).toBe(true)
+  expect(
+    (
+      await screen.findByRole('button', { name: 'Sonnet 5.5 · Medium' })
+    ).hasAttribute('disabled'),
   ).toBe(true)
   expect(screen.getByText(/Wait for the current answer/)).toBeTruthy()
 })
@@ -89,17 +128,84 @@ it('shows conflicts inline and reuses the turn key on retry without recreating t
   fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
     target: { value: 'Explain negligence' },
   })
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled'),
+    ).toBe(false),
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   expect((await screen.findByRole('alert')).textContent).toContain(
     'An answer is already in progress',
   )
   const first = calls[1]?.body
   conflict = false
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled'),
+    ).toBe(false),
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Send' }))
   await waitFor(() => expect(sent).toHaveBeenCalledWith('s1'))
   expect(calls).toHaveLength(3)
   expect(calls[2]?.body).toEqual(first)
 })
+it('shows the level in the pill and offers every supported level in one menu', async () => {
+  setup()
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Sonnet 5.5 · Medium' }),
+  )
+  const menu = await screen.findByRole('dialog', {
+    name: 'Model and thinking',
+  })
+  expect(
+    screen
+      .getByRole('radio', { name: /Sonnet 5.5/ })
+      .getAttribute('aria-checked'),
+  ).toBe('true')
+  const levels = within(screen.getByRole('radiogroup', { name: 'Thinking' }))
+  expect(
+    levels
+      .getAllByRole('radio')
+      .map((level) => [level.textContent, level.getAttribute('aria-checked')]),
+  ).toEqual([
+    ['Off', 'false'],
+    ['Low', 'false'],
+    ['Medium', 'true'],
+    ['High', 'false'],
+  ])
+  fireEvent.click(levels.getByRole('radio', { name: 'High' }))
+  expect(
+    levels.getByRole('radio', { name: 'High' }).getAttribute('aria-checked'),
+  ).toBe('true')
+  expect(menu.isConnected).toBe(true)
+  expect(screen.getByRole('button', { name: 'Sonnet 5.5 · High' })).toBeTruthy()
+})
+
+it('keeps the level when the model changes and sends it with the new model', async () => {
+  models = [sonnet, opus]
+  const sent = setup()
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Sonnet 5.5 · Medium' }),
+  )
+  fireEvent.click(
+    within(screen.getByRole('radiogroup', { name: 'Thinking' })).getByRole(
+      'radio',
+      { name: 'High' },
+    ),
+  )
+  fireEvent.click(screen.getByRole('radio', { name: /Opus 5.5/ }))
+  await screen.findByRole('button', { name: 'Opus 5.5 · High' })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
+    target: { value: 'Explain negligence' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(sent).toHaveBeenCalledWith('s1'))
+  expect(calls[0]?.body).toMatchObject({
+    model: 'claude-opus-5-5',
+    thinking: 'high',
+  })
+})
+
 it('trims conversation titles at a word boundary within eighty characters', () => {
   expect(conversationTitle('  short title  ')).toBe('short title')
   expect(conversationTitle('word '.repeat(20))).toBe(

@@ -12,7 +12,7 @@ export const SHELL_ICONS = [
   'MagnifyingGlass',
   'Moon',
   'PencilSimple',
-  'Robot',
+  'Ratio',
   'ShieldCheck',
   'SidebarSimple',
   'Sun',

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { agentThinkingLevelSchema } from './agent-models'
 import {
   AGENT_GOAL_MAX_LENGTH,
   agentRunSchema,
@@ -66,6 +67,8 @@ export type AgentSessionListResponse = z.infer<
 export const agentSessionCreateRequestSchema = z
   .object({
     matterId: sessionIdSchema.nullable(),
+    model: z.string().trim().min(1).max(128).optional(),
+    thinking: agentThinkingLevelSchema.optional(),
     title: z.string().trim().min(1),
     mode: agentSessionModeSchema,
     idempotencyKey: idempotencyKeySchema,
@@ -87,6 +90,8 @@ export type AgentSessionDetailResponse = z.infer<
 export const agentSessionTurnRequestSchema = z
   .object({
     kind: z.enum(['follow_up', 'steer']),
+    model: z.string().trim().min(1).max(128).optional(),
+    thinking: agentThinkingLevelSchema.optional(),
     text: z.string().trim().min(1).max(AGENT_GOAL_MAX_LENGTH),
     idempotencyKey: idempotencyKeySchema,
   })

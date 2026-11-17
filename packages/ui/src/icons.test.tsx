@@ -5,6 +5,7 @@ import * as icons from './icons'
 import type { IconProps, IconWeight } from './icon-base'
 
 const WEIGHTS: IconWeight[] = ['regular', 'bold', 'fill']
+const HAND_DRAWN = new Set(['Ratio'])
 
 function isComponent(value: unknown): value is ComponentType<IconProps> {
   return (
@@ -14,8 +15,9 @@ function isComponent(value: unknown): value is ComponentType<IconProps> {
 }
 
 describe('generated icons', () => {
-  it('every icon and weight renders the same SVG as Phosphor', async () => {
+  it('every Phosphor icon and weight renders the same SVG as Phosphor', async () => {
     for (const [name, Icon] of Object.entries(icons)) {
+      if (HAND_DRAWN.has(name)) continue
       const module: Record<string, unknown> = await import(
         `@phosphor-icons/react/dist/csr/${name}`
       )
@@ -33,5 +35,19 @@ describe('generated icons', () => {
         )
       }
     }
+  })
+})
+
+describe('hand-drawn icons', () => {
+  it('Ratio thickens the line for bold and floods the face for fill', () => {
+    const svg = (weight: IconWeight) =>
+      renderToStaticMarkup(createElement(icons.Ratio, { size: 16, weight }))
+    expect(svg('regular')).toContain('stroke-width="16"')
+    expect(svg('bold')).toContain('stroke-width="24"')
+    expect(svg('fill')).toContain('stroke-width="16"')
+    expect(svg('regular')).toContain('128 222 Q 176 196 176 114" fill="none"')
+    expect(svg('fill')).toContain(
+      '128 222 Q 176 196 176 114" fill="currentColor"',
+    )
   })
 })

@@ -17,7 +17,11 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import type { AgentRun, AgentRunDetailResponse } from '@obiter/contracts'
+import type {
+  AgentModelsResponse,
+  AgentRun,
+  AgentRunDetailResponse,
+} from '@obiter/contracts'
 import { AgentTab } from './agent-panel'
 const baseRun = {
   id: 'arun_1',
@@ -101,6 +105,7 @@ const running: AgentRun = {
   stopReason: null,
 }
 let runs: AgentRun[] = []
+let models: AgentModelsResponse['models'] = []
 const requests: Array<{ url: string; method: string }> = []
 function detail(run: AgentRun): AgentRunDetailResponse {
   return { run, steps: [], toolCalls: [], events: [] }
@@ -143,6 +148,13 @@ beforeEach(() => {
             keySetAt: null,
           })
         }
+        if (url.endsWith('/api/agent/models'))
+          return json({
+            models,
+            default: models[0]?.id ?? null,
+            defaultThinking: 'off',
+            ...(models.length === 0 ? { reason: 'not_configured' } : {}),
+          })
         if (url.includes('/api/agent-sessions')) return json({ sessions: [] })
         if (url.endsWith('/api/matters/mtr_1/agent-runs')) return json({ runs })
         if (url.endsWith('/cancel')) {
@@ -194,6 +206,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   mock.restore()
+  models = []
 })
 
 function renderTab(path = '/matters/mtr_1') {
@@ -251,6 +264,24 @@ describe('agent tab', () => {
     expect(
       await screen.findByText(/No agent model is set for this organisation/),
     ).toBeTruthy()
+  })
+
+  it('drops the model setup note once the catalogue offers a model', async () => {
+    models = [
+      {
+        id: 'claude-sonnet-5-5',
+        provider: 'anthropic',
+        label: 'Claude Sonnet 5.5',
+        description: 'Balanced speed and depth for everyday research',
+        thinkingLevels: ['off', 'low', 'medium', 'high'],
+        defaultThinking: 'medium',
+      },
+    ]
+    renderTab()
+    await screen.findByRole('button', { name: 'Sonnet 5.5 · No thinking' })
+    expect(
+      screen.queryByText(/No agent model is set for this organisation/),
+    ).toBeNull()
   })
 
   it('links every answer pointer to the paragraph it cites', async () => {

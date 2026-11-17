@@ -224,7 +224,9 @@ export function useUpdateOrganisationAgentSettings(organisationId: string) {
         `/api/organisations/${organisationId}/agent-settings`,
         { method: 'PUT', body: JSON.stringify(input) },
       ),
-    onSuccess: (settings) =>
-      queryClient.setQueryData(agentRunKeys.settings(organisationId), settings),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(agentRunKeys.settings(organisationId), settings)
+      void queryClient.invalidateQueries({ queryKey: ['agent-models'] })
+    },
   })
 }

@@ -4,6 +4,7 @@ import { Badge, Skeleton } from '@obiter/ui'
 import { FileText, Folders, X } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
 import { useMatterAgentRuns, useOrganisationAgentSettings } from './agent-runs'
+import { agentModelsQueryOptions } from './agent-models'
 import { agentRunStatusLabel } from './agent-timeline'
 import { currentUserQueryOptions } from './current-user'
 import { useDocument } from './documents'
@@ -77,15 +78,16 @@ export function MatterTextNote({
   const settings = useOrganisationAgentSettings(
     me.data?.organisation?.id ?? null,
   )
-  if (!settings.data) return <span />
-  if (!settings.data.model)
+  const catalogue = useQuery(agentModelsQueryOptions())
+  if (!catalogue.data?.models) return <span />
+  if (catalogue.data.models.length === 0)
     return (
       <p className="text-caption text-muted">
         No agent model is set for this organisation. An owner or admin can set
         one in Settings.
       </p>
     )
-  if (lawOnly) return null
+  if (lawOnly || !settings.data?.model) return null
   const provider = AGENT_PROVIDERS[settings.data.model.provider].label
   const text = settings.data.matterTextToModel
     ? `Your question and the documents it reads go to ${provider}.`

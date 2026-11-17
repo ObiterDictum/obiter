@@ -1,6 +1,7 @@
 import { RatioMascot } from '@obiter/ui/ratio-mascot'
 import type { AgentSessionRun } from '@obiter/contracts'
 import { useRunPresence } from '../agent-presence'
+import { shortModelLabel, thinkingFooterLabel } from '../agent-models'
 import { EvidenceLink, evidenceLabel } from '../agent-evidence'
 
 export function AgentTurn({
@@ -112,6 +113,11 @@ export function AgentTurn({
                   : 'Researching your question…'}
             </p>
           )}
+          {run.modelLabel && run.thinking ? (
+            <p className="mt-3 text-caption text-muted">
+              {`${shortModelLabel(run.modelLabel)} · ${thinkingFooterLabel(run.thinking)}`}
+            </p>
+          ) : null}
         </div>
       </div>
     </article>
