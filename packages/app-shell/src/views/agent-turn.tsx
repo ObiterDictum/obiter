@@ -115,7 +115,7 @@ export function AgentTurn({
           )}
           {run.modelLabel && run.thinking ? (
             <p className="mt-3 text-caption text-muted">
-              {`${shortModelLabel(run.modelLabel)} · ${thinkingFooterLabel(run.thinking)}`}
+              {`${run.modelGroup ? `${run.modelGroup} · ` : ''}${shortModelLabel(run.modelLabel)} · ${thinkingFooterLabel(run.thinking)}`}
             </p>
           ) : null}
         </div>

@@ -1,3 +1,4 @@
+import { agentModelUsageSchema } from './agent-connections'
 import { z } from 'zod'
 import { agentThinkingLevelSchema } from './agent-models'
 import {
@@ -141,6 +142,9 @@ export type AgentSessionEvidence = z.infer<typeof agentSessionEvidenceSchema>
 const sessionRunBaseSchema = agentRunBaseSchema.extend({
   matterId: idSchema.nullable(),
   sessionId: idSchema,
+  connectionId: z.string().uuid().nullable().optional(),
+  modelGroup: z.string().optional(),
+  usage: z.array(agentModelUsageSchema).optional(),
   modelLabel: z.string().min(1).optional(),
   thinking: agentThinkingLevelSchema.optional(),
   budget: agentSessionRunBudgetSchema,

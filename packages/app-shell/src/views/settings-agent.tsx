@@ -1,3 +1,4 @@
+import { AgentConnections } from './settings-agent-connections'
 import { AgentModelForm } from './settings-agent-model'
 import {
   AGENT_PROVIDERS,
@@ -73,6 +74,7 @@ export function OrganisationAgentSettingsSection({
               organisationId={organisationId}
               settings={settings.data}
             />
+            <AgentConnections organisationId={organisationId} />
             <div className="flex flex-col gap-4 border-t border-line pt-6">
               <SectionHeading
                 id="settings-agent-sharing-heading"
