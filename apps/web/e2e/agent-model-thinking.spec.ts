@@ -28,7 +28,7 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
   await page.keyboard.press('Escape')
   await page.getByRole('combobox', { name: 'Thinking', exact: true }).click()
   await shot('thinking-control')
-  await page.getByRole('option', { name: 'High', exact: true }).click()
+  await page.getByRole('option', { name: 'High thinking', exact: true }).click()
   await page
     .getByRole('textbox', { name: 'Message' })
     .fill('Explain the duty of care')
@@ -87,7 +87,7 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
   await openMatter(page, 'Model selection synthetic matter')
   await page.getByRole('button', { name: 'Show agent panel' }).click()
   await page
-    .getByRole('button', { name: 'Test model · medium', exact: true })
+    .getByRole('button', { name: 'Test model · medium thinking', exact: true })
     .click()
   await expect(
     page.getByRole('dialog', { name: 'Model and thinking' }),

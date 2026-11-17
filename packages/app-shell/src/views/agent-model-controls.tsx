@@ -11,6 +11,12 @@ import {
   PopoverPopup,
   Select,
 } from '@obiter/ui'
+import { CaretDown } from '@obiter/ui/icons'
+
+const thinkingLabel = (level: AgentThinkingLevel) =>
+  level === 'off'
+    ? 'No thinking'
+    : `${level[0]?.toUpperCase()}${level.slice(1)} thinking`
 
 export function AgentModelControls({
   models,
@@ -34,7 +40,7 @@ export function AgentModelControls({
       value={thinking}
       options={model.thinkingLevels.map((value) => ({
         value,
-        label: value[0]?.toUpperCase() + value.slice(1),
+        label: thinkingLabel(value),
       }))}
       disabled={disabled}
       onValueChange={(value) => {
@@ -47,9 +53,10 @@ export function AgentModelControls({
     <Menu>
       <MenuTrigger
         disabled={disabled}
-        className="rounded-md px-2 py-1 text-meta text-muted hover:bg-hover disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-meta text-muted hover:bg-hover disabled:opacity-50"
       >
         {model.label}
+        <CaretDown size={12} aria-hidden />
       </MenuTrigger>
       <MenuContent align="start" aria-label="Model">
         {models.map((option) => (
@@ -86,7 +93,7 @@ export function AgentModelControls({
         disabled={disabled}
         className="min-w-0 truncate rounded-md px-2 py-1 text-caption text-muted hover:bg-hover disabled:opacity-50"
       >
-        {model.label} · {thinking}
+        {model.label} · {thinkingLabel(thinking).toLowerCase()}
       </PopoverTrigger>
       <PopoverPortal>
         <PopoverPositioner side="top" align="start" sideOffset={8}>
