@@ -169,6 +169,25 @@ test('compatible connections discover models, retry unsupported thinking and per
     },
   })
   expect(refused.status()).toBe(400)
+  await page.goto('/settings?section=agent')
+  await page.getByRole('button', { name: 'Edit', exact: true }).nth(1).click()
+  await page.getByLabel('Connection name').fill('Renamed gateway')
+  await page
+    .getByRole('button', { name: 'Save connection', exact: true })
+    .click()
+  await expect(page.getByRole('dialog')).not.toBeVisible()
+  await expect(page.getByText('Renamed gateway', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Remove', exact: true }).nth(1).click()
+  await expect(
+    page.getByText('Renamed gateway', { exact: true }),
+  ).not.toBeVisible()
+  const saved = await (await page.request.get('/api/agent/connections')).json()
+  expect(saved.connections).toHaveLength(1)
+  expect(saved.connections[0]).not.toHaveProperty('key')
+  expect(saved.connections[0]).toMatchObject({
+    keyLastFour: 'cret',
+    modelCount: 2,
+  })
   const otherAccount = await createAccount(request, 'OtherCompatible')
   const otherContext = await browser.newContext({
     baseURL: new URL(page.url()).origin,
