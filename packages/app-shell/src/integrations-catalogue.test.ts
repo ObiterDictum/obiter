@@ -3,9 +3,12 @@ import { INTEGRATION_MARKS } from './integration-marks'
 import {
   INTEGRATION_GROUPS,
   INTEGRATIONS,
+  integrationGroupTitle,
+  integrationWorksWith,
   type Integration,
   type IntegrationStatus,
 } from './integrations-catalogue'
+import { CAPABILITY_ICONS } from './views/integration-capability-icons'
 import {
   INTEGRATION_FILTERS,
   filterIntegrations,
@@ -50,13 +53,30 @@ describe('integrations catalogue', () => {
     }
   })
 
-  it('gives every integration capabilities with a title and an explanation', () => {
+  it('gives every integration capabilities with a title, an explanation and an icon', () => {
     for (const integration of INTEGRATIONS) {
       expect(integration.capabilities.length).toBeGreaterThanOrEqual(2)
       for (const capability of integration.capabilities) {
         expect(capability.title.length).toBeGreaterThan(0)
         expect(capability.description.length).toBeGreaterThan(0)
+        expect(CAPABILITY_ICONS[capability.icon]).toBeFunction()
       }
+    }
+  })
+
+  it('names the data each integration sends out, in a long and a short form', () => {
+    for (const integration of INTEGRATIONS) {
+      expect(integration.leaves.length).toBeGreaterThan(0)
+      expect(integration.leaves.length).toBeLessThan(
+        integration.dataLeaves.length,
+      )
+    }
+  })
+
+  it('says what every integration works with, from its group', () => {
+    for (const integration of INTEGRATIONS) {
+      expect(integrationWorksWith(integration).length).toBeGreaterThan(0)
+      expect(integrationGroupTitle(integration).length).toBeGreaterThan(0)
     }
   })
 

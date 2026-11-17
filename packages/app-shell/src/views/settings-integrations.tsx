@@ -8,7 +8,6 @@ import {
   INTEGRATION_GROUPS,
   INTEGRATIONS,
   type Integration,
-  type IntegrationGroup,
   type IntegrationStatus,
 } from '../integrations-catalogue'
 import {
@@ -19,8 +18,14 @@ import {
   type IntegrationFilter,
 } from '../integrations-filter'
 import { SegmentedControl } from '../segmented-control'
+import { shortNpub } from '../staff-buzz-data'
 import { staffBuzzQueryOptions } from '../staff'
+import {
+  ConnectedStrip,
+  type ConnectedIntegration,
+} from './integration-connected'
 import { IntegrationCard } from './integration-card'
+import { IntegrationRule } from './integration-rule'
 import { IntegrationDetail } from './settings-integration-detail'
 
 export function IntegrationsSection({ me }: { me: MeResponse }) {
@@ -43,6 +48,15 @@ export function IntegrationsSection({ me }: { me: MeResponse }) {
   const statusOf = (integration: Integration) =>
     liveStatus(integration, buzzStatus)
   const selected = integrationId ? integrationById(integrationId) : undefined
+  const connected = INTEGRATIONS.filter(
+    (integration) => statusOf(integration) === 'connected',
+  ).map((integration): ConnectedIntegration => ({
+    integration,
+    facts: integration.id === 'buzz' ? buzzFacts(buzz) : [],
+  }))
+  const firstAvailable = canManage
+    ? INTEGRATIONS.find((integration) => statusOf(integration) === 'available')
+    : undefined
 
   return (
     <section id="settings-integrations" aria-label="Integrations">
@@ -62,6 +76,8 @@ export function IntegrationsSection({ me }: { me: MeResponse }) {
           onQuery={setQuery}
           statusOf={statusOf}
           canConnect={canManage}
+          connected={connected}
+          firstAvailable={firstAvailable}
         />
       )}
     </section>
@@ -76,6 +92,16 @@ function buzzIntegrationStatus(
   return view.data.me.status === 'active' ? 'connected' : 'available'
 }
 
+function buzzFacts(view: UseQueryResult<StaffBuzzResponse>) {
+  const data = view.data
+  if (!data || data.me.status !== 'active') return []
+  const agents = data.me.agents.length
+  return [
+    ...(data.me.npub ? [`Linked as ${shortNpub(data.me.npub)}`] : []),
+    agents === 1 ? '1 agent' : `${agents} agents`,
+  ]
+}
+
 function IntegrationsDirectory({
   filter,
   query,
@@ -83,6 +109,8 @@ function IntegrationsDirectory({
   onQuery,
   statusOf,
   canConnect,
+  connected,
+  firstAvailable,
 }: {
   filter: IntegrationFilter
   query: string
@@ -90,15 +118,22 @@ function IntegrationsDirectory({
   onQuery: (query: string) => void
   statusOf: (integration: Integration) => IntegrationStatus
   canConnect: boolean
+  connected: ConnectedIntegration[]
+  firstAvailable: Integration | undefined
 }) {
   const visible = filterIntegrations(INTEGRATIONS, {
     filter,
     query,
     statusOf,
   })
+  const showConnected = query.trim() === '' && filter === 'all'
+  const featured = new Set(
+    showConnected ? connected.map((entry) => entry.integration.id) : [],
+  )
+  const grouped = visible.filter((integration) => !featured.has(integration.id))
 
   return (
-    <div className="flex flex-col gap-9">
+    <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-3 @[42rem]:flex-row @[42rem]:items-center @[42rem]:justify-between">
         <SegmentedControl
           label="Filter integrations"
@@ -121,7 +156,11 @@ function IntegrationsDirectory({
         </div>
       </div>
 
-      {visible.length === 0 ? (
+      {showConnected ? (
+        <ConnectedStrip connected={connected} firstAvailable={firstAvailable} />
+      ) : null}
+
+      {grouped.length === 0 ? (
         <EmptyDirectory
           filter={filter}
           query={query}
@@ -131,52 +170,48 @@ function IntegrationsDirectory({
           }}
         />
       ) : (
-        INTEGRATION_GROUPS.map((group) => (
-          <IntegrationGroupSection
-            key={group.id}
-            group={group}
-            integrations={visible.filter(
-              (integration) => integration.group === group.id,
-            )}
-            statusOf={statusOf}
-            canConnect={canConnect}
-          />
-        ))
+        <div className="flex flex-col gap-7">
+          {INTEGRATION_GROUPS.map((group) => (
+            <IntegrationGroupSection
+              key={group.id}
+              groupId={group.id}
+              title={group.title}
+              integrations={grouped.filter(
+                (integration) => integration.group === group.id,
+              )}
+              statusOf={statusOf}
+              canConnect={canConnect}
+            />
+          ))}
+        </div>
       )}
     </div>
   )
 }
 
 function IntegrationGroupSection({
-  group,
+  groupId,
+  title,
   integrations,
   statusOf,
   canConnect,
 }: {
-  group: IntegrationGroup
+  groupId: string
+  title: string
   integrations: Integration[]
   statusOf: (integration: Integration) => IntegrationStatus
   canConnect: boolean
 }) {
   if (integrations.length === 0) return null
+  const headingId = `integration-group-${groupId}`
   return (
-    <section
-      aria-labelledby={`integration-group-${group.id}`}
-      className="flex flex-col gap-4"
-    >
-      <div className="flex items-center gap-3">
-        <h3
-          id={`integration-group-${group.id}`}
-          className="text-meta font-medium text-ink"
-        >
-          {group.title}
-        </h3>
-        <span aria-hidden className="h-px flex-1 bg-line" />
-        <span className="text-caption tabular-nums text-subtle">
-          {integrations.length}
-        </span>
-      </div>
-      <ul className="grid grid-cols-1 gap-4 @[30rem]:grid-cols-2 @[46rem]:grid-cols-3 @[62rem]:grid-cols-4">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3">
+      <IntegrationRule
+        id={headingId}
+        label={title}
+        count={integrations.length}
+      />
+      <ul className="grid grid-cols-1 items-stretch gap-3 @[28rem]:grid-cols-2 @[42rem]:grid-cols-3 @[52rem]:grid-cols-4">
         {integrations.map((integration) => (
           <li key={integration.id} className="min-w-0">
             <IntegrationCard
@@ -206,7 +241,7 @@ function EmptyDirectory({
       ? 'No integrations are connected yet.'
       : 'No integrations match this filter.'
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line px-6 py-12 text-center">
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-line px-6 py-10 text-center">
       <p className="text-meta text-muted">{message}</p>
       <button
         type="button"

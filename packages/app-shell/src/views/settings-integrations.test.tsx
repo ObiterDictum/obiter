@@ -14,6 +14,7 @@ import {
   buzzView,
   renderIntegrations,
 } from './staff-buzz-test-support'
+import { staffBuzzAgents } from '@obiter/contracts'
 
 afterEach(() => {
   cleanup()
@@ -136,6 +137,65 @@ it('opens a planned integration from its card with every toggle disabled and the
       'The subject, body and attachments of the threads you give it.',
     ),
   ).toBeTruthy()
+})
+
+it('features a connected integration above the groups with what is switched on', async () => {
+  renderIntegrations({
+    buzz: buzzView({
+      me: {
+        npub: NPUB,
+        status: 'active',
+        agents: staffBuzzAgents(['operations']),
+      },
+    }),
+  })
+  expect(
+    await screen.findByRole('heading', { name: 'Connected', level: 3 }),
+  ).toBeTruthy()
+  expect(screen.getByText('Linked as npub1gutg…cky8')).toBeTruthy()
+  expect(screen.getByText('5 agents')).toBeTruthy()
+  expect(
+    screen.getAllByRole('heading', { name: 'Buzz', level: 4 }),
+  ).toHaveLength(1)
+})
+
+it('invites the first connection when nothing is connected yet', async () => {
+  renderIntegrations({ buzz: buzzView() })
+  expect(await screen.findByText('Nothing connected yet')).toBeTruthy()
+  expect(
+    (await screen.findByRole('link', { name: 'Start with Buzz' })).getAttribute(
+      'href',
+    ),
+  ).toContain('integration=buzz')
+})
+
+it('keeps the connection prompt out of the planned filter', async () => {
+  renderIntegrations({ buzz: buzzView() })
+  await screen.findByRole('link', { name: 'Open Slack' })
+  fireEvent.click(filterRow().getByRole('button', { name: 'Planned' }))
+  expect(screen.queryByText('Nothing connected yet')).toBeNull()
+})
+
+it('says what a planned integration will bring when it ships', async () => {
+  renderIntegrations()
+  fireEvent.click(
+    await screen.findByRole('link', { name: 'Open Microsoft Outlook' }),
+  )
+  expect(
+    await screen.findByText(
+      'Coming with Microsoft Outlook. These abilities switch on when it ships.',
+    ),
+  ).toBeTruthy()
+})
+
+it('shows the category, what it works with and the data it sends out', async () => {
+  renderIntegrations()
+  fireEvent.click(await screen.findByRole('link', { name: 'Open Slack' }))
+  expect(await screen.findByText('Team chat')).toBeTruthy()
+  expect(screen.getByText('Works with')).toBeTruthy()
+  expect(screen.getByText('Research')).toBeTruthy()
+  expect(screen.getByText('Leaves Obiter')).toBeTruthy()
+  expect(screen.getByText('Message text and channel names')).toBeTruthy()
 })
 
 it('returns to the directory from the detail page', async () => {
