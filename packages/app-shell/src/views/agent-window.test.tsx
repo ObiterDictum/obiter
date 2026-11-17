@@ -14,7 +14,12 @@ import { PagePanelProvider } from '../page-panel'
 import { AgentWindowView } from './agent-window'
 import { AgentContents } from './agent-contents'
 
-function setup(path = '/agent', live = false, missing = false) {
+function setup(
+  path = '/agent',
+  live = false,
+  missing = false,
+  runStatuses: string[] = [],
+) {
   spyOn(globalThis, 'fetch').mockImplementation(
     Object.assign(
       async (input: Parameters<typeof fetch>[0]) => {
@@ -53,9 +58,24 @@ function setup(path = '/agent', live = false, missing = false) {
                   matterId: null,
                   activeRunId: live ? 'r1' : null,
                 },
-                runs: live
-                  ? [{ id: 'r1', goal: 'A legal question', status: 'running' }]
-                  : [],
+                runs: runStatuses.length
+                  ? runStatuses.map((status, index) => ({
+                      id: `r${index}`,
+                      goal: `A legal question ${index + 1}`,
+                      status,
+                      ...(status === 'completed'
+                        ? { deliverables: [], evidence: [] }
+                        : {}),
+                    }))
+                  : live
+                    ? [
+                        {
+                          id: 'r1',
+                          goal: 'A legal question',
+                          status: 'running',
+                        },
+                      ]
+                    : [],
               })
         return Response.json({ organisation: null })
       },
@@ -133,6 +153,20 @@ it('announces live research politely and disables the thread composer', async ()
   expect(
     screen.getByRole('textbox', { name: 'Message' }).hasAttribute('disabled'),
   ).toBe(true)
+})
+it('shows Ratio thinking beside a live research turn', async () => {
+  setup('/agent/s1', true)
+  expect(
+    await screen.findByRole('img', { name: 'Ratio, thinking' }),
+  ).toBeTruthy()
+  expect(screen.getByText('Ratio')).toBeTruthy()
+})
+it('animates only the latest turn and holds past turns still', async () => {
+  setup('/agent/s1', true, false, ['completed', 'running'])
+  const past = await screen.findByRole('img', { name: 'Ratio, done' })
+  const live = await screen.findByRole('img', { name: 'Ratio, thinking' })
+  expect(past.getAttribute('class')).toContain('ratio-mascot--still')
+  expect(live.getAttribute('class')).toContain('ratio-mascot--live')
 })
 it('shows the shell not-found state for an inaccessible conversation', async () => {
   setup('/agent/s1', false, true)

@@ -136,6 +136,41 @@ Bench should measure:
 - whether final output included inspectable evidence
 - whether unsafe or unsupported actions were avoided
 
+## Ratio
+
+Ratio is the agent's animated badger mascot: barrister's wig, gown and bands, holding a brief tied with pink tape. It sits beside each agent turn, in the empty agent window and in the matter-side agent panel header. The app renders it from `@obiter/ui`; static avatars for Slack, Teams and Buzz are written to `apps/web/public/ratio/` by `scripts/ratio-avatars.ts`.
+
+| State            | Reads as                      | Motion                                    |
+| ---------------- | ----------------------------- | ----------------------------------------- |
+| `idle`           | waiting for you               | sway, blink, brief wave                   |
+| `thinking`       | planning before it acts       | head up, eyes up, thought dots, paw tap   |
+| `working`        | reading or drafting           | open brief, scanning eyes, lines lighting |
+| `needs_approval` | holding out the brief         | raised brows, amber pulse ring            |
+| `done`           | finished the task             | closed eyes, nod, tick, sparkles          |
+| `stuck`          | failed or needs more from you | puzzled tilt, glancing eyes, sweat drop   |
+
+### Derivation
+
+`agentPresence(run, latestEvent?)` in `@obiter/contracts` derives the state from what the API already reports. The harness never declares presence: it has no UI and no presence channel.
+
+| API run status         | Latest trace event                      | Presence         |
+| ---------------------- | --------------------------------------- | ---------------- |
+| no run, or `cancelled` | —                                       | `idle`           |
+| `queued` or `running`  | a tool `step_started` with no later end | `working`        |
+| `queued` or `running`  | anything else                           | `thinking`       |
+| `waiting_for_approval` | —                                       | `needs_approval` |
+| `completed`            | —                                       | `done`           |
+| `failed` or `refused`  | —                                       | `stuck`          |
+
+### Ownership
+
+- harness: no UI, never sets presence
+- API: sets run status
+- `@obiter/contracts`: the derivation and its schema
+- `@obiter/ui`: the art, keyframes and still pose
+
+Live instances animate: the current or latest turn in the agent window, the matter panel header and the empty agent window. A state change eases the new pose in, so it is not a hard swap. `done` celebrates twice, then settles into a calm loop with the tick still showing; `stuck` keeps the sweat drop and puzzled loop. Earlier turns show the still pose so history does not keep moving. Below 40px the mascot drops the gown and brief but keeps motion: blink, sway, thought dots, the amber approval ring and the done tick. `prefers-reduced-motion: reduce` is the only other still state.
+
 ## Acceptance Criteria
 
 - every agent run has a durable run record
