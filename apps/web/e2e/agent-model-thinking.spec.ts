@@ -1,3 +1,4 @@
+import { agentModelOption } from './agent-controls'
 import { mkdir } from 'node:fs/promises'
 import { test, expect } from '@playwright/test'
 import { createAccount } from './document-journey'
@@ -22,7 +23,7 @@ test('model and thinking selection is sent, recorded, remembered and shown on an
       })
   }
   await page.getByRole('button', { name: 'Test model', exact: true }).click()
-  await expect(page.getByRole('menuitem', { name: /Test model/ })).toBeVisible()
+  await expect(agentModelOption(page, /Test model/)).toBeVisible()
   await shot('composer-model-menu')
   await page.keyboard.press('Escape')
   await page.getByRole('combobox', { name: 'Thinking', exact: true }).click()
