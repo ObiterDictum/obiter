@@ -178,9 +178,6 @@ export function LinkKey() {
 }
 
 export function LinkedKey({ npub }: { npub: string }) {
-  const unlink = useMutation(staffBuzzUnlinkMutationOptions())
-  const [confirming, setConfirming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
   async function copy() {
@@ -192,20 +189,6 @@ export function LinkedKey({ npub }: { npub: string }) {
         title: 'Could not copy',
         description: 'Check clipboard permissions and try again.',
       })
-    }
-  }
-
-  async function confirmUnlink() {
-    setError(null)
-    try {
-      await unlink.mutateAsync()
-      setConfirming(false)
-    } catch (cause) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : 'Could not unlink that key. Try again.',
-      )
     }
   }
 
@@ -229,10 +212,35 @@ export function LinkedKey({ npub }: { npub: string }) {
         >
           Copy
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => setConfirming(true)}>
-          Unlink
-        </Button>
       </div>
+    </section>
+  )
+}
+
+export function DisconnectBuzzKey() {
+  const unlink = useMutation(staffBuzzUnlinkMutationOptions())
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function confirmUnlink() {
+    setError(null)
+    try {
+      await unlink.mutateAsync()
+      setConfirming(false)
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : 'Could not unlink that key. Try again.',
+      )
+    }
+  }
+
+  return (
+    <>
+      <Button variant="secondary" onClick={() => setConfirming(true)}>
+        Disconnect
+      </Button>
       {confirming ? (
         <Dialog
           open
@@ -241,7 +249,7 @@ export function LinkedKey({ npub }: { npub: string }) {
           }}
         >
           <DialogContent size="sm">
-            <DialogTitle>Unlink Buzz key?</DialogTitle>
+            <DialogTitle>Disconnect Buzz?</DialogTitle>
             <DialogDescription>
               Your Buzz agents stop reaching you until you link a key again.
             </DialogDescription>
@@ -259,12 +267,12 @@ export function LinkedKey({ npub }: { npub: string }) {
                 loading={unlink.isPending}
                 onClick={() => void confirmUnlink()}
               >
-                Unlink key
+                Disconnect key
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       ) : null}
-    </section>
+    </>
   )
 }

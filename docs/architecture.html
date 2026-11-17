@@ -2146,10 +2146,10 @@
             Staff members have a sidebar entry opening the lazy
             <code>/staff</code> Overview, <code>/staff/access</code> Access
             review, <code>/staff/usage</code> Usage,
-            <code>/staff/feedback</code> Feedback,
-            <code>/staff/errors</code> Errors and <code>/staff/buzz</code> Buzz
-            shared screens. Approval emails open
-            <code>/request-access/setup</code>, reusing the account setup form.
+            <code>/staff/feedback</code> Feedback and
+            <code>/staff/errors</code> Errors shared screens. Approval emails
+            open <code>/request-access/setup</code>, reusing the account setup
+            form.
           </p>
           <p class="lede">
             Both clients are deliberately thin. Product screens live in
@@ -2490,11 +2490,12 @@
           <p>
             Two routes are new in both routers:
             <code>/settings</code>, which holds the account name, the password
-            change and the organisation (name, members, invites), in three
-            sections that keep an unsaved draft while the user moves between
-            them; and <code>/verify</code>, which lists organisation
-            verification runs and opens the document they were bound to. The
-            matter tab strip adds two more, registered in both routers:
+            change and the organisation (name, members, invites, integrations),
+            in sections that keep an unsaved draft while the user moves between
+            them — Integrations excepted, as it loads its own chunk on first
+            use; and <code>/verify</code>, which lists organisation verification
+            runs and opens the document they were bound to. The matter tab strip
+            adds two more, registered in both routers:
             <code>/matters/:matterId/verify</code>, the same Verify view scoped
             to one matter, and <code>/matters/:matterId/redact/:runId</code>, a
             redaction run reviewed inside the matter pane. Web and desktop

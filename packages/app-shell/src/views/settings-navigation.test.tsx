@@ -119,6 +119,7 @@ describe('SettingsRouteView — information architecture', () => {
       'Preferences',
       'Organisation',
       'Members',
+      'Integrations',
       'Agent',
     ])
 
@@ -194,6 +195,7 @@ describe('SettingsRouteView — addressable sections', () => {
       '/settings?section=preferences',
       '/settings?section=organisation',
       '/settings?section=members',
+      '/settings?section=integrations',
       '/settings?section=agent',
     ])
   })
@@ -214,6 +216,7 @@ describe('SettingsRouteView — addressable sections', () => {
       'Preferences',
       'Organisation',
       'Members',
+      'Integrations',
       'Agent',
     ])
   })

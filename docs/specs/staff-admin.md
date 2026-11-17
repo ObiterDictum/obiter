@@ -263,20 +263,3 @@ count, distinct affected users and last seen. Selecting a group shows its last
 `GET /api/staff/errors/:fingerprint` returns recent samples.
 `POST /api/telemetry/errors` accepts bounded signed-in or signed-out batches.
 See Data and Compliance for collection fields, exclusions and 90-day retention.
-
-## Buzz
-
-The Buzz screen sits beside Errors on web and desktop and uses the same staff
-and two-factor gate. It shows your npub and Buzz status, a single-use invite
-valid for seven days, and the agents your roles unlock. Staff organisation
-owners and admins also see every member's Buzz status with their Operations
-and Corpus roles. When Buzz access is not set up the screen says so and offers
-no action. Every invite, key and role change answers with the whole view,
-which the app puts straight into the cache; it refetches only when someone
-asks it to check again.
-
-API: `GET /api/staff/buzz` returns `staffBuzzResponseSchema`;
-`POST /api/staff/buzz/invite` returns a single-use invite;
-`PUT` and `DELETE /api/staff/buzz/key` link and unlink an npub;
-`PUT /api/staff/buzz/members/:userId/roles` sets a member's full role list.
-An unconfigured or unreachable Buzz host answers 503 `buzz_unavailable`.
