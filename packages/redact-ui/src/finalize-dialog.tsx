@@ -299,7 +299,7 @@ export function FinalizeDialog({
 
           {finalize.error ? (
             <p className="text-meta text-danger" role="alert">
-              The redaction was not finalised. {finalize.error.message}
+              {finalize.error.message}
             </p>
           ) : null}
 

@@ -66,6 +66,24 @@ is not a span somebody chose to keep. The product owner approved keeping both
 gates on 2026-10-28; the API still allows the call, so this is a UI rule, not an
 API rule. The confirmation itself is not stored.
 
+### Word source metadata
+
+Finalisation checks extraction coverage against the requested output mode. An
+image-only PDF carries no Word package properties or custom XML. Editable Word
+output clears custom document properties, removes custom XML data and support parts,
+and removes their relationships and content type overrides. Content controls keep
+their cached visible text and lose their XML bindings.
+
+Word output clears selected fields in core and application properties and blocks
+when unchecked metadata would survive. Both modes still block on unexamined
+content such as tracked changes, embedded content and unmapped text boxes.
+The finalisation error identifies the affected kinds of content and suggests how
+to prepare a new upload.
+
+The finalisation audit event, both JSON audit exports, and the PDF and Word
+schedules record which kinds of metadata were removed or omitted and their
+counts. They never record metadata values.
+
 ## Repeated text
 
 Identical text can appear many times in one run. A decision can be repeated on
@@ -144,9 +162,9 @@ preservation of all unaccepted mapped text, including duplicates.
 
 Selected fields lose their own instructions and selected hyperlinks lose their
 targets, including shared references. Accepted identity text is scrubbed from
-image descriptions, titles, filenames and comment/revision authors. Document
-properties and stale thumbnails are stripped. A residual gate examines unmapped
-XML text, attributes, annotations, encoded targets, UTF-8/UTF-16 binary content
+image descriptions, titles, filenames and comment/revision authors. Selected
+document properties, custom XML and stale thumbnails are stripped. A residual
+gate examines unmapped XML text, attributes, annotations, encoded targets, UTF-8/UTF-16 binary content
 and recursively expanded embedded packages. It refuses unsupported residuals;
 it never returns uncertain bytes. Verified mapped character data is exempt from
 string matching because it may contain deliberately kept occurrences.
