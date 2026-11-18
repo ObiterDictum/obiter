@@ -11,19 +11,19 @@ export function downloadBlob(blob: Blob, filename: string) {
   }, DOWNLOAD_URL_REVOKE_DELAY_MS)
 }
 
-export async function shareOrDownload(blob: Blob, filename: string) {
-  const file = new File([blob], filename, {
-    type: blob.type || 'application/octet-stream',
-  })
-  try {
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: filename })
-      return
-    }
-  } catch {}
-  downloadBlob(blob, filename)
-}
-
-export function scheduleFilename(extension: '.pdf' | '.docx') {
-  return `redaction-schedule${extension}`
+export function exportFilename(sourceFilename: string, suffix: string) {
+  const cleaned = sourceFilename
+    .replace(/[<>:"/\\|?*\p{Cc}]/gu, '')
+    .trim()
+    .replace(/\.(pdf|docx|txt)$/iu, '')
+    .trim()
+  const encoder = new TextEncoder()
+  let stem = ''
+  let remaining = 255 - encoder.encode(suffix).length
+  for (const character of cleaned) {
+    remaining -= encoder.encode(character).length
+    if (remaining < 0) break
+    stem += character
+  }
+  return `${stem.trim() || 'Document'}${suffix}`
 }

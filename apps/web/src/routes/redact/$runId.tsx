@@ -1,8 +1,5 @@
 import { RedactionReviewView } from '@obiter/redact-ui'
-import {
-  redactionDocumentTextQueryOptions,
-  redactionRunQueryOptions,
-} from '@obiter/redact-ui/hooks'
+import { redactionRunQueryOptions } from '@obiter/redact-ui/hooks'
 import { currentUserQueryOptions, guardAuth } from '@obiter/app-shell'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
@@ -11,12 +8,9 @@ export const Route = createFileRoute('/redact/$runId')({
     await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
-    await Promise.all([
-      context.queryClient.prefetchQuery(redactionRunQueryOptions(params.runId)),
-      context.queryClient.prefetchQuery(
-        redactionDocumentTextQueryOptions(params.runId),
-      ),
-    ])
+    await context.queryClient.prefetchQuery(
+      redactionRunQueryOptions(params.runId),
+    )
   },
   component: RedactionReviewRoute,
 })

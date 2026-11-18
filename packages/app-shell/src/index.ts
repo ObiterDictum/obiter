@@ -153,3 +153,5 @@ export {
 export { AccessSetupRouteView } from './views/access-setup'
 
 export { ErrorReportingBoundary } from './error-boundary'
+
+export { isTypingTarget } from './shell-shortcuts'

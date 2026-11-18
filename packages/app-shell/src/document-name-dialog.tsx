@@ -99,7 +99,7 @@ function DocumentNameForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const checked = checkDocumentName(name)
+    const checked = checkDocumentName(name, extension)
     if (!checked.ok) {
       setError(checked.error)
       return
@@ -125,7 +125,9 @@ function DocumentNameForm({
         ref={inputRef}
         label="Name"
         value={name}
-        maxLength={DOCUMENT_NAME_MAX_LENGTH}
+        maxLength={
+          DOCUMENT_NAME_MAX_LENGTH + (extension ? extension.length + 1 : 0)
+        }
         error={error}
         trailing={extension ? `.${extension}` : undefined}
         className={extension ? 'pr-14' : undefined}
