@@ -1,5 +1,5 @@
-import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '@obiter/ui'
 import {
   Suspense,
@@ -16,18 +16,11 @@ import {
   uploadMatterDocumentRequest,
   type DocumentUploadResponse,
 } from './documents'
-import { currentUserQueryOptions } from './current-user'
-import { useMattersList } from './matters'
-import { matterIdFromPath } from './navigation'
 import { useShellShortcuts } from './shell-shortcuts'
-import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings-sections'
+import { type SettingsSectionId } from './settings-sections'
 import { setShellLayout } from './shell-layout'
 import { setAppTheme, useAppTheme } from './use-app-theme'
-import type {
-  PaletteActionId,
-  PaletteCreateId,
-  PaletteRow,
-} from './command-palette-rows'
+import type { PaletteActionId, PaletteCreateId } from './command-palette-rows'
 
 const CommandPaletteDialogLazy = lazy(() =>
   import('./command-palette-dialog').then((module) => ({
@@ -88,16 +81,8 @@ export function CommandPaletteProvider({
 }) {
   const navigate = useNavigate()
   const theme = useAppTheme()
-  const { data: me } = useQuery(currentUserQueryOptions())
   const queryClient = useQueryClient()
   const { toast } = useToast()
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  })
-  const matters = useMattersList().data ?? []
-  const currentMatterId = matterIdFromPath(pathname)
-  const currentMatterName =
-    matters.find((matter) => matter.id === currentMatterId)?.name ?? null
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [welcomeGuideOpen, setWelcomeGuideOpen] = useState(false)
   const [open, setOpen] = useState(false)
@@ -145,85 +130,9 @@ export function CommandPaletteProvider({
 
   useShellShortcuts({ 'open-palette': openPalette })
 
-  function settingRow(id: SettingsSectionId, label: string): PaletteRow {
-    const targets = {
-      account: 'settings-account',
-      security: 'settings-security',
-      organisation: 'settings-organisation',
-      preferences: 'settings-preferences',
-      members: 'settings-members',
-      integrations: 'settings-integrations',
-      agent: 'settings-agent',
-    } satisfies Record<SettingsSectionId, PaletteActionId>
-    return {
-      id: `action-settings-${id}`,
-      label: `Open ${label.toLowerCase()} settings`,
-      hint: 'Settings',
-      target: { kind: 'action', id: targets[id] },
-    }
-  }
-
   function openSettings(section: SettingsSectionId) {
     void navigate({ to: '/settings', search: { section } })
   }
-
-  const actionRows: PaletteRow[] = [
-    {
-      id: 'send-feedback',
-      label: 'Send feedback',
-      target: { kind: 'action', id: 'send-feedback' },
-    },
-    {
-      id: 'action-toggle-nav',
-      label: 'Toggle sidebar',
-      hint: 'Show or hide the navigation',
-      shortcut: 'toggle-nav',
-      target: { kind: 'action', id: 'toggle-nav' },
-    },
-    {
-      id: 'action-toggle-right-slot',
-      label: currentMatterId ? 'Toggle agent panel' : 'Open Agent',
-      hint: currentMatterId
-        ? 'Show or hide the matter agent'
-        : 'Research case law and legislation',
-      shortcut: 'toggle-right-slot',
-      target: { kind: 'action', id: 'toggle-right-slot' },
-    },
-    {
-      id: 'action-focus-mode',
-      label: 'Focus mode',
-      hint: 'Hide the sidebar, contents and panel',
-      shortcut: 'focus-mode',
-      target: { kind: 'action', id: 'focus-mode' },
-    },
-    {
-      id: 'action-toggle-theme',
-      label: `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`,
-      hint: 'Change how Obiter looks',
-      target: { kind: 'action', id: 'toggle-theme' },
-    },
-    {
-      id: 'action-layout-sidebar',
-      label: 'Switch to sidebar layout',
-      hint: 'Navigation beside the page',
-      target: { kind: 'action', id: 'layout-sidebar' },
-    },
-    {
-      id: 'action-layout-tabs',
-      label: 'Switch to tabs layout',
-      hint: 'Modules in the title bar',
-      target: { kind: 'action', id: 'layout-tabs' },
-    },
-    {
-      id: 'action-layout-clean',
-      label: 'Switch to clean layout',
-      hint: 'Navigation behind the Obiter mark',
-      target: { kind: 'action', id: 'layout-clean' },
-    },
-    ...SETTINGS_SECTIONS.filter((section) => !me || section.available(me)).map(
-      (section) => settingRow(section.id, section.label),
-    ),
-  ]
 
   function runAction(id: PaletteActionId) {
     switch (id) {
@@ -341,9 +250,6 @@ export function CommandPaletteProvider({
       {open ? (
         <Suspense fallback={null}>
           <CommandPaletteDialogLazy
-            currentMatterId={currentMatterId}
-            currentMatterName={currentMatterName}
-            actions={actionRows}
             onClose={closePalette}
             onAction={runAction}
             onCreate={runCreate}

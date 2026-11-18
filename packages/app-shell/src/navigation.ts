@@ -136,3 +136,29 @@ export function breadcrumbTrail(
   }
   return [{ ...sectionCrumb, to: undefined }]
 }
+
+export function contentsPanelName(
+  section: ShellSection,
+  pathname: string,
+): string | null {
+  switch (section) {
+    case 'agent':
+      return 'conversations'
+    case 'home':
+      return null
+    case 'matters':
+      return matterIdFromPath(pathname) ? 'matter contents' : 'matters list'
+    case 'search':
+      return 'recent searches'
+    case 'verify':
+      return 'verify runs'
+    case 'redact':
+      return 'redaction runs'
+    case 'settings':
+      return 'settings sections'
+    case 'staff':
+      return 'staff sections'
+    default:
+      return null
+  }
+}

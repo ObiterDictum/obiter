@@ -1,7 +1,11 @@
 import { Skeleton, cn } from '@obiter/ui'
 import { Suspense, lazy, type ReactNode } from 'react'
 import { useCurrentUser } from './current-user'
-import { matterIdFromPath, type ShellSection } from './navigation'
+import {
+  contentsPanelName,
+  matterIdFromPath,
+  type ShellSection,
+} from './navigation'
 import { PagePanelToggle } from './page-panel'
 import { useMatter } from './matters'
 import {
@@ -109,32 +113,6 @@ function contentsLabel(section: ShellSection, pathname: string): string {
   const name = contentsPanelName(section, pathname)
   if (name) return name.charAt(0).toUpperCase() + name.slice(1)
   return SECTION_TITLES[section]
-}
-
-export function contentsPanelName(
-  section: ShellSection,
-  pathname: string,
-): string | null {
-  switch (section) {
-    case 'agent':
-      return 'conversations'
-    case 'home':
-      return null
-    case 'matters':
-      return matterIdFromPath(pathname) ? 'matter contents' : 'matters list'
-    case 'search':
-      return 'recent searches'
-    case 'verify':
-      return 'verify runs'
-    case 'redact':
-      return 'redaction runs'
-    case 'settings':
-      return 'settings sections'
-    case 'staff':
-      return 'staff sections'
-    default:
-      return null
-  }
 }
 
 export function ContentsPanel(props: {

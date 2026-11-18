@@ -2,20 +2,20 @@ import type { SVGProps } from 'react'
 
 export type IconWeight = 'regular' | 'bold' | 'fill'
 
-export interface IconProps extends Omit<
+export interface IconProps<Weight extends IconWeight = IconWeight> extends Omit<
   SVGProps<SVGSVGElement>,
   'children' | 'color'
 > {
   size?: number | string
-  weight?: IconWeight
+  weight?: Weight
   color?: string
   mirrored?: boolean
   alt?: string
 }
 
-type WeightPaths = Readonly<Record<IconWeight, string>>
-
-export function createIcon(paths: WeightPaths) {
+export function createIcon<Weight extends IconWeight>(
+  paths: Readonly<Record<'regular' | Weight, string>>,
+) {
   return function Icon({
     size,
     weight = 'regular',
@@ -23,7 +23,7 @@ export function createIcon(paths: WeightPaths) {
     mirrored,
     alt,
     ...rest
-  }: IconProps) {
+  }: IconProps<'regular' | Weight>) {
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"

@@ -3,8 +3,8 @@ import { createElement, type ComponentType } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import * as icons from './icons'
 import type { IconProps, IconWeight } from './icon-base'
+import { iconWeights } from '../scripts/icon-weights'
 
-const WEIGHTS: IconWeight[] = ['regular', 'bold', 'fill']
 const HAND_DRAWN = new Set(['Ratio'])
 
 function isComponent(value: unknown): value is ComponentType<IconProps> {
@@ -15,17 +15,17 @@ function isComponent(value: unknown): value is ComponentType<IconProps> {
 }
 
 describe('generated icons', () => {
-  it('every Phosphor icon and weight renders the same SVG as Phosphor', async () => {
-    for (const [name, Icon] of Object.entries(icons)) {
+  it('renders the upstream SVG for every generated icon and weight', async () => {
+    for (const [name, Icon] of Object.entries<unknown>(icons)) {
       if (HAND_DRAWN.has(name)) continue
       const module: Record<string, unknown> = await import(
         `@phosphor-icons/react/dist/csr/${name}`
       )
       const PhosphorIcon = module[name]
-      if (!isComponent(PhosphorIcon))
+      if (!isComponent(Icon) || !isComponent(PhosphorIcon))
         throw new Error(`${name} is not a Phosphor icon`)
 
-      for (const weight of WEIGHTS) {
+      for (const weight of iconWeights(name)) {
         expect(
           renderToStaticMarkup(createElement(Icon, { size: 16, weight })),
         ).toBe(

@@ -21,7 +21,6 @@ import { useMatterTabs } from './matter-tabs-state'
 
 interface TabIconProps {
   size?: number
-  weight?: 'regular' | 'fill'
   className?: string
   'aria-hidden'?: boolean
 }
