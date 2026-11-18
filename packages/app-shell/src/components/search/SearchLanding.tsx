@@ -1,3 +1,4 @@
+import { judgmentCoverage } from './search-coverage'
 import { Button, Card, CardBody, CardFoot, CardHead } from '@obiter/ui'
 import { SEARCH_EXAMPLE_QUERIES } from '../../legal-search-examples'
 import type { SearchCourtShortcut } from './searchTypes'
@@ -86,9 +87,7 @@ export function SearchLanding({
             </CardFoot>
           </Card>
           <p className="mt-3 max-w-[68ch] text-meta text-muted">
-            Search judgments covers the records ingested so far, not every
-            published judgment. Obiter holds the source text and links to the
-            original.
+            {judgmentCoverage}
           </p>
         </section>
       </div>

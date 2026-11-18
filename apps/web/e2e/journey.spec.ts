@@ -1,3 +1,4 @@
+import { dismissWelcomeGuide } from './support'
 import { randomUUID } from 'node:crypto'
 import { test, expect } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
@@ -33,6 +34,7 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   })
   await expect(page).toHaveURL('/')
   await page.waitForLoadState('networkidle')
+  await dismissWelcomeGuide(page)
 
   await page.goto('/settings', { waitUntil: 'networkidle' })
   await page.getByRole('link', { name: 'Organisation', exact: true }).click()

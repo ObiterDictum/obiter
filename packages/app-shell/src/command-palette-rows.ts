@@ -3,6 +3,7 @@ import type { ShellCommand } from './shell-shortcuts'
 
 export type PaletteActionId =
   | 'send-feedback'
+  | 'welcome-guide'
   | 'toggle-nav'
   | 'toggle-right-slot'
   | 'focus-mode'

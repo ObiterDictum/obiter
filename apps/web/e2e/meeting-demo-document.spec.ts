@@ -1,3 +1,4 @@
+import { dismissWelcomeGuide } from './support'
 import { randomUUID } from 'node:crypto'
 import {
   test,
@@ -34,6 +35,7 @@ async function seedDocument(page: Page, request: APIRequestContext) {
     timeout: 15_000,
   })
   await page.waitForLoadState('networkidle')
+  await dismissWelcomeGuide(page)
 
   await openMatter(page, matterName)
 

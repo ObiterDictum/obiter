@@ -19,6 +19,7 @@ import {
 } from '@tanstack/react-router'
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from '../api'
+import { CommandPaletteContext } from '../command-palette'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
@@ -93,7 +94,13 @@ function renderSettings(client: QueryClient) {
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <SettingsRouteView />,
+    component: () => (
+      <CommandPaletteContext.Provider
+        value={{ open: () => {}, feedback: () => {}, welcomeGuide: () => {} }}
+      >
+        <SettingsRouteView />
+      </CommandPaletteContext.Provider>
+    ),
   })
   const router = createRouter({
     routeTree: rootRoute.addChildren([indexRoute]),

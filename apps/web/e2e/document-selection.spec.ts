@@ -1,3 +1,4 @@
+import { dismissWelcomeGuide } from './support'
 import { expect, test, type Page } from '@playwright/test'
 import { openMatter } from './support'
 import path from 'node:path'
@@ -74,6 +75,7 @@ async function signIn(page: Page) {
       .catch(() => false)
     if (signedIn) {
       await page.waitForLoadState('networkidle')
+      await dismissWelcomeGuide(page)
       return
     }
   }

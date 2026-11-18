@@ -1,3 +1,4 @@
+import { dismissWelcomeGuide } from './support'
 import { documentEditRequestSchema } from '@obiter/contracts'
 import {
   expect,
@@ -75,6 +76,7 @@ async function signIn(page: Page, email: string, password: string) {
     timeout: 15_000,
   })
   await page.waitForLoadState('networkidle')
+  await dismissWelcomeGuide(page)
 }
 
 async function openFixtureDocument(

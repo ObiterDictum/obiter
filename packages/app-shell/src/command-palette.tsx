@@ -47,17 +47,22 @@ const CreateMatterDialogLazy = lazy(() =>
   })),
 )
 
+const WelcomeGuideDialogLazy = lazy(() => import('./welcome-guide-dialog'))
+
 interface CommandPaletteState {
   feedback: () => void
+  welcomeGuide: () => void
   open: (trigger?: HTMLElement | null) => void
 }
 
-const CommandPaletteContext = createContext<CommandPaletteState | null>(null)
+export const CommandPaletteContext = createContext<CommandPaletteState | null>(
+  null,
+)
 
-export function useFeedback() {
+export function usePaletteActions() {
   const context = useContext(CommandPaletteContext)
-  if (!context) throw new Error('Feedback needs the shell')
-  return context.feedback
+  if (!context) throw new Error('This control needs the app shell')
+  return context
 }
 
 const FeedbackDialogLazy = lazy(() =>
@@ -67,11 +72,7 @@ const FeedbackDialogLazy = lazy(() =>
 )
 
 export function useCommandPalette(): (trigger?: HTMLElement | null) => void {
-  const context = useContext(CommandPaletteContext)
-  if (!context) {
-    throw new Error('useCommandPalette must be used inside the app shell frame')
-  }
-  return context.open
+  return usePaletteActions().open
 }
 
 export function CommandPaletteProvider({
@@ -98,6 +99,9 @@ export function CommandPaletteProvider({
   const currentMatterName =
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [welcomeGuideOpen, setWelcomeGuideOpen] = useState<boolean>()
+  const openWelcomeGuide = () => setWelcomeGuideOpen(true)
+  const welcomeGuideUnseen = me?.welcomeGuide?.seenAt === null
   const [open, setOpen] = useState(false)
   const [createMatterOpen, setCreateMatterOpen] = useState(false)
   const [blankDocumentMatterId, setBlankDocumentMatterId] = useState<
@@ -228,6 +232,9 @@ export function CommandPaletteProvider({
       case 'send-feedback':
         setFeedbackOpen(true)
         return
+      case 'welcome-guide':
+        openWelcomeGuide()
+        return
       case 'toggle-nav':
         onToggleNav()
         return
@@ -317,14 +324,24 @@ export function CommandPaletteProvider({
 
   return (
     <CommandPaletteContext.Provider
-      value={{ open: openPalette, feedback: () => setFeedbackOpen(true) }}
+      value={{
+        open: openPalette,
+        feedback: () => setFeedbackOpen(true),
+        welcomeGuide: openWelcomeGuide,
+      }}
     >
       {children}
-      {feedbackOpen ? (
-        <Suspense fallback={null}>
+      <Suspense fallback={null}>
+        {(welcomeGuideOpen ?? welcomeGuideUnseen) ? (
+          <WelcomeGuideDialogLazy
+            unseenUserId={welcomeGuideUnseen ? me.user.id : undefined}
+            onClose={() => setWelcomeGuideOpen(false)}
+          />
+        ) : null}
+        {feedbackOpen ? (
           <FeedbackDialogLazy onClose={() => setFeedbackOpen(false)} />
-        </Suspense>
-      ) : null}
+        ) : null}
+      </Suspense>
       {open ? (
         <Suspense fallback={null}>
           <CommandPaletteDialogLazy

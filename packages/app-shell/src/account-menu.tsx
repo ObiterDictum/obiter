@@ -10,7 +10,7 @@ import {
   Skeleton,
   cn,
 } from '@obiter/ui'
-import { useFeedback } from './command-palette'
+import { usePaletteActions } from './command-palette'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
 import { initialsOf } from './format'
@@ -24,7 +24,7 @@ function accountContext(me: MeResponse) {
 
 export function AccountMenu({ platform }: { platform: AppPlatform }) {
   const { data: me } = useQuery(currentUserQueryOptions())
-  const feedback = useFeedback()
+  const { feedback, welcomeGuide } = usePaletteActions()
   const navigate = useNavigate()
   const { signOut } = useAuth()
 
@@ -60,6 +60,7 @@ export function AccountMenu({ platform }: { platform: AppPlatform }) {
           Account settings
         </MenuItem>
         <MenuItem onClick={feedback}>Send feedback</MenuItem>
+        <MenuItem onClick={welcomeGuide}>Welcome guide</MenuItem>
         <MenuItem
           onClick={() => {
             void signOut()

@@ -1,3 +1,4 @@
+import { dismissWelcomeGuide } from './support'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
@@ -31,6 +32,7 @@ test('finalizes a DOCX into a previewable secure PDF download', async ({
     timeout: 15_000,
   })
   await page.waitForLoadState('networkidle')
+  await dismissWelcomeGuide(page)
 
   await page.goto('/redact', { waitUntil: 'networkidle' })
   await page

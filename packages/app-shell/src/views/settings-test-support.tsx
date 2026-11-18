@@ -12,6 +12,7 @@ import type { MeResponse } from '@obiter/contracts'
 import { SettingsContents } from '../contents-sections'
 import { validateSettingsSearch } from '../settings-sections'
 import { SettingsRouteView } from './settings'
+import { CommandPaletteContext } from '../command-palette'
 
 export const ORGLESS_ME: MeResponse = {
   user: {
@@ -62,10 +63,14 @@ export function renderSettings(path = '/settings') {
     path: '/settings',
     validateSearch: validateSettingsSearch,
     component: () => (
-      <div className="flex">
-        <SettingsContents />
-        <SettingsRouteView />
-      </div>
+      <CommandPaletteContext.Provider
+        value={{ open: () => {}, feedback: () => {}, welcomeGuide: () => {} }}
+      >
+        <div className="flex">
+          <SettingsContents />
+          <SettingsRouteView />
+        </div>
+      </CommandPaletteContext.Provider>
     ),
   })
   const router = createRouter({

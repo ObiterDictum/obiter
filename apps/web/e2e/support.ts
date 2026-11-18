@@ -76,3 +76,20 @@ export function verifyEmailInDb(databaseName: string, email: string) {
     )
   }
 }
+
+export async function dismissWelcomeGuide(page: Page) {
+  const response = await page.request.get('/api/me')
+  expect(response.ok()).toBeTruthy()
+  const { welcomeGuide } = await response.json()
+  if (welcomeGuide?.seenAt !== null) return
+
+  const saved = page.waitForResponse(
+    (result) =>
+      new URL(result.url()).pathname === '/api/me/welcome-guide' &&
+      result.request().method() === 'POST',
+  )
+  const guide = page.getByRole('dialog', { name: 'Welcome to Obiter' })
+  await guide.getByRole('button', { name: 'Skip' }).click()
+  expect((await saved).ok()).toBeTruthy()
+  await expect(guide).toBeHidden()
+}

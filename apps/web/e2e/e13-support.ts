@@ -1,3 +1,4 @@
+import { dismissWelcomeGuide } from './support'
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 import { generateTotpCode } from './totp'
 import path from 'node:path'
@@ -27,7 +28,12 @@ export async function createAccount(request: APIRequestContext) {
   return { email, password }
 }
 
-export async function signIn(page: Page, email: string, password: string) {
+export async function signIn(
+  page: Page,
+  email: string,
+  password: string,
+  { showWelcomeGuide = false } = {},
+) {
   await page.goto('/sign-in', { waitUntil: 'networkidle' })
   await page.getByLabel('Email').click()
   await page.getByLabel('Email').pressSequentially(email, { delay: 10 })
@@ -38,6 +44,7 @@ export async function signIn(page: Page, email: string, password: string) {
     timeout: 15_000,
   })
   await page.waitForLoadState('networkidle')
+  if (!showWelcomeGuide) await dismissWelcomeGuide(page)
 }
 
 export async function signInWithTwoFactor(
@@ -64,6 +71,7 @@ export async function signInWithTwoFactor(
     timeout: 15_000,
   })
   await page.waitForLoadState('networkidle')
+  await dismissWelcomeGuide(page)
 }
 
 export async function signOut(page: Page) {
