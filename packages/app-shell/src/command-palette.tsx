@@ -34,6 +34,12 @@ const CommandPaletteDialogLazy = lazy(() =>
   })),
 )
 
+const NewDocumentDialogLazy = lazy(() =>
+  import('./document-name-dialog').then((module) => ({
+    default: module.NewDocumentDialog,
+  })),
+)
+
 const CreateMatterDialogLazy = lazy(() =>
   import('./views/create-matter-dialog').then((module) => ({
     default: module.CreateMatterDialog,
@@ -93,6 +99,9 @@ export function CommandPaletteProvider({
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [open, setOpen] = useState(false)
   const [createMatterOpen, setCreateMatterOpen] = useState(false)
+  const [blankDocumentMatterId, setBlankDocumentMatterId] = useState<
+    string | null
+  >(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadTargetRef = useRef<string | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
@@ -277,26 +286,17 @@ export function CommandPaletteProvider({
     })
   }
 
-  async function startBlankDocument(matterId: string) {
-    try {
-      const { blankDocumentFile } = await import('./document-blank')
-      const file = await blankDocumentFile()
-      const result = await upload.mutateAsync({ matterId, file })
-      toast({
-        title: 'Document created',
-        description: result.version.filename || result.document.logicalKey,
-      })
-      void navigate({
-        to: '/matters/$matterId/documents/$documentId',
-        params: { matterId, documentId: result.document.id },
-      })
-    } catch {
-      toast({
-        title: 'Could not create the document',
-        description: 'The blank document could not be prepared.',
-        tone: 'danger',
-      })
-    }
+  async function startBlankDocument(matterId: string, name: string) {
+    const { blankDocumentFile } = await import('./document-blank')
+    const result = await upload.mutateAsync({
+      matterId,
+      file: await blankDocumentFile(name),
+    })
+    toast({ title: 'Document created', description: name })
+    void navigate({
+      to: '/matters/$matterId/documents/$documentId',
+      params: { matterId, documentId: result.document.id },
+    })
   }
 
   function runCreate(id: PaletteCreateId, matterId?: string) {
@@ -310,7 +310,7 @@ export function CommandPaletteProvider({
     }
     if (!matterId) return
     if (id === 'blank-document') {
-      void startBlankDocument(matterId)
+      setBlankDocumentMatterId(matterId)
       return
     }
     uploadTargetRef.current = matterId
@@ -345,6 +345,17 @@ export function CommandPaletteProvider({
             trigger={null}
             open
             onOpenChange={setCreateMatterOpen}
+          />
+        </Suspense>
+      ) : null}
+      {blankDocumentMatterId !== null ? (
+        <Suspense fallback={null}>
+          <NewDocumentDialogLazy
+            open
+            onOpenChange={(next) => {
+              if (!next) setBlankDocumentMatterId(null)
+            }}
+            onCreate={(name) => startBlankDocument(blankDocumentMatterId, name)}
           />
         </Suspense>
       ) : null}

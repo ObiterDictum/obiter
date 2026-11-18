@@ -2,6 +2,7 @@ import { buttonClassName, cn, useToast, type ButtonSize } from '@obiter/ui'
 import { FileArrowUp, Plus, Upload } from '@obiter/ui/icons'
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { blankDocumentFile } from '../document-blank'
+import { NewDocumentDialog } from '../document-name-dialog'
 import { useUploadMatterDocument } from '../documents'
 
 function useMatterDocumentUpload(matterId: string) {
@@ -144,27 +145,27 @@ export function NewDocumentButton({
   variant?: 'primary' | 'secondary'
   size?: ButtonSize
 }) {
-  const { pending, send } = useMatterDocumentUpload(matterId)
+  const upload = useUploadMatterDocument(matterId)
   const { toast } = useToast()
+  const [open, setOpen] = useState(false)
   return (
-    <button
-      type="button"
-      className={buttonClassName({ variant, size })}
-      disabled={pending}
-      onClick={() => {
-        void blankDocumentFile()
-          .then((file) => send([file]))
-          .catch((error: unknown) => {
-            toast({
-              title: 'Could not create the document',
-              description:
-                error instanceof Error ? error.message : 'Please try again.',
-              tone: 'danger',
-            })
-          })
-      }}
-    >
-      <Plus size={16} aria-hidden /> New document
-    </button>
+    <>
+      <button
+        type="button"
+        className={buttonClassName({ variant, size })}
+        disabled={upload.isPending}
+        onClick={() => setOpen(true)}
+      >
+        <Plus size={16} aria-hidden /> New document
+      </button>
+      <NewDocumentDialog
+        open={open}
+        onOpenChange={setOpen}
+        onCreate={async (name) => {
+          await upload.mutateAsync(await blankDocumentFile(name))
+          toast({ title: 'Document created', description: name })
+        }}
+      />
+    </>
   )
 }

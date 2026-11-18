@@ -29,6 +29,18 @@ const commands = [
   ['Delete table', 0, 0],
 ] as const
 
+async function createUntitledDocument(page: Page) {
+  await page.getByRole('button', { name: 'New document', exact: true }).click()
+  const name = page.getByRole('dialog').getByLabel('Name', { exact: true })
+  await expect(name).toHaveValue('Untitled document')
+  await name.press('Enter')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page
+    .getByRole('link', { name: 'Untitled document.docx', exact: true })
+    .first()
+    .click()
+}
+
 async function shape(page: Page, rows: number, columns: number) {
   const table = page.locator('table').last()
   if (!rows) {
@@ -73,13 +85,7 @@ for (const saved of [false, true]) {
     } else {
       await signIn(page, email, password)
       await openMatter(page, matter)
-      await page
-        .getByRole('button', { name: 'New document', exact: true })
-        .click()
-      await page
-        .getByRole('link', { name: 'Untitled.docx', exact: true })
-        .first()
-        .click()
+      await createUntitledDocument(page)
     }
     await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
       timeout: 30_000,
@@ -147,11 +153,7 @@ test('a cross-reference inserted into a new table cell survives save and reload'
   const { email, password } = await createAccount(page.request, 'RibbonCellRef')
   await signIn(page, email, password)
   await openMatter(page, `Ribbon cell ref ${crypto.randomUUID()}`)
-  await page.getByRole('button', { name: 'New document', exact: true }).click()
-  await page
-    .getByRole('link', { name: 'Untitled.docx', exact: true })
-    .first()
-    .click()
+  await createUntitledDocument(page)
   await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })

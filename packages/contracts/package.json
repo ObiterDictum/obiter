@@ -9,6 +9,7 @@
     "./api-error": "./src/api-error.ts",
     "./api-error-response": "./src/api-error-response.ts",
     "./case-paths": "./src/case-paths.ts",
+    "./document-name-rules": "./src/document-name-rules.ts",
     "./legislation-paths": "./src/legislation-paths.ts",
     "./limits": "./src/limits.ts",
     "./two-factor": "./src/two-factor.ts"

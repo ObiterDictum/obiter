@@ -100,7 +100,8 @@ mock.module('./verification-runs', () => ({
 const blankModule = { ...(await import('./document-blank')) }
 mock.module('./document-blank', () => ({
   ...blankModule,
-  blankDocumentFile: async () => new File(['blank'], 'Blank document.docx'),
+  blankDocumentFile: async (name: string) =>
+    new File(['blank'], `${name}.docx`),
 }))
 
 const { CommandPaletteProvider, useCommandPalette } =
@@ -270,8 +271,15 @@ describe('command palette', () => {
     renderPalette('/matters/mtr_1')
     await openPalette()
     fireEvent.click(await screen.findByText('New blank document'))
+    const name = await screen.findByRole('textbox', { name: 'Name' })
+    expect(mocks.uploadRequest).not.toHaveBeenCalled()
+    fireEvent.change(name, { target: { value: 'Skeleton argument' } })
+    fireEvent.submit(name.closest('form') as HTMLFormElement)
     await waitFor(() => expect(mocks.uploadRequest).toHaveBeenCalledTimes(1))
     expect(mocks.uploadRequest.mock.calls[0]?.[0]).toBe('mtr_1')
+    expect(mocks.uploadRequest.mock.calls[0]?.[1]?.name).toBe(
+      'Skeleton argument.docx',
+    )
   })
 
   it('runs the law search from the palette row', async () => {

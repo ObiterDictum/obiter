@@ -15,7 +15,7 @@ import {
   ShieldCheck,
   Upload,
 } from '@obiter/ui/icons'
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { lazy, Suspense, useRef, useState, type KeyboardEvent } from 'react'
 import { blankDocumentFile } from './document-blank'
 import { useMatterDocuments, useUploadMatterDocument } from './documents'
 import {
@@ -28,12 +28,19 @@ import { useMatterTabs } from './matter-tabs-state'
 import { useCreateMatterRedactionRun } from './redaction-runs'
 import { useCreateVerificationRun } from './verification-runs'
 
+const NewDocumentDialogLazy = lazy(() =>
+  import('./document-name-dialog').then((module) => ({
+    default: module.NewDocumentDialog,
+  })),
+)
+
 export function MatterNewItemMenu() {
   const { matterId, tabs, activeId, openPermanent, goToTab } = useMatterTabs()
   const upload = useUploadMatterDocument(matterId)
   const { toast } = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
+  const [naming, setNaming] = useState(false)
 
   const targetTab = activeDocumentTab(tabs, activeId)
   const documents = useMatterDocuments(matterId).data ?? []
@@ -59,17 +66,11 @@ export function MatterNewItemMenu() {
     }
   }
 
-  function createBlankDocument() {
-    void blankDocumentFile()
-      .then((file) => uploadFiles([file]))
-      .catch((error: unknown) => {
-        toast({
-          title: 'Could not create the document',
-          description:
-            error instanceof Error ? error.message : 'Please try again.',
-          tone: 'danger',
-        })
-      })
+  async function createBlankDocument(name: string) {
+    const result = await upload.mutateAsync(await blankDocumentFile(name))
+    const tab = documentTab(result.document.id, result.version.filename)
+    openPermanent(tab)
+    goToTab(tab)
   }
 
   function startVerify() {
@@ -114,7 +115,7 @@ export function MatterNewItemMenu() {
   }
 
   const actions = {
-    n: createBlankDocument,
+    n: () => setNaming(true),
     u: () => inputRef.current?.click(),
     v: startVerify,
     d: startRedact,
@@ -156,7 +157,7 @@ export function MatterNewItemMenu() {
           aria-label="New in this matter"
           onKeyDownCapture={runAccelerator}
         >
-          <MenuItem onClick={() => runItem(createBlankDocument)}>
+          <MenuItem onClick={() => runItem(actions.n)}>
             <FileText size={15} aria-hidden className="text-subtle" />
             <span className="flex-1">Blank document</span>
             <KeyboardHint>N</KeyboardHint>
@@ -189,6 +190,15 @@ export function MatterNewItemMenu() {
           </MenuItem>
         </MenuContent>
       </Menu>
+      {naming ? (
+        <Suspense fallback={null}>
+          <NewDocumentDialogLazy
+            open
+            onOpenChange={setNaming}
+            onCreate={createBlankDocument}
+          />
+        </Suspense>
+      ) : null}
       <input
         ref={inputRef}
         type="file"

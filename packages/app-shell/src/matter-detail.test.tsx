@@ -199,10 +199,11 @@ beforeEach(() => {
   mocks.useMatterDocuments.mockReturnValue(noDocuments())
   mocks.useUploadMatterDocument.mockReturnValue(uploadMutationSpy())
   mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
-  mocks.blankDocumentFile.mockResolvedValue(
-    new File(['x'], 'Untitled.docx', {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    }),
+  mocks.blankDocumentFile.mockImplementation(
+    async (name: string) =>
+      new File(['x'], `${name}.docx`, {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
   )
   mocks.useNavigate.mockReturnValue(vi.fn())
   mocks.useToast.mockReturnValue({ toast: vi.fn() })
@@ -258,18 +259,55 @@ describe('matter page header', () => {
     ).toBeNull()
   })
 
-  it('starts a blank document through the upload path', async () => {
+  it('names a new document before creating it through the upload path', async () => {
     const upload = uploadMutationSpy()
     mocks.useUploadMatterDocument.mockReturnValue(upload)
     render(<RouterProvider router={buildRouter('mtr_1')} />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'New document' }))
+    const name = await screen.findByRole('textbox', { name: 'Name' })
+    expect((name as HTMLInputElement).value).toBe('Untitled document')
+    fireEvent.change(name, { target: { value: '  Witness statement ' } })
+    fireEvent.submit(name.closest('form') as HTMLFormElement)
     await waitFor(() => {
-      expect(mocks.blankDocumentFile).toHaveBeenCalled()
+      expect(mocks.blankDocumentFile).toHaveBeenCalledWith('Witness statement')
       expect(upload.mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Untitled.docx' }),
+        expect.objectContaining({ name: 'Witness statement.docx' }),
       )
     })
+  })
+
+  it('refuses a blank or path-like name without creating a document', async () => {
+    const upload = uploadMutationSpy()
+    mocks.useUploadMatterDocument.mockReturnValue(upload)
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New document' }))
+    const name = await screen.findByRole('textbox', { name: 'Name' })
+    fireEvent.change(name, { target: { value: 'drafts/witness' } })
+    fireEvent.submit(name.closest('form') as HTMLFormElement)
+    expect(
+      await screen.findByText(
+        'Names cannot contain slashes or control characters.',
+      ),
+    ).toBeTruthy()
+    fireEvent.change(name, { target: { value: '   ' } })
+    fireEvent.submit(name.closest('form') as HTMLFormElement)
+    expect(await screen.findByText('Enter a document name.')).toBeTruthy()
+    expect(upload.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('keeps the dialog open with the error when creation fails', async () => {
+    const upload = uploadMutationSpy()
+    upload.mutateAsync.mockRejectedValue(new Error('Storage is unavailable.'))
+    mocks.useUploadMatterDocument.mockReturnValue(upload)
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New document' }))
+    const name = await screen.findByRole('textbox', { name: 'Name' })
+    fireEvent.submit(name.closest('form') as HTMLFormElement)
+    expect(await screen.findByText('Storage is unavailable.')).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeTruthy()
   })
 })
 
