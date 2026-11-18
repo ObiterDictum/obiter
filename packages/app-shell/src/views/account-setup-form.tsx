@@ -18,7 +18,11 @@ function passwordProblem(password: string, confirm: string): string | null {
 
 export function AccountSetupForm({
   approvedEmail,
-}: { approvedEmail?: string } = {}) {
+  register,
+}: {
+  approvedEmail?: string
+  register?: (input: { name: string; password: string }) => Promise<void>
+} = {}) {
   const { signUpWithEmail } = useAuth()
   const [name, setName] = useState('')
   const [email, setEmail] = useState(approvedEmail ?? '')
@@ -36,6 +40,10 @@ export function AccountSetupForm({
     if (problem) return
     setSubmitting(true)
     try {
+      if (register) {
+        await register({ name: name.trim(), password })
+        return
+      }
       const result = await signUpWithEmail({
         name: name.trim(),
         email: email.trim(),
@@ -47,9 +55,11 @@ export function AccountSetupForm({
         return
       }
       setSentTo(email.trim())
-    } catch {
+    } catch (error) {
       setError(
-        'Could not create your account. Check your connection and try again.',
+        register && error instanceof Error
+          ? error.message
+          : 'Could not create your account. Check your connection and try again.',
       )
     } finally {
       setSubmitting(false)
@@ -68,12 +78,26 @@ export function AccountSetupForm({
     )
   }
 
+  const emailInput = (
+    <Input
+      label={register ? 'Invited email' : 'Email you confirmed'}
+      readOnly={!!approvedEmail}
+      type="email"
+      autoComplete="email"
+      required
+      className="h-control-large"
+      value={approvedEmail ?? email}
+      onChange={(event) => setEmail(event.target.value)}
+    />
+  )
+
   return (
     <form
       onSubmit={handleSubmit}
       noValidate
       className="mt-3 flex w-full flex-col gap-5 self-stretch text-left"
     >
+      {register ? emailInput : null}
       <Input
         label="Name"
         type="text"
@@ -84,16 +108,7 @@ export function AccountSetupForm({
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
-      <Input
-        label="Email you confirmed"
-        readOnly={!!approvedEmail}
-        type="email"
-        autoComplete="email"
-        required
-        className="h-control-large"
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-      />
+      {register ? null : emailInput}
       <Input
         label="Password"
         type="password"
@@ -128,7 +143,7 @@ export function AccountSetupForm({
         loading={submitting}
         className="mt-1 w-full"
       >
-        Create account
+        {register ? 'Create account and join' : 'Create account'}
       </Button>
     </form>
   )

@@ -1,6 +1,10 @@
 import { z } from 'zod'
-import { MAX_PASSWORD_LENGTH } from './limits'
-import { currentUserSchema, displayNameField } from './organisation'
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './limits'
+import {
+  acceptOrganisationInviteInputSchema,
+  currentUserSchema,
+  displayNameField,
+} from './organisation'
 
 export const USER_NAME_MAX_LENGTH = 120
 
@@ -8,6 +12,24 @@ export const accountNameFieldSchema = displayNameField(
   'Name',
   USER_NAME_MAX_LENGTH,
 )
+
+export const registerOrganisationInviteInputSchema =
+  acceptOrganisationInviteInputSchema.extend({
+    name: accountNameFieldSchema,
+    password: z
+      .string()
+      .min(
+        MIN_PASSWORD_LENGTH,
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+      )
+      .max(
+        MAX_PASSWORD_LENGTH,
+        `Password must be at most ${MAX_PASSWORD_LENGTH} characters.`,
+      ),
+  })
+export type RegisterOrganisationInviteInput = z.infer<
+  typeof registerOrganisationInviteInputSchema
+>
 
 export const updateProfileInputSchema = z.object({
   name: accountNameFieldSchema,

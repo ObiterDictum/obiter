@@ -3268,10 +3268,21 @@
                   <td class="id">organisations.ts</td>
                   <td>
                     Unauthenticated lookup for a holder of a secret invite
-                    token. Returns only organisation and inviter display names.
-                    Distinct 404 codes for missing, expired, revoked, and
-                    already-accepted tokens. Does not return emails, member
-                    lists, token hashes, or matter data.
+                    token. Returns the organisation and inviter display names,
+                    invited email, account status and registration eligibility.
+                    Distinct 404 codes identify missing, expired, revoked and
+                    accepted invites.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/auth/sign-up/invite</td>
+                  <td class="id">invite-registration.ts</td>
+                  <td>
+                    A new invitee presents an eligible invite token, name and
+                    password. Creates a verified account directly in the
+                    inviting organisation, accepts the invite, records the audit
+                    and issues a session. Uses the auth rate limit and trusted
+                    client IP.
                   </td>
                 </tr>
                 <tr>
@@ -4541,10 +4552,11 @@
             exposes the API commit SHA, checkout root, resolved env file and the
             database name read out of the configured
             <code>DATABASE_URL</code> for local provenance checks. Invite
-            preview is gated by the secret invite token and returns only
-            organisation and inviter display names. They must never return
-            matter, client, redaction, or session data, and production health
-            must never expose environment, version, or configuration detail.
+            preview is gated by the secret invite token and returns the
+            organisation and inviter display names, the invited email, account
+            status and registration eligibility. They must never return matter,
+            client, redaction, or session data, and production health must never
+            expose environment, version, or configuration detail.
           </div>
         </section>
 

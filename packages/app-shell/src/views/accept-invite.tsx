@@ -2,8 +2,11 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { Button, buttonClassName } from '@obiter/ui'
 import { Warning } from '@obiter/ui/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import type { AppPlatform } from '@obiter/contracts'
+import { lazy, Suspense, useState } from 'react'
+import type {
+  AppPlatform,
+  RegisterOrganisationInviteInput,
+} from '@obiter/contracts'
 import { ApiError, apiFetch } from '../api'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
@@ -15,6 +18,12 @@ import {
 import { ResendVerificationControl } from './sign-in'
 import { AuthCard, AuthHeading, AuthLayout } from './auth-layout'
 
+const AccountSetupForm = lazy(() =>
+  import('./account-setup-form').then(({ AccountSetupForm }) => ({
+    default: AccountSetupForm,
+  })),
+)
+
 function inviteTokenFromSearch(search: { token?: unknown }): string {
   return typeof search.token === 'string' && search.token.length > 0
     ? search.token
@@ -24,7 +33,13 @@ function inviteTokenFromSearch(search: { token?: unknown }): string {
 export function AcceptInviteRouteView({ platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { session, isPending, resendVerificationEmail, signOut } = useAuth()
+  const {
+    session,
+    isPending,
+    resendVerificationEmail,
+    signOut,
+    refreshSessionAfterAuth,
+  } = useAuth()
   // SAFETY: useSearch with strict:false is untyped; token is re-validated as a non-empty string by inviteTokenFromSearch before use.
   const search = useSearch({ strict: false }) as { token?: string }
   const token = inviteTokenFromSearch(search)
@@ -34,6 +49,9 @@ export function AcceptInviteRouteView({ platform }: { platform: AppPlatform }) {
   })
   const [error, setError] = useState<AcceptFailure | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [registrationAccountToken, setRegistrationAccountToken] = useState<
+    string | null
+  >(null)
 
   const preview = previewQuery.data
   const previewFailure = previewFailureFromResult(preview)
@@ -74,8 +92,43 @@ export function AcceptInviteRouteView({ platform }: { platform: AppPlatform }) {
     canJoin &&
     !differentEmail &&
     error?.kind !== 'missing_token'
-  const showSignUp = !session && canJoin
+  const signedOutPreview = !session && preview?.ok ? preview : null
+  const registerEmail =
+    signedOutPreview?.canRegister && signedOutPreview.invitedEmail
+  const requiresSignIn =
+    signedOutPreview?.hasAccount || registrationAccountToken === token
   const failureNotice = error ?? (differentEmail ? wrongEmail : null)
+
+  async function handleRegister(
+    input: Omit<RegisterOrganisationInviteInput, 'token'>,
+  ) {
+    const body: RegisterOrganisationInviteInput = { token, ...input }
+    try {
+      await apiFetch('/api/auth/sign-up/invite', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.code === 'conflict_detected') {
+        setRegistrationAccountToken(token)
+        return
+      }
+      if (
+        caught instanceof ApiError &&
+        caught.code === 'invite_already_accepted'
+      ) {
+        setError({ kind: caught.code })
+        return
+      }
+      if (caught instanceof ApiError && caught.status === 429) {
+        throw new Error('Too many attempts. Wait a moment and try again.')
+      }
+      throw caught
+    }
+    await refreshSessionAfterAuth()
+    await queryClient.invalidateQueries({ queryKey: ['current-user'] })
+    await navigate({ to: '/' })
+  }
 
   async function handleSignOut() {
     try {
@@ -93,8 +146,18 @@ export function AcceptInviteRouteView({ platform }: { platform: AppPlatform }) {
   return (
     <AuthLayout footnote="Invitations can be accepted once and expire after 7 days.">
       <AuthHeading
-        title="Accept organisation invite"
-        description={<InviteHeading preview={preview} />}
+        title={
+          registerEmail && signedOutPreview
+            ? `Join ${signedOutPreview.organisationName}`
+            : 'Accept organisation invite'
+        }
+        description={
+          registerEmail && signedOutPreview ? (
+            `${signedOutPreview.invitedByName} invited you`
+          ) : (
+            <InviteHeading preview={preview} />
+          )
+        }
       />
 
       <AuthCard>
@@ -107,7 +170,43 @@ export function AcceptInviteRouteView({ platform }: { platform: AppPlatform }) {
             failure={{ kind: 'other', message: '' }}
             token={token}
           />
-        ) : showSignUp ? (
+        ) : error?.kind === 'invite_already_accepted' ? (
+          <InviteFailureNotice failure={error} token={token} />
+        ) : signedOutPreview && requiresSignIn ? (
+          <Button
+            size="lg"
+            nativeButton={false}
+            render={<Link to="/sign-in" search={{ token }} />}
+            className="w-full"
+          >
+            Sign in to accept
+          </Button>
+        ) : registerEmail ? (
+          platform === 'web' ? (
+            <Suspense
+              fallback={
+                <p className="text-meta text-muted">Loading account form…</p>
+              }
+            >
+              <AccountSetupForm
+                key={token}
+                approvedEmail={registerEmail}
+                register={handleRegister}
+              />
+            </Suspense>
+          ) : (
+            <a
+              href={apiUrl(
+                `/invites/accept?token=${encodeURIComponent(token)}`,
+              )}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonClassName({ size: 'lg', className: 'w-full' })}
+            >
+              Create account on the web
+            </a>
+          )
+        ) : signedOutPreview ? (
           <>
             <p className="text-body text-muted">
               Obiter accounts are opened to verified people only. Request access
@@ -292,8 +391,7 @@ function failureCopy(failure: AcceptFailure): FailureCopy {
     case 'invite_already_accepted':
       return {
         title: 'This invite has already been accepted',
-        body: 'An invite can only be used once, and this one has been used.',
-        newInvite: true,
+        body: 'Sign in to open your workspace if you already joined this organisation.',
       }
     case 'wrong_email':
       return {
@@ -366,7 +464,11 @@ function InviteFailureNotice({
         ) : null}
         <Link
           to="/sign-in"
-          search={token ? { token } : undefined}
+          search={
+            token && failure.kind !== 'invite_already_accepted'
+              ? { token }
+              : undefined
+          }
           className={buttonClassName({ variant: 'secondary', size: 'sm' })}
         >
           Back to sign in
