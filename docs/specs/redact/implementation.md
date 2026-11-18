@@ -127,8 +127,11 @@ the standalone run behind it still sees the mark, without the link.
 Redact owns DOCX extraction and burning. The same XML walker supplies UTF-16
 review offsets and immutable per-carrier source ranges for body text, headers,
 footers, notes, comments and tracked text. Paragraphs contribute two newlines;
-tabs and breaks contribute one character. Modern alternate content is canonical;
-its duplicate fallback is removed. No editor edit operation produces Redact bytes.
+tabs and breaks contribute one character. Declared Word story parts are scanned even when their filenames are
+nonstandard. Modern alternate content is canonical when a Choice is present.
+Fallback-only text boxes are scanned and kept separate from the surrounding
+paragraph. Visible carriers that cannot be mapped, such as raw DrawingML text,
+require a PDF source. No editor edit operation produces Redact bytes.
 Matter ingestion keeps its existing extraction for Search. Migration 0040 lets
 matter DOCX runs store Redact's own extracted text under their scoped run key;
 re-detection carries that text forward without changing the matter version.

@@ -7,12 +7,25 @@ const confidenceRank = {
   low: 0,
 } satisfies Record<RedactionSpan['confidence'], number>
 
-const patterns: Array<{
-  category: SpanCategory
+const postcode = String.raw`(?:GIR\s?0AA|[A-Z]{1,2}[1-9][A-Z\d]?\s?\d[A-Z]{2})\b`
+const placeWord = String.raw`\p{Lu}[\p{L}\p{M}'’\-]*`
+const streetType = String.raw`(?:Street|Road|Avenue|Lane|Close|Drive|Crescent|Way|Place|Terrace|Grove|Gardens|Square|Mews|Hill|Walk|Court|Row|Rise|Park|View|Broadway)\b`
+const namedStreet = String.raw`(?:${placeWord}[ \t]+){1,4}?${streetType}|(?:High[ \t]+Holborn|Strand|Piccadilly|Pall[ \t]+Mall)\b`
+const streetAddress = new RegExp(
+  String.raw`(?<![\p{L}\p{N}./\-–£])(?<!\b(?:[Pp]ara(?:graph)?s?\.?|[Ss]ections?|[Rr]ules?|CPR)[ \t]{1,8})\d{1,5}[A-Za-z]?[ \t]+(?!High[ \t]+Court\b|(?:Crown|County|Family)[ \t]+Court\b|Magistrates[’\x27]?[ \t]+Court\b)(?:${namedStreet})(?:(?:[ \t]*,[ \t]*|[ \t]+)(?:${placeWord}[ \t]+){0,4}${postcode}|[ \t]*,[ \t]*${placeWord}(?:[ \t]+${placeWord}){0,3}(?=[ \t]*(?:[,;.!?)]|$)))?`,
+  'gmu',
+)
+const writtenDate = String.raw`(?:0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}`
+
+type Pattern = {
   regex: RegExp
   confidence: RedactionSpan['confidence']
-  dateOfBirth?: boolean
-}> = [
+} & (
+  | { category: 'date'; dateOfBirth: boolean }
+  | { category: Exclude<SpanCategory, 'date'>; dateOfBirth?: never }
+)
+
+const patterns: Pattern[] = [
   {
     category: 'national_insurance',
     regex: /\b[A-Z]{2}\s?\d{2}\s?\d{2}\s?\d{2}\s?[A-D]\b/gi,
@@ -20,7 +33,14 @@ const patterns: Array<{
   },
   {
     category: 'case_reference',
-    regex: /\b(?:[A-Z]{1,4}-\d{4}-\d{3,6}|\d{4}\/[A-Z]{2,8}\/\d{1,6})\b/g,
+    regex:
+      /\b(?:[A-Z]{1,4}-\d{4}-\d{3,6}|\d{4}\/[A-Z]{2,8}\/\d{1,6}|REF\/\d{4}\/\d{3,8})(?![\w/-])/g,
+    confidence: 'medium',
+  },
+  {
+    category: 'case_reference',
+    regex:
+      /(?<=\b(?:claim|case)[ \t]+(?:no\.?|number)[ \t]*:?[ \t]*)(?=[a-z0-9/-]{0,29}\d)(?=[a-z0-9/-]{0,29}[a-z])[a-z0-9][a-z0-9/-]{3,29}[a-z0-9](?![\w/-])/gi,
     confidence: 'medium',
   },
   {
@@ -39,7 +59,12 @@ const patterns: Array<{
 
   {
     category: 'address',
-    regex: /\b[A-Z]{1,2}[1-9][A-Z\d]?\s?\d[A-Z]{2}\b/g,
+    regex: streetAddress,
+    confidence: 'high',
+  },
+  {
+    category: 'address',
+    regex: new RegExp(String.raw`\b${postcode}`, 'g'),
     confidence: 'high',
   },
 
@@ -72,10 +97,18 @@ const patterns: Array<{
 
   {
     category: 'date',
-    regex:
-      /(?<=(?:\bdate\s+of\s+birth\b|\bd\.o\.b\.?|\bdob\b|\bborn\s+on\b|\bborn\b)[^\d]{0,20})(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{2}-\d{2})/gi,
+    regex: new RegExp(
+      String.raw`(?<=(?:\bdate\s+of\s+birth\b|\bd\.o\.b\.?|\bdob\b|\bborn\s+on\b|\bborn\b)[^\d]{0,20})\b(?:${writtenDate}|\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{2}-\d{2})\b`,
+      'gi',
+    ),
     confidence: 'high',
     dateOfBirth: true,
+  },
+  {
+    category: 'date',
+    regex: new RegExp(String.raw`\b${writtenDate}\b`, 'gi'),
+    confidence: 'medium',
+    dateOfBirth: false,
   },
 ]
 

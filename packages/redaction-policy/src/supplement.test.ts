@@ -156,9 +156,17 @@ describe('UK supplement — date of birth (context-gated)', () => {
     })
   }
 
-  it('does not match a bare hearing date with no cue', () => {
+  it('offers a written hearing date with a keep suggestion', () => {
     const spans = supplementSpans('the hearing on 4 February 2025')
-    expect(spans.filter((span) => span.category === 'date')).toHaveLength(0)
+    expect(spans).toMatchObject([
+      {
+        category: 'date',
+        text: '4 February 2025',
+        start: 15,
+        end: 30,
+        suggestion: 'keep',
+      },
+    ])
   })
 })
 
@@ -241,13 +249,13 @@ describe('UK supplement — negatives (new patterns must never trigger)', () => 
 describe('UK supplement — realistic mixed-PII paragraph', () => {
   const paragraph = `The Claimant, Mr James Cartwright of 42 Belgrave Road, Leicester LE4 5AB, can be reached on +44 20 7946 0958 or james.cartwright@personal.co.uk. His National Insurance number is JX 12 34 56 D. For payments, account number 12345678, sort code 12-34-56. IBAN GB29 NWBK 6016 1331 9268 19. Counsel are Smith & Jones Solicitors LLP. The matter reference is CR-2024-00123. The hearing is listed for 15 March 2024 under [2024] EWHC 1234 (QB).`
 
-  it('detects the exact expected span set with no false positives on the date or citation', () => {
+  it('detects dates and contact details without tagging the citation', () => {
     const spans = supplementSpans(paragraph)
     const groups = byCategory(spans)
 
     expect(groups.email).toEqual(['james.cartwright@personal.co.uk'])
     expect(groups.phone).toEqual(['+44 20 7946 0958'])
-    expect(groups.address).toEqual(['LE4 5AB'])
+    expect(groups.address).toEqual(['42 Belgrave Road, Leicester LE4 5AB'])
     expect(groups.national_insurance).toEqual(['JX 12 34 56 D'])
     expect(groups.case_reference).toEqual(['CR-2024-00123'])
     expect(groups.organisation_name).toEqual(['Smith & Jones Solicitors LLP'])
@@ -258,7 +266,7 @@ describe('UK supplement — realistic mixed-PII paragraph', () => {
     ])
 
     const allText = spans.map((span) => span.text)
-    expect(allText).not.toContain('15 March 2024')
+    expect(groups.date).toEqual(['15 March 2024'])
     expect(allText).not.toContain('[2024]')
   })
 
@@ -449,5 +457,50 @@ describe('review fix — intra-supplement overlap dedupe', () => {
     const spans = supplementSpans('account number 12345678 sort code 12-34-56')
     const account = spans.filter((s) => s.category === 'account_number')
     expect(account.map((s) => s.text)).toEqual(['12345678', '12-34-56'])
+  })
+})
+
+describe('UK supplement — street addresses and case references', () => {
+  it.each([
+    '78 High Holborn, London WC1V 6XX',
+    '78 High Holborn, London',
+    '31B Orchard Lane',
+    '24 St John’s Road, Little Wick AB1 2CD',
+  ])('offers the complete address %s', (address) => {
+    const prefix = 'The address is '
+    expect(supplementSpans(`${prefix}${address}.`)).toMatchObject([
+      {
+        category: 'address',
+        text: address,
+        start: prefix.length,
+        end: prefix.length + address.length,
+        suggestion: 'redact',
+      },
+    ])
+  })
+
+  it('offers a labelled claim reference without its cue', () => {
+    expect(
+      supplementSpans('Claim No: REF/2024/0123; Case No. HQ18X01234'),
+    ).toMatchObject([
+      {
+        category: 'case_reference',
+        text: 'REF/2024/0123',
+        start: 10,
+        end: 23,
+        suggestion: 'keep',
+      },
+      { category: 'case_reference', text: 'HQ18X01234', suggestion: 'keep' },
+    ])
+  })
+
+  it.each([
+    '[2024] UKSC 12',
+    'paragraph 78. High Street',
+    'Paragraph 78 High Street',
+    '2024 High Court of Justice',
+    'CPR 3.1(2)(a)',
+  ])('does not treat %s as an address or reference', (text) => {
+    expect(supplementSpans(text)).toEqual([])
   })
 })

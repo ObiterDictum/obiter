@@ -89,29 +89,30 @@ const PERSON_NAME_TITLES = new Set([
   'hon',
   'judge',
   'justice',
-])
-
-const STANDALONE_TITLES = new Set([
-  'dear',
-  'mr',
-  'mrs',
-  'ms',
-  'miss',
-  'mx',
-  'dr',
-  'prof',
-  'professor',
-  'sir',
-  'madam',
-  'rev',
-  'hon',
+  'lj',
+  'ljj',
+  'jj',
+  'hhj',
+  'dj',
+  'ddj',
+  'cjj',
+  'djj',
+  'jsc',
+  'recorder',
+  'chancellor',
 ])
 
 const LEADING_WORD_RE = /^(\p{L}[\p{L}\p{M}]*)(\.?)([ \t'’.-]+)/u
 const SOLE_WORD_RE = /^(\p{L}[\p{L}\p{M}]*)[.,]?$/u
+const JUDICIAL_SUFFIX = /[ \t]+(?:LJJ?|HHJ|DD?J|JJ|JSC)[.,]?$/u
+const UPPERCASE_HEADING =
+  /^(?=[^\r\n]*\p{Lu})[\p{Lu}\p{M}\p{N}\p{P}\p{Zs}\t]+$/u
+const JUDICIAL_PREFIX =
+  /^(?:the[ \t]+)?(?:(?:his|her)[ \t]+honour|(?:deputy[ \t]+)?(?:district|circuit|high[ \t]+court)[ \t]+judge|chief[ \t]+justice)(?=$|[ \t.,])[ \t.,]*/iu
 
 function trimLeadingTitles(text: string, start: number, end: number): number {
-  let offset = start
+  let offset =
+    start + (JUDICIAL_PREFIX.exec(text.slice(start, end))?.[0].length ?? 0)
   while (offset < end) {
     const remainder = text.slice(offset, end)
     const match = LEADING_WORD_RE.exec(remainder)
@@ -121,7 +122,7 @@ function trimLeadingTitles(text: string, start: number, end: number): number {
       continue
     }
     const sole = SOLE_WORD_RE.exec(remainder)
-    if (sole && STANDALONE_TITLES.has(sole[1].toLowerCase())) offset = end
+    if (sole && PERSON_NAME_TITLES.has(sole[1].toLowerCase())) offset = end
     break
   }
   return offset
@@ -147,10 +148,21 @@ export function normalizePersonDetections<T extends RampartSpanInput>(
       continue
     }
     const start = trimLeadingTitles(text, span.start, span.end)
-    const trimmed = text.slice(start, span.end)
+    const end =
+      span.end -
+      (JUDICIAL_SUFFIX.exec(text.slice(start, span.end))?.[0].length ?? 0)
+    const trimmed = text.slice(start, end)
     if (isDeniedPersonName(trimmed)) continue
-    // SAFETY: the spread preserves every property of T and only `start` and `text` change, both declared on the RampartSpanInput bound established by the generic constraint above, so the result is still a T.
-    kept.push({ ...span, start, text: trimmed } as T)
+    if ((span.score ?? 0) < 0.98 && UPPERCASE_HEADING.test(trimmed)) {
+      const lineStart = text.lastIndexOf('\n', start - 1) + 1
+      const nextBreak = text.indexOf('\n', end)
+      const line = text.slice(
+        lineStart,
+        nextBreak === -1 ? text.length : nextBreak,
+      )
+      if (UPPERCASE_HEADING.test(line)) continue
+    }
+    kept.push({ ...span, start, end, text: trimmed })
   }
   return kept
 }
@@ -170,7 +182,7 @@ function mapRampartSpan(
   id: string,
 ): RedactionSpan {
   const label = span.label ?? span.entity
-  if (!label || !labelMap[label]) {
+  if (!label || !Object.hasOwn(labelMap, label)) {
     throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
   }
   const mapping = labelMap[label]
