@@ -19,13 +19,11 @@ import {
   type RunSlice,
 } from '../../document-model-text'
 import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
-import type { WrappedLine } from '../../document-page-flow'
+import { textWidthPx, type WrappedLine } from '../../document-page-flow'
 import { readableRunColor, runDisplayText } from '../../document-page-media'
 import { DEFAULT_TAB_STOP_PX, tabAdvancePx } from '../../document-page-tabs'
-import { textWidthPx } from '../../document-page-flow'
 import { noteNumberKey, runNoteRefs } from '../../document-page-notes'
 import { runCss, runFace, type ParagraphFace } from '../../document-page-style'
-
 import { FootnoteReference } from './footnote-navigation'
 
 export const NoteNumbersContext = createContext<ReadonlyMap<string, string>>(
@@ -35,8 +33,6 @@ export const NoteNumbersContext = createContext<ReadonlyMap<string, string>>(
 export type ParagraphSelectionRange = { from: number; to: number }
 
 type ParagraphFieldMarker = { offset: number; label: string }
-
-type LinkOverlay = ParagraphLinkOverlay
 
 export function ParagraphRunPaint({
   paragraph,
@@ -78,7 +74,7 @@ export function ParagraphRunPaint({
   linePx: number
   wrapWidthPx?: number
   selection?: ParagraphSelectionRange
-  linkOverlay?: LinkOverlay
+  linkOverlay?: ParagraphLinkOverlay
   carets?: DocumentPresence[]
   continuation?: boolean
   indentFirstPx?: number
@@ -297,7 +293,7 @@ function ModelRun({
   text: string
   from: number
   selection?: ParagraphSelectionRange
-  linkOverlay?: LinkOverlay
+  linkOverlay?: ParagraphLinkOverlay
   paragraphEnd: number
   paragraphFace: ParagraphFace
   changes: DocumentChangeWire[]
@@ -321,9 +317,18 @@ function ModelRun({
     [run.preservedXmlFragments, run.id, run.text, text, drafts?.[run.id]],
   )
   const numbers = use(NoteNumbersContext)
-  const color = revision ? 'inherit' : readableRunColor(face.color)
+  const showNotes = notesVisible && notes.length > 0
+  const content = rangedParts(
+    text,
+    from,
+    paragraphEnd,
+    selection,
+    linkOverlay,
+    run.hyperlinkTarget,
+  )
   return (
     <span
+      aria-hidden={(hideText && !showNotes) || undefined}
       className={cn(
         'relative',
         kinds.has('insert') && TRACKED_INSERT_MARK,
@@ -334,22 +339,17 @@ function ModelRun({
       )}
       style={runCss({
         ...face,
-        color,
+        color: revision ? 'inherit' : readableRunColor(face.color),
         ...(notes.length ? { vertAlign: 'baseline' as const } : {}),
       })}
     >
       {caret ? <PresenceCaret userId={caret.userId} /> : null}
-      <span aria-hidden={hideText || undefined}>
-        {rangedParts(
-          text,
-          from,
-          paragraphEnd,
-          selection,
-          linkOverlay,
-          run.hyperlinkTarget,
-        )}
-      </span>
-      {(notesVisible ? notes : []).map((note) => (
+      {hideText && showNotes ? (
+        <span aria-hidden="true">{content}</span>
+      ) : (
+        content
+      )}
+      {(showNotes ? notes : []).map((note) => (
         <FootnoteReference
           key={`${note.kind}-${note.noteId}-${note.runId}`}
           note={note}
@@ -365,7 +365,7 @@ function rangedParts(
   from: number,
   paragraphEnd: number,
   selection?: ParagraphSelectionRange,
-  overlay?: LinkOverlay,
+  overlay?: ParagraphLinkOverlay,
   storedLinkTarget?: string,
 ) {
   const markers = overlay?.fieldMarkers
