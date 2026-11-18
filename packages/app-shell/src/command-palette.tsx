@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react'
 import {
+  documentDisplayName,
   documentsKeys,
   uploadMatterDocumentRequest,
   type DocumentUploadResponse,
@@ -279,10 +280,7 @@ export function CommandPaletteProvider({
   function finishUpload(result: DocumentUploadResponse) {
     toast({
       title: 'Document uploaded',
-      description:
-        result.document.currentVersion?.filename ??
-        result.version.filename ??
-        result.document.logicalKey,
+      description: documentDisplayName(result.document, result.version),
     })
   }
 

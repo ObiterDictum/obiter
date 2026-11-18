@@ -27,7 +27,11 @@ import {
   useDocumentTabStatuses,
   type DocumentTabStatus,
 } from './document-tab-status'
-import { useMatterDocuments } from './documents'
+import {
+  documentDisplayName,
+  useMatterDocuments,
+  type MatterDocumentRecord,
+} from './documents'
 import { PresenceAvatars } from './components/document-workspace/presence-avatars'
 import { matchMatterTabKey, type MatterTab } from './matter-tabs'
 import { useMatterTabs } from './matter-tabs-state'
@@ -184,18 +188,13 @@ function useResolvedTabs(tabs: MatterTab[]): MatterTab[] {
 function liveTitle(
   tab: MatterTab,
   matterName: string | null,
-  documents: Array<{
-    id: string
-    currentVersion?: { filename: string } | null
-  }>,
+  documents: MatterDocumentRecord[],
   runs: Array<{ id: string; sourceFilename: string }>,
 ): string {
   if (tab.kind === 'overview') return matterName ?? tab.title
   if (tab.kind === 'document') {
-    return (
-      documents.find((item) => item.id === tab.target)?.currentVersion
-        ?.filename ?? tab.title
-    )
+    const document = documents.find((item) => item.id === tab.target)
+    return document ? documentDisplayName(document) : tab.title
   }
   if (tab.kind === 'redact') {
     return (

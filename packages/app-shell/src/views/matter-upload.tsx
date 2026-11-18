@@ -3,7 +3,7 @@ import { FileArrowUp, Plus, Upload } from '@obiter/ui/icons'
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { blankDocumentFile } from '../document-blank'
 import { NewDocumentDialog } from '../document-name-dialog'
-import { useUploadMatterDocument } from '../documents'
+import { documentDisplayName, useUploadMatterDocument } from '../documents'
 
 function useMatterDocumentUpload(matterId: string) {
   const upload = useUploadMatterDocument(matterId)
@@ -17,7 +17,7 @@ function useMatterDocumentUpload(matterId: string) {
         const result = await upload.mutateAsync(file)
         toast({
           title: 'Document uploaded',
-          description: result.version.filename,
+          description: documentDisplayName(result.document, result.version),
         })
       } catch (error) {
         toast({

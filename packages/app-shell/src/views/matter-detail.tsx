@@ -23,7 +23,7 @@ import { useState } from 'react'
 import { ApiError } from '../api'
 import { ContentFrame } from '../content-frame'
 import { useCurrentUser } from '../current-user'
-import { useMatterDocuments } from '../documents'
+import { documentDisplayName, useMatterDocuments } from '../documents'
 import { useDeleteMatter, useMatter } from '../matters'
 import type { MatterRecord } from '../matters'
 import { useRedactionRunsList } from '../redaction-runs'
@@ -91,7 +91,7 @@ export function MatterRouteView({
       documentFilenames: new Map(
         (documents.data ?? []).flatMap((document) =>
           document.currentVersion
-            ? [[document.id, document.currentVersion.filename] as const]
+            ? [[document.id, documentDisplayName(document)] as const]
             : [],
         ),
       ),

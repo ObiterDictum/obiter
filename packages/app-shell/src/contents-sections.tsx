@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { useShellContents } from './shell-contents'
 import type { MatterStatusFilter } from './views/matters-rows'
 import { useMattersList } from './matters'
-import { useMatterDocuments } from './documents'
+import { documentDisplayName, useMatterDocuments } from './documents'
 import { attentionRunLabel, useRedactionRunsList } from './redaction-runs'
 import { latestRunsPerDocument, openWorkForRun } from './open-work'
 import { useOrganisationVerificationRuns } from './verification-runs'
@@ -206,8 +206,7 @@ export function MatterContents({
           <Note>No documents yet.</Note>
         ) : (
           documents.data.map((document) => {
-            const filename =
-              document.currentVersion?.filename ?? document.logicalKey
+            const filename = documentDisplayName(document)
             return (
               <RowLink
                 key={document.id}

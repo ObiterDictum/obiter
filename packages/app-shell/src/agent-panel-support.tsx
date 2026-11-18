@@ -7,7 +7,7 @@ import { useMatterAgentRuns, useOrganisationAgentSettings } from './agent-runs'
 import { agentModelsQueryOptions } from './agent-models'
 import { agentRunStatusLabel } from './agent-timeline'
 import { currentUserQueryOptions } from './current-user'
-import { useDocument } from './documents'
+import { documentDisplayName, useDocument } from './documents'
 import { useMatter } from './matters'
 function Chip({
   icon,
@@ -54,10 +54,9 @@ export function DocumentChip({
   onRemove: () => void
 }) {
   const document = useDocument(documentId)
-  const name =
-    document.data?.document.currentVersion?.filename ??
-    document.data?.versions[0]?.filename ??
-    'This document'
+  const name = document.data
+    ? documentDisplayName(document.data.document, document.data.versions[0])
+    : 'This document'
   return (
     <Chip
       icon={<FileText size={12} aria-hidden className="text-subtle" />}

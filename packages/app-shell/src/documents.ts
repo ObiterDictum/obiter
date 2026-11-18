@@ -3,6 +3,7 @@ import { queryOptions } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import type {
   CitationTargetsResponse,
+  DocumentRenameResponse,
   DocumentOpenResponse,
   PersonAttribution,
   RecentlyOpenedDocumentResponse,
@@ -50,6 +51,7 @@ export interface MatterDocumentRecord {
   matterId: string
   currentVersionId: string | null
   logicalKey: string
+  name?: string | null
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -238,6 +240,80 @@ export function useDeleteDocument() {
         queryClient.invalidateQueries({ queryKey: ['redaction-runs'] }),
         queryClient.invalidateQueries({
           queryKey: ['document-redaction-runs'],
+        }),
+      ])
+    },
+  })
+}
+
+export function documentDisplayName(
+  document: Pick<
+    MatterDocumentRecord,
+    'name' | 'logicalKey' | 'currentVersion'
+  >,
+  version?: Pick<DocumentVersionRecord, 'filename' | 'fileType'> | null,
+) {
+  const shown = version ?? document.currentVersion
+  if (document.name && shown) return `${document.name}.${shown.fileType}`
+  return document.name ?? shown?.filename ?? document.logicalKey
+}
+
+export function documentFilename(
+  document: Pick<MatterDocumentRecord, 'name'> | undefined,
+  version: Pick<DocumentVersionRecord, 'filename' | 'fileType'>,
+) {
+  return document?.name
+    ? `${document.name}.${version.fileType}`
+    : version.filename
+}
+
+export function documentRenameErrorMessage(error: unknown) {
+  if (error instanceof ApiError && error.status === 404) {
+    return 'This document could not be renamed. It may have been deleted, or you may not have edit access to this matter.'
+  }
+  if (error instanceof ApiError && error.status === 400) return error.message
+  return 'The document could not be renamed. Check your connection and try again.'
+}
+
+export function useRenameDocument() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      documentId: string
+      matterId: string
+      name: string
+    }) => {
+      const response = await apiFetch<DocumentRenameResponse>(
+        `/api/documents/${input.documentId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ name: input.name }),
+        },
+      )
+      return response.document
+    },
+    onSuccess: async (renamed, { matterId }) => {
+      const apply = (document: MatterDocumentRecord) =>
+        document.id === renamed.id
+          ? { ...document, name: renamed.name, updatedAt: renamed.updatedAt }
+          : document
+      queryClient.setQueryData<DocumentDetailResponse>(
+        documentsKeys.detail(renamed.id),
+        (previous) =>
+          previous
+            ? { ...previous, document: apply(previous.document) }
+            : previous,
+      )
+      queryClient.setQueryData<MatterDocumentRecord[]>(
+        documentsKeys.byMatter(matterId),
+        (previous) => previous?.map(apply),
+      )
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: documentsKeys.recentlyOpened(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: documentsKeys.citationTargets(),
         }),
       ])
     },
