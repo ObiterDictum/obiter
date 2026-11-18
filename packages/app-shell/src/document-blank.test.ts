@@ -9,9 +9,9 @@ import {
 import { blankDocumentFile } from './document-blank'
 
 describe('blankDocumentFile', () => {
-  it('builds an Untitled Word document for upload', async () => {
-    const file = await blankDocumentFile()
-    expect(file.name).toBe('Untitled.docx')
+  it('names the Word document after the chosen name', async () => {
+    const file = await blankDocumentFile('Witness statement')
+    expect(file.name).toBe('Witness statement.docx')
     expect(file.type).toBe(
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
@@ -19,7 +19,7 @@ describe('blankDocumentFile', () => {
   })
 
   it('offers bullets, numbering, multilevel numbering and paragraph styles', async () => {
-    const file = await blankDocumentFile()
+    const file = await blankDocumentFile('Blank')
     const document = await parseDocx(new Uint8Array(await file.arrayBuffer()))
     const model = document.model
     const paragraph = model.stories.find((item) => item.kind === 'document')

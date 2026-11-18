@@ -19,6 +19,7 @@ import { currentUserQueryOptions } from './current-user'
 import { useMattersList } from './matters'
 import { matterIdFromPath } from './navigation'
 import { useShellShortcuts } from './shell-shortcuts'
+import { NewDocumentDialog } from './document-name-dialog'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings-sections'
 import { setShellLayout } from './shell-layout'
 import { setAppTheme, useAppTheme } from './use-app-theme'
@@ -93,6 +94,9 @@ export function CommandPaletteProvider({
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [open, setOpen] = useState(false)
   const [createMatterOpen, setCreateMatterOpen] = useState(false)
+  const [blankDocumentMatterId, setBlankDocumentMatterId] = useState<
+    string | null
+  >(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadTargetRef = useRef<string | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
@@ -277,26 +281,17 @@ export function CommandPaletteProvider({
     })
   }
 
-  async function startBlankDocument(matterId: string) {
-    try {
-      const { blankDocumentFile } = await import('./document-blank')
-      const file = await blankDocumentFile()
-      const result = await upload.mutateAsync({ matterId, file })
-      toast({
-        title: 'Document created',
-        description: result.version.filename || result.document.logicalKey,
-      })
-      void navigate({
-        to: '/matters/$matterId/documents/$documentId',
-        params: { matterId, documentId: result.document.id },
-      })
-    } catch {
-      toast({
-        title: 'Could not create the document',
-        description: 'The blank document could not be prepared.',
-        tone: 'danger',
-      })
-    }
+  async function startBlankDocument(matterId: string, name: string) {
+    const { blankDocumentFile } = await import('./document-blank')
+    const result = await upload.mutateAsync({
+      matterId,
+      file: await blankDocumentFile(name),
+    })
+    toast({ title: 'Document created', description: name })
+    void navigate({
+      to: '/matters/$matterId/documents/$documentId',
+      params: { matterId, documentId: result.document.id },
+    })
   }
 
   function runCreate(id: PaletteCreateId, matterId?: string) {
@@ -310,7 +305,7 @@ export function CommandPaletteProvider({
     }
     if (!matterId) return
     if (id === 'blank-document') {
-      void startBlankDocument(matterId)
+      setBlankDocumentMatterId(matterId)
       return
     }
     uploadTargetRef.current = matterId
@@ -348,6 +343,16 @@ export function CommandPaletteProvider({
           />
         </Suspense>
       ) : null}
+      <NewDocumentDialog
+        open={blankDocumentMatterId !== null}
+        onOpenChange={(next) => {
+          if (!next) setBlankDocumentMatterId(null)
+        }}
+        onCreate={async (name) => {
+          if (blankDocumentMatterId)
+            await startBlankDocument(blankDocumentMatterId, name)
+        }}
+      />
       <input
         ref={fileInputRef}
         type="file"
