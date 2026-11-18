@@ -41,7 +41,7 @@ function StaffUsage() {
   return (
     <PageScaffold
       title="Usage"
-      description="Aggregates only, counted from records the product already keeps. The Obiter staff organisation is excluded."
+      description="Aggregates only, counted from records the product already keeps, including the Obiter staff organisation."
       actions={
         <SegmentedControl<string>
           label="Weeks shown"

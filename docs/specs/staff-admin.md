@@ -68,10 +68,10 @@ Each figure links to the screen behind it.
 API: `GET /api/staff/overview` returns `staffOverviewResponseSchema`. The
 waiting count and oldest wait come from `access_requests` in
 `pending_review`; unread feedback counts rows with no `handled_at`; account
-and organisation figures count rows created in the last 7 and 30 days,
-excluding the staff organisation; active users are distinct users with an
-audit event or a created record today, in the last 7 days and in the last 30
-days, also excluding the staff organisation. The API has no deployed-build
+and organisation figures count rows created in the last 7 and 30 days; active
+users are distinct users with an audit event or a created record today, in the
+last 7 days and in the last 30 days. Every figure includes the staff
+organisation. The API has no deployed-build
 source, so the build commit and deploy time are omitted for now.
 
 ### 2. Access review
@@ -172,7 +172,7 @@ documents opened come from `document_opens`, documents saved from
 `document_versions`, matters from `matters`, Redact runs from
 `redaction_runs`, Verify runs from `verification_runs`, agent runs from
 `agent_runs` and sources saved from `matter_saved_sources`. The per-week and
-per-organisation figures exclude the staff organisation; organisation rows
+per-organisation figures include the staff organisation; organisation rows
 carry id, name, member count and the same counts. Retention cohorts are
 signup weeks inside the window, with `cohortSize` and per-week active users.
 
