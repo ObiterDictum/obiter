@@ -115,6 +115,7 @@ export interface UseAuthReturn {
     email: string,
     callbackURL?: string,
   ) => Promise<{ ok: boolean; message?: string }>
+  refreshSessionAfterAuth: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -406,6 +407,7 @@ export function useAuth(): UseAuthReturn {
     changeEmail,
     deleteAccount,
     resendVerificationEmail,
+    refreshSessionAfterAuth,
     signOut,
   }
 }

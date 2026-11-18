@@ -49,6 +49,9 @@ describe('organisation membership queries', () => {
     api.apiFetch.mockResolvedValueOnce({
       organisationName: 'North Chambers',
       invitedByName: 'Ada Owner',
+      invitedEmail: 'invitee@example.com',
+      canRegister: true,
+      hasAccount: false,
     })
     const client = new QueryClient()
     await expect(
@@ -57,6 +60,9 @@ describe('organisation membership queries', () => {
       ok: true,
       organisationName: 'North Chambers',
       invitedByName: 'Ada Owner',
+      invitedEmail: 'invitee@example.com',
+      canRegister: true,
+      hasAccount: false,
     })
     expect(api.apiFetch).toHaveBeenCalledWith(
       '/api/invites/preview?token=invite-token',

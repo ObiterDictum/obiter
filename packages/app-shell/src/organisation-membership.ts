@@ -36,12 +36,7 @@ const INVITE_UNAVAILABLE_CODES = [
 export type InviteUnavailableCode = (typeof INVITE_UNAVAILABLE_CODES)[number]
 
 export type InvitePreviewResult =
-  | {
-      ok: true
-      organisationName: string
-      invitedByName: string
-      matchesSessionEmail?: boolean
-    }
+  | ({ ok: true } & OrganisationInvitePreview)
   | { ok: false; code: InviteUnavailableCode; message: string }
 
 function isInviteUnavailableCode(code: string): code is InviteUnavailableCode {

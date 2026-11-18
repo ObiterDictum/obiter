@@ -119,6 +119,9 @@ export type OrganisationInviteAccountExists = z.infer<
 export const organisationInvitePreviewSchema = z.object({
   organisationName: z.string().min(1),
   invitedByName: z.string().min(1),
+  invitedEmail: z.string().email().optional(),
+  canRegister: z.boolean().optional(),
+  hasAccount: z.boolean().optional(),
   matchesSessionEmail: z.boolean().optional(),
 })
 export type OrganisationInvitePreview = z.infer<

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   resendVerificationEmail: vi.fn(),
   signOut: vi.fn(),
+  refreshSessionAfterAuth: vi.fn(),
   session: null as {
     user: { id: string; email?: string }
     session: { id: string }
@@ -44,6 +45,7 @@ mock.module('../auth', () =>
         resetPassword: vi.fn(),
         resendVerificationEmail: mocks.resendVerificationEmail,
         signOut: mocks.signOut,
+        refreshSessionAfterAuth: mocks.refreshSessionAfterAuth,
       }),
     }))(),
   ),
@@ -94,6 +96,9 @@ const preview = {
   organisationName: 'North Chambers',
   invitedByName: 'Ada Owner',
   matchesSessionEmail: true,
+  invitedEmail: 'invitee@example.com',
+  canRegister: false,
+  hasAccount: false,
 }
 
 function mockApi(options?: {
@@ -111,15 +116,12 @@ function mockApi(options?: {
   })
 }
 
-function renderAccept(platform: 'web' | 'desktop' = 'web') {
+function renderAccept(
+  platform: 'web' | 'desktop' = 'web',
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(
-    <QueryClientProvider
-      client={
-        new QueryClient({
-          defaultOptions: { queries: { retry: false } },
-        })
-      }
-    >
+    <QueryClientProvider client={client}>
       <AcceptInviteRouteView platform={platform} />
     </QueryClientProvider>,
   )
@@ -171,6 +173,78 @@ describe('AcceptInviteRouteView', () => {
       screen.getByRole('link', { name: /sign in/i }).getAttribute('href'),
     ).toBe('/sign-in?token=invite-token')
     expect(screen.queryByText(/then return here/i)).toBeNull()
+  })
+
+  it('registers an eligible new invitee using the read-only invited email', async () => {
+    mockApi({ preview: { ...preview, canRegister: true } })
+    const client = new QueryClient()
+    client.setQueryData(['current-user'], null)
+    renderAccept('web', client)
+
+    const button = await screen.findByRole('button', {
+      name: 'Create account and join',
+    })
+    expect(
+      screen.getByRole('heading', { name: 'Join North Chambers' }),
+    ).toBeTruthy()
+    expect(screen.getByText('Ada Owner invited you')).toBeTruthy()
+    expect(
+      screen.getByLabelText('Invited email').getAttribute('readonly'),
+    ).not.toBeNull()
+    expect(screen.getByDisplayValue('invitee@example.com')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: /request access/i })).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: '  Invitee Name  ' },
+    })
+    fireEvent.change(screen.getByLabelText('Password', { exact: true }), {
+      target: { value: 'example-password' },
+    })
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'different-password' },
+    })
+    fireEvent.click(button)
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Passwords do not match.',
+    )
+    expect(mocks.apiFetch).toHaveBeenCalledTimes(1)
+
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: 'example-password' },
+    })
+    fireEvent.click(button)
+    await waitFor(() => {
+      expect(mocks.apiFetch).toHaveBeenCalledWith('/api/auth/sign-up/invite', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: 'invite-token',
+          name: 'Invitee Name',
+          password: 'example-password',
+        }),
+      })
+      expect(mocks.refreshSessionAfterAuth).toHaveBeenCalledTimes(1)
+      expect(client.getQueryState(['current-user'])?.isInvalidated).toBe(true)
+      expect(mocks.navigate).toHaveBeenCalledWith({ to: '/' })
+    })
+  })
+
+  it('sends desktop invitees who can register to the web invite page', async () => {
+    mockApi({ preview: { ...preview, canRegister: true } })
+    renderAccept('desktop')
+    const link = await screen.findByRole('link', {
+      name: 'Create account on the web',
+    })
+    expect(link.getAttribute('href')).toBe('/invites/accept?token=invite-token')
+    expect(link.getAttribute('target')).toBe('_blank')
+  })
+
+  it('sends an invitee with an account to sign in with the invite token', async () => {
+    mockApi({ preview: { ...preview, hasAccount: true } })
+    renderAccept()
+    const link = await screen.findByRole('link', { name: 'Sign in to accept' })
+    expect(link.getAttribute('href')).toBe('/sign-in?token=invite-token')
+    expect(screen.queryByRole('link', { name: /request access/i })).toBeNull()
+    expect(screen.queryByLabelText('Invited email')).toBeNull()
   })
 
   it('accepts the invite and routes home when signed in', async () => {
@@ -231,7 +305,6 @@ describe('AcceptInviteRouteView', () => {
   it.each([
     ['invite_expired', 'This invite has expired'],
     ['invite_revoked', 'This invite has been revoked'],
-    ['invite_already_accepted', 'This invite has already been accepted'],
     ['invite_not_found', 'We cannot find that invite'],
   ] as const)(
     'gives a failed invite (%s) a way out, not one red line',
@@ -251,6 +324,26 @@ describe('AcceptInviteRouteView', () => {
       expect(screen.queryByRole('link', { name: /request access/i })).toBeNull()
     },
   )
+
+  it('takes someone with a consumed invite to sign-in without looping back', async () => {
+    mockApi({
+      preview: new ApiError(
+        'invite_already_accepted',
+        'Used',
+        404,
+        'req_preview',
+      ),
+    })
+    renderAccept()
+    expect(
+      await screen.findByText('This invite has already been accepted'),
+    ).toBeTruthy()
+    expect(
+      screen
+        .getByRole('link', { name: /back to sign in/i })
+        .getAttribute('href'),
+    ).toBe('/sign-in')
+  })
 
   it('explains a link that carries no token and offers the same two ways out', async () => {
     mocks.search = {}
