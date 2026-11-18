@@ -1,3 +1,4 @@
+import { Button } from '@obiter/ui'
 import { Moon, Sun } from '@obiter/ui/icons'
 import { SegmentedControl } from '../segmented-control'
 import {
@@ -6,6 +7,7 @@ import {
   type ShellLayout,
 } from '../shell-layout'
 import { setAppTheme, useThemeChoice, type ThemeChoice } from '../use-app-theme'
+import { usePaletteActions } from '../command-palette'
 import { SectionHeading } from './settings-fields'
 
 const THEME_OPTIONS = [
@@ -31,6 +33,7 @@ const LAYOUT_OPTIONS = [
 export function PreferencesSection({ active }: { active: boolean }) {
   const choice = useThemeChoice()
   const layout = useShellLayout()
+  const { welcomeGuide: openWelcomeGuide } = usePaletteActions()
 
   return (
     <section
@@ -75,6 +78,19 @@ export function PreferencesSection({ active }: { active: boolean }) {
           options={LAYOUT_OPTIONS}
           onChange={setShellLayout}
         />
+      </div>
+
+      <div className="flex flex-wrap items-start justify-between gap-8 border-t border-line pt-6">
+        <div className="min-w-0 max-w-[21rem]">
+          <p className="text-meta text-ink">Welcome guide</p>
+          <p className="mt-1 text-caption text-subtle">
+            A short tour of matters, Search, Redact, Verify, Ratio and how your
+            data is handled.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={openWelcomeGuide}>
+          Show welcome guide
+        </Button>
       </div>
     </section>
   )

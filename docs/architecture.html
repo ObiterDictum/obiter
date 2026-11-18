@@ -3148,7 +3148,18 @@
                 <tr>
                   <td class="id">GET /api/me</td>
                   <td class="id">app.ts</td>
-                  <td>Session user and organisation</td>
+                  <td>
+                    Session user, organisation and the per-user welcome guide
+                    timestamp when supported.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/me/welcome-guide</td>
+                  <td class="id">app.ts</td>
+                  <td>
+                    Records the first dismissal or completion for the signed-in
+                    user. Reopening the guide preserves that timestamp.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">PATCH /api/me</td>
@@ -4992,9 +5003,10 @@
                     organisation-name stash consumed at first provisioning,
                     lifecycle columns for account deletion and the daily job
                     that anonymises a deleted user six years after
-                    <code>deletedAt</code>.
+                    <code>deletedAt</code>. The welcome guide timestamp is
+                    scoped to the user.
                   </td>
-                  <td class="id">0001, 0016, 0053, 0054</td>
+                  <td class="id">0001, 0016, 0053, 0054, 0064</td>
                 </tr>
                 <tr>
                   <td class="id">organisations</td>

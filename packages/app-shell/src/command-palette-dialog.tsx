@@ -209,7 +209,14 @@ export function CommandPaletteDialog({
         redactionRuns,
         recentlyOpenedDocumentId: recentDocument?.documentId ?? null,
         currentMatterName,
-        actions,
+        actions: [
+          ...actions,
+          {
+            id: 'welcome-guide',
+            label: 'Show welcome guide',
+            target: { kind: 'action', id: 'welcome-guide' },
+          },
+        ],
       })
   const rows = flattenPalette(groups)
   const activeRow = rows[Math.min(activeIndex, Math.max(rows.length - 1, 0))]

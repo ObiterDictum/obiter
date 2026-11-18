@@ -491,6 +491,7 @@ export { planTextRevision } from './text-revision-plan'
 export * from './organisation-update-policy'
 
 export * from './feedback'
+export * from './welcome-guide'
 
 export const documentVersionRestoreRequestSchema = z.object({
   expectedCurrentVersionId: z.string().min(1).max(255),

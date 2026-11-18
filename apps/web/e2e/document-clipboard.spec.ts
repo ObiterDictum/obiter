@@ -1,3 +1,4 @@
+import { dismissWelcomeGuide } from './support'
 import {
   expect,
   test,
@@ -61,6 +62,7 @@ async function signIn(page: Page, email: string, password: string) {
       .catch(() => false)
     if (signedIn) {
       await page.waitForLoadState('networkidle')
+      await dismissWelcomeGuide(page)
       return
     }
   }

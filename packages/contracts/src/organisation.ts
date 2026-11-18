@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { welcomeGuideStateSchema } from './welcome-guide'
 
 export const userRoleSchema = z.enum(['owner', 'admin', 'member'])
 export type UserRole = z.infer<typeof userRoleSchema>
@@ -23,6 +24,7 @@ export type CurrentOrganisation = z.infer<typeof currentOrganisationSchema>
 
 export const meResponseSchema = z.object({
   isStaff: z.boolean().optional(),
+  welcomeGuide: welcomeGuideStateSchema.optional(),
   twoFactorEnabled: z.boolean().optional(),
   twoFactorEnabledAt: z
     .string()

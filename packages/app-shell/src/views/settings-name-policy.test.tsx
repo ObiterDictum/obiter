@@ -19,6 +19,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import type { MeResponse } from '@obiter/contracts'
+import { CommandPaletteContext } from '../command-palette'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
@@ -101,10 +102,14 @@ function renderSettings(me: MeResponse = ME) {
     path: '/settings',
     validateSearch: validateSettingsSearch,
     component: () => (
-      <div className="flex">
-        <SettingsContents />
-        <SettingsRouteView />
-      </div>
+      <CommandPaletteContext.Provider
+        value={{ open: () => {}, feedback: () => {}, welcomeGuide: () => {} }}
+      >
+        <div className="flex">
+          <SettingsContents />
+          <SettingsRouteView />
+        </div>
+      </CommandPaletteContext.Provider>
     ),
   })
   const router = createRouter({
