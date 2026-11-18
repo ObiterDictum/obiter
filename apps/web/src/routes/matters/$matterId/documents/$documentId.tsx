@@ -10,9 +10,10 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 export const Route = createFileRoute(
   '/matters/$matterId/documents/$documentId',
 )({
-  loader: ({ context, params }) =>
+  loader: ({ context, params, location }) =>
     prefetchDocumentRouteData(
       context.queryClient,
+      location,
       params.matterId,
       params.documentId,
     ),

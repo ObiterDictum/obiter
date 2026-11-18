@@ -2,8 +2,8 @@ import { VerifyRouteView, prefetchVerifyData } from '@obiter/app-shell'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/matters/$matterId/verify')({
-  loader: async ({ context }) => {
-    await prefetchVerifyData(context.queryClient)
+  loader: async ({ context, location }) => {
+    await prefetchVerifyData(context.queryClient, location)
   },
   component: MatterVerifyRoute,
 })

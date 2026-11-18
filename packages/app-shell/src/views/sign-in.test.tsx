@@ -21,6 +21,7 @@ const authMocks = vi.hoisted(() => ({
 
 const searchState = vi.hoisted(() => ({
   token: undefined as string | undefined,
+  redirect: undefined as string | undefined,
 }))
 
 const authModuleKeys = Object.fromEntries(
@@ -56,7 +57,10 @@ mock.module('@tanstack/react-router', () =>
     { ...tanstackReactRouterModuleKeys },
     (() => ({
       useNavigate: () => authMocks.navigate,
-      useSearch: () => (searchState.token ? { token: searchState.token } : {}),
+      useSearch: () => ({
+        ...(searchState.token ? { token: searchState.token } : {}),
+        ...(searchState.redirect ? { redirect: searchState.redirect } : {}),
+      }),
       Link: ({
         children,
         to,
@@ -99,6 +103,7 @@ describe('SignInRouteView — password submit outcomes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     searchState.token = undefined
+    searchState.redirect = undefined
   })
 
   afterEach(() => {
@@ -402,6 +407,151 @@ describe('SignInRouteView — password submit outcomes', () => {
         'lex@obiter.dev',
         undefined,
       )
+    })
+  })
+
+  it('clears a password error when switching to the email link tab and shows each tab its own error once', async () => {
+    authMocks.signInWithEmail.mockResolvedValueOnce({
+      ok: false,
+      message: 'Invalid email or password.',
+    })
+    authMocks.requestMagicLink.mockResolvedValueOnce({
+      ok: false,
+      message: 'Could not send magic link.',
+    })
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('lex@obiter.dev', 'wrong-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+    await waitFor(() => {
+      expect(screen.getAllByText('Invalid email or password.')).toHaveLength(1)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /email link/i }))
+    expect(screen.queryByText('Invalid email or password.')).toBeNull()
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /send sign-in link/i }),
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getAllByText('Could not send magic link.')).toHaveLength(1)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^password$/i }))
+    expect(screen.queryByText('Could not send magic link.')).toBeNull()
+  })
+
+  it('returns to the requested page after a password sign-in', async () => {
+    searchState.redirect = '/matters/mtr_1/documents/doc_1'
+    authMocks.signInWithEmail.mockResolvedValueOnce({ ok: true })
+    authMocks.navigate.mockResolvedValueOnce(undefined)
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('lex@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+
+    await waitFor(() => {
+      expect(authMocks.navigate).toHaveBeenCalledWith({
+        href: '/matters/mtr_1/documents/doc_1',
+      })
+    })
+  })
+
+  it('returns to the requested page after the second factor', async () => {
+    searchState.redirect = '/settings?section=security'
+    authMocks.signInWithEmail.mockResolvedValueOnce({
+      ok: true,
+      twoFactor: true,
+    })
+    authMocks.verifyTwoFactorSignIn.mockResolvedValueOnce({ ok: true })
+    authMocks.navigate.mockResolvedValueOnce(undefined)
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('lex@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+    await waitFor(() => {
+      expect(screen.getByLabelText('Authentication code')).toBeTruthy()
+    })
+    fireEvent.change(screen.getByLabelText('Authentication code'), {
+      target: { value: '123456' },
+    })
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Verify and sign in' }),
+      )
+    })
+
+    await waitFor(() => {
+      expect(authMocks.navigate).toHaveBeenCalledWith({
+        href: '/settings?section=security',
+      })
+    })
+  })
+
+  it('sends the email link back to the requested page', async () => {
+    searchState.redirect = '/matters/mtr_1/documents/doc_1'
+    authMocks.requestMagicLink.mockResolvedValueOnce({ ok: true })
+
+    render(<SignInRouteView platform="web" />)
+    fireEvent.click(screen.getByRole('button', { name: /email link/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+      target: { value: 'lex@obiter.dev' },
+    })
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: /send sign-in link/i }),
+      )
+    })
+
+    await waitFor(() => {
+      expect(authMocks.requestMagicLink).toHaveBeenCalledWith(
+        'lex@obiter.dev',
+        `${window.location.origin}/matters/mtr_1/documents/doc_1`,
+      )
+    })
+  })
+
+  it('ignores an off-site return target and goes Home', async () => {
+    searchState.redirect = '//evil.example/matters'
+    authMocks.signInWithEmail.mockResolvedValueOnce({ ok: true })
+    authMocks.navigate.mockResolvedValueOnce(undefined)
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('lex@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+
+    await waitFor(() => {
+      expect(authMocks.navigate).toHaveBeenCalledWith({ to: '/' })
+    })
+  })
+
+  it('prefers an invite over a return target', async () => {
+    searchState.token = 'invite-token'
+    searchState.redirect = '/matters/mtr_1'
+    authMocks.signInWithEmail.mockResolvedValueOnce({ ok: true })
+    authMocks.navigate.mockResolvedValueOnce(undefined)
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('lex@obiter.dev', 'correct-password')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+    })
+
+    await waitFor(() => {
+      expect(authMocks.navigate).toHaveBeenCalledWith({
+        to: '/invites/accept',
+        search: { token: 'invite-token' },
+      })
     })
   })
 })

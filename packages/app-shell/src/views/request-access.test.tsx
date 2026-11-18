@@ -66,7 +66,7 @@ async function fillRequest(
     },
   )
   fireEvent.click(screen.getByRole('radio', { name: /Legal professional/ }))
-  fireEvent.click(screen.getByRole('combobox', { name: 'Country' }))
+  fireEvent.click(screen.getByRole('combobox', { name: 'Jurisdiction' }))
   fireEvent.click(
     await screen.findByRole('option', { name: 'England and Wales' }),
   )
@@ -103,6 +103,7 @@ type FakeTurnstileOptions = {
   action?: string
   callback?: (token: string) => void
   'error-callback'?: () => void
+  'expired-callback'?: () => void
 }
 
 function installFakeTurnstile() {
@@ -130,7 +131,7 @@ describe('access request form', () => {
     })
     expect(screen.getByText('Email is required.')).toBeTruthy()
     expect(screen.getByText('Choose the category that fits you.')).toBeTruthy()
-    expect(screen.getByText('Choose where you are based.')).toBeTruthy()
+    expect(screen.getByText('Choose your jurisdiction.')).toBeTruthy()
     expect(screen.getByText('Organisation name is required.')).toBeTruthy()
     expect(
       screen.getByText(
@@ -327,6 +328,39 @@ describe('access request form', () => {
       await waitFor(() => expect(api.apiFetch).toHaveBeenCalledTimes(1))
       const body = JSON.parse(String(api.apiFetch.mock.calls[0]?.[1]?.body))
       expect(body).not.toHaveProperty('botCheckToken')
+    })
+
+    it('says the check failed and offers a retry that renders a fresh widget', async () => {
+      const { fake, widget } = installFakeTurnstile()
+      renderRequestAccess('site-key')
+      await fillRequest()
+      await waitFor(() => expect(fake.render).toHaveBeenCalledTimes(1))
+
+      act(() => widget.options?.['expired-callback']?.())
+
+      expect(
+        screen.getByText("We couldn't confirm you're not a bot. Try again."),
+      ).toBeTruthy()
+      expect(
+        (screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement)
+          .value,
+      ).toBe('Alex Morgan')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+      await waitFor(() => expect(fake.render).toHaveBeenCalledTimes(2))
+      expect(fake.remove).toHaveBeenCalledWith('widget-1')
+      expect(
+        screen.queryByText("We couldn't confirm you're not a bot. Try again."),
+      ).toBeNull()
+      expect(
+        screen.getByRole('button', { name: 'Checking your browser…' }),
+      ).toBeTruthy()
+
+      act(() => widget.options?.callback?.('token-456'))
+      expect(
+        screen.getByRole('button', { name: 'Request access' }),
+      ).toBeTruthy()
     })
 
     it('asks for a fresh check after a refused request', async () => {

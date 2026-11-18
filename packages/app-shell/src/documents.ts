@@ -9,6 +9,7 @@ import type {
   RecentlyOpenedDocumentResponse,
 } from '@obiter/contracts'
 import { apiFetch, ApiError } from './api'
+import { useSignedIn } from './auth'
 import { declaredFileType } from './file-type'
 
 export type DocumentStatus =
@@ -157,7 +158,10 @@ export function citationTargetsQueryOptions() {
 }
 
 export function useCitationTargets() {
-  return useQuery(citationTargetsQueryOptions())
+  return useQuery({
+    ...citationTargetsQueryOptions(),
+    enabled: useSignedIn(),
+  })
 }
 
 export function useRecordDocumentOpen(documentId: string) {

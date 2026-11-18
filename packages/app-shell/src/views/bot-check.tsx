@@ -11,6 +11,8 @@ type TurnstileOptions = {
   callback?: (token: string) => void
   'error-callback'?: () => void
   'expired-callback'?: () => void
+  'timeout-callback'?: () => void
+  'before-interactive-callback'?: () => void
 }
 
 type Turnstile = {
@@ -33,15 +35,14 @@ function loadTurnstile(): Promise<Turnstile> {
     const script = document.createElement('script')
     script.src = SCRIPT_URL
     script.async = true
-    script.onload = () =>
-      window.turnstile
-        ? resolve(window.turnstile)
-        : reject(new Error('Turnstile did not load'))
-    script.onerror = () => {
+    function fail() {
       scriptLoad = undefined
       script.remove()
       reject(new Error('Turnstile did not load'))
     }
+    script.onload = () =>
+      window.turnstile ? resolve(window.turnstile) : fail()
+    script.onerror = fail
     document.head.append(script)
   })
   return scriptLoad
@@ -54,6 +55,8 @@ export type BotCheckState =
 
 export type BotCheckHandle = { reset: () => void }
 
+export const BOT_CHECK_TIMEOUT_MS = 20_000
+
 export const BotCheck = forwardRef<
   BotCheckHandle,
   { siteKey: string; action: string; onChange: (state: BotCheckState) => void }
@@ -62,18 +65,33 @@ export const BotCheck = forwardRef<
   const widget = useRef<{ api: Turnstile; id: string } | undefined>(undefined)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const deadline = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  function settle(state: BotCheckState) {
+    clearTimeout(deadline.current)
+    onChangeRef.current(state)
+  }
+
+  function wait() {
+    clearTimeout(deadline.current)
+    onChangeRef.current({ status: 'pending' })
+    deadline.current = setTimeout(
+      () => onChangeRef.current({ status: 'unavailable' }),
+      BOT_CHECK_TIMEOUT_MS,
+    )
+  }
 
   useImperativeHandle(ref, () => ({
     reset() {
       if (!widget.current) return
-      onChangeRef.current({ status: 'pending' })
+      wait()
       widget.current.api.reset(widget.current.id)
     },
   }))
 
   useEffect(() => {
     let cancelled = false
-    onChangeRef.current({ status: 'pending' })
+    wait()
     loadTurnstile().then(
       (api) => {
         if (cancelled || !container.current) return
@@ -82,19 +100,21 @@ export const BotCheck = forwardRef<
           action,
           theme: 'auto',
           appearance: 'interaction-only',
-          callback: (token) => onChangeRef.current({ status: 'passed', token }),
-          'error-callback': () =>
-            onChangeRef.current({ status: 'unavailable' }),
-          'expired-callback': () => onChangeRef.current({ status: 'pending' }),
+          callback: (token) => settle({ status: 'passed', token }),
+          'error-callback': () => settle({ status: 'unavailable' }),
+          'expired-callback': () => settle({ status: 'unavailable' }),
+          'timeout-callback': () => settle({ status: 'unavailable' }),
+          'before-interactive-callback': () => clearTimeout(deadline.current),
         })
         widget.current = { api, id }
       },
       () => {
-        if (!cancelled) onChangeRef.current({ status: 'unavailable' })
+        if (!cancelled) settle({ status: 'unavailable' })
       },
     )
     return () => {
       cancelled = true
+      clearTimeout(deadline.current)
       if (widget.current) widget.current.api.remove(widget.current.id)
       widget.current = undefined
     }

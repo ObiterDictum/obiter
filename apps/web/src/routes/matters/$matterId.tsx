@@ -7,11 +7,11 @@ import {
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/matters/$matterId')({
-  loader: async ({ context, params }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, params, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
-    await guardAuth(context.queryClient, () =>
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
     )
     await context.queryClient.prefetchQuery(

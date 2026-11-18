@@ -13,15 +13,20 @@ import {
   organisationVerificationRunsQueryOptions,
 } from './verification-runs'
 
+export type RouteLocation = { href: string }
+
 export async function guardAuth<T>(
-  _queryClient: QueryClient,
+  location: RouteLocation,
   run: () => Promise<T>,
 ): Promise<void> {
   try {
     await run()
   } catch (error) {
     if (error instanceof ApiError && error.code === 'unauthenticated') {
-      throw redirect({ to: '/sign-in' })
+      throw redirect({
+        to: '/sign-in',
+        search: location.href === '/' ? {} : { redirect: location.href },
+      })
     }
     throw error
   }
@@ -30,7 +35,7 @@ export async function guardAuth<T>(
 export async function prefetchHomeData(
   queryClient: QueryClient,
 ): Promise<void> {
-  await guardAuth(queryClient, () =>
+  await guardAuth({ href: '/' }, () =>
     queryClient.ensureQueryData(currentUserQueryOptions()),
   )
   await queryClient.prefetchQuery(mattersListQueryOptions())
@@ -40,10 +45,11 @@ const DOCUMENT_PREFETCH_STALE_MS = 30_000
 
 export async function prefetchDocumentRouteData(
   queryClient: QueryClient,
+  location: RouteLocation,
   matterId: string,
   documentId: string,
 ): Promise<void> {
-  await guardAuth(queryClient, () =>
+  await guardAuth(location, () =>
     queryClient.ensureQueryData(currentUserQueryOptions()),
   )
   void queryClient.prefetchQuery({
@@ -72,8 +78,9 @@ export async function prefetchDocumentRouteData(
 
 export async function prefetchVerifyData(
   queryClient: QueryClient,
+  location: RouteLocation,
 ): Promise<void> {
-  await guardAuth(queryClient, () =>
+  await guardAuth(location, () =>
     queryClient.ensureQueryData(currentUserQueryOptions()),
   )
   const me = queryClient.getQueryData<MeResponse>(['current-user'])

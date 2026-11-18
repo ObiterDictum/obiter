@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
 import { apiFetch } from './api'
+import { useSignedIn } from './auth'
 import { documentsKeys } from './documents'
 
 import type { MatterRecord } from '@obiter/contracts'
@@ -93,9 +94,10 @@ export function useCreateMatter(): UseMutationResult<
 }
 
 export function useMattersList(options?: { enabled?: boolean }) {
+  const signedIn = useSignedIn()
   return useQuery({
     ...mattersListQueryOptions(),
-    enabled: options?.enabled ?? true,
+    enabled: signedIn && (options?.enabled ?? true),
   })
 }
 

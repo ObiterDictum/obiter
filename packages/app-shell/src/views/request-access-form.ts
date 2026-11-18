@@ -35,12 +35,14 @@ export const CATEGORY_OPTIONS: {
   },
 ]
 
-export const COUNTRY_OPTIONS: { value: AccessRequestCountry; label: string }[] =
-  [
-    { value: 'england_and_wales', label: 'England and Wales' },
-    { value: 'scotland', label: 'Scotland' },
-    { value: 'northern_ireland', label: 'Northern Ireland' },
-  ]
+export const JURISDICTION_OPTIONS: {
+  value: AccessRequestCountry
+  label: string
+}[] = [
+  { value: 'england_and_wales', label: 'England and Wales' },
+  { value: 'scotland', label: 'Scotland' },
+  { value: 'northern_ireland', label: 'Northern Ireland' },
+]
 
 export function countryFromSelect(
   value: string | null,
@@ -91,7 +93,7 @@ export function validateRequestAccess(
   else if (!accessRequestEmailFieldSchema.safeParse(email).success)
     errors.email = 'Enter an email address.'
   if (!form.category) errors.category = 'Choose the category that fits you.'
-  if (!form.country) errors.country = 'Choose where you are based.'
+  if (!form.country) errors.country = 'Choose your jurisdiction.'
   if (form.organisationName.trim().length === 0)
     errors.organisationName = 'Organisation name is required.'
   if (

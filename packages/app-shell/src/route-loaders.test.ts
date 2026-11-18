@@ -12,7 +12,8 @@ import {
   prefetchVerifyData,
 } from './route-loaders'
 
-const noopQueryClient = new QueryClient()
+const settingsLocation = { href: '/settings?section=security' }
+const documentLocation = { href: '/matters/mtr_1/documents/doc_1' }
 
 const CURRENT_USER_QUERY_KEY = ['current-user'] as const
 
@@ -29,7 +30,7 @@ const ORG_ME: MeResponse = {
 describe('guardAuth', () => {
   it('passes through when the wrapped call succeeds', async () => {
     const run = vi.fn().mockResolvedValue(undefined)
-    await expect(guardAuth(noopQueryClient, run)).resolves.toBeUndefined()
+    await expect(guardAuth(settingsLocation, run)).resolves.toBeUndefined()
     expect(run).toHaveBeenCalledOnce()
   })
 
@@ -40,11 +41,14 @@ describe('guardAuth', () => {
         new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_1'),
       )
 
-    await expectRejection(guardAuth(noopQueryClient, run), (error: unknown) => {
-      if (!isRedirect(error)) return false
-      const opts = (error as { options?: { to?: string } }).options
-      return opts?.to === '/sign-in'
-    })
+    await expectRejection(
+      guardAuth(settingsLocation, run),
+      (error: unknown) => {
+        if (!isRedirect(error)) return false
+        const opts = (error as { options?: { to?: string } }).options
+        return opts?.to === '/sign-in'
+      },
+    )
   })
 
   it('does not report success or run further work after a 401', async () => {
@@ -56,7 +60,7 @@ describe('guardAuth', () => {
       )
 
     await expectRejection(
-      guardAuth(noopQueryClient, async () => {
+      guardAuth(settingsLocation, async () => {
         await failing()
         await after()
       }),
@@ -77,13 +81,42 @@ describe('guardAuth', () => {
       )
 
     try {
-      await expectRejection(guardAuth(noopQueryClient, run), (error: unknown) =>
-        isRedirect(error),
+      await expectRejection(
+        guardAuth(settingsLocation, run),
+        (error: unknown) => isRedirect(error),
       )
     } finally {
       vi.stubGlobal('window', originalWindow)
       vi.unstubAllGlobals()
     }
+  })
+
+  it('carries the requested page to sign-in as the redirect search parameter', async () => {
+    const run = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_4'),
+      )
+
+    await expectRejection(guardAuth(settingsLocation, run), (error: unknown) =>
+      isRedirect(error)
+        ? JSON.stringify(error.options.search) ===
+          JSON.stringify({ redirect: '/settings?section=security' })
+        : false,
+    )
+  })
+
+  it('sends no redirect search parameter for Home', async () => {
+    const queryClient = new QueryClient()
+    vi.spyOn(queryClient, 'ensureQueryData').mockRejectedValueOnce(
+      new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_5'),
+    )
+
+    await expectRejection(prefetchHomeData(queryClient), (error: unknown) =>
+      isRedirect(error)
+        ? JSON.stringify(error.options.search) === JSON.stringify({})
+        : false,
+    )
   })
 
   it('rethrows non-auth errors so the router handles them normally', async () => {
@@ -93,7 +126,7 @@ describe('guardAuth', () => {
         new ApiError('matter_not_found', 'Matter not found.', 404, 'req_3'),
       )
 
-    await expect(guardAuth(noopQueryClient, run)).rejects.toMatchObject({
+    await expect(guardAuth(settingsLocation, run)).rejects.toMatchObject({
       code: 'matter_not_found',
     })
   })
@@ -156,7 +189,7 @@ describe('prefetchVerifyData', () => {
       .mockResolvedValue(undefined)
     vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(undefined)
 
-    await prefetchVerifyData(queryClient)
+    await prefetchVerifyData(queryClient, { href: '/verify' })
 
     expect(prefetchInfiniteQuery).toHaveBeenCalledTimes(1)
     expect(prefetchQuery).toHaveBeenCalledTimes(2)
@@ -182,7 +215,7 @@ describe('prefetchVerifyData', () => {
       .mockResolvedValue(undefined)
     vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(undefined)
 
-    await prefetchVerifyData(queryClient)
+    await prefetchVerifyData(queryClient, { href: '/verify' })
 
     expect(prefetchInfiniteQuery).not.toHaveBeenCalled()
     expect(prefetchQuery).not.toHaveBeenCalled()
@@ -194,11 +227,14 @@ describe('prefetchVerifyData', () => {
       new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_7'),
     )
 
-    await expectRejection(prefetchVerifyData(queryClient), (error: unknown) => {
-      if (!isRedirect(error)) return false
-      const opts = (error as { options?: { to?: string } }).options
-      return opts?.to === '/sign-in'
-    })
+    await expectRejection(
+      prefetchVerifyData(queryClient, { href: '/verify' }),
+      (error: unknown) => {
+        if (!isRedirect(error)) return false
+        const opts = (error as { options?: { to?: string } }).options
+        return opts?.to === '/sign-in'
+      },
+    )
   })
 })
 
@@ -217,7 +253,12 @@ describe('prefetchDocumentRouteData', () => {
     )
 
     await expect(
-      prefetchDocumentRouteData(queryClient, 'mtr_1', 'doc_1'),
+      prefetchDocumentRouteData(
+        queryClient,
+        documentLocation,
+        'mtr_1',
+        'doc_1',
+      ),
     ).resolves.toBeUndefined()
   })
 
@@ -229,7 +270,12 @@ describe('prefetchDocumentRouteData', () => {
       .spyOn(queryClient, 'prefetchQuery')
       .mockResolvedValue(undefined)
 
-    await prefetchDocumentRouteData(queryClient, 'mtr_1', 'doc_1')
+    await prefetchDocumentRouteData(
+      queryClient,
+      documentLocation,
+      'mtr_1',
+      'doc_1',
+    )
     await settle()
 
     expect(prefetchQuery).toHaveBeenCalledWith(
@@ -249,7 +295,12 @@ describe('prefetchDocumentRouteData', () => {
         .spyOn(queryClient, 'prefetchQuery')
         .mockResolvedValue(undefined)
 
-      await prefetchDocumentRouteData(queryClient, 'mtr_1', 'doc_1')
+      await prefetchDocumentRouteData(
+        queryClient,
+        documentLocation,
+        'mtr_1',
+        'doc_1',
+      )
       await settle()
 
       expect(prefetchQuery).not.toHaveBeenCalledWith(
@@ -267,8 +318,16 @@ describe('prefetchDocumentRouteData', () => {
     )
 
     await expectRejection(
-      prefetchDocumentRouteData(queryClient, 'mtr_1', 'doc_1'),
-      (error: unknown) => isRedirect(error),
+      prefetchDocumentRouteData(
+        queryClient,
+        documentLocation,
+        'mtr_1',
+        'doc_1',
+      ),
+      (error: unknown) =>
+        isRedirect(error) &&
+        JSON.stringify(error.options.search) ===
+          JSON.stringify({ redirect: '/matters/mtr_1/documents/doc_1' }),
     )
   })
 })
