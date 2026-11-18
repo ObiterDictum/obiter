@@ -11,9 +11,10 @@ import {
   useDocumentPdfView,
   useDocumentText,
 } from '../../document-workspace-api'
-import type {
-  DocumentVersionRecord,
-  MatterDocumentRecord,
+import {
+  documentFilename,
+  type DocumentVersionRecord,
+  type MatterDocumentRecord,
 } from '../../documents'
 import {
   DocumentDraftStatusProvider,
@@ -120,7 +121,7 @@ function DocumentWorkspaceBody({
       <VerifiedViewer>
         <UnsupportedWorkspace
           documentId={documentId}
-          filename={version.filename}
+          filename={documentFilename(document, version)}
           layout={layout}
         />
       </VerifiedViewer>
@@ -131,7 +132,7 @@ function DocumentWorkspaceBody({
       <VerifiedViewer>
         <TxtWorkspace
           documentId={documentId}
-          filename={version.filename}
+          filename={documentFilename(document, version)}
           layout={layout}
           mark={
             <RedactedMark
@@ -148,7 +149,7 @@ function DocumentWorkspaceBody({
       <VerifiedViewer>
         <PdfWorkspace
           documentId={documentId}
-          filename={version.filename}
+          filename={documentFilename(document, version)}
           layout={layout}
           mark={
             <RedactedMark
@@ -167,7 +168,7 @@ function DocumentWorkspaceBody({
         versionId={version.id}
         versionNumber={version.versionNumber}
         matterId={version.matterId}
-        filename={version.filename}
+        filename={documentFilename(document, version)}
         layout={layout}
         document={document}
         versions={versions}

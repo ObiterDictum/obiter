@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { buttonClassName } from '@obiter/ui'
-import type { MatterDocumentRecord } from '../documents'
+import { documentDisplayName, type MatterDocumentRecord } from '../documents'
 import { formatDate } from '../format'
 import { RedactedMark } from '../redacted-mark'
 import { DocumentIcon } from './matter-documents-table'
@@ -71,7 +71,7 @@ export function MatterPreview({
                   <DocumentIcon />
                   <span className="min-w-0 flex-1">
                     <span className="block text-meta break-words text-ink">
-                      {version?.filename ?? document.logicalKey}
+                      {documentDisplayName(document)}
                     </span>
                     <span className="mt-1 block text-caption text-subtle">
                       {version

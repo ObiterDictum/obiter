@@ -18,7 +18,7 @@ import type {
   VerificationRunResponse,
 } from '@obiter/contracts'
 import { apiFetch } from './api'
-import { documentQueryOptions } from './documents'
+import { documentDisplayName, documentQueryOptions } from './documents'
 
 export const verificationRunsQueryKey = ['verification-runs'] as const
 
@@ -251,7 +251,7 @@ export function useVerificationRunDocuments(
     const versions = query.data?.versions ?? []
     identities.set(documentId, {
       status: 'available',
-      filename: document.currentVersion?.filename ?? document.logicalKey,
+      filename: documentDisplayName(document),
       currentVersionId,
       currentVersionNumber: versions.find(
         (version) => version.id === currentVersionId,

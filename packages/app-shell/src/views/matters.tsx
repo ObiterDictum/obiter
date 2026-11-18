@@ -14,7 +14,7 @@ import {
 import { MagnifyingGlass } from '@obiter/ui/icons'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState } from 'react'
-import { matterDocumentsQueryOptions } from '../documents'
+import { documentDisplayName, matterDocumentsQueryOptions } from '../documents'
 import { formatDateTime } from '../format'
 import { useMattersList } from '../matters'
 import { useRedactionRunsList } from '../redaction-runs'
@@ -62,8 +62,8 @@ export function MattersRouteView({
   const documentFilenames = new Map<string, string>()
   for (const documents of documentsByMatter.values()) {
     for (const document of documents ?? []) {
-      const version = document.currentVersion
-      if (version) documentFilenames.set(document.id, version.filename)
+      if (document.currentVersion)
+        documentFilenames.set(document.id, documentDisplayName(document))
     }
   }
   const openWork = openWorkByMatter(

@@ -3393,6 +3393,18 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">PATCH /api/documents/:id</td>
+                  <td class="id">documents.ts</td>
+                  <td>
+                    Rename: <code>{ name }</code> validated by the shared
+                    <code>documentRenameRequestSchema</code>. Matter edit
+                    access, 404 otherwise and across organisations. Writes
+                    <code>matter_documents.name</code> and a
+                    <code>document.rename</code> audit row in one transaction;
+                    no new version.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET /api/documents/recently-opened</td>
                   <td class="id">documents.ts</td>
                   <td>
@@ -5030,8 +5042,13 @@
                 </tr>
                 <tr>
                   <td class="id">matter_documents</td>
-                  <td>Documents within a matter</td>
-                  <td class="id">0002</td>
+                  <td>
+                    Documents within a matter. 0061 adds <code>name</code>, the
+                    display name kept apart from the immutable version
+                    filenames, backfilled from the current version filename
+                    without its file type extension
+                  </td>
+                  <td class="id">0002, 0061</td>
                 </tr>
                 <tr>
                   <td class="id">document_versions</td>

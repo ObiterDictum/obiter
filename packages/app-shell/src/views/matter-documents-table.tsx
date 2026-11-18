@@ -14,7 +14,7 @@ import {
   type StatusDotProps,
 } from '@obiter/ui'
 import { CaretRight, FileText } from '@obiter/ui/icons'
-import type { MatterDocumentRecord } from '../documents'
+import { documentDisplayName, type MatterDocumentRecord } from '../documents'
 import { formatDate } from '../format'
 import { RedactedMark } from '../redacted-mark'
 import {
@@ -26,6 +26,7 @@ import {
   useLatestVerificationRuns,
   type DocumentVerificationState,
 } from '../verification-runs'
+import { DocumentRowMenu } from './document-row-menu'
 import { MatterUploadButton, NewDocumentButton } from './matter-upload'
 
 export interface VerifyPart {
@@ -220,7 +221,7 @@ export function MatterDocumentsTable({
             ) : (
               files.map((file) => {
                 const version = file.currentVersion
-                const filename = version?.filename ?? file.logicalKey
+                const filename = documentDisplayName(file)
                 const redactRun = redaction.get(file.id)
                 return (
                   <TR key={file.id}>
@@ -270,7 +271,8 @@ export function MatterDocumentsTable({
                     <TD className="px-3 text-right text-meta whitespace-nowrap text-subtle tabular-nums">
                       {formatDate(version?.updatedAt ?? file.updatedAt)}
                     </TD>
-                    <TD className="pr-4 text-right">
+                    <TD className="pr-4 text-right whitespace-nowrap">
+                      <DocumentRowMenu document={file} />
                       <Link
                         to="/matters/$matterId/documents/$documentId"
                         params={{ matterId, documentId: file.id }}

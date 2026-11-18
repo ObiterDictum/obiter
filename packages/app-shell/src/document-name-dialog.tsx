@@ -23,6 +23,7 @@ export function DocumentNameDialog({
   description,
   submitLabel,
   initialName,
+  extension,
   onSubmit,
 }: {
   open: boolean
@@ -31,6 +32,7 @@ export function DocumentNameDialog({
   description: string
   submitLabel: string
   initialName: string
+  extension?: string
   onSubmit: (name: string) => Promise<void>
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -42,6 +44,7 @@ export function DocumentNameDialog({
         <DocumentNameForm
           inputRef={inputRef}
           initialName={initialName}
+          extension={extension}
           submitLabel={submitLabel}
           onSubmit={async (name) => {
             await onSubmit(name)
@@ -71,6 +74,7 @@ export function NewDocumentDialog({
       description="Name the Word document. You can rename it later."
       submitLabel="Create"
       initialName={DEFAULT_DOCUMENT_NAME}
+      extension="docx"
       onSubmit={onCreate}
     />
   )
@@ -79,11 +83,13 @@ export function NewDocumentDialog({
 function DocumentNameForm({
   inputRef,
   initialName,
+  extension,
   submitLabel,
   onSubmit,
 }: {
   inputRef: RefObject<HTMLInputElement | null>
   initialName: string
+  extension?: string
   submitLabel: string
   onSubmit: (name: string) => Promise<void>
 }) {
@@ -121,6 +127,8 @@ function DocumentNameForm({
         value={name}
         maxLength={DOCUMENT_NAME_MAX_LENGTH}
         error={error}
+        trailing={extension ? `.${extension}` : undefined}
+        className={extension ? 'pr-14' : undefined}
         autoComplete="off"
         spellCheck={false}
         onFocus={(event) => event.currentTarget.select()}
