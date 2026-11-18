@@ -1,10 +1,19 @@
 import { z } from 'zod'
 import { agentApiKeySchema } from './agent-settings'
+import {
+  AGENT_CONNECTION_ENABLED_MODEL_LIMIT,
+  AGENT_CONNECTION_LISTED_MODEL_LIMIT,
+} from './limits'
 
+export {
+  AGENT_CONNECTION_ENABLED_MODEL_LIMIT,
+  AGENT_CONNECTION_LISTED_MODEL_LIMIT,
+} from './limits'
+const modelIdSchema = z.string().trim().min(1).max(128)
 const fields = {
   name: z.string().trim().min(1).max(80),
   baseUrl: z.string().url().max(2048),
-  modelIds: z.array(z.string().trim().min(1).max(128)).max(100),
+  modelIds: z.array(modelIdSchema).max(AGENT_CONNECTION_ENABLED_MODEL_LIMIT),
   supportsReasoningEffort: z.boolean(),
 }
 export const agentConnectionCreateSchema = z
@@ -25,6 +34,31 @@ export const agentConnectionSchema = z
   })
   .strict()
 export type AgentConnection = z.infer<typeof agentConnectionSchema>
+export const agentConnectionSavedSchema = z
+  .object({ ok: z.literal(true), id: z.string().uuid().optional() })
+  .strict()
+export type AgentConnectionSaved = z.infer<typeof agentConnectionSavedSchema>
+export const agentConnectionModelSchema = z
+  .object({ id: modelIdSchema, name: z.string().min(1).max(128).nullable() })
+  .strict()
+export type AgentConnectionModel = z.infer<typeof agentConnectionModelSchema>
+export const agentConnectionTestSchema = z
+  .object({ modelId: modelIdSchema.optional() })
+  .strict()
+export type AgentConnectionTest = z.infer<typeof agentConnectionTestSchema>
+export const agentConnectionTestResponseSchema = z
+  .object({
+    message: z.string(),
+    models: z
+      .array(agentConnectionModelSchema)
+      .max(AGENT_CONNECTION_LISTED_MODEL_LIMIT)
+      .optional(),
+    truncated: z.boolean().optional(),
+  })
+  .strict()
+export type AgentConnectionTestResponse = z.infer<
+  typeof agentConnectionTestResponseSchema
+>
 export type AgentConnectionCreate = z.infer<typeof agentConnectionCreateSchema>
 export type AgentConnectionUpdate = z.infer<typeof agentConnectionUpdateSchema>
 
