@@ -372,9 +372,14 @@ describe('Comments and Checks notice', () => {
     expect(onReturn).toHaveBeenCalled()
   })
 
-  it('explains that comments and checks need a Word document', () => {
+  it('explains why a read-only document has no Comments', () => {
     render(<DocumentTabsNotice notice={{ kind: 'not-word' }} tab="comments" />)
     expect(screen.getByText('Comments need a Word document')).toBeTruthy()
+  })
+
+  it('directs read-only documents to the Verify dock for citation checks', () => {
+    render(<DocumentTabsNotice notice={{ kind: 'not-word' }} tab="checks" />)
+    expect(screen.getByText(/Use the Verify dock/)).toBeTruthy()
   })
 })
 

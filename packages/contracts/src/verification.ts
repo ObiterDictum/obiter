@@ -28,6 +28,8 @@ export type VerificationRunStatus = z.infer<typeof verificationRunStatusSchema>
 
 export const verificationFailureCodeSchema = z.enum([
   'model_unavailable',
+  'pdf_text_unavailable',
+  'text_unavailable',
   'version_not_ready',
   'execution_failed',
   'interrupted',
@@ -69,8 +71,9 @@ export type VerificationReviewReason = z.infer<
 export const verificationSeveritySchema = z.enum(['high', 'medium', 'low'])
 export type VerificationSeverity = z.infer<typeof verificationSeveritySchema>
 
-const draftLocationSchema = z
+const wordLocationSchema = z
   .object({
+    kind: z.literal('word').optional(),
     paragraphId: z.string().min(1),
     storyKind: documentStoryKindSchema.optional(),
     storyPartName: z.string().min(1).optional(),
@@ -78,6 +81,21 @@ const draftLocationSchema = z
     end: z.number().int().positive(),
   })
   .strict()
+
+export const verificationTextLocationSchema = z
+  .object({
+    kind: z.literal('text'),
+    start: z.number().int().nonnegative(),
+    end: z.number().int().positive(),
+    page: z.number().int().positive().optional(),
+  })
+  .strict()
+
+const draftLocationSchema = z
+  .discriminatedUnion('kind', [
+    wordLocationSchema,
+    verificationTextLocationSchema,
+  ])
   .refine((location) => location.end > location.start, {
     message: 'A draft location must be a non-empty half-open span.',
     path: ['end'],

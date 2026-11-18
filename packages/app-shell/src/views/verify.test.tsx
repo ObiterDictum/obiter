@@ -358,6 +358,15 @@ describe('VerifyRouteView', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('shows the page and excerpt for a finding from extracted PDF text', async () => {
+    findings = [
+      { ...flagged, location: { kind: 'text', start: 45, end: 58, page: 2 } },
+    ]
+    await renderVerify()
+    expect(await screen.findByText(/· Page 2/)).toBeTruthy()
+    expect(screen.getAllByText(flagged.excerpt).length).toBeGreaterThan(0)
+  })
+
   it('says plainly that the checked version is older than the one stored now', async () => {
     runs = [run({ stale: true, documentCurrentVersionId: 'ver_doc_1_2' })]
     await renderVerify()

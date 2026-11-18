@@ -32,16 +32,19 @@ export function DocumentAuthoritiesPanel({
   }
   const findings = verification?.findings ?? []
   for (const group of groups) {
-    group.finding = findings.find(
-      (finding) =>
+    group.finding = findings.find((finding) => {
+      const { location } = finding
+      return (
+        location.kind !== 'text' &&
         group.hits.some(
           (hit) =>
-            finding.location.paragraphId === hit.paragraphId &&
+            location.paragraphId === hit.paragraphId &&
             excerptNamesCitation(finding.excerpt, group.citation),
         ) &&
         (finding.authorityLabel === group.citation ||
-          excerptNamesCitation(finding.excerpt, group.citation)),
-    )
+          excerptNamesCitation(finding.excerpt, group.citation))
+      )
+    })
     group.name =
       group.finding?.authorityName ??
       findings.find(

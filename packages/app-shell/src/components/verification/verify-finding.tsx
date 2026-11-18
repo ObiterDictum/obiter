@@ -19,7 +19,7 @@ import {
   verificationDismissalRecord,
   verificationStateLabel,
   verificationStateTone,
-  verificationStoryLabel,
+  verificationLocationLabel,
   verificationTypeLabel,
   verificationUncertainty,
   verificationWhatCompared,
@@ -97,7 +97,7 @@ export function VerifyFinding({
   onUndismiss?: () => void
   onOpen?: () => void
 }) {
-  const story = verificationStoryLabel(finding.location.storyKind)
+  const story = verificationLocationLabel(finding.location)
   const uncertainty = verificationUncertainty(finding)
   const dismissal = finding.dismissal
   const settled = dismissal != null
