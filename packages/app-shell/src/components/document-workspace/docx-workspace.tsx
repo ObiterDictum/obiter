@@ -220,15 +220,7 @@ export function DocxWorkspace({
     onNotice: setBanner,
   })
 
-  const currentVersionId = syncQuery.data?.currentVersionId
-  const modelVersionId = modelQuery.data?.versionId
-  useDocumentPresenceHeartbeat(
-    documentId,
-    cursor,
-    modelVersionId && (!currentVersionId || currentVersionId === modelVersionId)
-      ? modelVersionId
-      : undefined,
-  )
+  useDocumentPresenceHeartbeat(documentId, cursor, modelQuery, syncQuery)
   const markings = useDocumentMarkings({
     documentId,
     matterId,

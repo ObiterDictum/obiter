@@ -38,7 +38,12 @@ it('starts after load, cancels superseded requests and stops on unmount without 
       { documentId: string; versionId?: string }
     >(
       ({ documentId, versionId }: { documentId: string; versionId?: string }) =>
-        useDocumentPresenceHeartbeat(documentId, cursor, versionId),
+        useDocumentPresenceHeartbeat(
+          documentId,
+          cursor,
+          { data: versionId ? { versionId } : undefined },
+          {},
+        ),
       {
         initialProps: { documentId: 'doc_1' },
         wrapper: ({ children }: PropsWithChildren) => (

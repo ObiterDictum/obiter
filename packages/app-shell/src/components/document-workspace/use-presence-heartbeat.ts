@@ -7,8 +7,13 @@ const HEARTBEAT_MS = 8_000
 export function useDocumentPresenceHeartbeat(
   documentId: string,
   cursor: DocumentCursor | null,
-  versionId: string | undefined,
+  model: { data?: { versionId: string } },
+  sync: { data?: { currentVersionId?: string | null } },
 ) {
+  const loaded = model.data?.versionId
+  const current = sync.data?.currentVersionId
+  const versionId =
+    loaded && (!current || current === loaded) ? loaded : undefined
   const { mutate } = usePresenceUpdate()
   const cursorRef = useRef(cursor)
   cursorRef.current = cursor
