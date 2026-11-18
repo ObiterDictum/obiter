@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import {
-  documentRenameResponseSchema,
-  type CitationTargetsResponse,
-  type DocumentOpenResponse,
-  type PersonAttribution,
-  type RecentlyOpenedDocumentResponse,
+import type {
+  CitationTargetsResponse,
+  DocumentRenameResponse,
+  DocumentOpenResponse,
+  PersonAttribution,
+  RecentlyOpenedDocumentResponse,
 } from '@obiter/contracts'
 import { apiFetch, ApiError } from './api'
 import { declaredFileType } from './file-type'
@@ -283,11 +283,12 @@ export function useRenameDocument() {
       matterId: string
       name: string
     }) => {
-      const response = documentRenameResponseSchema.parse(
-        await apiFetch<unknown>(`/api/documents/${input.documentId}`, {
+      const response = await apiFetch<DocumentRenameResponse>(
+        `/api/documents/${input.documentId}`,
+        {
           method: 'PATCH',
           body: JSON.stringify({ name: input.name }),
-        }),
+        },
       )
       return response.document
     },
