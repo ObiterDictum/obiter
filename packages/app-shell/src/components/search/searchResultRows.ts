@@ -46,7 +46,8 @@ export function formatResultSummary(
   response: LegalSearchFetchResponse,
   browse?: LegalSearchBrowseContext,
 ): string {
-  const resultCount = response.hits.length + legislationHits(response).length
+  const legislation = legislationHits(response)
+  const resultCount = response.hits.length + legislation.length
   if (browse) {
     const caseLabel = response.hits.length === 1 ? 'case' : 'cases'
     return `${response.hits.length} recent ${caseLabel} for ${browse.courtLabel} from stored legal sources`
@@ -65,14 +66,12 @@ export function formatResultSummary(
   }
 
   const judgments = response.hits.length
-  const legislation = legislationHits(response).length
+  const acts = legislation.filter((hit) => !hit.labelPath).length
+  const provisions = legislation.length - acts
   const parts = [
-    judgments
-      ? `${judgments} ${judgments === 1 ? 'judgment' : 'judgments'}`
-      : null,
-    legislation
-      ? `${legislation} ${legislation === 1 ? 'provision' : 'provisions'}`
-      : null,
+    countResults(judgments, 'judgment'),
+    countResults(acts, 'Act'),
+    countResults(provisions, 'provision'),
   ].filter(Boolean)
   if (parts.length === 0) return `No results ${source}`
   return `${parts.join(' · ')} ${source}${
@@ -80,6 +79,10 @@ export function formatResultSummary(
       ? ` · ${response.estimatedTotalHits} matching in the index`
       : ''
   }`
+}
+
+function countResults(count: number, noun: string) {
+  return count ? `${count} ${noun}${count === 1 ? '' : 's'}` : null
 }
 
 function formatResultSource(response: LegalSearchFetchResponse) {

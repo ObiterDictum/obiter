@@ -114,15 +114,12 @@ export {
 } from './views/CaseLawDocumentView'
 export type { CaseLawDocumentResponse } from './views/CaseLawDocumentView'
 export {
-  LegislationProvisionView,
   legislationProvisionQueryOptions,
-} from './views/LegislationProvisionView'
-export type { LegislationProvisionResponse } from './views/LegislationProvisionView'
-export {
-  LegislationActView,
   legislationActQueryOptions,
-} from './views/LegislationActView'
-export type { LegislationActResponse } from './views/LegislationActView'
+  prefetchLegislationPage,
+  type LegislationProvisionResponse,
+  type LegislationActResponse,
+} from './views/legislation-document-query'
 export {
   createCanonicalCasePath,
   resolveCaseDocumentIdFromSlug,

@@ -12,6 +12,7 @@
     "./views/case-law-document-query": "./src/views/case-law-document-query.ts",
     "./views/document-detail": "./src/views/document-detail.tsx",
     "./views/legislation-provision": "./src/views/LegislationProvisionView.tsx",
+    "./views/legislation-route": "./src/views/LegislationRouteView.tsx",
     "./views/matter-detail": "./src/views/matter-detail.tsx",
     "./views/matters": "./src/views/matters.tsx",
     "./views/settings": "./src/views/settings.tsx",

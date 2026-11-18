@@ -1,3 +1,4 @@
+import { ActSearchActions, ActSearchDetails } from './ActSearchDetails'
 import { Link } from '@tanstack/react-router'
 import { Button, StatusDot } from '@obiter/ui'
 import { caseResultLocation } from '../../case-navigation'
@@ -139,6 +140,7 @@ function LegislationResult({
   onPreview: () => void
 }) {
   const hit = row.hit
+  const isAct = !hit.labelPath
   const status = legislationStatusDisplay(
     hit.legislationStatus,
     hit.repealedFrom,
@@ -159,7 +161,7 @@ function LegislationResult({
             {...provisionResultLocation(hit)}
             className="text-ink underline-offset-2 hover:underline"
           >
-            {hit.provisionLabel} · {hit.title}
+            {isAct ? hit.title : `${hit.provisionLabel} · ${hit.title}`}
           </Link>
         </h3>
         <Button
@@ -171,20 +173,29 @@ function LegislationResult({
           Preview
         </Button>
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-2 text-meta text-subtle">
-        <span>{hit.extent ? hit.extent : 'Extent not recorded'}</span>
-        <span aria-hidden>·</span>
-        <StatusDot tone={status.tone}>{status.label}</StatusDot>
-      </div>
-      {extract ? (
-        <>
-          <p className="mt-3 max-w-[68ch] text-meta leading-relaxed text-muted">
-            {extract}
-          </p>
-          <LegislationExtractProvenance hit={hit} />
-        </>
+      {isAct ? (
+        <div className="mt-2 flex flex-col gap-3">
+          <ActSearchDetails hit={hit} />
+          <ActSearchActions hit={hit} />
+        </div>
       ) : (
-        <p className="mt-3 text-meta text-muted">{hit.notice}</p>
+        <>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-meta text-subtle">
+            <span>{hit.extent ? hit.extent : 'Extent not recorded'}</span>
+            <span aria-hidden>·</span>
+            <StatusDot tone={status.tone}>{status.label}</StatusDot>
+          </div>
+          {extract ? (
+            <>
+              <p className="mt-3 max-w-[68ch] text-meta leading-relaxed text-muted">
+                {extract}
+              </p>
+              <LegislationExtractProvenance hit={hit} />
+            </>
+          ) : (
+            <p className="mt-3 text-meta text-muted">{hit.notice}</p>
+          )}
+        </>
       )}
     </article>
   )

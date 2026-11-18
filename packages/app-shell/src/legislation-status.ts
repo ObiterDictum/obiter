@@ -1,6 +1,8 @@
 import { formatDate } from './format'
 
-export type LegislationStatus = 'current' | 'amended_not_held' | 'repealed'
+import type { LegislationStatus } from '@obiter/contracts/legislation-reader'
+
+export type { LegislationStatus }
 
 export interface LegislationStatusDisplay {
   tone: 'success' | 'warning' | 'neutral'

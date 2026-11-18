@@ -194,3 +194,50 @@ describe('SearchPreview provenance', () => {
     ).toBeTruthy()
   })
 })
+
+it('presents an Act result and preview with a primary reader link', () => {
+  const actHit: LegislationSearchResultHit = {
+    ...provision,
+    id: provision.documentIdentity,
+    labelPath: '',
+    provisionLabel: '2010 c. 15',
+    text: undefined,
+    officialUrl: provision.sourceUrl,
+    act: {
+      status: 'in_force',
+      enactmentDate: '2010-04-08',
+      totalCount: 561,
+      withheldCount: 116,
+      outline: ['Part 1 · Socio-economic inequalities'],
+    },
+  }
+  const rows = searchResultRows(
+    response({
+      hits: [],
+      groups: [{ key: 'legislation', label: 'Legislation', hits: [actHit] }],
+    }),
+  )
+  render(
+    <>
+      <SearchResultList
+        rows={rows}
+        selectedIndex={0}
+        onSelectIndex={() => {}}
+        onPreview={() => {}}
+      />
+      <SearchPreview row={rows[0]} />
+    </>,
+  )
+  expect(screen.getAllByText('561 provisions · 116 withheld')).toHaveLength(2)
+  expect(
+    screen.getAllByText('Part 1 · Socio-economic inequalities'),
+  ).toHaveLength(2)
+  expect(screen.getAllByText('Royal Assent 8 Apr 2010')).toHaveLength(2)
+  expect(
+    screen
+      .getAllByRole('link', { name: 'Read the Act' })
+      .map((link) => link.getAttribute('href')),
+  ).toEqual(['/ln/ukpga/2010/15', '/ln/ukpga/2010/15'])
+  expect(screen.queryByText('No unapplied amendments')).toBeNull()
+  expect(screen.queryByText(/No extracted provision text/)).toBeNull()
+})

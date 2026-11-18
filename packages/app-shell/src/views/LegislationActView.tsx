@@ -1,119 +1,25 @@
+import { LegislationActReader } from './LegislationActReader'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHead,
-  Skeleton,
-  StatusDot,
-  buttonClassName,
-} from '@obiter/ui'
+import { Button, Skeleton, StatusDot, buttonClassName } from '@obiter/ui'
 import { ArrowUpRight } from '@obiter/ui/icons'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
-import { provisionResultLocation } from '../legislation-navigation'
 import { sourceNameForUrl } from '../components/search/provenance'
 import { formatDate } from '../format'
 import { legislationStatusDisplay } from '../legislation-status'
-import {
-  legislationActQueryOptions,
-  type LegislationActContentsKind,
-  type LegislationActContentsNode,
-} from './legislation-document-query'
+import { legislationActQueryOptions } from './legislation-document-query'
 
 export { legislationActQueryOptions }
 export type { LegislationActResponse } from './legislation-document-query'
 
-const containerKinds = new Set<LegislationActContentsKind>([
-  'part',
-  'chapter',
-  'schedule',
-  'crossheading',
-])
-
-function isContainerKind(kind: LegislationActContentsKind): boolean {
-  return containerKinds.has(kind)
-}
-
-function countLabel(count: number): string {
-  return `${count} ${count === 1 ? 'provision' : 'provisions'}`
-}
-
-function ActContentsItem({
-  node,
-  documentIdentity,
+export function LegislationActView({
+  identity,
+  hash = '',
 }: {
-  node: LegislationActContentsNode
-  documentIdentity: string
+  identity: string
+  hash?: string
 }) {
-  if (isContainerKind(node.kind)) {
-    return (
-      <li>
-        <div className="flex flex-col gap-0.5 py-2 pl-2">
-          <span className="text-item text-ink">{node.label}</span>
-          {node.text && node.text !== node.label ? (
-            <span className="text-meta text-muted">{node.text}</span>
-          ) : null}
-        </div>
-        {node.children.length > 0 ? (
-          <ul className="ml-2 flex flex-col border-l border-line pl-2">
-            {node.children.map((child) => (
-              <ActContentsItem
-                key={child.labelPath}
-                node={child}
-                documentIdentity={documentIdentity}
-              />
-            ))}
-          </ul>
-        ) : null}
-      </li>
-    )
-  }
-  return (
-    <li>
-      <Link
-        {...provisionResultLocation({
-          documentIdentity,
-          labelPath: node.labelPath,
-          canonicalUrl: node.href,
-        })}
-        data-legislation-status={
-          node.repealed
-            ? 'repealed'
-            : node.withheld
-              ? 'amended_not_held'
-              : 'current'
-        }
-        className={
-          node.repealed
-            ? 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-muted hover:bg-hover'
-            : node.withheld
-              ? 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-ink hover:bg-warning-soft'
-              : 'flex min-h-row items-center justify-between gap-4 rounded-md px-2 text-ink hover:bg-hover'
-        }
-      >
-        <span className="flex min-w-0 items-baseline gap-2">
-          <span className="shrink-0 text-item tabular-nums">{node.label}</span>
-          {node.heading ? (
-            <span className="truncate text-meta text-muted">
-              {node.heading}
-            </span>
-          ) : null}
-        </span>
-        {node.repealed ? (
-          <StatusDot tone="neutral">
-            {legislationStatusDisplay('repealed', node.repealedFrom).label}
-          </StatusDot>
-        ) : node.withheld ? (
-          <StatusDot tone="warning">Amended wording withheld</StatusDot>
-        ) : null}
-      </Link>
-    </li>
-  )
-}
-
-export function LegislationActView({ identity }: { identity: string }) {
   const query = useQuery(legislationActQueryOptions(identity))
 
   if (query.isPending) {
@@ -146,9 +52,7 @@ export function LegislationActView({ identity }: { identity: string }) {
 
   const act = query.data.act
   const sourceName = sourceNameForUrl(act.sourceUrl)
-  const withheld = act.withheldCount > 0
   const repealedAct = act.status === 'repealed'
-  const repealedCount = act.repealedCount ?? 0
 
   return (
     <PageScaffold
@@ -165,11 +69,10 @@ export function LegislationActView({ identity }: { identity: string }) {
               {legislationStatusDisplay('repealed', act.repealedFrom).label}
             </StatusDot>
           ) : (
-            <StatusDot tone={withheld ? 'warning' : 'success'}>
-              {withheld
-                ? `${act.withheldCount} provisions not shown`
-                : 'No unapplied amendments'}
-            </StatusDot>
+            <span>
+              {act.totalCount}{' '}
+              {act.totalCount === 1 ? 'provision' : 'provisions'}
+            </span>
           )}
           <span aria-hidden>·</span>
           <span>Point-in-time date not recorded</span>
@@ -195,120 +98,35 @@ export function LegislationActView({ identity }: { identity: string }) {
         </>
       }
     >
-      <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
-        <Card>
-          <CardHead title="Contents">
-            <span className="text-meta text-subtle">
-              {countLabel(act.totalCount)} in document order
-            </span>
-          </CardHead>
-          <CardBody>
-            {repealedCount > 0 ? (
-              <p className="mb-4 text-meta text-muted">
-                {repealedCount} of {countLabel(act.totalCount)}{' '}
-                {repealedCount === 1 ? 'has' : 'have'} been repealed. They stay
-                listed, marked Repealed, and each one shows what repealed it.
-              </p>
-            ) : null}
-            {act.withheldCount > 0 ? (
-              <div
-                className="mb-4 rounded-md bg-warning-soft px-4 py-3"
-                role="alert"
-              >
-                <p className="text-item text-warning">
-                  {act.withheldCount} of {countLabel(act.totalCount)} are not
-                  shown
-                </p>
-                <p className="mt-1 text-meta text-muted">
-                  Those provisions are affected by amendments that have been
-                  recorded but not yet applied, so their wording is withheld.
-                  They stay listed below and link to the official revised text.
-                </p>
-              </div>
-            ) : null}
-            <ul className="flex flex-col gap-0.5">
-              {act.contents.map((node) => (
-                <ActContentsItem
-                  key={node.labelPath}
-                  node={node}
-                  documentIdentity={act.identity}
-                />
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
-
-        <aside aria-label="About this Act">
-          <Card>
-            <CardHead title="About this Act" />
-            <CardBody>
-              <dl className="grid grid-cols-[minmax(84px,auto)_minmax(0,1fr)] gap-x-3 gap-y-2 text-meta">
-                <dt className="text-subtle">Chapter</dt>
-                <dd className="text-ink">{act.chapter}</dd>
-                <dt className="text-subtle">Year</dt>
-                <dd className="text-ink tabular-nums">{act.year}</dd>
-                {act.enactmentDate ? (
-                  <>
-                    <dt className="text-subtle">Royal Assent</dt>
-                    <dd className="text-ink">
-                      {formatDate(act.enactmentDate)}
-                    </dd>
-                  </>
-                ) : null}
-                {repealedAct ? (
-                  <>
-                    <dt className="text-subtle">Status</dt>
-                    <dd className="text-ink">
-                      {
-                        legislationStatusDisplay('repealed', act.repealedFrom)
-                          .label
-                      }
-                    </dd>
-                  </>
-                ) : null}
-                <dt className="text-subtle">Extent</dt>
-                <dd className="text-ink">
-                  {act.extent ? act.extent : 'Extent not recorded'}
-                </dd>
-                <dt className="text-subtle">Source</dt>
-                <dd className="flex flex-col gap-1 text-ink">
-                  <a
-                    href={act.officialUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="underline-offset-2 hover:underline"
-                  >
-                    {sourceName}
-                  </a>
-                  <span className="text-caption text-subtle">
-                    {act.acquiredAt
-                      ? `Retrieved ${formatDate(act.acquiredAt)}`
-                      : 'Retrieval date not recorded'}
-                  </span>
-                  <a
-                    href={act.officialUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="text-caption text-ink underline-offset-2 hover:underline"
-                  >
-                    Open original
-                  </a>
-                </dd>
-              </dl>
-              <div className="mt-4 rounded-md bg-warning-soft px-4 py-3">
-                <p className="text-caption text-warning">
-                  Point-in-time date not recorded
-                </p>
-                <p className="mt-1 text-caption text-muted">
-                  Check legislation.gov.uk before relying on the text. This page
-                  shows the stored version, not a guarantee that later
-                  amendments are incorporated.
-                </p>
-              </div>
-            </CardBody>
-          </Card>
-        </aside>
+      <div className="space-y-2 text-meta text-muted">
+        <p>
+          Source{' '}
+          <a
+            className="text-ink underline underline-offset-2"
+            href={act.officialUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            {sourceName}
+          </a>
+          {' · '}
+          {act.acquiredAt
+            ? `Retrieved ${formatDate(act.acquiredAt)}`
+            : 'Retrieval date not recorded'}
+          {act.enactmentDate
+            ? ` · Royal Assent ${formatDate(act.enactmentDate)}`
+            : ''}
+        </p>
+        <p>Check legislation.gov.uk before relying on the stored version.</p>
+        {act.withheldCount > 0 ? (
+          <p className="rounded-md bg-warning-soft px-4 py-3 text-ink">
+            {act.withheldCount} of {act.totalCount} provisions have wording
+            withheld. They appear in document order with a link to the official
+            revised text.
+          </p>
+        ) : null}
       </div>
+      <LegislationActReader key={act.identity} act={act} hash={hash} />
     </PageScaffold>
   )
 }

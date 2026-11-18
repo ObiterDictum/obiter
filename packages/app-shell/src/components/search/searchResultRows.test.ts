@@ -70,6 +70,24 @@ describe('searchResultRows', () => {
     )
   })
 
+  it('counts Act hits separately from provisions', () => {
+    const act = { ...provision, labelPath: '' }
+    expect(
+      formatResultSummary(
+        response({
+          hits: [],
+          groups: [
+            {
+              key: 'legislation',
+              label: 'Legislation',
+              hits: [act, provision],
+            },
+          ],
+        }),
+      ),
+    ).toBe('1 Act · 1 provision from stored legal sources')
+  })
+
   it('names a court browse from the API data', () => {
     expect(
       formatResultSummary(response(), { courtLabel: 'UK Supreme Court' }),

@@ -1,3 +1,4 @@
+import { ActSearchActions, ActSearchDetails } from './ActSearchDetails'
 import { Link } from '@tanstack/react-router'
 import { Card, CardBody, CardFoot, CardHead, StatusDot } from '@obiter/ui'
 import { Scales } from '@obiter/ui/icons'
@@ -110,6 +111,21 @@ function LegislationPreview({
   embedded: boolean
 }) {
   const hit = row.hit
+  if (!hit.labelPath) {
+    return (
+      <Card aria-label="Result preview">
+        {embedded ? null : <CardHead title="Preview" />}
+        <CardBody className="flex flex-col gap-4 pt-6">
+          <p className="text-meta text-subtle">Act of Parliament</p>
+          <h2 className="text-section leading-snug">{hit.title}</h2>
+          <ActSearchDetails hit={hit} />
+        </CardBody>
+        <CardFoot>
+          <ActSearchActions hit={hit} />
+        </CardFoot>
+      </Card>
+    )
+  }
   const withheld = hit.legislationStatus !== 'current'
   const status = legislationStatusDisplay(
     hit.legislationStatus,
