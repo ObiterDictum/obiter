@@ -20,7 +20,7 @@ describe('redaction schedule', () => {
     expect(
       screen.getByText('The schedule lists decisions, not the words removed.'),
     ).toBeTruthy()
-    expect(screen.getByText('brief redaction schedule.pdf')).toBeTruthy()
+    expect(screen.getByText('redaction-schedule.pdf')).toBeTruthy()
     expect(
       screen.getByText(/it is never part of the disclosure copy/u),
     ).toBeTruthy()
@@ -72,13 +72,12 @@ describe('redaction schedule', () => {
     expect(mutate).toHaveBeenCalledWith('pdf', expect.anything())
     expect(createObjectURL).toHaveBeenCalledWith(scheduleFile)
     expect(anchorDownload).toHaveBeenCalled()
-    expect(downloaded).toBe('brief redaction schedule.pdf')
+    expect(downloaded).toBe('redaction-schedule.pdf')
 
     fireEvent.click(screen.getByRole('button', { name: 'Export Word' }))
     expect(mutate).toHaveBeenCalledWith('docx', expect.anything())
-    expect(downloaded).toBe('brief redaction schedule.docx')
+    expect(downloaded).toBe('redaction-schedule.docx')
 
-    // Legal: the shareable audit leaves the firm, so its filename never carries the source document's name.
     fireEvent.click(
       screen.getByRole('button', { name: 'Export shareable JSON' }),
     )

@@ -26,7 +26,7 @@ describe('finalised disclosure copy', () => {
     expect(
       screen.getByRole('heading', { name: 'Redaction finalised' }),
     ).toBeTruthy()
-    expect(screen.getByText('brief (redacted).pdf')).toBeTruthy()
+    expect(screen.getByText('brief-redacted.pdf')).toBeTruthy()
     expect(screen.getByText('PDF, image-only pages')).toBeTruthy()
     expect(
       screen.getByText(

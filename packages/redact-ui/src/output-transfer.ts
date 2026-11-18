@@ -11,19 +11,6 @@ export function downloadBlob(blob: Blob, filename: string) {
   }, DOWNLOAD_URL_REVOKE_DELAY_MS)
 }
 
-export function exportFilename(sourceFilename: string, suffix: string) {
-  const cleaned = sourceFilename
-    .replace(/[<>:"/\\|?*\p{Cc}]/gu, '')
-    .trim()
-    .replace(/\.(pdf|docx|txt)$/iu, '')
-    .trim()
-  const encoder = new TextEncoder()
-  let stem = ''
-  let remaining = 255 - encoder.encode(suffix).length
-  for (const character of cleaned) {
-    remaining -= encoder.encode(character).length
-    if (remaining < 0) break
-    stem += character
-  }
-  return `${stem.trim() || 'Document'}${suffix}`
+export function scheduleFilename(extension: '.pdf' | '.docx') {
+  return `redaction-schedule${extension}`
 }

@@ -1,4 +1,4 @@
-import { downloadBlob, exportFilename } from './output-transfer'
+import { downloadBlob, scheduleFilename } from './output-transfer'
 import { ShareOutput } from './share-output'
 import { useState } from 'react'
 import { Badge, Button, Card, Skeleton, StatusDot } from '@obiter/ui'
@@ -105,12 +105,8 @@ export function FinalizedOutput({
   const isPdf = mimeType === 'application/pdf'
   const isDocx = mimeType === DOCX_MIME
   const isFile = isPdf || isDocx
-  const mode =
-    run.summary.outputMode === 'pseudonymised' ? 'pseudonymised' : 'redacted'
-  const filename = exportFilename(
-    run.sourceFilename,
-    ` (${mode}).${isPdf ? 'pdf' : isDocx ? 'docx' : 'txt'}`,
-  )
+  const filename =
+    output?.filename ?? run.summary.outputFilename ?? 'document-redacted.txt'
   const fileQuery = useRedactionOutputFile(
     run.id,
     isFile && Boolean(run.outputId),
@@ -154,10 +150,7 @@ export function FinalizedOutput({
           blob,
           format === 'json-shareable'
             ? 'redaction-audit.json'
-            : exportFilename(
-                run.sourceFilename,
-                ` redaction schedule.${format}`,
-              ),
+            : scheduleFilename(`.${format}`),
         ),
     })
   const exportFailed = outputQuery.error ?? (isFile ? fileQuery.error : null)
@@ -404,13 +397,7 @@ export function FinalizedOutput({
             </div>
             <dl className="grid gap-x-8 gap-y-3 md:grid-cols-2">
               <div className="flex flex-col gap-3">
-                <Detail
-                  label="File"
-                  value={exportFilename(
-                    run.sourceFilename,
-                    ' redaction schedule.pdf',
-                  )}
-                />
+                <Detail label="File" value={scheduleFilename('.pdf')} />
                 <Detail
                   label="Decisions"
                   value={`${run.summary.reviewedCount} recorded`}

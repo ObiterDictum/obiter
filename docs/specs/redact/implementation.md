@@ -80,9 +80,8 @@ The schedule is served as PDF or DOCX from `GET
 /api/redaction-runs/:runId/audit?format=pdf|docx` and is generated server-side.
 It lists each decision with its category, reviewer and time, and the audit log,
 but never reproduces the removed words: the file is meant to be emailed and
-printed. The review screen names downloaded disclosure copies and PDF or Word
-schedules after the sanitised source name. Check the filename before sharing
-a copy if the source name is confidential.
+printed. Disclosure copies use generic filenames; schedules identify the run
+without reproducing the confidential source filename.
 
 ## Shareable audit export
 
@@ -91,8 +90,7 @@ for handing to the other side. It carries the counts by category and decision,
 each decision's category, reviewer, time and page, the reviewer and time of
 finalisation, the audit log's actions and actors, and the output's SHA-256. It
 carries no span text, no source text and no original filename — the restricted
-JSON keeps those for the run's access-controlled record. The shareable JSON
-download also uses a generic filename. Pages come from the
+JSON keeps those for the run's access-controlled record. Pages come from the
 same stored layout the review screen reads; a source with no stored layout
 leaves the page absent rather than guessing.
 
