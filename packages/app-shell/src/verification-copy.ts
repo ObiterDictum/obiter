@@ -289,9 +289,9 @@ export function verificationFailureTitle(code: VerificationFailureCode) {
 export function verificationFailureLabel(code: VerificationFailureCode) {
   switch (code) {
     case 'pdf_text_unavailable':
-      return 'Verify could not read any extracted text from this PDF. It may have no usable text layer, or text extraction may have failed.'
+      return 'Obiter could not read any text in this PDF, so it could not be verified. Scanned PDFs need a text layer (OCR) first.'
     case 'text_unavailable':
-      return 'Verify could not read any extracted text from this file.'
+      return 'Obiter could not read any text in this document, so it could not be verified.'
     case 'model_unavailable':
       return 'Nothing was checked for this version, and the document was not changed.'
     case 'version_not_ready':

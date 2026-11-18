@@ -2,7 +2,13 @@ import { command } from './editor-test-commands'
 
 import '@obiter/test-dom'
 import { createElement, type PropsWithChildren } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../../scripts/test/vitest-compat'
@@ -369,6 +375,45 @@ describe('DocumentWorkspace', () => {
     const status = await screen.findByText('Download failed.')
     expect(status.closest('[role="status"]')).toBeTruthy()
   })
+
+  it.each([
+    {
+      documentStatus: 'processing',
+      fileType: 'pdf',
+      message:
+        'This document must finish processing before it can be verified.',
+    },
+    {
+      documentStatus: 'failed',
+      fileType: 'application/pdf',
+      message:
+        'Obiter could not read any text in this PDF, so it could not be verified. Scanned PDFs need a text layer (OCR) first.',
+    },
+    {
+      documentStatus: 'failed',
+      fileType: 'txt',
+      message:
+        'Obiter could not read any text in this document, so it could not be verified.',
+    },
+  ] as const)(
+    'explains Verify availability for a $documentStatus $fileType version',
+    ({ documentStatus, fileType, message }) => {
+      const currentVersion = version({ documentStatus, fileType })
+      verification.useDocument.mockReturnValue({
+        isPending: false,
+        isError: false,
+        data: { document: { currentVersion } },
+      })
+      renderWorkspace(
+        <DocumentWorkspace documentId="doc_1" version={currentVersion} />,
+      )
+      expect(
+        within(screen.getByRole('region', { name: 'Verification' })).getByText(
+          message,
+        ),
+      ).toBeTruthy()
+    },
+  )
 
   it('explains when the version is not ready', () => {
     renderWorkspace(

@@ -8,6 +8,7 @@ import {
   DialogClose,
   DialogContent,
   DialogTitle,
+  DialogTrigger,
   DialogDescription,
   DialogFooter,
   Input,
@@ -80,13 +81,36 @@ export function AgentConnections({
             >
               Test
             </Button>
-            <Button
-              variant="secondary"
-              disabled={action.isPending}
-              onClick={() => action.mutate({ id: connection.id, test: false })}
-            >
-              Remove
-            </Button>
+            <Dialog>
+              <DialogTrigger
+                render={<Button variant="secondary">Remove</Button>}
+              />
+              <DialogContent size="sm">
+                <DialogTitle>Remove {connection.name}?</DialogTitle>
+                <DialogDescription>
+                  Agent chats using models from this connection will stop
+                  working until you choose another model.
+                </DialogDescription>
+                <DialogFooter>
+                  <DialogClose
+                    render={<Button variant="ghost">Cancel</Button>}
+                  />
+                  <DialogClose
+                    render={
+                      <Button
+                        variant="danger"
+                        disabled={action.isPending}
+                        onClick={() =>
+                          action.mutate({ id: connection.id, test: false })
+                        }
+                      >
+                        Remove connection
+                      </Button>
+                    }
+                  />
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       ))}

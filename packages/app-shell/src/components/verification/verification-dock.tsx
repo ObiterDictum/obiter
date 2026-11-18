@@ -186,7 +186,9 @@ export function VerificationDock({
             <span className="text-ink">Not checked.</span>{' '}
             {verification.ready
               ? 'Run Verify to compare citations, authorities and quotations with the stored sources.'
-              : 'This document must finish processing before it can be verified.'}
+              : verification.unreadableText
+                ? verificationFailureLabel(verification.unreadableText)
+                : 'This document must finish processing before it can be verified.'}
           </p>
         ) : null}
 

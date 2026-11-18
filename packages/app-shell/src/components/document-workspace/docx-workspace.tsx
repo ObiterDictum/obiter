@@ -220,7 +220,7 @@ export function DocxWorkspace({
     onNotice: setBanner,
   })
 
-  useDocumentPresenceHeartbeat(documentId, cursor, true)
+  useDocumentPresenceHeartbeat(documentId, cursor, modelQuery, syncQuery)
   const markings = useDocumentMarkings({
     documentId,
     matterId,

@@ -7,25 +7,36 @@ const HEARTBEAT_MS = 8_000
 export function useDocumentPresenceHeartbeat(
   documentId: string,
   cursor: DocumentCursor | null,
-  enabled: boolean,
+  model: { data?: { versionId: string } },
+  sync: { data?: { currentVersionId?: string | null } },
 ) {
-  const update = usePresenceUpdate(documentId)
+  const loaded = model.data?.versionId
+  const current = sync.data?.currentVersionId
+  const versionId =
+    loaded && (!current || current === loaded) ? loaded : undefined
+  const { mutate } = usePresenceUpdate()
   const cursorRef = useRef(cursor)
   cursorRef.current = cursor
-  const mutateRef = useRef(update.mutate)
-  mutateRef.current = update.mutate
   const clientIdRef = useRef(crypto.randomUUID())
 
   useEffect(() => {
-    if (!enabled) return
+    if (!versionId) return
     const clientId = clientIdRef.current
-    mutateRef.current({ cursor: cursorRef.current, clientId })
-    const timer = window.setInterval(() => {
-      mutateRef.current({ cursor: cursorRef.current, clientId })
-    }, HEARTBEAT_MS)
+    let controller: AbortController | undefined
+    const heartbeat = () => {
+      controller?.abort()
+      controller = new AbortController()
+      mutate({
+        documentId,
+        input: { cursor: cursorRef.current, clientId },
+        signal: controller.signal,
+      })
+    }
+    heartbeat()
+    const timer = window.setInterval(heartbeat, HEARTBEAT_MS)
     return () => {
       window.clearInterval(timer)
-      mutateRef.current({ cursor: null, clientId })
+      controller?.abort()
     }
-  }, [documentId, enabled])
+  }, [documentId, versionId, mutate])
 }
