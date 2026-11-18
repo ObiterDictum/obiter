@@ -19,7 +19,9 @@ it('renders charts for staff and keeps the tables behind toggles', async () => {
       name: /Line chart of active users and new accounts/,
     }),
   ).toBeTruthy()
-  expect(screen.getByText(/Obiter staff organisation is excluded/)).toBeTruthy()
+  expect(
+    screen.getByText(/including the Obiter staff organisation/),
+  ).toBeTruthy()
   for (const label of [
     'Docs opened',
     'Docs saved',
