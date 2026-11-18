@@ -1,7 +1,7 @@
 import { Button } from '@obiter/ui'
 import type { StaffDecisionInput, StaffQueueResponse } from '@obiter/contracts'
 import { formatDate } from '../format'
-import { CATEGORY_OPTIONS, COUNTRY_OPTIONS } from './request-access-form'
+import { CATEGORY_OPTIONS, JURISDICTION_OPTIONS } from './request-access-form'
 
 function optionLabel<T extends string>(
   options: readonly { value: T; label: string }[],
@@ -45,7 +45,7 @@ export function AccessQueue({
               .join(', ')}{' '}
             ·{' '}
             {group.countries
-              .map((c) => optionLabel(COUNTRY_OPTIONS, c))
+              .map((c) => optionLabel(JURISDICTION_OPTIONS, c))
               .join(', ')}
           </p>
           {group.organisationNames.map((name) => (

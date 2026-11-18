@@ -155,6 +155,10 @@ function twoFactorSignInMessage(code: string | undefined): string {
   }
 }
 
+export function useSignedIn(): boolean {
+  return Boolean(authClient.useSession().data)
+}
+
 export function useAuth(): UseAuthReturn {
   const realSession = authClient.useSession()
   const queryClient = useQueryClient()
@@ -268,6 +272,7 @@ export function useAuth(): UseAuthReturn {
     if (result.error) {
       throw new Error(result.error.message ?? 'Could not sign out.')
     }
+    await refreshSessionAfterAuth()
     try {
       await clearDesktopAuthToken()
     } finally {

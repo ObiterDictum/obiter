@@ -24,6 +24,7 @@ export {
   prefetchHomeData,
   prefetchInviteAcceptData,
   prefetchVerifyData,
+  type RouteLocation,
 } from './route-loaders'
 
 export {

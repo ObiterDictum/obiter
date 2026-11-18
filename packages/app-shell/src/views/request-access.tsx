@@ -8,7 +8,7 @@ import {
 import { accessRequestFailure, useCreateAccessRequest } from '../access-request'
 import {
   CATEGORY_OPTIONS,
-  COUNTRY_OPTIONS,
+  JURISDICTION_OPTIONS,
   countryFromSelect,
   validateRequestAccess,
   type FieldErrors,
@@ -48,6 +48,7 @@ export function RequestAccessRouteView({
   const [botCheckState, setBotCheckState] = useState<BotCheckState>({
     status: 'pending',
   })
+  const [botCheckAttempt, setBotCheckAttempt] = useState(0)
   const waitingForBotCheck =
     Boolean(botCheckSiteKey) && botCheckState.status === 'pending'
 
@@ -171,11 +172,11 @@ export function RequestAccessRouteView({
         </fieldset>
 
         <Select
-          label="Country"
-          ariaLabel="Country"
-          options={COUNTRY_OPTIONS}
+          label="Jurisdiction"
+          ariaLabel="Jurisdiction"
+          options={JURISDICTION_OPTIONS}
           value={form.country}
-          placeholder="Select a country"
+          placeholder="Select a jurisdiction"
           invalid={Boolean(errors.country)}
           onValueChange={(next) => update('country', countryFromSelect(next))}
         />
@@ -284,11 +285,28 @@ export function RequestAccessRouteView({
 
         {botCheckSiteKey ? (
           <BotCheck
+            key={botCheckAttempt}
             ref={botCheck}
             siteKey={botCheckSiteKey}
             action="request-access"
             onChange={setBotCheckState}
           />
+        ) : null}
+
+        {botCheckSiteKey && botCheckState.status === 'unavailable' ? (
+          <div className="flex items-center justify-between gap-3 rounded-md bg-danger-soft px-4 py-3">
+            <p role="alert" className="text-meta text-danger">
+              We couldn't confirm you're not a bot. Try again.
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setBotCheckAttempt((attempt) => attempt + 1)}
+            >
+              Retry
+            </Button>
+          </div>
         ) : null}
 
         {errors.form ? (

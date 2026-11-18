@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
 import { SegmentedControl } from '../segmented-control'
+import { returnToCallbackURL, safeReturnTo } from '../sign-in-return'
 import { AuthForm, AuthFoot, AuthHeading, AuthLayout } from './auth-layout'
 import { SignInTwoFactorStep } from './sign-in-two-factor'
 
@@ -24,15 +25,17 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
     requestMagicLink,
     resendVerificationEmail,
   } = useAuth()
-  // SAFETY: useSearch with strict:false is untyped; token is typeof-narrowed into inviteToken below and reset is compared against a literal.
+  // SAFETY: useSearch with strict:false is untyped; token is typeof-narrowed into inviteToken below, redirect is validated by safeReturnTo and reset is compared against a literal.
   const search = useSearch({ strict: false }) as {
     reset?: string
     token?: string
+    redirect?: unknown
   }
   const inviteToken =
     typeof search.token === 'string' && search.token.length > 0
       ? search.token
       : ''
+  const returnTo = safeReturnTo(search.redirect)
   const [mode, setMode] = useState<Mode>('password')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,12 +49,23 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const [unverified, setUnverified] = useState(false)
   const [twoFactorChallenge, setTwoFactorChallenge] = useState(false)
 
-  async function goToHome() {
+  function switchMode(next: Mode) {
+    setMode(next)
+    setError(null)
+    setNotice(null)
+    setUnverified(false)
+  }
+
+  async function goToDestination() {
     if (inviteToken) {
       await navigate({
         to: '/invites/accept',
         search: { token: inviteToken },
       })
+      return
+    }
+    if (returnTo) {
+      await navigate({ href: returnTo })
       return
     }
     await navigate({ to: '/' })
@@ -77,7 +91,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
         setTwoFactorChallenge(true)
         return
       }
-      await goToHome()
+      await goToDestination()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Sign-in failed.')
     } finally {
@@ -93,7 +107,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
     try {
       const result = await requestMagicLink(
         email,
-        inviteAcceptCallbackURL(inviteToken),
+        inviteAcceptCallbackURL(inviteToken) ?? returnToCallbackURL(returnTo),
       )
       if (!result.ok) {
         setError(result.message ?? 'Could not send magic link.')
@@ -122,7 +136,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
           onVerify={async (input) => {
             const result = await verifyTwoFactorSignIn(input)
             if (result.ok) {
-              await goToHome()
+              await goToDestination()
               return { ok: true }
             }
             return { ok: false, message: result.message }
@@ -143,7 +157,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
         description="Continue to your firm's Obiter workspace."
       />
 
-      {notice && mode === 'password' ? (
+      {notice ? (
         <p
           role="status"
           className="mt-6 flex items-start gap-2 rounded-md bg-success-soft px-4 py-3 text-meta text-ink"
@@ -159,7 +173,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
             label="Sign-in method"
             value={mode}
             options={MODES}
-            onChange={setMode}
+            onChange={switchMode}
           />
         </div>
         <Input
@@ -204,9 +218,6 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
           </>
         ) : null}
 
-        {mode === 'magic-link' && error ? (
-          <p className="text-meta text-danger">{error}</p>
-        ) : null}
         {unverified ? (
           <ResendVerificationControl
             email={email}

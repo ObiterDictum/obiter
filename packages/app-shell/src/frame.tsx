@@ -81,6 +81,9 @@ export function AppShellLayout({
     currentPath === '/forgot-password' ||
     currentPath === '/reset-password' ||
     currentPath === '/invites/accept'
+  const currentHref = useRouterState({
+    select: (state) => state.location.href,
+  })
 
   let body: ReactNode
 
@@ -89,7 +92,12 @@ export function AppShellLayout({
   } else if (isPending) {
     body = <ShellBootLoading />
   } else if (!session) {
-    body = <Navigate to="/sign-in" />
+    body = (
+      <Navigate
+        to="/sign-in"
+        search={currentPath === '/' ? {} : { redirect: currentHref }}
+      />
+    )
   } else {
     body = (
       <ShellContentsProvider>

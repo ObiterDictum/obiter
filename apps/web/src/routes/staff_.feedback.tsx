@@ -7,8 +7,8 @@ import {
 
 export const Route = createFileRoute('/staff_/feedback')({
   validateSearch: validateStaffFeedbackSearch,
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
   },

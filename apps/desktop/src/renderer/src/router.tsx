@@ -217,11 +217,11 @@ const workspaceRoute = createRoute({
 const mattersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters',
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
-    await guardAuth(context.queryClient, () =>
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(mattersListQueryOptions()),
     )
   },
@@ -239,11 +239,11 @@ function DesktopMattersRoute() {
 const matterDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId',
-  loader: async ({ context, params }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, params, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
-    await guardAuth(context.queryClient, () =>
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
     )
     await context.queryClient.prefetchQuery(
@@ -256,9 +256,10 @@ const matterDetailRoute = createRoute({
 const documentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId/documents/$documentId',
-  loader: ({ context, params }) =>
+  loader: ({ context, params, location }) =>
     prefetchDocumentRouteData(
       context.queryClient,
+      location,
       params.matterId,
       params.documentId,
     ),
@@ -280,8 +281,8 @@ const redactReviewRoute = createRoute({
 const matterVerifyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId/verify',
-  loader: async ({ context }) => {
-    await prefetchVerifyData(context.queryClient)
+  loader: async ({ context, location }) => {
+    await prefetchVerifyData(context.queryClient, location)
   },
   component: DesktopMatterVerifyRoute,
 })
@@ -351,8 +352,8 @@ const StaffRouteView = lazy(async () => ({
 const staffRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'staff',
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
   },
@@ -365,8 +366,8 @@ const staffRoute = createRoute({
 const staffAccessRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'staff/access',
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
   },
@@ -380,8 +381,8 @@ const staffUsageRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'staff/usage',
   validateSearch: validateStaffUsageSearch,
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
   },
@@ -405,8 +406,8 @@ const staffFeedbackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'staff/feedback',
   validateSearch: validateStaffFeedbackSearch,
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
   },
@@ -433,8 +434,8 @@ const AgentWindowView = lazy(() =>
 const agentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'agent',
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
   },
@@ -447,8 +448,8 @@ const agentRoute = createRoute({
 const agentSessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'agent/$sessionId',
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
   },
@@ -463,8 +464,8 @@ const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'settings',
   validateSearch: validateSettingsSearch,
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
+  loader: async ({ context, location }) => {
+    await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
   },

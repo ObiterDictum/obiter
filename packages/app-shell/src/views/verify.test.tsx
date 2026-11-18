@@ -31,6 +31,8 @@ mock.module('../current-user', () => ({
   ...currentUserModule,
   useCurrentUser: mocks.useCurrentUser,
 }))
+const authModule = { ...(await import('../auth')) }
+mock.module('../auth', () => ({ ...authModule, useSignedIn: () => true }))
 
 const { VerifyRouteView } = await import('./verify')
 
