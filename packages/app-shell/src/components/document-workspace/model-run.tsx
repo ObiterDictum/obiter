@@ -19,15 +19,12 @@ import {
   type RunSlice,
 } from '../../document-model-text'
 import type { ParagraphLinkOverlay } from '../../document-structure-overlays'
-import type { WrappedLine } from '../../document-page-flow'
+import { textWidthPx, type WrappedLine } from '../../document-page-flow'
 import { readableRunColor, runDisplayText } from '../../document-page-media'
 import { DEFAULT_TAB_STOP_PX, tabAdvancePx } from '../../document-page-tabs'
-import { textWidthPx } from '../../document-page-flow'
 import { noteNumberKey, runNoteRefs } from '../../document-page-notes'
-import { runCss, runFace } from '../../document-page-style'
-import type { ParagraphFace } from '../../document-page-style'
-
-const SELECTION_PAINT = '#b8d4f5'
+import { runCss, runFace, type ParagraphFace } from '../../document-page-style'
+import { FootnoteReference } from './footnote-navigation'
 
 export const NoteNumbersContext = createContext<ReadonlyMap<string, string>>(
   new Map(),
@@ -37,14 +34,13 @@ export type ParagraphSelectionRange = { from: number; to: number }
 
 type ParagraphFieldMarker = { offset: number; label: string }
 
-type LinkOverlay = ParagraphLinkOverlay
-
 export function ParagraphRunPaint({
   paragraph,
   toEditableOffset = (at) => at,
   inlineSpans = [],
   runSources,
   reviewable = true,
+  hideText = false,
   drafts,
   changes,
   styles,
@@ -67,6 +63,7 @@ export function ParagraphRunPaint({
   inlineSpans?: InlineSpan[]
   runSources?: InlineProjection['runSources']
   reviewable?: boolean
+  hideText?: boolean
   drafts?: Record<string, string>
   changes: DocumentChangeWire[]
   styles: DocumentStyleWire[]
@@ -77,7 +74,7 @@ export function ParagraphRunPaint({
   linePx: number
   wrapWidthPx?: number
   selection?: ParagraphSelectionRange
-  linkOverlay?: LinkOverlay
+  linkOverlay?: ParagraphLinkOverlay
   carets?: DocumentPresence[]
   continuation?: boolean
   indentFirstPx?: number
@@ -109,6 +106,7 @@ export function ParagraphRunPaint({
           <ModelRun
             key={`${run.id}-${pieceFrom}`}
             run={original}
+            hideText={hideText}
             revision={
               span?.pending ? (span.deleted ? 'delete' : 'insert') : undefined
             }
@@ -177,7 +175,7 @@ export function ParagraphRunPaint({
                   selection &&
                   from + index >= selection.from &&
                   from + index < selection.to
-                    ? SELECTION_PAINT
+                    ? selectedStyle.backgroundColor
                     : undefined,
               }}
             />,
@@ -288,13 +286,14 @@ function ModelRun({
   drafts,
   caret,
   notesVisible = true,
+  hideText,
   revision,
 }: {
   run: DocumentTextRunWire
   text: string
   from: number
   selection?: ParagraphSelectionRange
-  linkOverlay?: LinkOverlay
+  linkOverlay?: ParagraphLinkOverlay
   paragraphEnd: number
   paragraphFace: ParagraphFace
   changes: DocumentChangeWire[]
@@ -302,6 +301,7 @@ function ModelRun({
   drafts?: Record<string, string>
   caret?: DocumentPresence
   notesVisible?: boolean
+  hideText: boolean
   revision?: 'insert' | 'delete'
 }) {
   const face = useMemo(
@@ -317,9 +317,18 @@ function ModelRun({
     [run.preservedXmlFragments, run.id, run.text, text, drafts?.[run.id]],
   )
   const numbers = use(NoteNumbersContext)
-  const color = revision ? 'inherit' : readableRunColor(face.color)
+  const showNotes = notesVisible && notes.length > 0
+  const content = rangedParts(
+    text,
+    from,
+    paragraphEnd,
+    selection,
+    linkOverlay,
+    run.hyperlinkTarget,
+  )
   return (
     <span
+      aria-hidden={(hideText && !showNotes) || undefined}
       className={cn(
         'relative',
         kinds.has('insert') && TRACKED_INSERT_MARK,
@@ -330,27 +339,22 @@ function ModelRun({
       )}
       style={runCss({
         ...face,
-        color,
+        color: revision ? 'inherit' : readableRunColor(face.color),
         ...(notes.length ? { vertAlign: 'baseline' as const } : {}),
       })}
     >
       {caret ? <PresenceCaret userId={caret.userId} /> : null}
-      {rangedParts(
-        text,
-        from,
-        paragraphEnd,
-        selection,
-        linkOverlay,
-        run.hyperlinkTarget,
+      {hideText && showNotes ? (
+        <span aria-hidden="true">{content}</span>
+      ) : (
+        content
       )}
-      {(notesVisible ? notes : []).map((note) => (
-        <sup
+      {(showNotes ? notes : []).map((note) => (
+        <FootnoteReference
           key={`${note.kind}-${note.noteId}-${note.runId}`}
-          data-note-mark
-          className="relative -top-[0.5em] align-baseline text-[0.65em] leading-none"
-        >
-          {numbers.get(noteNumberKey(note.kind, note.noteId)) ?? note.mark}
-        </sup>
+          note={note}
+          mark={numbers.get(noteNumberKey(note.kind, note.noteId)) ?? note.mark}
+        />
       ))}
     </span>
   )
@@ -361,7 +365,7 @@ function rangedParts(
   from: number,
   paragraphEnd: number,
   selection?: ParagraphSelectionRange,
-  overlay?: LinkOverlay,
+  overlay?: ParagraphLinkOverlay,
   storedLinkTarget?: string,
 ) {
   const markers = overlay?.fieldMarkers
@@ -471,7 +475,7 @@ function FieldMarkerAnchor({ label }: { label: string }) {
   )
 }
 
-const selectedStyle = { backgroundColor: SELECTION_PAINT }
+const selectedStyle = { backgroundColor: '#b8d4f5' }
 
 function PresenceCaret({ userId }: { userId: string }) {
   return (

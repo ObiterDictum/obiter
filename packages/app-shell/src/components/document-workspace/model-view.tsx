@@ -408,7 +408,8 @@ function ModelPage({
       </div>
       {pageLayout?.footnotes && (
         <div
-          aria-label="Page footnotes"
+          role="region"
+          aria-label={chromeless ? 'Footnotes' : 'Page footnotes'}
           className="flex shrink-0 flex-col justify-end"
           style={{
             height: pageLayout.footnotes.heightPx,
@@ -417,22 +418,26 @@ function ModelPage({
             paddingTop: 12,
           }}
         >
-          <div
-            aria-hidden="true"
-            data-footnote-separator={
-              footnoteContinues(pageLayout.footnotes.blocks)
-                ? 'continuation'
-                : 'separator'
-            }
-            className="shrink-0 bg-current"
-            style={{
-              height: 1,
-              marginBottom: 8,
-              width: footnoteContinues(pageLayout.footnotes.blocks)
-                ? '100%'
-                : Math.min(FOOTNOTE_SEPARATOR_PX, frame.widthPx),
-            }}
-          />
+          {chromeless ? (
+            <h2>Footnotes</h2>
+          ) : (
+            <div
+              aria-hidden="true"
+              data-footnote-separator={
+                footnoteContinues(pageLayout.footnotes.blocks)
+                  ? 'continuation'
+                  : 'separator'
+              }
+              className="shrink-0 bg-current"
+              style={{
+                height: 1,
+                marginBottom: 8,
+                width: footnoteContinues(pageLayout.footnotes.blocks)
+                  ? '100%'
+                  : Math.min(FOOTNOTE_SEPARATOR_PX, frame.widthPx),
+              }}
+            />
+          )}
           {pageLayout.footnotes.blocks.flatMap((block, index) =>
             renderBlock(block, index, {
               ...sharedCtx,
@@ -440,7 +445,7 @@ function ModelPage({
               editing: bodyEditing,
               paragraphs: story.paragraphs,
               columnWidthPx: frame.widthPx,
-              neighbors: latestNeighbors,
+              neighbors: marginEdit?.neighbors,
             }),
           )}
         </div>

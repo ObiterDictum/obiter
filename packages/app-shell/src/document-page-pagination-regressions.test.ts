@@ -133,22 +133,31 @@ describe('page layout regressions', () => {
   })
 
   it('keeps a footnote beneath its reference and reduces that page body height', () => {
-    const model = withNote(
-      [
-        reference(),
-        ...Array.from({ length: 40 }, (_, i) => paragraph(`body${i}`, 'Body')),
-      ],
-      'Footnote text',
+    const body = Array.from({ length: 40 }, (_, i) =>
+      paragraph(`body${i}`, 'Body'),
     )
-    const pages = layoutDocument(model)
+    const pages = layoutDocument(
+      withNote([reference(), ...body], 'Footnote text'),
+    )
+    const first = pages[0]
+    const band = first?.footnotes
+    const withoutNote = layoutDocument(
+      modelOf([paragraph('ref', 'Claim'), ...body]),
+    )[0]
+    if (!first || !band || !withoutNote)
+      throw new Error('Missing first page or note band')
     expect(
-      pages[0]?.footnotes?.blocks.some(
+      first.blocks.some(
+        (block) => block.type === 'paragraph' && block.paragraph.id === 'ref',
+      ),
+    ).toBe(true)
+    expect(
+      band.blocks.some(
         (block) => block.type === 'paragraph' && block.paragraph.id === 'note',
       ),
     ).toBe(true)
-    expect(pages[0]?.frame.heightPx).toBeLessThan(
-      layoutDocument(modelOf(model.stories[0]?.paragraphs ?? []))[0]?.frame
-        .heightPx ?? 0,
+    expect(first.frame.heightPx + band.heightPx).toBeCloseTo(
+      withoutNote.frame.heightPx,
     )
     expect(
       pages

@@ -6,6 +6,7 @@ import {
   type DocumentPresence,
 } from '@obiter/contracts'
 import { batchParagraphDeletions } from '../../document-edits'
+import { FootnoteNavigation } from './footnote-navigation'
 import { editingStoryFor } from '../../document-page-layout'
 import { pageReferenceMap } from '../../document-page-references'
 import type { LaidOutPage } from '../../document-page-engine'
@@ -154,7 +155,11 @@ export function DocxModelPages({
     }
   })
   return (
-    <>
+    <FootnoteNavigation
+      model={rendered}
+      onOpen={onOpenNoteEditing}
+      onClose={onExitMarginEditing}
+    >
       {pages.map((laid, index) => (
         <DocumentPage
           key={`page-${index + 1}`}
@@ -209,6 +214,6 @@ export function DocxModelPages({
           />
         </DocumentPage>
       ))}
-    </>
+    </FootnoteNavigation>
   )
 }

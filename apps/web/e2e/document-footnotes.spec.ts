@@ -335,3 +335,53 @@ test('band numbers share their own first line and leave space below the divider'
     expect(note.gap).toBeGreaterThanOrEqual(5.3)
   }
 })
+
+test('existing notes can be reached and edited from their references', async ({
+  page,
+  request,
+}) => {
+  const { email, password } = await createAccount(request, 'NoteNavigation')
+  await signIn(page, email, password)
+  await openMatter(page, `Note navigation ${Date.now()}`)
+  const fixture =
+    process.env.OBITER_E2E_EXISTING_FOOTNOTES ??
+    path.join(HERE, 'fixtures/note-typography.docx')
+  await page
+    .getByLabel('Upload document', { exact: true })
+    .first()
+    .setInputFiles(fixture)
+  await page
+    .getByRole('link', { name: path.basename(fixture), exact: true })
+    .first()
+    .click()
+
+  const band = page.getByRole('region', { name: 'Page footnotes' }).first()
+  await expect(band).toBeVisible()
+  await expect(
+    band.getByRole('button', { name: 'Back to reference for footnote 1' }),
+  ).toBeVisible()
+  await band.scrollIntoViewIfNeeded()
+  await shot(page, 'after-page-footnotes')
+
+  const reference = page
+    .getByRole('link', { name: 'Footnote 1', exact: true })
+    .first()
+  await reference.press('Enter')
+  await expect(editor(page)).toBeFocused()
+  await expect(editor(page)).not.toHaveValue('')
+  await shot(page, 'after-reference-navigation')
+
+  await band
+    .getByRole('button', { name: 'Back to reference for footnote 1' })
+    .press('Enter')
+  await expect(reference).toBeFocused()
+  await reference.click()
+  await expect(editor(page)).toBeFocused()
+  await page.keyboard.press('End')
+  await page.keyboard.type(' Updated note.')
+  await saveAndWait(page)
+  await page.reload()
+  await reference.click()
+  await expect(editor(page)).toBeFocused()
+  await expect(editor(page)).toHaveValue(/Updated note\./u)
+})

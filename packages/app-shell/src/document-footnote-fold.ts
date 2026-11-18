@@ -105,6 +105,7 @@ function foldedNoteStory(
   const base: DocumentStoryWire = story ?? {
     partName: FOOTNOTES_PART_NAME,
     kind: 'footnotes',
+    footnoteEntries: [],
     paragraphs: [],
     preservedXmlFragments: [],
     fields: [],
@@ -133,12 +134,20 @@ function foldedNoteStory(
       })
     }
   }
+  const footnoteEntries = base.footnoteEntries?.slice()
   for (const { draft, noteId } of spliced) {
     const paraId = nextParaId()
     fragments.push(buildFootnoteXml(noteId, '', paraId))
-    paragraphs.push(noteParagraphWire(draft, paraId))
+    const paragraph = noteParagraphWire(draft, paraId)
+    paragraphs.push(paragraph)
+    footnoteEntries?.push({ id: String(noteId), paragraphIds: [paragraph.id] })
   }
-  return { ...base, paragraphs, preservedXmlFragments: fragments }
+  return {
+    ...base,
+    paragraphs,
+    preservedXmlFragments: fragments,
+    footnoteEntries,
+  }
 }
 
 function noteParagraphWire(
@@ -184,6 +193,10 @@ function nextPendingFootnoteId(
       }
     }
     for (const fragment of item.preservedXmlFragments) consider(fragment)
+    for (const entry of item.footnoteEntries ?? []) {
+      const value = Number(entry.id)
+      if (Number.isInteger(value) && value >= next) next = value + 1
+    }
   }
   return next
 }

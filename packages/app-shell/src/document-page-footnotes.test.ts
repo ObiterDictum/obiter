@@ -181,19 +181,39 @@ it('keeps endnotes at the document end while footnotes remain on reference pages
   )
 })
 
-it('keeps web-flow footnotes in the continuous document rather than a page-bottom band', async () => {
+it('appends web-flow footnotes after the body without reserving page space', async () => {
   const model = await noteModel()
-  const pages = layoutDocument(model, undefined, [], {}, undefined, [], {
-    kind: 'web',
-    widthPx: 600,
-  })
+  const flow = { kind: 'web', widthPx: 600 } as const
+  const pages = layoutDocument(model, undefined, [], {}, undefined, [], flow)
+  const withoutNote = structuredClone(model)
+  const claim = withoutNote.stories.find((story) => story.kind === 'document')
+    ?.paragraphs[0]
+  if (!claim) throw new Error('Missing synthetic body')
+  claim.runs = claim.runs.filter((run) => run.id !== 'reference')
+  const [bodyOnly] = layoutDocument(
+    withoutNote,
+    undefined,
+    [],
+    {},
+    undefined,
+    [],
+    flow,
+  )
   expect(pages).toHaveLength(1)
-  expect(pages[0]?.footnotes).toBeUndefined()
+  const page = pages[0]
+  const notes = page?.footnotes
+  if (!page || !notes || !bodyOnly)
+    throw new Error('Missing web page or footnotes')
+  expect(notes.blocks).toMatchObject([
+    { type: 'paragraph', paragraph: { id: 'note' } },
+  ])
   expect(
-    pages[0]?.blocks.some(
+    page.blocks.some(
       (block) => block.type === 'paragraph' && block.paragraph.id === 'note',
     ),
-  ).toBe(true)
+  ).toBe(false)
+  expect(page.frame.heightPx).toBeCloseTo(bodyOnly.contentPx ?? 0)
+  expect(page.contentPx).toBeCloseTo(page.frame.heightPx + notes.heightPx)
 })
 
 it('reserves twelve pixels above the separator plus its pixel and an eight pixel note gap', async () => {
