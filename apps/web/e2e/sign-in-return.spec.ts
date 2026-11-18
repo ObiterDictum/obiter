@@ -13,6 +13,7 @@ import { resolveJourneyTargets } from '../journey-target.mjs'
 const { webOrigin } = resolveJourneyTargets()
 
 async function submitPassword(page: Page, email: string, password: string) {
+  await page.waitForLoadState('networkidle')
   await page.getByLabel('Email').fill(email)
   await page.getByLabel('Password').fill(password)
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
@@ -35,19 +36,17 @@ test('a document link opens the document, and survives sign-in', async ({
   await signIn(page, account.email, account.password)
   await openMatterDocument(page, 'Deep link matter')
   const documentPath = new URL(page.url()).pathname
-  const fileName = 'e4-lists-styles.docx'
+  const documentTab = page
+    .getByRole('group', { name: 'Open in this matter' })
+    .getByRole('button', { name: 'e4-lists-styles.docx', exact: true })
 
   await page.goto('/')
   await page.goto(documentPath)
   await expect(page).toHaveURL(new RegExp(`${documentPath}$`))
-  await expect(
-    page.getByRole('button', { name: fileName, exact: true }),
-  ).toBeVisible({
-    timeout: 30_000,
-  })
+  await expect(documentTab).toBeVisible({ timeout: 30_000 })
 
-  await signOut(page)
   const failures = unauthorisedRequests(page)
+  await signOut(page)
   await page.goto(documentPath)
   await page.waitForURL('**/sign-in?**')
   expect(new URL(page.url()).searchParams.get('redirect')).toBe(documentPath)
@@ -62,11 +61,7 @@ test('a document link opens the document, and survives sign-in', async ({
   await page.waitForURL((url) => url.pathname === documentPath, {
     timeout: 15_000,
   })
-  await expect(
-    page.getByRole('button', { name: fileName, exact: true }),
-  ).toBeVisible({
-    timeout: 30_000,
-  })
+  await expect(documentTab).toBeVisible({ timeout: 30_000 })
 })
 
 test('the requested page survives a two-factor sign-in', async ({

@@ -38,20 +38,22 @@ test('a bot check that never answers shows an error with a working retry', async
   await page.clock.install()
   await page.goto(`${PRODUCTION_ORIGIN}/request-access`)
 
-  await page.getByRole('textbox', { name: 'Name' }).fill('Synthetic Applicant')
   const waiting = page.getByRole('button', { name: 'Checking your browser…' })
   await expect(waiting).toBeDisabled()
   await expect
     .poll(() => page.evaluate(() => window.__turnstileWidgets?.length ?? 0))
     .toBe(1)
+  await page
+    .getByRole('textbox', { name: 'Name', exact: true })
+    .fill('Synthetic Applicant')
 
   await page.clock.fastForward(20_000)
   await expect(
     page.getByRole('alert').filter({ hasText: FAILURE }),
   ).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue(
-    'Synthetic Applicant',
-  )
+  await expect(
+    page.getByRole('textbox', { name: 'Name', exact: true }),
+  ).toHaveValue('Synthetic Applicant')
 
   await page.getByRole('button', { name: 'Retry' }).click()
   await expect(page.getByText(FAILURE)).toHaveCount(0)

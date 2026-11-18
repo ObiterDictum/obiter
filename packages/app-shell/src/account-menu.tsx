@@ -62,9 +62,9 @@ export function AccountMenu({ platform }: { platform: AppPlatform }) {
         <MenuItem onClick={feedback}>Send feedback</MenuItem>
         <MenuItem onClick={welcomeGuide}>Welcome guide</MenuItem>
         <MenuItem
-          onClick={() => {
-            void signOut()
-            void navigate({ to: '/sign-in' })
+          onClick={async () => {
+            await navigate({ to: '/sign-in' })
+            await signOut()
           }}
         >
           Sign out

@@ -20,17 +20,20 @@ function sql(statement: string) {
   ).trim()
 }
 
-async function createOrganisation(page: Page, name: string) {
+async function nameOrganisation(page: Page, name: string) {
   return page.evaluate(async (orgName) => {
-    const response = await fetch('/api/organisations', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: orgName }),
-    })
+    const save = (method: 'POST' | 'PATCH') =>
+      fetch('/api/organisations', {
+        method,
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: orgName }),
+      })
+    const created = await save('POST')
+    const response = created.status === 409 ? await save('PATCH') : created
     if (!response.ok) {
       throw new Error(
-        `create organisation failed: ${response.status} ${await response.text()}`,
+        `name organisation failed: ${response.status} ${await response.text()}`,
       )
     }
     const body = (await response.json()) as {
@@ -75,7 +78,7 @@ test('an owner changes a member to admin and back and the table shows it', async
   const orgName = `Role Org ${runId}`
 
   await signIn(page, owner.email, owner.password)
-  const organisationId = await createOrganisation(page, orgName)
+  const organisationId = await nameOrganisation(page, orgName)
   joinOrganisation(member.email, organisationId, 'member')
 
   await openSettings(page, 'members')
@@ -107,7 +110,7 @@ test('a plain member sees the member list without invite, role or remove control
   const orgName = `Roster Org ${runId}`
 
   await signIn(page, owner.email, owner.password)
-  const organisationId = await createOrganisation(page, orgName)
+  const organisationId = await nameOrganisation(page, orgName)
   joinOrganisation(member.email, organisationId, 'member')
 
   await signInFresh(page, member.email, member.password)
@@ -143,7 +146,7 @@ test('a member leaves the organisation and their next navigation lands on sign-i
   const orgName = `Leave Org ${runId}`
 
   await signIn(page, owner.email, owner.password)
-  const organisationId = await createOrganisation(page, orgName)
+  const organisationId = await nameOrganisation(page, orgName)
   joinOrganisation(member.email, organisationId, 'member')
 
   await signInFresh(page, member.email, member.password)
@@ -174,7 +177,7 @@ test('an owner transfers ownership by typing the organisation name', async ({
   const orgName = `Transfer Org ${runId}`
 
   await signIn(page, owner.email, owner.password)
-  const organisationId = await createOrganisation(page, orgName)
+  const organisationId = await nameOrganisation(page, orgName)
   joinOrganisation(member.email, organisationId, 'member')
 
   await openSettings(page, 'organisation')
@@ -256,7 +259,7 @@ test('an owner of an organisation with other members sees transfer ownership fir
   const orgName = `Shared Org ${runId}`
 
   await signIn(page, owner.email, owner.password)
-  const organisationId = await createOrganisation(page, orgName)
+  const organisationId = await nameOrganisation(page, orgName)
   joinOrganisation(member.email, organisationId, 'member')
 
   await openSettings(page, 'account')
@@ -285,7 +288,7 @@ test('a sole user deletes their account, lands on sign-in and cannot sign in aga
   const orgName = `Sole Org ${runId}`
 
   await signIn(page, user.email, user.password)
-  await createOrganisation(page, orgName)
+  await nameOrganisation(page, orgName)
   await openSettings(page, 'account')
   await page
     .getByRole('button', { name: 'Delete account', exact: true })
@@ -330,7 +333,7 @@ test.describe('lifecycle screenshots', () => {
     )
 
     await signIn(page, owner.email, owner.password)
-    const organisationId = await createOrganisation(page, orgName)
+    const organisationId = await nameOrganisation(page, orgName)
     joinOrganisation(member.email, organisationId, 'member')
 
     await openSettings(page, 'members')
