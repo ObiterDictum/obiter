@@ -73,9 +73,9 @@ const EXTEND_SCORE = 0.15
 const CONNECTOR_RE = /^[ \t'\u2019.-]*$/
 const PERSON_LABELS: ReadonlySet<PiiLabel> = new Set(['GIVEN_NAME', 'SURNAME'])
 const LEFT_PARTICLE_RE =
-  /([\p{Lu}][\p{L}\p{M}\u2019']{0,3})([ \t'\u2019.-]{1,3})$/u
+  /(?<![\p{L}\p{M}\u2019'])([\p{Lu}][\p{L}\p{M}\u2019']{0,3})([ \t'\u2019.-]{1,3})$/u
 const RIGHT_PARTICLE_RE =
-  /^([ \t'\u2019.-]{1,3})([\p{Lu}][\p{L}\p{M}\u2019']{0,3})/u
+  /^([ \t'\u2019.-]{1,3})([\p{Lu}][\p{L}\p{M}\u2019']{0,3})(?![\p{L}\p{M}\u2019'])/u
 const NON_NAME_PARTICLES = new Set([
   'law',
   'ltd',

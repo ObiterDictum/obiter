@@ -475,6 +475,22 @@ describe('detectNer', () => {
     expect(spans[0]).toMatchObject({ start: 0, end: 5, text: 'Smith' })
   })
 
+  it('extends a name across a whole particle but never into part of a longer word', async () => {
+    const particle = await detectNer('Jane Van Dijkstra', async () => [
+      aggregated('GIVEN_NAME', 0, 4),
+    ])
+    const right = await detectNer('Jane Example', async () => [
+      aggregated('GIVEN_NAME', 0, 4),
+    ])
+    const left = await detectNer('Example Smith', async () => [
+      aggregated('SURNAME', 8, 13),
+    ])
+
+    expect(particle[0]).toMatchObject({ start: 0, end: 8, text: 'Jane Van' })
+    expect(right[0]).toMatchObject({ start: 0, end: 4, text: 'Jane' })
+    expect(left[0]).toMatchObject({ start: 8, end: 13, text: 'Smith' })
+  })
+
   it('does not extend a person name into a region another detection already claims', async () => {
     const spans = await detectNer('John Smith', async () => [
       aggregated('GIVEN_NAME', 0, 4),
