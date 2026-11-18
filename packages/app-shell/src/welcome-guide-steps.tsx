@@ -90,7 +90,7 @@ export function welcomeSteps(isMac: boolean): WelcomeStep[] {
       art: <Eraser {...iconProps} />,
       body: (
         <div className="flex flex-col gap-3 text-body text-muted">
-          <ol className="list-decimal space-y-1 pl-5">
+          <ol className="list-decimal space-y-2 pl-4">
             <li>Detection marks candidate personal details.</li>
             <li>You review each span and choose Redact or Keep visible.</li>
             <li>You finalise, then download the redacted copy.</li>
@@ -119,7 +119,7 @@ export function welcomeSteps(isMac: boolean): WelcomeStep[] {
     {
       id: 'ratio',
       title: 'Ratio, the agent',
-      art: <RatioMascot state="idle" size={44} label="Ratio" live={false} />,
+      art: <RatioMascot state="idle" size={36} label="Ratio" live={false} />,
       body: (
         <Paragraphs
           items={[

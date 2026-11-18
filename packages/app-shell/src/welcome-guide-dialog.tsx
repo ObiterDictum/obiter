@@ -86,10 +86,10 @@ export default function WelcomeGuideDialog({
       <DialogContent size="md" initialFocus={primaryRef} className="p-0">
         <div onKeyDown={onKeyDown} className="flex flex-col">
           <DialogCloseButton />
-          <div className="flex flex-col gap-5 px-6 pt-8 pb-6 sm:px-8">
+          <div className="flex flex-col gap-5 px-6 pt-8 pb-6">
             <div
               aria-hidden
-              className="grid size-14 place-items-center rounded-lg bg-brand-soft text-brand"
+              className="grid size-11 place-items-center rounded-lg bg-brand-soft text-brand"
             >
               {step.art}
             </div>
@@ -99,9 +99,9 @@ export default function WelcomeGuideDialog({
               </p>
               <DialogTitle className="mb-0">{step.title}</DialogTitle>
             </div>
-            <div className="sm:min-h-36">{step.body}</div>
+            <div className="min-h-36">{step.body}</div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-line px-6 py-4 sm:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-line px-6 py-4">
             <ol aria-label="Guide steps" className="flex items-center">
               {steps.map((item, index) => (
                 <li key={item.id}>
@@ -110,14 +110,12 @@ export default function WelcomeGuideDialog({
                     aria-label={`Step ${index + 1}: ${item.title}`}
                     aria-current={index === at ? 'step' : undefined}
                     onClick={() => go(index)}
-                    className="group grid size-6 place-items-center rounded-pill focus-visible:outline-2 focus-visible:outline-ring"
+                    className="grid size-6 place-items-center rounded-pill hover:bg-hover focus-visible:outline-2 focus-visible:outline-ring"
                   >
                     <span
                       className={cn(
-                        'block size-2 rounded-pill transition-colors',
-                        index === at
-                          ? 'bg-brand'
-                          : 'bg-line-strong group-hover:bg-muted',
+                        'block size-2.5 rounded-pill transition-colors',
+                        index === at ? 'bg-brand' : 'bg-line-strong',
                       )}
                     />
                   </button>
