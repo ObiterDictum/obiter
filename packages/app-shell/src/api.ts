@@ -98,6 +98,7 @@ async function authorisedFetch(
       ...init?.headers,
     },
   }).catch((error: unknown) => {
+    if (init?.signal?.aborted) throw error
     reportError(new Error('API network request failed'), {
       route: input,
       method: init?.method ?? 'GET',

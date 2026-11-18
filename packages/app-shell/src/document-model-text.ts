@@ -1,5 +1,6 @@
 import {
   EDITABLE_STORY_KINDS,
+  documentCursorSchema,
   type DocumentChangeWire,
   type DocumentCursor,
   type DocumentModelWire,
@@ -213,7 +214,8 @@ export function cursorForSelection(
   const paragraph = editableParagraph(model, paragraphId)
   const run = paragraph?.runs[0]
   if (!paragraph || !run) return null
-  return { paragraphId: paragraph.id, runId: run.id, offset: 0 }
+  const cursor = { paragraphId: paragraph.id, runId: run.id, offset: 0 }
+  return documentCursorSchema.safeParse(cursor).success ? cursor : null
 }
 
 export function paragraphStoryResolver(model: DocumentModelWire) {

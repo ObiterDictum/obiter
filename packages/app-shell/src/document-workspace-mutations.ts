@@ -172,12 +172,30 @@ export function useCollaborationMerge(
   })
 }
 
-export function usePresenceUpdate(documentId: string) {
+export function usePresenceUpdate() {
   return useMutation({
-    mutationFn: (input: DocumentPresenceUpdateRequest) =>
-      apiFetch(`/api/documents/${documentId}/collaboration/presence`, {
-        method: 'PUT',
-        body: JSON.stringify(input),
-      }),
+    mutationFn: async ({
+      documentId,
+      input,
+      signal,
+    }: {
+      documentId: string
+      input: DocumentPresenceUpdateRequest
+      signal: AbortSignal
+    }) => {
+      try {
+        signal.throwIfAborted()
+        await apiFetch<void>(
+          `/api/documents/${documentId}/collaboration/presence`,
+          {
+            method: 'PUT',
+            body: JSON.stringify(input),
+            signal,
+          },
+        )
+      } catch (error) {
+        if (!signal.aborted) throw error
+      }
+    },
   })
 }

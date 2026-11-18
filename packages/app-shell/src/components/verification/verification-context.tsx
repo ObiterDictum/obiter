@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { VerificationFindingView } from '@obiter/contracts'
+import { workspaceKind } from '../../document-kind'
 import { useDocument } from '../../documents'
 import { useDocumentModel } from '../../document-workspace-api'
 import {
@@ -60,6 +61,7 @@ export type VerificationWorkspaceValue = {
   step: (delta: 1 | -1) => void
   dirty: boolean
   ready: boolean
+  unreadableText: 'pdf_text_unavailable' | 'text_unavailable' | null
   checkedVersionNumber: number | undefined
   currentVersionNumber: number | undefined
   stale: boolean
@@ -254,6 +256,12 @@ export function VerificationWorkspaceProvider({
     },
     dirty,
     ready,
+    unreadableText:
+      version?.documentStatus === 'failed'
+        ? workspaceKind(version.fileType) === 'pdf'
+          ? 'pdf_text_unavailable'
+          : 'text_unavailable'
+        : null,
     totalFindings,
     checkedVersionNumber: checkedVersionId
       ? versionNumbers.get(checkedVersionId)
