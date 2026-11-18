@@ -1,6 +1,6 @@
 import type { RedactionSpan, SpanCategory } from './types'
 
-// Legal: Court detail is not personal data. A claim number after "Claim No." is a court reference and a court's location is not a person's address, so both are suppressed whichever model head produced them.
+// Legal: A court reference belongs under its own category. A court's location is not a person's address.
 const claimNumber =
   /(?<=\b(?:Claim|Case)[ \t]+No[.:]?[ \t]*)[A-Z0-9][A-Z0-9/-]*/g
 
@@ -25,6 +25,10 @@ const personalIdentifiers = new Set<SpanCategory>([
   'national_insurance',
 ])
 
+export function isPersonalIdentifier(category: SpanCategory) {
+  return personalIdentifiers.has(category)
+}
+
 function ranges(text: string, pattern: RegExp): Array<[number, number]> {
   return [...text.matchAll(pattern)].map((match) => [
     match.index,
@@ -47,8 +51,7 @@ export function suppressCourtContextSpans(
   ]
   return spans.filter((span) => {
     if (span.category === 'address') return !within(span, courtPlaces)
-    if (personalIdentifiers.has(span.category))
-      return !within(span, claimNumbers)
+    if (isPersonalIdentifier(span.category)) return !within(span, claimNumbers)
     return true
   })
 }

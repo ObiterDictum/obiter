@@ -10,8 +10,7 @@ The fork defaults to Obiter's `qarlus/rampart` mirror at revision `c3221c5cd838e
 
 ## Local divergence from upstream (P0.31)
 
-One behavioural patch is applied on top of upstream and **must be re-applied on
-every re-vendor**:
+These behavioural patches **must be re-applied on every re-vendor**:
 
 - `src/ner/classifier.ts`, `detectNer`: the final cross-window step calls a
   local `dedupeExactSpans` instead of upstream's `policy.mergeSpans`.
@@ -25,18 +24,14 @@ every re-vendor**:
   `mergeSpans` inherits the preferred detection's label for the union, so a
   `keep`-category winner at a window seam could discard a `redact`-required
   contributor before the product boundary saw it (release-board P0.31).
-- Not part of the divergence: `policy.ts` and `premask.ts` are byte-faithful and
-  still use `mergeSpans`; only `detectNer`'s cross-window step changed. The
-  product is the only caller of `detectNer` and already reconciles overlaps.
-- Re-vendor check: after applying the upstream tarball, confirm `detectNer`
-  does not call `mergeSpans` and still returns overlapping contributors, then
-  run `packages/rampart-inference` tests (including
-  `ner/classifier.test.ts > keeps overlapping detections from separate windows
-  as contributors`) and the `redaction-merge-integrity.test.ts` test in the
-  private backend repository's `services/api` (which drives the real `detectNer`
-  over two windows through the finalize route).
+- `src/ner/span-repair.ts` preserves whole name words and joins adjacent person
+  components. A confident given name can extend over a following surname-shaped
+  word or particle sequence. An isolated name line can be suggested when the
+  surname is corroborated by two different model-anchored names in the input.
+- Re-vendor check the classifier tests for overlap contributors, full name
+  offsets and false positives at titles and organisation suffixes.
 
 ## Formatting / linting
 
-This package is **excluded from the repo-wide Prettier, oxlint, and ESLint passes** (see the root `.prettierignore`, `.oxlintrc.json`, and `eslint.config.mjs`). The vendored source is kept byte-faithful to upstream (except the recorded P0.31 divergence above) so that future re-vendors produce clean, reviewable diffs against the original tarball — reformatting or repo-policy lint fixes would erase that correspondence for no behavioural gain. The package still typechecks and runs its own tests via its workspace scripts.
+This package is **excluded from the repo-wide Prettier, oxlint, and ESLint passes** (see the root `.prettierignore`, `.oxlintrc.json`, and `eslint.config.mjs`). The vendored source is kept byte-faithful to upstream (except the recorded divergences above) so that future re-vendors produce clean, reviewable diffs against the original tarball — reformatting or repo-policy lint fixes would erase that correspondence for no behavioural gain. The package still typechecks and runs its own tests via its workspace scripts.
 

@@ -16,8 +16,10 @@ checked outright. Neutral citations are rigidly structured. For these, a validat
 pattern is strictly better than a model, and cheaper.
 
 This is already implemented. `packages/redaction-policy/src/supplement.ts` covers
-national insurance numbers, case references, organisation names, emails, UK phone
-numbers, postcodes, GB IBANs and context-gated sort codes and account numbers.
+national insurance numbers, case references, written dates, UK street addresses,
+postcodes, organisation names, emails, UK phone numbers, GB IBANs and
+context-gated sort codes and account numbers. Birth dates carry a redact
+suggestion. Other written dates and case references carry a keep suggestion.
 
 **Fine-tuning should not target these.** They are at ceiling. Effort spent teaching
 the model to recognise NI numbers is effort spent duplicating a solved problem with
@@ -29,8 +31,7 @@ The contextual entities the model genuinely owns, where UK forms differ from the
 US-centric training distribution:
 
 - UK person names
-- UK address forms (postcodes are handled by the supplement; building and street
-  patterns are not)
+- UK address forms outside the supplement’s numbered street and postcode patterns
 - UK phone formats in running prose, where the supplement's patterns are too strict
 
 ## On "making Rampart forget American things"

@@ -324,18 +324,6 @@ describe('detectNer', () => {
     expect(spans.map((span) => span.label)).toEqual(['CITY'])
   })
 
-  it('keeps a given name and a surname as separate labels', async () => {
-    const spans = await detectNer('John Smith', async () => [
-      aggregated('GIVEN_NAME', 0, 4),
-      aggregated('SURNAME', 5, 10),
-    ])
-
-    expect(spans.map((span) => span.label)).toEqual([
-      'GIVEN_NAME',
-      'SURNAME',
-    ])
-  })
-
   it('keeps offsets aligned when a hyphen is folded to a space before inference', async () => {
     const raw = 'tel 0123-456-7890 end'
     const classifier: TokenClassifier = async (window) => {
@@ -475,28 +463,50 @@ describe('detectNer', () => {
     expect(spans[0]).toMatchObject({ start: 0, end: 5, text: 'Smith' })
   })
 
-  it('extends a name across a whole particle but never into part of a longer word', async () => {
-    const particle = await detectNer('Jane Van Dijkstra', async () => [
-      aggregated('GIVEN_NAME', 0, 4),
-    ])
-    const right = await detectNer('Jane Example', async () => [
-      aggregated('GIVEN_NAME', 0, 4),
-    ])
-    const left = await detectNer('Example Smith', async () => [
-      aggregated('SURNAME', 8, 13),
-    ])
+  it.each(['Jane Example', 'Jane Whitfield', "Sarah O'Neill", 'Bob van der Berg', 'Jane Van Dijkstra'])(
+    'recovers an unlabelled surname in %s',
+    async (name) => {
+      const spans = await detectNer(`${name} gave evidence.`, async () => [
+        aggregated('GIVEN_NAME', 0, name.indexOf(' ')),
+      ])
+      expect(spans).toMatchObject([{ start: 0, end: name.length, text: name }])
+    },
+  )
 
-    expect(particle[0]).toMatchObject({ start: 0, end: 8, text: 'Jane Van' })
-    expect(right[0]).toMatchObject({ start: 0, end: 4, text: 'Jane' })
-    expect(left[0]).toMatchObject({ start: 8, end: 13, text: 'Smith' })
+  it('completes a surname clipped at a subword boundary and joins the given name', async () => {
+    const spans = await detectNer('Oliver Hedgerow signed.', async () => [
+      aggregated('GIVEN_NAME', 0, 6),
+      aggregated('SURNAME', 7, 12, 0.57),
+    ])
+    expect(spans).toMatchObject([{ start: 0, end: 15, text: 'Oliver Hedgerow' }])
   })
 
-  it('does not extend a person name into a region another detection already claims', async () => {
-    const spans = await detectNer('John Smith', async () => [
-      aggregated('GIVEN_NAME', 0, 4),
-      aggregated('SURNAME', 5, 10),
+  it('does not swallow titles, organisation suffixes or other detections', async () => {
+    const text = 'Justice Smith; Jane Smith LLP; Jane Bristol; Jane Court'
+    const jane = text.indexOf('Jane')
+    const secondJane = text.indexOf('Jane', jane + 1)
+    const thirdJane = text.lastIndexOf('Jane')
+    const spans = await detectNer(text, async () => [
+      aggregated('SURNAME', 8, 13),
+      aggregated('GIVEN_NAME', jane, jane + 4),
+      aggregated('GIVEN_NAME', secondJane, secondJane + 4),
+      aggregated('CITY', secondJane + 5, secondJane + 12),
+      aggregated('GIVEN_NAME', thirdJane, thirdJane + 4),
     ])
+    expect(spans.map((span) => span.text)).toEqual(['Smith', 'Jane', 'Jane', 'Bristol', 'Jane'])
+  })
 
-    expect(spans.map((span) => span.text)).toEqual(['John', 'Smith'])
+  it('recovers an unlabelled name on a short labelled line once the surname is corroborated', async () => {
+    const text = 'Header: Alice Example\n\nBody: Jane Example\n\nTable: Sarah Example\n\nFooter: Bob Example'
+    const spans = await detectNer(text, async () =>
+      ['Jane', 'Sarah', 'Bob'].map((name) => {
+        const start = text.indexOf(name)
+        return aggregated('GIVEN_NAME', start, start + name.length, 0.74)
+      }),
+    )
+    expect(spans.map((span) => span.text)).toEqual([
+      'Alice Example', 'Jane Example', 'Sarah Example', 'Bob Example',
+    ])
+    expect(spans.every((span) => text.slice(span.start, span.end) === span.text)).toBe(true)
   })
 })

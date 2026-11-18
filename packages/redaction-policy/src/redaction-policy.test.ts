@@ -87,6 +87,58 @@ describe('redaction policy', () => {
     expect(spans).toEqual([])
   })
 
+  it.each([
+    'Justice',
+    'Mr Justice',
+    'Mrs Justice',
+    'Lord',
+    'Lady',
+    'LJ',
+    'HHJ',
+    'DJ',
+    'DDJ',
+    'Her Honour Judge',
+    'His Honour',
+    'Deputy District Judge',
+  ])(
+    'drops a standalone judicial title %s and preserves the surname',
+    (title) => {
+      const text = `${title} Marshbrook presides.`
+      expect(
+        mapNormalized(text, [
+          { start: 0, end: title.length, label: 'GIVEN_NAME', score: 0.99 },
+        ]),
+      ).toEqual([])
+      expect(
+        mapNormalized(text, [
+          { start: 0, end: title.length + 11, label: 'SURNAME', score: 0.99 },
+        ]),
+      ).toMatchObject([{ start: title.length + 1, text: 'Marshbrook' }])
+    },
+  )
+
+  it('drops a low-confidence all-caps heading while retaining a very confident name', () => {
+    const text = '1. SKELETON—ARGUMENT\n\nJANE WHITFIELD'
+    const name = text.indexOf('JANE')
+    expect(
+      mapNormalized(text, [
+        { start: 3, end: 11, label: 'GIVEN_NAME', score: 0.94 },
+        { start: name, end: text.length, label: 'SURNAME', score: 0.99 },
+      ]),
+    ).toMatchObject([{ start: name, text: 'JANE WHITFIELD' }])
+  })
+
+  it('keeps a structured court reference when a model assigns an identifier label', () => {
+    const text = 'Claim No: REF/2024/0123'
+    const model = mapRampartSpans({
+      text,
+      spans: [{ start: 10, end: text.length, label: 'DRIVERS_LICENSE' }],
+    })
+    expect(mergeSpans(model, supplementSpans(text))).toMatchObject([
+      { category: 'case_reference', text: 'REF/2024/0123', suggestion: 'keep' },
+    ])
+  })
+
   it('normalises each detection and leaves other categories untouched', () => {
     const text = 'Dear Ms Amara Okonkwo of Leicester'
     const normalized = normalizePersonDetections(text, [

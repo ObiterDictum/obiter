@@ -20,5 +20,109 @@
     "j.cartwright@personal.example",
     "020 7946 0958"
   ],
-  "reviewGuidance": "Reject Mr Justice Holroyd and Ms Priya Sharma as public-record professionals; accept private party and contact details."
+  "reviewGuidance": "Reject Mr Justice Holroyd and Ms Priya Sharma as public-record professionals; accept private party and contact details.",
+  "expectedSpans": [
+    {
+      "category": "case_reference",
+      "start": 65,
+      "end": 78,
+      "text": "REF/2024/0123"
+    },
+    {
+      "category": "person_name",
+      "start": 97,
+      "end": 113,
+      "text": "James Cartwright"
+    },
+    {
+      "category": "person_name",
+      "start": 135,
+      "end": 145,
+      "text": "Sarah Chen"
+    },
+    {
+      "category": "person_name",
+      "start": 218,
+      "end": 234,
+      "text": "James Cartwright"
+    },
+    {
+      "category": "address",
+      "start": 238,
+      "end": 273,
+      "text": "42 Belgrave Road, Leicester LE4 5AB"
+    },
+    {
+      "category": "date",
+      "start": 287,
+      "end": 299,
+      "text": "10 June 1956"
+    },
+    {
+      "category": "national_insurance",
+      "start": 338,
+      "end": 351,
+      "text": "JX 12 34 56 D"
+    },
+    {
+      "category": "email",
+      "start": 366,
+      "end": 395,
+      "text": "j.cartwright@personal.example"
+    },
+    {
+      "category": "phone",
+      "start": 413,
+      "end": 425,
+      "text": "07700 900482"
+    },
+    {
+      "category": "organisation_name",
+      "start": 463,
+      "end": 491,
+      "text": "Smith & Jones Solicitors LLP"
+    },
+    {
+      "category": "address",
+      "start": 495,
+      "end": 527,
+      "text": "78 High Holborn, London WC1V 6XX"
+    },
+    {
+      "category": "phone",
+      "start": 539,
+      "end": 552,
+      "text": "020 7946 0958"
+    },
+    {
+      "category": "date",
+      "start": 584,
+      "end": 597,
+      "text": "15 March 2024"
+    },
+    {
+      "category": "account_number",
+      "start": 638,
+      "end": 646,
+      "text": "12345678"
+    },
+    {
+      "category": "account_number",
+      "start": 658,
+      "end": 666,
+      "text": "12-34-56"
+    },
+    {
+      "category": "person_name",
+      "start": 786,
+      "end": 793,
+      "text": "Holroyd"
+    },
+    {
+      "category": "person_name",
+      "start": 807,
+      "end": 819,
+      "text": "Priya Sharma"
+    }
+  ]
 }

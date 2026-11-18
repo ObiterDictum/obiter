@@ -1,3 +1,4 @@
+import { isPersonalIdentifier } from './court-context'
 import type { RedactionSpan, SpanCategory, SpanSuggestion } from './types'
 
 const redactByDefault = new Set<SpanCategory>([
@@ -45,6 +46,17 @@ function longerSpan(left: RedactionSpan, right: RedactionSpan) {
 }
 
 function unionSpans(left: RedactionSpan, right: RedactionSpan): RedactionSpan {
+  if (
+    left.category === 'case_reference' &&
+    left.source === 'uk_supplement' &&
+    left.start <= right.start &&
+    left.end >= right.end
+  ) {
+    return right.suggestion === 'redact' &&
+      !isPersonalIdentifier(right.category)
+      ? { ...left, suggestion: 'redact' }
+      : left
+  }
   const base = longerSpan(left, right)
   const suggestion =
     left.suggestion === 'redact' || right.suggestion === 'redact'
