@@ -76,7 +76,13 @@ export async function signInWithTwoFactor(
 
 export async function signOut(page: Page) {
   await page.getByRole('button', { name: 'Account menu' }).click()
+  const signedOut = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/api/auth/sign-out' &&
+      response.request().method() === 'POST',
+  )
   await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  expect((await signedOut).ok()).toBe(true)
   await page.waitForURL('**/sign-in**', { timeout: 15_000 })
   await expect(
     page.getByRole('heading', { name: 'Sign in', exact: true }),

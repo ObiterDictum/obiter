@@ -66,6 +66,7 @@ export default function WelcomeGuideDialog({
   function close() {
     if (unseen && me) markSeen.mutate(me.user.id)
     setDismissed(true)
+    setAt(0)
     onOpenChange(false)
   }
 
