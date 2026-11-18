@@ -11,7 +11,17 @@ import type { DocumentStoryKind } from '@obiter/contracts'
 import { formerMemberName } from '@obiter/ui/person-name'
 import type { UnmappedReason } from './components/verification/verification-mapping'
 
-export function verificationStoryLabel(kind: DocumentStoryKind | undefined) {
+export function verificationLocationLabel(
+  location: VerificationFindingView['location'],
+) {
+  if (location.kind !== 'text')
+    return verificationStoryLabel(location.storyKind)
+  return location.page === undefined
+    ? 'Extracted text'
+    : `Page ${location.page}`
+}
+
+function verificationStoryLabel(kind: DocumentStoryKind | undefined) {
   switch (kind) {
     case 'document':
       return 'Main document'
@@ -257,6 +267,10 @@ export function formatRunTime(value: string) {
 
 export function verificationFailureTitle(code: VerificationFailureCode) {
   switch (code) {
+    case 'pdf_text_unavailable':
+      return 'No readable PDF text'
+    case 'text_unavailable':
+      return 'No readable document text'
     case 'model_unavailable':
       return 'The stored document could not be read'
     case 'version_not_ready':
@@ -274,6 +288,10 @@ export function verificationFailureTitle(code: VerificationFailureCode) {
 
 export function verificationFailureLabel(code: VerificationFailureCode) {
   switch (code) {
+    case 'pdf_text_unavailable':
+      return 'Verify could not read any extracted text from this PDF. It may have no usable text layer, or text extraction may have failed.'
+    case 'text_unavailable':
+      return 'Verify could not read any extracted text from this file.'
     case 'model_unavailable':
       return 'Nothing was checked for this version, and the document was not changed.'
     case 'version_not_ready':

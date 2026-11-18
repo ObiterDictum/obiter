@@ -19,7 +19,7 @@ import {
   verificationStateLabel,
   verificationStateTone,
   verificationStoredVersionNote,
-  verificationStoryLabel,
+  verificationLocationLabel,
   verificationTypeLabel,
   verificationUncertainty,
   verificationUnmappedLabel,
@@ -74,6 +74,8 @@ export function VerificationEvidencePanel() {
     verification.closePanel()
     if (restoreFocus) anchor?.focus()
   }
+  const page =
+    finding.location.kind === 'text' ? finding.location.page : undefined
   const body = (
     <PanelBody
       key={finding.id}
@@ -86,6 +88,14 @@ export function VerificationEvidencePanel() {
         { unsaved: verification.dirty, stale: verification.stale },
       )}
       unmappedReason={unmappedReasonFor(verification, finding)}
+      onShowInDocument={
+        page !== undefined && !verification.stale
+          ? () => {
+              verification.setPdfPageIndex(page - 1)
+              close(false)
+            }
+          : undefined
+      }
       canGoPrevious={verification.activeIndex > 0}
       canGoNext={verification.activeIndex < total - 1}
       onPrevious={() => verification.step(-1)}
@@ -145,6 +155,7 @@ function unmappedReasonFor(
   verification: VerificationWorkspaceValue,
   finding: VerificationFindingView,
 ): UnmappedReason | null {
+  if (finding.location.kind === 'text') return null
   if (!verification.mappable) return 'document_not_mappable'
   const target = verification.targets.get(finding.id)
   if (target?.kind === 'unmapped') return target.reason
@@ -163,6 +174,7 @@ function PanelBody({
   position,
   storedVersionNote,
   unmappedReason,
+  onShowInDocument,
   canGoPrevious,
   canGoNext,
   onPrevious,
@@ -176,6 +188,7 @@ function PanelBody({
   position: string
   storedVersionNote: string
   unmappedReason: ReturnType<typeof unmappedReasonFor>
+  onShowInDocument?: () => void
   canGoPrevious: boolean
   canGoNext: boolean
   onPrevious: () => void
@@ -203,9 +216,9 @@ function PanelBody({
             <Badge tone={verificationStateTone(finding.state)}>
               {verificationStateLabel(finding)}
             </Badge>
-            {verificationStoryLabel(finding.location.storyKind) ? (
+            {verificationLocationLabel(finding.location) ? (
               <Badge tone="neutral">
-                {verificationStoryLabel(finding.location.storyKind)}
+                {verificationLocationLabel(finding.location)}
               </Badge>
             ) : null}
           </div>
@@ -226,6 +239,11 @@ function PanelBody({
         {finding.excerpt}
       </p>
 
+      {onShowInDocument ? (
+        <Button variant="secondary" size="sm" onClick={onShowInDocument}>
+          Show in document
+        </Button>
+      ) : null}
       {unmappedReason ? (
         <p className="text-xs text-warning" role="note">
           {verificationUnmappedLabel(unmappedReason)}

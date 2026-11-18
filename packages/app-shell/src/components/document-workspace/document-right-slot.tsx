@@ -203,10 +203,17 @@ export function DocumentTabsNotice({
         />
       )
     case 'not-word':
+      if (tab === 'checks')
+        return (
+          <EmptyState
+            title="Citation and quotation checks"
+            body="Use the Verify dock to check this document. Defined-term and cross-reference checks are available in Word documents."
+          />
+        )
       return (
         <EmptyState
           title={`${name} need a Word document`}
-          body="This document is read only. Comments and checks work on .docx files."
+          body="This document is read only. Comments work on .docx files."
         />
       )
     case 'historical':

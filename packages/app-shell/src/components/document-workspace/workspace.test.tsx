@@ -208,6 +208,54 @@ describe('DocumentWorkspace', () => {
     expect(command('Download')).toBeTruthy()
   })
 
+  it('shows the PDF evidence page and opens it from the verification dock', async () => {
+    workspaceApi.useDocumentPdfView.mockReturnValue({
+      data: {
+        text: '',
+        layout: {
+          version: 1,
+          pages: [
+            { width: 200, height: 200 },
+            { width: 200, height: 200 },
+          ],
+          segments: [],
+        },
+      },
+    })
+    verification.latestVerificationRun.mockReturnValue({
+      id: 'run_pdf',
+      status: 'completed',
+      documentVersionId: 'ver_1',
+      completedAt: '2026-01-01T00:00:00.000Z',
+      summary: { findingCount: 1, flaggedCount: 1 },
+    })
+    verification.useVerificationFindings.mockReturnValue({
+      findings: [
+        {
+          id: 'pdf_citation',
+          type: 'citation_resolution',
+          state: 'flagged',
+          authorityLabel: 'Example authority',
+          explanation: 'Check this citation.',
+          excerpt: '[2099] UKSC 9',
+          location: { kind: 'text', start: 10, end: 23, page: 2 },
+          evidence: [],
+        },
+      ],
+    })
+    renderWorkspace(
+      <DocumentWorkspace
+        documentId="doc_1"
+        version={version({ filename: 'bundle.pdf', fileType: 'pdf' })}
+      />,
+    )
+    expect(screen.getByRole('region', { name: 'PDF page 1' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Go to finding' }))
+    expect(await screen.findByText('Page 2')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show in document' }))
+    expect(screen.getByRole('region', { name: 'PDF page 2' })).toBeTruthy()
+  })
+
   it('routes the find chord from document-body focus, and only while mounted', () => {
     workspaceApi.useDocumentPdfView.mockReturnValue({
       isLoading: false,

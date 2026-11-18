@@ -115,7 +115,25 @@ describe('verification contracts', () => {
       dismissal: null,
       evidence: [],
     })
-    expect(parsed.location.storyKind).toBe('footnotes')
+    expect(parsed.location).toMatchObject({ storyKind: 'footnotes' })
+    const extractedLocation = {
+      kind: 'text' as const,
+      start: 28,
+      end: 51,
+      page: 2,
+    }
+    expect(
+      verificationFindingViewSchema.parse({
+        ...parsed,
+        location: extractedLocation,
+      }).location,
+    ).toEqual(extractedLocation)
+    expect(
+      verificationFindingViewSchema.safeParse({
+        ...parsed,
+        location: { ...extractedLocation, page: 0 },
+      }).success,
+    ).toBe(false)
     expect(
       verificationFindingViewSchema.safeParse({
         ...parsed,

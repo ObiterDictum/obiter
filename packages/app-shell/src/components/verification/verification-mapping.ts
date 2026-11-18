@@ -42,6 +42,8 @@ export function resolveFindingTarget(
   model: DocumentModelWire,
 ): FindingTarget {
   const { location } = finding
+  if (location.kind === 'text')
+    return { kind: 'unmapped', reason: 'document_not_mappable' }
   const stories = storiesFor(model, location.storyKind, location.storyPartName)
   if (stories.length === 0)
     return { kind: 'unmapped', reason: 'story_not_in_document' }

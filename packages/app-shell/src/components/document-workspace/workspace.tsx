@@ -20,7 +20,11 @@ import {
   DocumentDraftStatusProvider,
   useDocumentDraftStatus,
 } from './document-draft-status'
-import { VerificationWorkspaceProvider } from '../verification/verification-context'
+import {
+  VerificationWorkspaceProvider,
+  useVerificationWorkspace,
+} from '../verification/verification-context'
+import { verificationFailureLabel } from '../../verification-copy'
 import { VerificationDock } from '../verification/verification-dock'
 import { DocxWorkspace } from './docx-workspace'
 import { DocumentDesk } from './document-page'
@@ -53,6 +57,7 @@ export function DocumentWorkspace(props: DocumentWorkspaceProps) {
   if (draftStatus)
     return (
       <VerificationWorkspaceProvider
+        key={kind === 'pdf' ? props.version?.id : undefined}
         documentId={props.documentId}
         mappable={kind === 'docx'}
       >
@@ -65,6 +70,7 @@ export function DocumentWorkspace(props: DocumentWorkspaceProps) {
       onDirtyChange={props.onDocumentEdited}
     >
       <VerificationWorkspaceProvider
+        key={kind === 'pdf' ? props.version?.id : undefined}
         documentId={props.documentId}
         mappable={kind === 'docx'}
       >
@@ -96,7 +102,9 @@ function DocumentWorkspaceBody({
             title="This document could not be opened"
             body={
               version.failureReason ??
-              'The document text could not be read. Try uploading it again.'
+              (kind === 'pdf'
+                ? verificationFailureLabel('pdf_text_unavailable')
+                : 'The document text could not be read. Try uploading it again.')
             }
           />
         </div>
@@ -329,7 +337,9 @@ function PdfWorkspace({
 }) {
   const view = useDocumentPdfView(documentId)
   const [zoom, setZoom] = useState(100)
-  const [pageIndex, setPageIndex] = useState(0)
+  const verification = useVerificationWorkspace()
+  const pageIndex = verification?.pdfPageIndex ?? 0
+  const setPageIndex = (index: number) => verification?.setPdfPageIndex(index)
   const find = useFindState()
   const { downloadError, download } = useDownloadOriginal(documentId, filename)
 

@@ -37,6 +37,7 @@ export function VerificationFindingsIndex({
 
   const notes = new Map<string, string>()
   for (const finding of verification.findings) {
+    if (finding.location.kind === 'text') continue
     const target = verification.targets.get(finding.id)
     const reason: UnmappedReason | null = !verification.mappable
       ? 'document_not_mappable'
@@ -61,8 +62,9 @@ export function VerificationFindingsIndex({
               unsaved: verification.dirty,
               stale: verification.stale,
             })}{' '}
-            Checks cover the main document, footnotes and endnotes. Headers,
-            footers and comments are not checked.
+            {verification.mappable
+              ? 'Checks cover the main document, footnotes and endnotes. Headers, footers and comments are not checked.'
+              : 'Checks cover the readable text extracted from the stored file.'}
           </DialogDescription>
         </div>
 

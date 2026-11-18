@@ -38,6 +38,8 @@ export const verificationDockId = 'document-verification'
 export type VerificationWorkspaceValue = {
   documentId: string
   mappable: boolean
+  pdfPageIndex: number
+  setPdfPageIndex: (pageIndex: number) => void
   run: ReturnType<typeof latestVerificationRun>
   runsPending: boolean
   runsError: Error | null
@@ -119,6 +121,7 @@ export function VerificationWorkspaceProvider({
     latest && latest.status === 'completed' ? latest.id : null
   const findingsQuery = useVerificationFindings(findingsRunId)
   const findings = findingsQuery.findings
+  const [pdfPageIndex, setPdfPageIndex] = useState(0)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
   const [indexOpen, setIndexOpen] = useState(false)
@@ -214,6 +217,8 @@ export function VerificationWorkspaceProvider({
   const value: VerificationWorkspaceValue = {
     documentId,
     mappable,
+    pdfPageIndex,
+    setPdfPageIndex,
     run: latest,
     runsPending: runs.isPending,
     runsError: runs.isError ? runs.error : null,
