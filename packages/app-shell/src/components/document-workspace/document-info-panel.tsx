@@ -2,9 +2,10 @@ import { Badge, Button, DockedPanel, type PanelPopout } from '@obiter/ui'
 import { formerMemberName } from '@obiter/ui/person-name'
 import { ArrowRight } from '@obiter/ui/icons'
 import type { ReactNode } from 'react'
-import type {
-  DocumentVersionRecord,
-  MatterDocumentRecord,
+import {
+  documentDisplayName,
+  type DocumentVersionRecord,
+  type MatterDocumentRecord,
 } from '../../documents'
 import { formatBytes, formatDateTime } from '../../format'
 import { RedactedMark } from '../../redacted-mark'
@@ -60,7 +61,7 @@ export function DocumentInfoPanel({
         <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-caption">
           <dt className="text-subtle">Name</dt>
           <dd className="min-w-0 break-words text-ink">
-            {current?.filename ?? document.logicalKey}
+            {documentDisplayName(document)}
           </dd>
           <dt className="text-subtle">Type</dt>
           <dd className="text-ink">{fileTypeLabel(current?.fileType ?? '')}</dd>

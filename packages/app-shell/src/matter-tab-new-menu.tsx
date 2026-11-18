@@ -17,7 +17,11 @@ import {
 } from '@obiter/ui/icons'
 import { lazy, Suspense, useRef, useState, type KeyboardEvent } from 'react'
 import { blankDocumentFile } from './document-blank'
-import { useMatterDocuments, useUploadMatterDocument } from './documents'
+import {
+  documentDisplayName,
+  useMatterDocuments,
+  useUploadMatterDocument,
+} from './documents'
 import {
   documentTab,
   redactTab,
@@ -53,7 +57,10 @@ export function MatterNewItemMenu() {
     for (const file of files) {
       try {
         const result = await upload.mutateAsync(file)
-        const tab = documentTab(result.document.id, result.version.filename)
+        const tab = documentTab(
+          result.document.id,
+          documentDisplayName(result.document, result.version),
+        )
         openPermanent(tab)
         if (file === first) goToTab(tab)
       } catch (error) {
@@ -68,7 +75,10 @@ export function MatterNewItemMenu() {
 
   async function createBlankDocument(name: string) {
     const result = await upload.mutateAsync(await blankDocumentFile(name))
-    const tab = documentTab(result.document.id, result.version.filename)
+    const tab = documentTab(
+      result.document.id,
+      documentDisplayName(result.document, result.version),
+    )
     openPermanent(tab)
     goToTab(tab)
   }
@@ -97,10 +107,7 @@ export function MatterNewItemMenu() {
     void redact
       .mutateAsync(target.id)
       .then((result) => {
-        const tab = redactTab(
-          result.run.id,
-          target.currentVersion?.filename ?? target.logicalKey,
-        )
+        const tab = redactTab(result.run.id, documentDisplayName(target))
         openPermanent(tab)
         goToTab(tab)
       })
@@ -136,7 +143,7 @@ export function MatterNewItemMenu() {
     action()
   }
 
-  const runTarget = target?.currentVersion?.filename ?? target?.logicalKey
+  const runTarget = target ? documentDisplayName(target) : undefined
 
   return (
     <>

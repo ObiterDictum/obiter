@@ -20,6 +20,7 @@ import {
   useOrganisationMembers,
 } from '../organisation-membership'
 import {
+  documentDisplayName,
   matterDocumentsQueryOptions,
   useRecentlyOpenedDocument,
 } from '../documents'
@@ -101,12 +102,12 @@ function HomeDashboard({ me }: { me: MeResponse }) {
     for (const document of documents) {
       const version = document.currentVersion
       if (!version) continue
-      documentFilenames.set(document.id, version.filename)
+      documentFilenames.set(document.id, documentDisplayName(document))
       recentDocuments.push({
         documentId: document.id,
         matterId: matter.id,
         matterName: matter.name,
-        filename: version.filename,
+        filename: documentDisplayName(document),
         updatedAt: version.updatedAt,
         redaction: version.redaction ?? null,
         versionCreatedAt: version.createdAt,

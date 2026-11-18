@@ -12,6 +12,7 @@ import { useDocument } from '../documents'
 import { useMatter } from '../matters'
 import { ContentFrame } from '../content-frame'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
+import { DocumentTitle } from '../components/document-workspace/document-title'
 import { DocumentVersionView } from '../components/document-workspace/document-version-view'
 import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
 import { DocumentHistoryPortal } from '../components/document-workspace/document-history-tab'
@@ -203,9 +204,10 @@ function DocumentDetailBody({
   return (
     <div className="flex flex-col">
       {rightSlotPanels}
-      <div className="h-[calc(100dvh-5.5rem)] min-h-[34rem] shrink-0">
+      <div className="flex h-[calc(100dvh-5.5rem)] min-h-[34rem] shrink-0 flex-col">
+        <DocumentTitle document={loaded.document} />
         {viewingHistorical && selectedVersion ? (
-          <ContentFrame className="flex h-full flex-col py-8">
+          <ContentFrame className="flex min-h-0 flex-1 flex-col py-8">
             <DocumentVersionView
               documentId={documentId}
               version={selectedVersion}
@@ -216,7 +218,7 @@ function DocumentDetailBody({
           </ContentFrame>
         ) : null}
         <div
-          className={viewingHistorical ? 'hidden' : 'h-full'}
+          className={viewingHistorical ? 'hidden' : 'min-h-0 flex-1'}
           inert={restore.isPending}
         >
           <DocumentWorkspace
