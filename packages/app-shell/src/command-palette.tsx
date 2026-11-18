@@ -99,9 +99,7 @@ export function CommandPaletteProvider({
   const currentMatterName =
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
   const [feedbackOpen, setFeedbackOpen] = useState(false)
-  const [welcomeGuideOpen, setWelcomeGuideOpen] = useState<boolean>()
-  const openWelcomeGuide = () => setWelcomeGuideOpen(true)
-  const welcomeGuideUnseen = me?.welcomeGuide?.seenAt === null
+  const [welcomeGuideOpen, setWelcomeGuideOpen] = useState(false)
   const [open, setOpen] = useState(false)
   const [createMatterOpen, setCreateMatterOpen] = useState(false)
   const [blankDocumentMatterId, setBlankDocumentMatterId] = useState<
@@ -233,7 +231,7 @@ export function CommandPaletteProvider({
         setFeedbackOpen(true)
         return
       case 'welcome-guide':
-        openWelcomeGuide()
+        setWelcomeGuideOpen(true)
         return
       case 'toggle-nav':
         onToggleNav()
@@ -327,17 +325,15 @@ export function CommandPaletteProvider({
       value={{
         open: openPalette,
         feedback: () => setFeedbackOpen(true),
-        welcomeGuide: openWelcomeGuide,
+        welcomeGuide: () => setWelcomeGuideOpen(true),
       }}
     >
       {children}
       <Suspense fallback={null}>
-        {(welcomeGuideOpen ?? welcomeGuideUnseen) ? (
-          <WelcomeGuideDialogLazy
-            unseenUserId={welcomeGuideUnseen ? me.user.id : undefined}
-            onClose={() => setWelcomeGuideOpen(false)}
-          />
-        ) : null}
+        <WelcomeGuideDialogLazy
+          open={welcomeGuideOpen}
+          onOpenChange={setWelcomeGuideOpen}
+        />
         {feedbackOpen ? (
           <FeedbackDialogLazy onClose={() => setFeedbackOpen(false)} />
         ) : null}

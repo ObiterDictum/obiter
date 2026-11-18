@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { MeResponse, WelcomeGuideState } from '@obiter/contracts'
 import { useNavigate } from '@tanstack/react-router'
 import { useRef, useState, type KeyboardEvent } from 'react'
@@ -12,16 +12,20 @@ import {
   useToast,
 } from '@obiter/ui'
 import { apiFetch } from './api'
+import { currentUserQueryOptions } from './current-user'
 import { useIsMacPlatform } from './keyboard-platform'
 import { welcomeSteps } from './welcome-guide-steps'
 
 export default function WelcomeGuideDialog({
-  onClose,
-  unseenUserId,
+  open,
+  onOpenChange,
 }: {
-  onClose: () => void
-  unseenUserId?: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
+  const { data: me } = useQuery(currentUserQueryOptions())
+  const [dismissed, setDismissed] = useState(false)
+  const unseen = me?.welcomeGuide?.seenAt === null
   const steps = welcomeSteps(useIsMacPlatform())
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -60,14 +64,17 @@ export default function WelcomeGuideDialog({
   }
 
   function close() {
-    if (unseenUserId) markSeen.mutate(unseenUserId)
-    onClose()
+    if (unseen && me) markSeen.mutate(me.user.id)
+    setDismissed(true)
+    onOpenChange(false)
   }
 
   function finish() {
     close()
     void navigate({ to: '/' })
   }
+
+  if (!open && !(unseen && !dismissed)) return null
 
   return (
     <Dialog
