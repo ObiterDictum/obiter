@@ -1,3 +1,12 @@
+import {
+  Folders,
+  GearSix,
+  Lock,
+  Ratio,
+  ShareNetwork,
+  User,
+  Users,
+} from '@obiter/ui/icons'
 import { Link } from '@tanstack/react-router'
 import { Skeleton, cn } from '@obiter/ui'
 import { CaretRight, FileText, ShieldCheck } from '@obiter/ui/icons/shell'
@@ -19,7 +28,11 @@ import {
 } from './matter-tabs'
 import { useMatterPreviewRef } from './matter-preview'
 import { useCurrentUser } from './current-user'
-import { SETTINGS_SECTIONS, useSettingsSection } from './settings-sections'
+import {
+  SETTINGS_SECTIONS,
+  useSettingsSection,
+  type SettingsSectionId,
+} from './settings-sections'
 import { getRecentLegalSearches } from './legal-search-recents'
 import type { RedactionRunStatus, VerificationRun } from '@obiter/contracts'
 
@@ -423,6 +436,16 @@ export function SearchContents() {
   )
 }
 
+const settingsIcons = {
+  account: User,
+  security: Lock,
+  preferences: GearSix,
+  organisation: Folders,
+  members: Users,
+  integrations: ShareNetwork,
+  agent: Ratio,
+} satisfies Record<SettingsSectionId, typeof User>
+
 export function SettingsContents() {
   const { data: me } = useCurrentUser()
   const settingsSection = useSettingsSection(me)
@@ -432,21 +455,24 @@ export function SettingsContents() {
       aria-label="Settings sections"
       className="flex flex-col gap-px px-1.5 pt-1"
     >
-      {sections.map(({ id, label, icon: Icon }) => (
-        <Link
-          key={id}
-          to="/settings"
-          search={{ section: id }}
-          aria-current={id === settingsSection ? 'page' : undefined}
-          className={cn(rowClass(id === settingsSection), 'gap-2.5')}
-        >
-          <Icon size={16} aria-hidden className="shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          {id === settingsSection ? (
-            <CaretRight size={12} aria-hidden className="text-subtle" />
-          ) : null}
-        </Link>
-      ))}
+      {sections.map(({ id, label }) => {
+        const Icon = settingsIcons[id]
+        return (
+          <Link
+            key={id}
+            to="/settings"
+            search={{ section: id }}
+            aria-current={id === settingsSection ? 'page' : undefined}
+            className={cn(rowClass(id === settingsSection), 'gap-2.5')}
+          >
+            <Icon size={16} aria-hidden className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+            {id === settingsSection ? (
+              <CaretRight size={12} aria-hidden className="text-subtle" />
+            ) : null}
+          </Link>
+        )
+      })}
     </nav>
   )
 }

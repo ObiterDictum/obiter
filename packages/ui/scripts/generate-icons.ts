@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SHELL_ICONS } from '../src/icon-shell'
+import { iconWeights } from './icon-weights'
 
 const ICONS = [
   'AlignBottom',
@@ -107,8 +108,6 @@ const ICONS = [
   'X',
 ] as const
 
-const WEIGHTS = ['regular', 'bold', 'fill'] as const
-
 const RATIO_ICON = `import type { IconProps } from '../icon-base'
 
 const STROKE_WIDTH = { regular: 16, bold: 24, fill: 16 } as const
@@ -211,7 +210,7 @@ async function main() {
       join(defsDir, `${name}.es.js`)
     )
     const weights = module.default
-    const args = WEIGHTS.map(
+    const args = iconWeights(name).map(
       (weight) =>
         `  ${weight}: ${JSON.stringify(pathData(weights.get(weight)))},`,
     )
