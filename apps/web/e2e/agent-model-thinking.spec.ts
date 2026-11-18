@@ -68,7 +68,7 @@ test('one menu carries the model and thinking level, and the answer records it',
     thinking: 'high',
   })
   await expect(
-    page.getByText('Test model · High thinking', { exact: true }),
+    page.getByText('Anthropic · Test model · High thinking', { exact: true }),
   ).toBeVisible({ timeout: 60000 })
   await expect(page.getByRole('list', { name: 'Sources' })).toBeVisible({
     timeout: 60000,

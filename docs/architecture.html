@@ -7509,9 +7509,18 @@
             model carries source, recommended=false, provider, connection
             identity and a raw model id. POST/GET /api/agent/connections and
             PATCH/DELETE /api/agent/connections/:id manage owner/admin
-            connections; POST /api/agent/connections/:id/test probes model
-            discovery. Migration <code>0060_agent_connections.sql</code> adds
-            encrypted connection keys and column-based per-call usage records.
+            connections; POST /api/agent/connections/:id/test lists the
+            provider’s models with display names (capped at 500, flagged when
+            truncated) or, given a <code>modelId</code>, probes that one model
+            with a chat request. A connection’s <code>modelIds</code> are the
+            models an admin turned on; an empty list means every listed model.
+            Requests identify as <code>obiter-ratio/&lt;build&gt;</code> and
+            send the agent session id as <code>x-opencode-session</code> to
+            opencode.ai only. Provider 400/404/422 responses surface a short,
+            sanitised provider reason instead of “unavailable”. Migration
+            <code>0060_agent_connections.sql</code> adds encrypted connection
+            keys and column-based per-call usage records;
+            <code>0062</code> stores the display names of enabled models.
             Public-only HTTPS egress pins validated DNS addresses and refuses
             redirects. The disposable e2e lane has an explicit loopback
             exception. Thinking retries without unsupported reasoning effort and

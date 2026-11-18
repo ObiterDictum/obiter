@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { AgentConnection } from '@obiter/contracts'
+import type { AgentConnection, AgentConnectionSaved } from '@obiter/contracts'
+import { AGENT_CONNECTION_ENABLED_MODEL_LIMIT } from '@obiter/contracts/limits'
 import {
   Button,
   Dialog,
@@ -14,6 +15,10 @@ import {
 } from '@obiter/ui'
 import { apiFetch } from '../api'
 import { ErrorNotice, SectionHeading } from './settings-fields'
+import {
+  ConnectionModels,
+  connectionModelsKey,
+} from './settings-agent-connection-models'
 
 const path = '/api/agent/connections'
 export function AgentConnections({
@@ -108,8 +113,8 @@ export function AgentConnections({
           <ConnectionForm
             key={editing === 'new' ? 'new' : editing.id}
             connection={editing === 'new' ? null : editing}
-            onSaved={async () => {
-              setEditing(null)
+            onSaved={async (close) => {
+              if (close) setEditing(null)
               await client.invalidateQueries({ queryKey })
               await client.invalidateQueries({ queryKey: ['agent-models'] })
             }}
@@ -124,36 +129,50 @@ function ConnectionForm({
   onSaved,
 }: {
   connection: AgentConnection | null
-  onSaved: () => Promise<void>
+  onSaved: (close: boolean) => Promise<void>
 }) {
+  const client = useQueryClient()
+  const [id, setId] = useState(connection?.id ?? null)
   const [name, setName] = useState(connection?.name ?? '')
   const [baseUrl, setBaseUrl] = useState(connection?.baseUrl ?? '')
   const [key, setKey] = useState('')
-  const [models, setModels] = useState(connection?.modelIds.join(', ') ?? '')
+  const [enabled, setEnabled] = useState<string[] | null>(
+    connection?.modelIds.length ? connection.modelIds : null,
+  )
   const [reasoning, setReasoning] = useState(
     connection?.supportsReasoningEffort ?? true,
   )
   const save = useMutation({
     mutationFn: () =>
-      apiFetch(`${path}${connection ? `/${connection.id}` : ''}`, {
-        method: connection ? 'PATCH' : 'POST',
+      apiFetch<AgentConnectionSaved>(`${path}${id ? `/${id}` : ''}`, {
+        method: id ? 'PATCH' : 'POST',
         body: JSON.stringify({
           name,
           baseUrl,
-          modelIds: models
-            .split(',')
-            .map((value) => value.trim())
-            .filter(Boolean),
           supportsReasoningEffort: reasoning,
+          ...(id ? (enabled ? { modelIds: enabled } : {}) : { modelIds: [] }),
           ...(key ? { key } : {}),
         }),
       }),
-    onSuccess: onSaved,
+    onSuccess: async (saved) => {
+      if (id)
+        await client.invalidateQueries({ queryKey: connectionModelsKey(id) })
+      if (!id && saved.id) {
+        setId(saved.id)
+        setKey('')
+        await onSaved(false)
+        return
+      }
+      await onSaved(true)
+    },
   })
   function submit(event: FormEvent) {
     event.preventDefault()
     save.mutate()
   }
+  const tooMany =
+    enabled !== null && enabled.length > AGENT_CONNECTION_ENABLED_MODEL_LIMIT
+  const noneOn = enabled !== null && enabled.length === 0
   return (
     <DialogContent>
       <DialogTitle>
@@ -180,17 +199,12 @@ function ConnectionForm({
           placeholder="https://provider.example/v1"
         />
         <Input
-          label={connection ? 'Replace API key (optional)' : 'API key'}
+          label={id ? 'Replace API key (optional)' : 'API key'}
           value={key}
           onChange={(event) => setKey(event.target.value)}
-          required={!connection}
+          required={!id}
           type="password"
           autoComplete="off"
-        />
-        <Input
-          label="Model ids (comma separated, optional)"
-          value={models}
-          onChange={(event) => setModels(event.target.value)}
         />
         <Switch
           label="Supports reasoning effort"
@@ -199,11 +213,23 @@ function ConnectionForm({
         >
           Supports reasoning effort
         </Switch>
+        {id ? (
+          <ConnectionModels
+            connectionId={id}
+            enabled={enabled}
+            setEnabled={setEnabled}
+          />
+        ) : null}
+        {noneOn ? <ErrorNotice message="Turn on at least one model." /> : null}
         {save.error ? <ErrorNotice message={save.error.message} /> : null}
         <DialogFooter>
           <DialogClose render={<Button variant="ghost">Cancel</Button>} />
-          <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? 'Saving…' : 'Save connection'}
+          <Button type="submit" disabled={save.isPending || tooMany || noneOn}>
+            {save.isPending
+              ? 'Saving…'
+              : id
+                ? 'Save connection'
+                : 'Save and load models'}
           </Button>
         </DialogFooter>
       </form>

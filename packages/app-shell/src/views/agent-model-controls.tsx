@@ -53,7 +53,11 @@ export function AgentModelControls({
             aria-label="Model and thinking"
             className="flex w-72 flex-col p-2"
           >
-            <div role="radiogroup" aria-label="Model" className="flex flex-col">
+            <div
+              role="radiogroup"
+              aria-label="Model"
+              className="flex max-h-80 flex-col overflow-y-auto"
+            >
               {[...models]
                 .sort((a, b) =>
                   a.group === 'Obiter'
