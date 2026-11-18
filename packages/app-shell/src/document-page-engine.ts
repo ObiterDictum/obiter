@@ -1,12 +1,8 @@
 import type { PendingRedlines } from './document-pending-redlines'
 import type { DocumentModelWire } from '@obiter/contracts'
-import {
-  flowIds,
-  insertRuns,
-  type BreakDraft,
-  type LocalInsert,
-} from './document-edits'
+import { type BreakDraft, type LocalInsert } from './document-edits'
 import type { ExtraRuns } from './document-word-edits'
+import { storyBlocksWithInserts } from './document-page-story-blocks'
 import { documentStory } from './document-model-text'
 import { keepWithNext } from './document-page-keep'
 import { paragraphFloatTargets } from './document-page-measure'
@@ -43,6 +39,7 @@ import {
 } from './document-page-blocks'
 
 export type { ContentFrame } from './document-page-layout'
+export { storyBlocksWithInserts } from './document-page-story-blocks'
 export { contentFrame } from './document-page-layout'
 export type {
   LaidOutBlock,
@@ -69,8 +66,8 @@ export function layoutDocument(
   const hasFootnotes = documentNotes(model).some(
     (note) => note.kind === 'footnote',
   )
-  if (flow?.kind === 'web' || !hasFootnotes)
-    return layoutBody(
+  if (flow?.kind === 'web' || !hasFootnotes) {
+    const pages = layoutBody(
       model,
       drafts,
       inserts,
@@ -80,6 +77,27 @@ export function layoutDocument(
       flow,
       pendingRedlines,
     )
+    if (hasFootnotes) {
+      const layout = layoutFootnotes(
+        pages,
+        model,
+        drafts,
+        extraRuns,
+        new Map(),
+        pendingRedlines,
+        undefined,
+        inserts,
+        true,
+      )
+      attachFootnotes(pages, layout.notes, model)
+      for (const page of pages) {
+        const content = page.contentPx ?? 0
+        page.frame = { ...page.frame, heightPx: content }
+        page.contentPx = content + (page.footnotes?.heightPx ?? 0)
+      }
+    }
+    return pages
+  }
   const cacheable =
     !inserts.length &&
     !Object.keys(extraRuns).length &&
@@ -141,6 +159,8 @@ export function layoutDocument(
       extraRuns,
       minimumPages,
       pendingRedlines,
+      undefined,
+      inserts,
     )
     const stable = sameFootnotePlacement(layout.notes, notes)
     notes = layout.notes
@@ -417,7 +437,6 @@ function layoutBody(
     column,
     advance,
     pendingRedlines,
-    Boolean(web),
   )
 
   if (
@@ -443,11 +462,8 @@ function layoutNotes(
   column: () => ColumnFrame,
   advance: () => void,
   pendingRedlines?: PendingRedlines,
-  includeFootnotes = false,
 ): void {
-  const notes = documentNotes(model).filter(
-    (note) => includeFootnotes || note.kind === 'endnote',
-  )
+  const notes = documentNotes(model).filter((note) => note.kind === 'endnote')
   if (notes.length === 0) return
   if (session.y > 0) {
     session.y += 12
@@ -470,46 +486,4 @@ function layoutNotes(
       )
     }
   }
-}
-
-export function storyBlocksWithInserts(
-  blocks: StoryBlock[],
-  inserts: LocalInsert[],
-): StoryBlock[] {
-  if (inserts.length === 0) return blocks
-  const insertById = new Map(inserts.map((item) => [item.clientId, item]))
-  const hostIds: string[] = []
-  const hostBlock = new Map<string, StoryBlock>()
-  for (const block of blocks) {
-    if (block.type === 'paragraph') {
-      hostIds.push(block.paragraph.id)
-      hostBlock.set(block.paragraph.id, block)
-    } else {
-      for (const id of block.table.paragraphIds) {
-        hostIds.push(id)
-        hostBlock.set(id, block)
-      }
-    }
-  }
-  const seen = new Set<StoryBlock>()
-  const result: StoryBlock[] = []
-  for (const id of flowIds(hostIds, inserts)) {
-    const insert = insertById.get(id)
-    if (insert) {
-      result.push({
-        type: 'paragraph',
-        paragraph: {
-          id: insert.clientId,
-          runs: insertRuns(insert),
-          preservedXmlFragments: [],
-        },
-      })
-      continue
-    }
-    const block = hostBlock.get(id)
-    if (!block || seen.has(block)) continue
-    seen.add(block)
-    result.push(block)
-  }
-  return result
 }

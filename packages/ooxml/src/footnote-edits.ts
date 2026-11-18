@@ -107,6 +107,10 @@ export function insertFootnote(
   const noteWire = noteParagraphWire(document, paraId, text)
   footnotes.story.preservedXmlFragments.push(entryXml)
   footnotes.story.paragraphs.push(noteWire)
+  footnotes.story.footnoteEntries?.push({
+    id: String(footnoteId),
+    paragraphIds: [noteWire.id],
+  })
   if (lineage) {
     lineage.recorder.runOrigins.set(referenceWire, [
       { fromRunId: null, fromOffset: 0, toOffset: 0 },
@@ -125,7 +129,7 @@ export function deleteFootnote(
 ) {
   const part = requireEditablePart(document, run.partName)
   const runXml = part.overlay.source.slice(run.runRange.start, run.runRange.end)
-  const footnoteId = /<w:footnoteReference\b[^>]*\bw:id="(\d+)"/u.exec(
+  const footnoteId = /<w:footnoteReference\b[^>]*\bw:id="(-?\d+)"/u.exec(
     runXml,
   )?.[1]
   if (
@@ -179,21 +183,17 @@ export function deleteFootnote(
     value: '',
   })
   notesPart.dirty = true
-  let cursor = 0
-  const fragments: string[] = []
-  const paragraphs: DocumentParagraphWire[] = []
-  for (const fragment of notes.preservedXmlFragments) {
-    const count = Math.max(1, (fragment.match(/<w:p\b/gu) ?? []).length)
-    const own = notes.paragraphs.slice(cursor, cursor + count)
-    cursor += count
-    const id = /^<w:footnote\b[^>]*\bw:id="(-?\d+)"/u.exec(fragment)?.[1]
-    if (id === footnoteId) continue
-    fragments.push(fragment)
-    paragraphs.push(...own)
-  }
-  paragraphs.push(...notes.paragraphs.slice(cursor))
-  notes.preservedXmlFragments = fragments
-  notes.paragraphs = paragraphs
+  notes.preservedXmlFragments = notes.preservedXmlFragments.filter(
+    (fragment) =>
+      fragment !== notesPart.overlay.source.slice(entry.start, entry.end),
+  )
+  const removed = new Set(
+    notes.footnoteEntries?.find((item) => item.id === footnoteId)?.paragraphIds,
+  )
+  notes.paragraphs = notes.paragraphs.filter((item) => !removed.has(item.id))
+  notes.footnoteEntries = notes.footnoteEntries?.filter(
+    (item) => item.id !== footnoteId,
+  )
 }
 
 const STYLES_PART_NAME = 'word/styles.xml'
@@ -246,6 +246,7 @@ function ensureFootnotesStory(
   const created: DocumentStoryWire = {
     partName: FOOTNOTES_PART_NAME,
     kind: 'footnotes',
+    footnoteEntries: [],
     paragraphs: [],
     preservedXmlFragments: [],
     fields: [],
@@ -425,7 +426,7 @@ export function assertNoteStoriesKeepParagraph(
         if (!inside.includes(operation.paragraph)) continue
         surviving += operation.type === 'delete_paragraph' ? -1 : 1
       }
-      if (surviving < 1) {
+      if (inside.length && surviving < 1) {
         throw new OoxmlError('last-paragraph-required')
       }
     }

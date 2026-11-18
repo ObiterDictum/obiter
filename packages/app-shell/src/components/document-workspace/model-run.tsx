@@ -24,10 +24,9 @@ import { readableRunColor, runDisplayText } from '../../document-page-media'
 import { DEFAULT_TAB_STOP_PX, tabAdvancePx } from '../../document-page-tabs'
 import { textWidthPx } from '../../document-page-flow'
 import { noteNumberKey, runNoteRefs } from '../../document-page-notes'
-import { runCss, runFace } from '../../document-page-style'
-import type { ParagraphFace } from '../../document-page-style'
+import { runCss, runFace, type ParagraphFace } from '../../document-page-style'
 
-const SELECTION_PAINT = '#b8d4f5'
+import { FootnoteReference } from './footnote-navigation'
 
 export const NoteNumbersContext = createContext<ReadonlyMap<string, string>>(
   new Map(),
@@ -45,6 +44,7 @@ export function ParagraphRunPaint({
   inlineSpans = [],
   runSources,
   reviewable = true,
+  hideText = false,
   drafts,
   changes,
   styles,
@@ -67,6 +67,7 @@ export function ParagraphRunPaint({
   inlineSpans?: InlineSpan[]
   runSources?: InlineProjection['runSources']
   reviewable?: boolean
+  hideText?: boolean
   drafts?: Record<string, string>
   changes: DocumentChangeWire[]
   styles: DocumentStyleWire[]
@@ -109,6 +110,7 @@ export function ParagraphRunPaint({
           <ModelRun
             key={`${run.id}-${pieceFrom}`}
             run={original}
+            hideText={hideText}
             revision={
               span?.pending ? (span.deleted ? 'delete' : 'insert') : undefined
             }
@@ -177,7 +179,7 @@ export function ParagraphRunPaint({
                   selection &&
                   from + index >= selection.from &&
                   from + index < selection.to
-                    ? SELECTION_PAINT
+                    ? selectedStyle.backgroundColor
                     : undefined,
               }}
             />,
@@ -288,6 +290,7 @@ function ModelRun({
   drafts,
   caret,
   notesVisible = true,
+  hideText,
   revision,
 }: {
   run: DocumentTextRunWire
@@ -302,6 +305,7 @@ function ModelRun({
   drafts?: Record<string, string>
   caret?: DocumentPresence
   notesVisible?: boolean
+  hideText: boolean
   revision?: 'insert' | 'delete'
 }) {
   const face = useMemo(
@@ -335,22 +339,22 @@ function ModelRun({
       })}
     >
       {caret ? <PresenceCaret userId={caret.userId} /> : null}
-      {rangedParts(
-        text,
-        from,
-        paragraphEnd,
-        selection,
-        linkOverlay,
-        run.hyperlinkTarget,
-      )}
+      <span aria-hidden={hideText || undefined}>
+        {rangedParts(
+          text,
+          from,
+          paragraphEnd,
+          selection,
+          linkOverlay,
+          run.hyperlinkTarget,
+        )}
+      </span>
       {(notesVisible ? notes : []).map((note) => (
-        <sup
+        <FootnoteReference
           key={`${note.kind}-${note.noteId}-${note.runId}`}
-          data-note-mark
-          className="relative -top-[0.5em] align-baseline text-[0.65em] leading-none"
-        >
-          {numbers.get(noteNumberKey(note.kind, note.noteId)) ?? note.mark}
-        </sup>
+          note={note}
+          mark={numbers.get(noteNumberKey(note.kind, note.noteId)) ?? note.mark}
+        />
       ))}
     </span>
   )
@@ -471,7 +475,7 @@ function FieldMarkerAnchor({ label }: { label: string }) {
   )
 }
 
-const selectedStyle = { backgroundColor: SELECTION_PAINT }
+const selectedStyle = { backgroundColor: '#b8d4f5' }
 
 function PresenceCaret({ userId }: { userId: string }) {
   return (

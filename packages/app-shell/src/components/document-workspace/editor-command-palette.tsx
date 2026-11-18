@@ -45,7 +45,9 @@ function EditorCommandPaletteInner({
   const hits = needle
     ? all.filter(
         (hit) =>
-          hit.command.label.toLowerCase().includes(needle) ||
+          `${hit.menu.label} ${hit.command.label}`
+            .toLowerCase()
+            .includes(needle) ||
           hit.group.toLowerCase().includes(needle) ||
           hit.menu.label.toLowerCase().includes(needle),
       )

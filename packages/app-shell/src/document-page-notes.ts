@@ -3,6 +3,11 @@ import type {
   DocumentParagraphWire,
   DocumentStoryWire,
 } from '@obiter/contracts'
+import {
+  flowIds,
+  insertParagraphWire,
+  type LocalInsert,
+} from './document-story-flow'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
 
 export type NoteKind = 'footnote' | 'endnote'
@@ -20,6 +25,7 @@ export type NoteBody = {
   noteId: string
   mark: string
   paragraphs: DocumentParagraphWire[]
+  readOnly?: boolean
 }
 
 export function runNoteRefs(runXml: string, runId: string): NoteRef[] {
@@ -101,21 +107,28 @@ function collectNotes(model: DocumentModelWire): NoteBody[] {
       if (used.has(key)) continue
       const body =
         ref.kind === 'footnote'
-          ? footnotes.get(ref.noteId)
+          ? (footnotes.get(ref.noteId) ?? unavailableFootnote(ref.noteId))
           : endnotes.get(ref.noteId)
       if (!body) continue
       used.add(key)
-      ordered.push({ ...body, mark: numbers.get(key) ?? body.mark })
+      ordered.push({
+        ...(ref.custom && ref.kind === 'footnote'
+          ? unavailableFootnote(ref.noteId)
+          : body),
+        mark: numbers.get(key) ?? body.mark,
+      })
     }
   }
   return ordered
 }
 
 export function noteEntryGroups(story: DocumentStoryWire): string[][] {
+  if (story.footnoteEntries)
+    return story.footnoteEntries.map((entry) => entry.paragraphIds)
   const groups: string[][] = []
   let cursor = 0
   for (const fragment of story.preservedXmlFragments) {
-    const count = Math.max(1, (fragment.match(/<w:p\b/giu) ?? []).length)
+    const count = (fragment.match(/<w:p\b/giu) ?? []).length
     groups.push(
       story.paragraphs
         .slice(cursor, cursor + count)
@@ -134,21 +147,58 @@ function noteStoryBodies(
   const story = model.stories.find((item) => item.kind === storyKind)
   const bodies = new Map<string, NoteBody>()
   if (!story) return bodies
-  let cursor = 0
-  for (const fragment of story.preservedXmlFragments) {
-    const noteId = xmlAttr(xmlTagAttrs(fragment, elementName), 'id')
-    const count = Math.max(1, (fragment.match(/<w:p\b/gi) ?? []).length)
-    const paragraphs = story.paragraphs.slice(cursor, cursor + count)
-    cursor += count
-    if (!noteId || noteId === '-1' || noteId === '0') continue
-    bodies.set(noteId, {
-      kind: storyKind === 'footnotes' ? 'footnote' : 'endnote',
-      noteId,
-      mark: noteMark(noteId),
-      paragraphs,
+  const byId = new Map(
+    story.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
+  )
+  const groups = noteEntryGroups(story)
+  const entries =
+    story.footnoteEntries ??
+    story.preservedXmlFragments.flatMap((fragment, index) => {
+      const attrs = xmlTagAttrs(fragment, elementName)
+      const id = xmlAttr(attrs, 'id')
+      const type = xmlAttr(attrs, 'type')
+      if (!id || (type ? type !== 'normal' : id === '-1' || id === '0'))
+        return []
+      return [{ id, paragraphIds: groups[index] ?? [], readOnly: false }]
     })
+  for (const entry of entries) {
+    const paragraphs = entry.paragraphIds.flatMap((id) => byId.get(id) ?? [])
+    bodies.set(
+      entry.id,
+      elementName === 'footnote' && (entry.readOnly || !paragraphs.length)
+        ? unavailableFootnote(entry.id)
+        : {
+            kind: elementName,
+            noteId: entry.id,
+            mark: noteMark(entry.id),
+            paragraphs,
+          },
+    )
   }
   return bodies
+}
+
+function unavailableFootnote(noteId: string): NoteBody {
+  const id = `footnote-unavailable:${noteId}`
+  return {
+    kind: 'footnote',
+    noteId,
+    mark: noteMark(noteId),
+    readOnly: true,
+    paragraphs: [
+      {
+        id,
+        preservedXmlFragments: [],
+        runs: [
+          {
+            id: `${id}:text`,
+            text: 'Footnote content is unavailable in this editor. The original DOCX content is preserved.',
+            preservedXmlFragments: [],
+          },
+        ],
+      },
+    ],
+  }
 }
 
 function noteTags(xml: string, name: 'footnoteReference' | 'endnoteReference') {
@@ -157,7 +207,10 @@ function noteTags(xml: string, name: 'footnoteReference' | 'endnoteReference') {
   for (const tag of tags) {
     const noteId = xmlAttr(tag[1], 'id')
     const custom = xmlAttr(tag[1], 'customMarkFollows')
-    if (noteId && noteId !== '-1' && noteId !== '0')
+    if (
+      noteId &&
+      (name === 'footnoteReference' || (noteId !== '-1' && noteId !== '0'))
+    )
       found.push({
         noteId,
         custom: custom !== undefined && !['0', 'false', 'off'].includes(custom),
@@ -168,4 +221,20 @@ function noteTags(xml: string, name: 'footnoteReference' | 'endnoteReference') {
 
 function noteMark(noteId: string): string {
   return /^\d+$/.test(noteId) ? noteId : '*'
+}
+
+export function noteFlowParagraphs(
+  note: NoteBody,
+  inserts: readonly LocalInsert[],
+) {
+  if (!inserts.length || note.readOnly) return note.paragraphs
+  const paragraphs = new Map(
+    note.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
+  )
+  const pending = new Map(inserts.map((insert) => [insert.clientId, insert]))
+  return flowIds([...paragraphs.keys()], inserts).flatMap((id) => {
+    const paragraph = paragraphs.get(id)
+    const insert = pending.get(id)
+    return paragraph ?? (insert ? insertParagraphWire(insert) : [])
+  })
 }

@@ -137,3 +137,11 @@ These rules were in code comments until the no-comments rule (29 Oct 2026). No p
 - A target that a kept relationship also reaches under a refused role is refused (`share-safe-inventory.ts`).
 - A run whose anchors do not reconstruct its model text is refused, never placed by guesswork (`text-offsets.ts`).
 - The comparison parser is built lazily so it never enters the client bundle (`xml-canonicalisation.ts`).
+
+## Footnotes in the Word editor
+
+- Paginated view reserves space for footnotes at the bottom of the page with their first reference. Long notes can continue on the next page. Web view displays a labelled Footnotes area at the end.
+- A numbered reference opens the note and places the caret in its text. The note number returns focus to the reference used to open it, or the first reference if the note was opened directly.
+- Insert → Footnote, the command palette and Ctrl+Alt+F (⌘⌥F on macOS) insert at a collapsed body caret and focus the new note. Standard decimal marks follow reference order. Repeated references share a mark and body. Deleting the last reference removes the note.
+- Footnote paragraphs use the existing story editor, including tracked text edits. Inserting or removing a footnote reference is a structural edit and requires tracking to be off.
+- Source note IDs, styles, separators and numbering settings remain in the DOCX. Custom marks and unsupported note structures such as tables or fields show a read-only notice. The editor preserves the original content for export. The preview uses continuous decimal numbering for automatic marks.

@@ -1,4 +1,5 @@
 import { trackedElementText } from './tracked-change-display'
+import { footnoteEntries } from './footnote-entries'
 import { PartIndex } from './story-index'
 import { isSplittableRun } from '../run-revision-eligibility'
 import { runHyperlinkTarget } from './hyperlink-target'
@@ -117,6 +118,9 @@ export function parseStory(
       preservedXmlFragments: storyStructureFragments(source, index, kind),
       fields,
       unanchoredFieldParagraphIds,
+      ...(kind === 'footnotes'
+        ? { footnoteEntries: footnoteEntries(index, paragraphAnchors) }
+        : {}),
     },
     anchors,
     paragraphAnchors,
@@ -438,7 +442,7 @@ function storyStructureFragments(
       (element) =>
         !isWord(element, 'p') &&
         !isWord(element, 'body') &&
-        !index.containsTrackedChange(element),
+        (kind === 'footnotes' || !index.containsTrackedChange(element)),
     )
     .map((element) => elementFragment(source, element))
 }

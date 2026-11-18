@@ -86,6 +86,15 @@ export const documentStoryWireSchema = z.object({
   preservedXmlFragments: z.array(z.string()),
   fields: z.array(documentFieldWireSchema),
   unanchoredFieldParagraphIds: z.array(z.string().min(1)),
+  footnoteEntries: z
+    .array(
+      z.object({
+        id: z.string(),
+        paragraphIds: z.array(z.string()),
+        readOnly: z.boolean().optional(),
+      }),
+    )
+    .optional(),
 })
 export type DocumentStoryWire = z.infer<typeof documentStoryWireSchema>
 

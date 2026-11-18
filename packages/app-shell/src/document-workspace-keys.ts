@@ -109,7 +109,10 @@ export function handleDocumentWorkspaceKeys(
   }
   if (!isPrimaryModifier(event)) return
   const footnote =
-    event.altKey && event.code === 'KeyF' && (isMacPlatform() || key === 'f')
+    event.altKey &&
+    !event.shiftKey &&
+    event.code === 'KeyF' &&
+    (isMacPlatform() ? !event.ctrlKey : !event.metaKey && key === 'f')
   if (event.altKey && !footnote) return
   const claim = event.preventDefault.bind(event)
   const run = (handler: (() => void) | undefined) => {

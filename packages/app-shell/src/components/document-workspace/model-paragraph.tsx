@@ -31,6 +31,7 @@ import {
 } from '../../document-model-text'
 import { firstLineIndentPx, wrapLines } from '../../document-page-flow'
 import type { ListMarker } from '../../document-page-lists'
+import { NoteLabel } from './footnote-navigation'
 import type { NoteKind } from '../../document-page-notes'
 import {
   paragraphCss,
@@ -294,6 +295,7 @@ export function ModelParagraphInner({
   const runPaint = (
     <ParagraphRunPaint
       paragraph={projection.paragraph}
+      hideText={editing && holdsCaret}
       toEditableOffset={projection.toEditable}
       drafts={drafts}
       changes={bucket}
@@ -383,26 +385,21 @@ export function ModelParagraphInner({
               lineHeight: `${linePx}px`,
             }}
           >
-            {continuation
-              ? ''
-              : (noteMark ? `${noteMark} ` : '') + listMarker.text}
+            {!continuation && noteMark !== undefined && (
+              <NoteLabel
+                kind={noteKind}
+                mark={noteMark}
+                paragraphId={paragraph.id}
+              />
+            )}
+            {!continuation && listMarker.text}
           </span>
-        ) : noteMark && !continuation ? (
-          <span
-            className="shrink-0 self-start pr-1"
-            aria-label={
-              noteKind === 'endnote'
-                ? `Endnote ${noteMark}`
-                : `Footnote ${noteMark}`
-            }
-          >
-            <span
-              aria-hidden="true"
-              className="relative -top-[0.5em] text-[0.65em] leading-none"
-            >
-              {noteMark}
-            </span>
-          </span>
+        ) : noteMark !== undefined && !continuation ? (
+          <NoteLabel
+            kind={noteKind}
+            mark={noteMark}
+            paragraphId={paragraph.id}
+          />
         ) : null}
         <div
           className="relative min-h-[1em] min-w-0 flex-1"
@@ -415,7 +412,6 @@ export function ModelParagraphInner({
               <div
                 data-caret-run-overlay
                 className="pointer-events-none absolute inset-0"
-                aria-hidden="true"
               >
                 {runPaint}
               </div>

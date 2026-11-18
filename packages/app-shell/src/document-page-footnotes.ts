@@ -1,7 +1,12 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import type { PendingRedlines } from './document-pending-redlines'
+import type { LocalInsert } from './document-story-flow'
 import type { ExtraRuns } from './document-word-edits'
-import { documentNotes, runNoteRefs } from './document-page-notes'
+import {
+  documentNotes,
+  noteFlowParagraphs,
+  runNoteRefs,
+} from './document-page-notes'
 import { paragraphMeasure } from './document-page-measure'
 import { contentFrame, type ContentFrame } from './document-page-layout'
 import { marginBandHeights } from './document-page-margin'
@@ -50,14 +55,11 @@ export function footnoteIdsForBlock(
     return measure.paragraph.runs.flatMap((run) => {
       offset += run.text.length
       const at = measure.projection.toDisplay(offset)
-      if (
-        block.type === 'paragraph' &&
-        (at < (block.from ?? 0) ||
-          at > (block.to ?? measure.text.length) ||
-          (at === (block.to ?? measure.text.length) &&
-            at < measure.text.length))
-      )
-        return []
+      if (block.type === 'paragraph') {
+        const from = block.from ?? 0
+        const to = block.to ?? measure.text.length
+        if (at === 0 ? from !== 0 : at <= from || at > to) return []
+      }
       return runNoteRefs(run.preservedXmlFragments.join(''), run.id)
         .filter((ref) => ref.kind === 'footnote')
         .map((ref) => ref.noteId)
@@ -136,6 +138,8 @@ export function layoutFootnotes(
   minimumPages: Map<string, number>,
   pendingRedlines?: PendingRedlines,
   previous?: FootnoteLayout,
+  inserts: readonly LocalInsert[] = [],
+  atEnd = false,
 ): FootnoteLayout {
   const notes = new Map(
     documentNotes(model)
@@ -186,7 +190,9 @@ export function layoutFootnotes(
     )
     const frame = {
       ...base,
-      heightPx: Math.max(1, base.heightPx - 2 * bodyLinePx - 21),
+      heightPx: atEnd
+        ? base.heightPx
+        : Math.max(1, base.heightPx - 2 * bodyLinePx - 21),
     }
     frames.set(index, frame)
     return frame
@@ -222,7 +228,10 @@ export function layoutFootnotes(
   }
   const save = () => {
     if (!session || session.page.blocks.length === 0) return
-    result[notePage] = { blocks: session.page.blocks, heightPx: session.y + 21 }
+    result[notePage] = {
+      blocks: session.page.blocks,
+      heightPx: session.y + (atEnd ? 36 : 21),
+    }
   }
   const advance = () => {
     save()
@@ -231,7 +240,10 @@ export function layoutFootnotes(
     const next = create(notePage)
     Object.assign(session, next)
   }
-  for (const [pageIndex, ids] of idsByPage.entries()) {
+  const placements = atEnd
+    ? ([[pages.length - 1, idsByPage.flat()]] as const)
+    : idsByPage.entries()
+  for (const [pageIndex, ids] of placements) {
     for (const id of ids) {
       const note = notes.get(id)
       if (!note || used.has(note.noteId)) continue
@@ -242,7 +254,7 @@ export function layoutFootnotes(
         notePage = pageIndex
         session = create(notePage)
       }
-      for (const paragraph of note.paragraphs) {
+      for (const paragraph of noteFlowParagraphs(note, inserts)) {
         layoutParagraph(
           { type: 'paragraph', paragraph },
           model,

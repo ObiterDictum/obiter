@@ -23,6 +23,12 @@ export function parseModelJson(json: string) {
   const parsed = documentModelWireSchema.safeParse(value)
   if (!parsed.success) throw new OoxmlError('invalid-model-json')
   if (
+    parsed.data.stories.some(
+      (story) => story.kind === 'footnotes' && !story.footnoteEntries,
+    )
+  )
+    throw new OoxmlError('invalid-model-json')
+  if (
     parsed.data.changes.some(
       (change) => change.inlinePosition && !change.inlinePosition.segments,
     )
