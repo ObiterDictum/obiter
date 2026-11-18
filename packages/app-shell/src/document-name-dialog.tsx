@@ -10,10 +10,10 @@ import {
   Input,
 } from '@obiter/ui'
 import {
+  checkDocumentName,
   DEFAULT_DOCUMENT_NAME,
   DOCUMENT_NAME_MAX_LENGTH,
-  documentNameSchema,
-} from '@obiter/contracts'
+} from '@obiter/contracts/document-name-rules'
 import { useRef, useState, type FormEvent, type RefObject } from 'react'
 
 export function DocumentNameDialog({
@@ -93,15 +93,15 @@ function DocumentNameForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const parsed = documentNameSchema.safeParse(name)
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Enter a document name.')
+    const checked = checkDocumentName(name)
+    if (!checked.ok) {
+      setError(checked.error)
       return
     }
     setError(null)
     setPending(true)
     try {
-      await onSubmit(parsed.data)
+      await onSubmit(checked.name)
     } catch (cause) {
       setError(
         cause instanceof Error && cause.message

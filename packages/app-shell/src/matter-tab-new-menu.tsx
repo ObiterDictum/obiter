@@ -15,9 +15,8 @@ import {
   ShieldCheck,
   Upload,
 } from '@obiter/ui/icons'
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { lazy, Suspense, useRef, useState, type KeyboardEvent } from 'react'
 import { blankDocumentFile } from './document-blank'
-import { NewDocumentDialog } from './document-name-dialog'
 import { useMatterDocuments, useUploadMatterDocument } from './documents'
 import {
   documentTab,
@@ -28,6 +27,12 @@ import {
 import { useMatterTabs } from './matter-tabs-state'
 import { useCreateMatterRedactionRun } from './redaction-runs'
 import { useCreateVerificationRun } from './verification-runs'
+
+const NewDocumentDialogLazy = lazy(() =>
+  import('./document-name-dialog').then((module) => ({
+    default: module.NewDocumentDialog,
+  })),
+)
 
 export function MatterNewItemMenu() {
   const { matterId, tabs, activeId, openPermanent, goToTab } = useMatterTabs()
@@ -185,11 +190,15 @@ export function MatterNewItemMenu() {
           </MenuItem>
         </MenuContent>
       </Menu>
-      <NewDocumentDialog
-        open={naming}
-        onOpenChange={setNaming}
-        onCreate={createBlankDocument}
-      />
+      {naming ? (
+        <Suspense fallback={null}>
+          <NewDocumentDialogLazy
+            open
+            onOpenChange={setNaming}
+            onCreate={createBlankDocument}
+          />
+        </Suspense>
+      ) : null}
       <input
         ref={inputRef}
         type="file"

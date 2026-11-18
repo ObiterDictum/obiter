@@ -1,22 +1,18 @@
 import { z } from 'zod'
+import { checkDocumentName } from './document-name-rules'
 
-export const DOCUMENT_NAME_MAX_LENGTH = 200
+export {
+  checkDocumentName,
+  DEFAULT_DOCUMENT_NAME,
+  DOCUMENT_NAME_MAX_LENGTH,
+} from './document-name-rules'
 
-export const DEFAULT_DOCUMENT_NAME = 'Untitled document'
-
-const forbiddenDocumentNameCharacter = /[/\\\p{Cc}]/u
-
-export const documentNameSchema = z
-  .string()
-  .trim()
-  .min(1, 'Enter a document name.')
-  .max(
-    DOCUMENT_NAME_MAX_LENGTH,
-    `Use ${DOCUMENT_NAME_MAX_LENGTH} characters or fewer.`,
-  )
-  .refine((name) => !forbiddenDocumentNameCharacter.test(name), {
-    message: 'Names cannot contain slashes or control characters.',
-  })
+export const documentNameSchema = z.string().transform((input, context) => {
+  const checked = checkDocumentName(input)
+  if (checked.ok) return checked.name
+  context.addIssue({ code: 'custom', message: checked.error })
+  return z.NEVER
+})
 
 export const documentRenameRequestSchema = z
   .object({ name: documentNameSchema })

@@ -19,7 +19,6 @@ import { currentUserQueryOptions } from './current-user'
 import { useMattersList } from './matters'
 import { matterIdFromPath } from './navigation'
 import { useShellShortcuts } from './shell-shortcuts'
-import { NewDocumentDialog } from './document-name-dialog'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings-sections'
 import { setShellLayout } from './shell-layout'
 import { setAppTheme, useAppTheme } from './use-app-theme'
@@ -32,6 +31,12 @@ import type {
 const CommandPaletteDialogLazy = lazy(() =>
   import('./command-palette-dialog').then((module) => ({
     default: module.CommandPaletteDialog,
+  })),
+)
+
+const NewDocumentDialogLazy = lazy(() =>
+  import('./document-name-dialog').then((module) => ({
+    default: module.NewDocumentDialog,
   })),
 )
 
@@ -343,16 +348,17 @@ export function CommandPaletteProvider({
           />
         </Suspense>
       ) : null}
-      <NewDocumentDialog
-        open={blankDocumentMatterId !== null}
-        onOpenChange={(next) => {
-          if (!next) setBlankDocumentMatterId(null)
-        }}
-        onCreate={async (name) => {
-          if (blankDocumentMatterId)
-            await startBlankDocument(blankDocumentMatterId, name)
-        }}
-      />
+      {blankDocumentMatterId !== null ? (
+        <Suspense fallback={null}>
+          <NewDocumentDialogLazy
+            open
+            onOpenChange={(next) => {
+              if (!next) setBlankDocumentMatterId(null)
+            }}
+            onCreate={(name) => startBlankDocument(blankDocumentMatterId, name)}
+          />
+        </Suspense>
+      ) : null}
       <input
         ref={fileInputRef}
         type="file"
