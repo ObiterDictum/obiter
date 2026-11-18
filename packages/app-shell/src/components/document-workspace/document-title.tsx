@@ -43,7 +43,7 @@ export function DocumentTitle({
   async function save(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
     if (draft === null || rename.isPending) return
-    const checked = checkDocumentName(draft)
+    const checked = checkDocumentName(draft, extension)
     if (!checked.ok) {
       setError(checked.error)
       return
@@ -106,7 +106,9 @@ export function DocumentTitle({
           aria-describedby={error ? errorId : undefined}
           autoFocus
           value={draft}
-          maxLength={DOCUMENT_NAME_MAX_LENGTH}
+          maxLength={
+            DOCUMENT_NAME_MAX_LENGTH + (extension ? extension.length + 1 : 0)
+          }
           readOnly={rename.isPending}
           spellCheck={false}
           autoComplete="off"

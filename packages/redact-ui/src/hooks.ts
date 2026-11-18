@@ -109,7 +109,10 @@ export function redactionRunQueryOptions(runId: string) {
       (await apiFetch<{ run: RedactionRun }>(`/api/redaction-runs/${runId}`))
         .run,
     refetchInterval: (query) =>
-      query.state.data?.status === 'detecting' ? 2_000 : false,
+      query.state.data?.status === 'detecting' ||
+      query.state.data?.status === 'pending'
+        ? 2_000
+        : false,
     staleTime: 30_000,
   })
 }

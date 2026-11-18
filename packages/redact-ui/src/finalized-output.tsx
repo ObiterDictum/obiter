@@ -1,12 +1,8 @@
+import { downloadBlob, scheduleFilename } from './output-transfer'
+import { ShareOutput } from './share-output'
 import { useState } from 'react'
 import { Badge, Button, Card, Skeleton, StatusDot } from '@obiter/ui'
-import {
-  DownloadSimple,
-  Eye,
-  FolderOpen,
-  ShareNetwork,
-  Warning,
-} from '@obiter/ui/icons'
+import { DownloadSimple, Eye, FolderOpen, Warning } from '@obiter/ui/icons'
 import { PageScaffold } from '@obiter/app-shell'
 import {
   useRedactionOutput,
@@ -19,11 +15,6 @@ import {
   PdfDocumentPreview,
   type PdfPreviewStatus,
 } from './pdf-document-preview'
-import {
-  downloadBlob,
-  scheduleFilename,
-  shareOrDownload,
-} from './output-transfer'
 import { formatDateTime } from './span-copy'
 import type { RedactionRun } from './types'
 
@@ -115,7 +106,7 @@ export function FinalizedOutput({
   const isDocx = mimeType === DOCX_MIME
   const isFile = isPdf || isDocx
   const filename =
-    output?.filename ?? run.summary.outputFilename ?? run.sourceFilename
+    output?.filename ?? run.summary.outputFilename ?? 'document-redacted.txt'
   const fileQuery = useRedactionOutputFile(
     run.id,
     isFile && Boolean(run.outputId),
@@ -281,19 +272,11 @@ export function FinalizedOutput({
               >
                 Download {isPdf ? 'PDF' : isDocx ? 'Word copy' : 'text copy'}
               </Button>
-              <Button
-                variant="secondary"
-                disabled={!downloadReady}
-                onClick={() => {
-                  void (async () => {
-                    const blob = outputBlob()
-                    if (blob) await shareOrDownload(blob, filename)
-                  })()
-                }}
-                iconStart={<ShareNetwork size={16} aria-hidden="true" />}
-              >
-                Share
-              </Button>
+              <ShareOutput
+                filename={filename}
+                ready={downloadReady}
+                getBlob={outputBlob}
+              />
               {isPdf ? (
                 <StatusDot tone={previewReady ? 'success' : 'neutral'}>
                   {pageCount === null

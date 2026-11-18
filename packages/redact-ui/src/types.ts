@@ -70,3 +70,13 @@ export interface SpanDecisionInput {
   applyToSameText?: boolean
 }
 export type FinalizeInput = RedactionFinalizeInput
+
+export function hasRedactionDocumentText(
+  status: RedactionRun['status'] | undefined,
+) {
+  return (
+    status === 'ready_for_review' ||
+    status === 'reviewing' ||
+    status === 'finalized'
+  )
+}

@@ -7,8 +7,16 @@ const forbiddenDocumentNameCharacter = /[/\\\p{Cc}]/u
 export type DocumentNameCheck =
   { ok: true; name: string } | { ok: false; error: string }
 
-export function checkDocumentName(input: string): DocumentNameCheck {
-  const name = input.trim()
+export function checkDocumentName(
+  input: string,
+  extension?: string,
+): DocumentNameCheck {
+  const trimmed = input.trim()
+  const suffix = extension ? `.${extension.toLowerCase()}` : ''
+  const name =
+    suffix && trimmed.toLowerCase().endsWith(suffix)
+      ? trimmed.slice(0, -suffix.length).trimEnd()
+      : trimmed
   if (!name) return { ok: false, error: 'Enter a document name.' }
   if (name.length > DOCUMENT_NAME_MAX_LENGTH)
     return {

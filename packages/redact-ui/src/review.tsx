@@ -36,7 +36,7 @@ import {
 } from './review-document-text'
 import { ReviewPanel, type SpanFilter } from './review-panel'
 import { decisionCounts, spanDecisionState } from './span-copy'
-import type { RedactionRun } from './types'
+import { hasRedactionDocumentText, type RedactionRun } from './types'
 
 function runPosition(run: RedactionRun) {
   return run.matterName ?? 'Not filed in a matter'
@@ -59,7 +59,7 @@ export function RedactionReviewView({
     runQuery.data?.status === 'detecting' || runQuery.data?.status === 'pending'
   const textQuery = useRedactionDocumentText(
     runId,
-    !!runQuery.data && !detecting && runQuery.data.status !== 'failed',
+    hasRedactionDocumentText(runQuery.data?.status),
   )
   const retry = useRetryDetection(runId)
   const pdfPreviewEnabled =
@@ -77,18 +77,27 @@ export function RedactionReviewView({
     runQuery.data?.status === 'finalized',
   )
   const replaceRun = useCreateUploadedRedactionRun()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>()
   const [filter, setFilter] = useState<SpanFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
+  const reviewRef = useRef<HTMLDivElement | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const focusList = useRef(false)
   const decision = useSpanDecision(runId)
 
   useEffect(() => {
+    if (focusList.current) {
+      focusList.current = false
+      listRef.current?.focus({ preventScroll: true })
+    }
     if (!selectedId) return
-    document
-      .querySelector<HTMLElement>(`[data-span-id="${CSS.escape(selectedId)}"]`)
-      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    reviewRef.current
+      ?.querySelector('[data-span-id][aria-pressed="true"]')
+      ?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+    listRef.current
+      ?.querySelector('[aria-selected="true"]')
+      ?.scrollIntoView?.({ block: 'nearest' })
   }, [selectedId])
 
   const failedWithoutText =
@@ -204,7 +213,7 @@ export function RedactionReviewView({
   const counts = decisionCounts(run.spans, run.decisions)
   const changeFilter = (apply: () => void) => {
     apply()
-    setSelectedId(null)
+    setSelectedId(undefined)
   }
   const filtered = run.spans.filter(
     (span) =>
@@ -214,7 +223,9 @@ export function RedactionReviewView({
       (sourceFilter === 'all' || span.source === sourceFilter),
   )
   const selected =
-    run.spans.find((span) => span.id === selectedId) ?? filtered[0]
+    selectedId === undefined
+      ? filtered[0]
+      : run.spans.find((span) => span.id === selectedId)
   const position = selected
     ? run.spans.findIndex((span) => span.id === selected.id) + 1
     : 0
@@ -229,28 +240,45 @@ export function RedactionReviewView({
     return segment ? segment.pageIndex + 1 : null
   }
 
-  const decide = (decisionValue: SpanDecision) => {
+  const decide = (decisionValue: SpanDecision, applyToSameText = false) => {
     if (!selected || decision.isPending) return
-    decision.mutate({ spanId: selected.id, decision: decisionValue })
+    decision.mutate(
+      {
+        spanId: selected.id,
+        decision: decisionValue,
+        ...(applyToSameText ? { applyToSameText } : {}),
+      },
+      {
+        onSuccess: ({ run: updated }) => {
+          const index = updated.spans.findIndex(
+            (span) => span.id === selected.id,
+          )
+          const next = [
+            ...updated.spans.slice(index + 1),
+            ...updated.spans.slice(0, index),
+          ].find((span) => !updated.decisions[span.id])
+          if (next && !filtered.some((span) => span.id === next.id)) {
+            setFilter('all')
+            setCategoryFilter('all')
+            setSourceFilter('all')
+          }
+          focusList.current = true
+          setSelectedId(next?.id ?? null)
+        },
+      },
+    )
   }
 
   const occurrences = selected
     ? sameTextOccurrences(run.spans, selected.text).length
     : 0
-  const applyToAll = (decisionValue: SpanDecision) => {
-    if (!selected || decision.isPending) return
-    decision.mutate({
-      spanId: selected.id,
-      decision: decisionValue,
-      applyToSameText: true,
-    })
-  }
-
   const move = (delta: number) => {
-    if (!filtered.length || !selected) return
-    const index = filtered.findIndex((span) => span.id === selected.id)
+    if (!filtered.length) return
+    const index = filtered.findIndex((span) => span.id === selected?.id)
     const next =
-      filtered[(index + delta + filtered.length) % filtered.length] ?? null
+      index < 0
+        ? filtered[delta > 0 ? 0 : filtered.length - 1]
+        : filtered[(index + delta + filtered.length) % filtered.length]
     if (next) setSelectedId(next.id)
   }
 
@@ -261,21 +289,6 @@ export function RedactionReviewView({
       move(event.key === 'ArrowDown' ? 1 : -1)
       return
     }
-    if (!selected || decision.isPending || run.replacementRunId) return
-    if (event.ctrlKey || event.metaKey || event.altKey) return
-    if (event.target !== event.currentTarget) return
-    const key = event.key.toLowerCase()
-    const shortcut: SpanDecision | null =
-      event.key === 'Enter'
-        ? 'accept'
-        : key === 'r'
-          ? 'reject'
-          : key === 'p'
-            ? 'pseudonymise'
-            : null
-    if (!shortcut) return
-    event.preventDefault()
-    decision.mutate({ spanId: selected.id, decision: shortcut })
   }
 
   const remaining = counts.pending
@@ -287,7 +300,7 @@ export function RedactionReviewView({
   const categories = Array.from(new Set(run.spans.map((span) => span.category)))
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={reviewRef} className="flex h-full min-h-0 flex-col">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-line bg-surface px-12 py-4 @max-pane:px-8">
         <div className="flex min-w-0 items-start gap-3">
           {onBack ? (
@@ -342,9 +355,13 @@ export function RedactionReviewView({
           value={progress}
           className="max-w-[200px] min-w-[120px] flex-1"
         />
-        {remaining > 0 ? (
-          <p className="text-caption text-subtle">{remaining} left</p>
-        ) : null}
+        <p className="text-caption text-subtle" role="status">
+          {remaining > 0
+            ? `${remaining} left`
+            : run.replacementRunId
+              ? null
+              : 'All spans decided. Choose Finalise to continue.'}
+        </p>
         <CategoryLegend categories={categories} />
         <div className="ml-auto flex items-center gap-4">
           <span className="flex items-center gap-4 text-caption text-muted">
@@ -432,7 +449,7 @@ export function RedactionReviewView({
                 onPrevious={() => move(-1)}
                 onNext={() => move(1)}
                 onDecide={decide}
-                onApplyToAll={applyToAll}
+                onApplyToAll={(value) => decide(value, true)}
               />
             )}
           </div>

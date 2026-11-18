@@ -1,12 +1,13 @@
 import '@obiter/test-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import type { RedactionRun } from './types'
 
 const apiFetch = vi.hoisted(() => vi.fn())
 
+const { isTypingTarget } = await import('@obiter/app-shell')
 const appShellKeys = Object.fromEntries(
   Object.keys(await import('@obiter/app-shell')).map((key) => [key, undefined]),
 )
@@ -14,6 +15,7 @@ mock.module('@obiter/app-shell', () =>
   Object.assign(
     { ...appShellKeys },
     {
+      isTypingTarget,
       apiFetch: (...args: unknown[]) => apiFetch(...args),
       useCurrentUser: () => ({ data: { user: { id: 'usr_reviewer' } } }),
       PageScaffold: ({
@@ -95,6 +97,7 @@ function emptyCacheView() {
       <RedactionReviewView runId={run.id} onOpenRun={() => undefined} />
     </QueryClientProvider>,
   )
+  return client
 }
 
 function serveRun() {
@@ -149,4 +152,106 @@ describe('a run that fails to load from an empty cache', () => {
       ),
     ).toBeTruthy()
   })
+})
+
+it.each(['pending', 'detecting'] as const)(
+  'waits for detection to finish before requesting document text while %s',
+  async (status) => {
+    const path = `/api/redaction-runs/${run.id}`
+    apiFetch.mockResolvedValue({ run: { ...run, status } })
+    const client = emptyCacheView()
+    expect(await screen.findByText('Detecting…')).toBeTruthy()
+    expect(apiFetch.mock.calls).toEqual([[path]])
+
+    serveRun()
+    act(() => {
+      client.setQueryData(['redaction-run', run.id], run)
+    })
+    expect(
+      await screen.findByText(
+        'No sensitive data was detected in this document',
+      ),
+    ).toBeTruthy()
+    expect(apiFetch.mock.calls.slice(1)).toEqual([[`${path}/document-text`]])
+  },
+)
+
+it('saves from the document, list and body, wraps past decided spans and allows revising a decision', async () => {
+  const reviewRun: RedactionRun = {
+    ...run,
+    spans: ['Jane', 'John', 'Joan'].map((name, index) => ({
+      id: `span_${index + 1}`,
+      text: name,
+      start: index * 5,
+      end: index * 5 + 4,
+      category: 'person_name',
+      source: 'rampart_model',
+      confidence: 'high',
+      suggestion: 'redact',
+    })),
+    decisions: {
+      span_2: {
+        decision: 'accept',
+        decidedBy: 'usr_reviewer',
+        decidedAt: run.updatedAt,
+      },
+    },
+    summary: {
+      ...run.summary,
+      totalSpans: 3,
+      reviewedCount: 1,
+      unreviewedCount: 2,
+    },
+  }
+  apiFetch.mockImplementation((path: string, options?: RequestInit) => {
+    if (path.endsWith('/document-text'))
+      return Promise.resolve({ text: 'Jane John Joan' })
+    const spanId = path.split('/').at(-2)
+    if (options?.method === 'POST' && spanId) {
+      reviewRun.decisions = {
+        ...reviewRun.decisions,
+        [spanId]: {
+          decision:
+            options.body === '{"decision":"reject"}' ? 'reject' : 'accept',
+          decidedBy: 'usr_reviewer',
+          decidedAt: run.updatedAt,
+        },
+      }
+    }
+    return Promise.resolve({ run: { ...reviewRun } })
+  })
+  emptyCacheView()
+
+  const original = await screen.findByRole('article', {
+    name: 'Original document text',
+  })
+  const joan = within(original).getByRole('button', { name: /Joan/u })
+  fireEvent.click(joan)
+  joan.focus()
+  fireEvent.keyDown(joan, { key: 'r' })
+
+  const list = screen.getByRole('listbox', { name: 'Detected spans' })
+  const bar = screen.getByRole('region', { name: 'Decide the selected span' })
+  expect(await within(bar).findByText('1 of 3')).toBeTruthy()
+  expect(document.activeElement).toBe(list)
+  expect(apiFetch).toHaveBeenCalledWith(
+    `/api/redaction-runs/${run.id}/spans/span_3/decision`,
+    { method: 'POST', body: '{"decision":"reject"}' },
+  )
+
+  fireEvent.keyDown(list, { key: 'Enter' })
+  expect(
+    await screen.findByText('All spans decided. Choose Finalise to continue.'),
+  ).toBeTruthy()
+  expect(within(bar).queryByRole('button', { name: /Redact/u })).toBeNull()
+
+  fireEvent.click(within(list).getByRole('option', { name: /Joan/u }))
+  fireEvent.keyDown(document.body, { key: 'Enter' })
+  expect(
+    await within(list).findByRole('option', { name: /Redacted.*Joan/u }),
+  ).toBeTruthy()
+  expect(apiFetch).toHaveBeenCalledWith(
+    `/api/redaction-runs/${run.id}/spans/span_3/decision`,
+    { method: 'POST', body: '{"decision":"accept"}' },
+  )
 })

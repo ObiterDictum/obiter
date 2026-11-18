@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useDecisionShortcuts } from './decision-shortcuts'
 import {
   Button,
   KeyboardHint,
@@ -69,6 +70,7 @@ export function DecisionBar({
   onApplyToAll: (decision: SpanDecision) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  useDecisionShortcuts(Boolean(span) && !pending && !menuOpen, onDecide)
   if (!span) {
     return (
       <section
@@ -208,6 +210,7 @@ export function DecisionBar({
             size="sm"
             disabled={pending}
             onClick={() => onDecide('reject')}
+            aria-keyshortcuts="R"
             iconStart={<X size={12} aria-hidden="true" />}
           >
             Keep visible
@@ -218,6 +221,7 @@ export function DecisionBar({
             size="sm"
             disabled={pending}
             onClick={() => onDecide('accept')}
+            aria-keyshortcuts="Enter"
             iconStart={<Check size={12} aria-hidden="true" />}
           >
             Redact

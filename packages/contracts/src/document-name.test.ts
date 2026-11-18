@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { checkDocumentName } from './document-name-rules'
 import {
   DOCUMENT_NAME_MAX_LENGTH,
   documentNameSchema,
@@ -36,4 +37,25 @@ test('rename requests carry only a name', () => {
   expect(
     documentRenameRequestSchema.safeParse({ name: 'A', filename: 'b' }).success,
   ).toBe(false)
+})
+
+test('rename strips only the matching extension before checking the stem', () => {
+  expect(checkDocumentName('  letter.DoCx  ', 'docx')).toEqual({
+    ok: true,
+    name: 'letter',
+  })
+  expect(checkDocumentName('letter.pdf', 'docx')).toEqual({
+    ok: true,
+    name: 'letter.pdf',
+  })
+  expect(checkDocumentName('letter.docx')).toEqual({
+    ok: true,
+    name: 'letter.docx',
+  })
+  expect(checkDocumentName('.docx', 'docx').ok).toBe(false)
+  expect(checkDocumentName('folder/letter.docx', 'docx').ok).toBe(false)
+  expect(
+    checkDocumentName(`${'a'.repeat(DOCUMENT_NAME_MAX_LENGTH)}.docx`, 'docx')
+      .ok,
+  ).toBe(true)
 })
