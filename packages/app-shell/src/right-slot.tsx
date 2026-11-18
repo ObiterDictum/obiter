@@ -16,7 +16,6 @@ export type RightSlotTabId = 'agent' | 'comments' | 'checks' | 'history'
 
 type IconComponent = (props: {
   size?: number
-  weight?: 'regular' | 'fill'
   className?: string
   'aria-hidden'?: boolean
 }) => ReactNode

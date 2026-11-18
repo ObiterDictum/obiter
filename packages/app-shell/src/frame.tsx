@@ -2,7 +2,7 @@ import { AgentPanelContext } from './agent-panel-toggle'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, useNavigate, useRouterState } from '@tanstack/react-router'
 import type { AppPlatform } from '@obiter/contracts'
-import { ToastProvider, Toaster, cn } from '@obiter/ui'
+import { Skeleton, ToastProvider, Toaster, cn } from '@obiter/ui'
 import {
   Suspense,
   lazy,
@@ -23,12 +23,12 @@ import type { ShellSection } from './navigation'
 import { Sidebar } from './sidebar'
 import { SidebarRail } from './sidebar-rail'
 import { TitleBar } from './title-bar'
-import { contentsPanelName } from './contents-panel'
 import { PagePanelProvider } from './page-panel'
 import type { RightSlotTabId } from './right-slot'
 import { ShellContentsProvider } from './shell-contents'
 import { MatterPreviewProvider } from './matter-preview'
 import {
+  contentsPanelName,
   documentIdFromPath,
   matterIdFromPath,
   resolveSection,
@@ -353,9 +353,28 @@ function ShellPane({
 }) {
   return (
     <>
+      {contentsVisible && narrow ? (
+        <ContentsScrim onClose={onCloseContents} />
+      ) : null}
       {contentsVisible ? (
-        <Suspense fallback={null}>
-          {narrow ? <ContentsScrim onClose={onCloseContents} /> : null}
+        <Suspense
+          fallback={
+            <div
+              role="status"
+              className={cn(
+                'shrink-0 border-r border-line bg-surface p-3',
+                narrow
+                  ? 'absolute inset-y-0 left-0 z-30 w-[260px]'
+                  : 'w-[250px]',
+              )}
+            >
+              <span className="sr-only">
+                Loading {contentsPanelName(section, pathname) ?? 'contents'}…
+              </span>
+              <Skeleton className="h-3.5 w-32" />
+            </div>
+          }
+        >
           <ContentsPanelLazy
             section={section}
             pathname={pathname}

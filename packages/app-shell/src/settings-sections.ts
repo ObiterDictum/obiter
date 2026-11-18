@@ -1,12 +1,3 @@
-import {
-  Folders,
-  GearSix,
-  Lock,
-  Ratio,
-  ShareNetwork,
-  User,
-  Users,
-} from '@obiter/ui/icons'
 import { useRouterState } from '@tanstack/react-router'
 import type { MeResponse } from '@obiter/contracts'
 
@@ -17,7 +8,6 @@ export const SETTINGS_SECTIONS = [
   {
     id: 'account',
     label: 'Account',
-    icon: User,
     description:
       'Your name, sign-in email and the devices you are signed in on.',
     available: always,
@@ -25,21 +15,18 @@ export const SETTINGS_SECTIONS = [
   {
     id: 'security',
     label: 'Security',
-    icon: Lock,
     description: 'Your password and two-factor authentication.',
     available: always,
   },
   {
     id: 'preferences',
     label: 'Preferences',
-    icon: GearSix,
     description: 'Appearance and other choices kept on this device.',
     available: always,
   },
   {
     id: 'organisation',
     label: 'Organisation',
-    icon: Folders,
     description:
       'The organisation you work in, your role and the update policy.',
     available: always,
@@ -47,7 +34,6 @@ export const SETTINGS_SECTIONS = [
   {
     id: 'members',
     label: 'Members',
-    icon: Users,
     description:
       'Who is in your organisation and the invitations you have sent.',
     available: inOrganisation,
@@ -55,7 +41,6 @@ export const SETTINGS_SECTIONS = [
   {
     id: 'integrations',
     label: 'Integrations',
-    icon: ShareNetwork,
     description:
       'Connect the tools your team already uses so the agent can work where you do.',
     available: inOrganisation,
@@ -63,7 +48,6 @@ export const SETTINGS_SECTIONS = [
   {
     id: 'agent',
     label: 'Agent',
-    icon: Ratio,
     description:
       "The model provider your organisation's agent uses and what it may send.",
     available: inOrganisation,

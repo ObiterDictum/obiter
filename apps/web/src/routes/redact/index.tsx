@@ -4,6 +4,7 @@ import { currentUserQueryOptions, guardAuth } from '@obiter/app-shell'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/redact/')({
+  codeSplitGroupings: [['loader'], ['component']],
   loader: async ({ context, location }) => {
     await guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),

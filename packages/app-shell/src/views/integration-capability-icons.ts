@@ -52,4 +52,7 @@ export const CAPABILITY_ICONS = {
   watch: Clock,
   legislation: BookOpen,
   commencement: CalendarBlank,
-} as const satisfies Record<IntegrationIconId, ComponentType<IconProps>>
+} as const satisfies Record<
+  IntegrationIconId,
+  ComponentType<IconProps<'regular'>>
+>
