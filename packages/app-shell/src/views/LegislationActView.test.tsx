@@ -1,9 +1,20 @@
 import '@obiter/test-dom'
-import { Suspense, type ReactNode } from 'react'
+import {
+  Suspense,
+  type ComponentType,
+  type AnchorHTMLAttributes,
+  type ReactNode,
+} from 'react'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
 import { ToastProvider } from '@obiter/ui'
 
 const tanstackReactRouterModuleKeys = Object.fromEntries(
@@ -16,20 +27,49 @@ mock.module('@tanstack/react-router', () =>
   Object.assign(
     { ...tanstackReactRouterModuleKeys },
     (() => ({
+      createLink:
+        (Anchor: ComponentType<AnchorHTMLAttributes<HTMLAnchorElement>>) =>
+        ({
+          href,
+          hash,
+          hashScrollIntoView: _scroll,
+          resetScroll: _reset,
+          preload: _preload,
+          to: _to,
+          params: _params,
+          ...props
+        }: AnchorHTMLAttributes<HTMLAnchorElement> & {
+          hash?: string
+          hashScrollIntoView?: boolean
+          resetScroll?: boolean
+          preload?: boolean
+          to?: string
+          params?: unknown
+        }) => (
+          <Anchor {...props} href={`${href}#${hash}`} aria-current="page" />
+        ),
       Link: ({
         children,
         to,
         params,
         href,
+        hash,
+        hashScrollIntoView: _hashScrollIntoView,
+        resetScroll: _resetScroll,
         ...props
       }: {
         children: ReactNode
         to?: string
         params?: { _splat: string }
         href?: string
+        hash?: string
         [key: string]: unknown
       }) => (
-        <a href={href ?? to} data-params={params?._splat} {...props}>
+        <a
+          href={hash ? `${href}#${hash}` : (href ?? to)}
+          data-params={params?._splat}
+          {...props}
+        >
           {children}
         </a>
       ),
@@ -40,177 +80,165 @@ mock.module('@tanstack/react-router', () =>
 const { LegislationActView, legislationActQueryOptions } =
   await import('./LegislationActView')
 
-const ACT_PAYLOAD = {
-  act: {
-    identity: 'ukpga/2010/15',
-    title: 'Equality Act 2010',
-    year: 2010,
-    number: 15,
-    chapter: '2010 c. 15',
-    extent: 'E+W+S',
-    officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
-    sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
-    canonicalUrl: '/ln/ukpga/2010/15',
-    totalCount: 6,
-    withheldCount: 2,
-    contents: [
-      {
-        label: 'Part 2',
-        labelPath: 'part/2',
-        href: '/ln/ukpga/2010/15/part/2',
-        extent: 'E+W+S',
-        withheld: false,
-        kind: 'part',
-        text: 'Equality: key concepts',
-        children: [
-          {
-            label: 's. 9',
-            labelPath: 'section/9',
-            href: '/ln/ukpga/2010/15/section/9',
-            extent: 'E+W+S',
-            withheld: false,
-            kind: 'P1',
-            children: [],
-          },
-          {
-            label: 's. 10',
-            labelPath: 'section/10',
-            href: '/ln/ukpga/2010/15/section/10',
-            extent: 'E+W+S',
-            withheld: false,
-            kind: 'P1',
-            children: [],
-          },
-          {
-            label: 's. 13',
-            labelPath: 'section/13',
-            href: '/ln/ukpga/2010/15/section/13',
-            extent: 'E+W+S',
-            withheld: false,
-            kind: 'P1',
-            children: [],
-          },
-          {
-            label: 's. 13A',
-            labelPath: 'section/13A',
-            href: '/ln/ukpga/2010/15/section/13A',
-            extent: 'E+W+S',
-            withheld: false,
-            kind: 'P1',
-            children: [],
-          },
-          {
-            label: 's. 14',
-            labelPath: 'section/14',
-            href: '/ln/ukpga/2010/15/section/14',
-            extent: 'E+W+S',
-            withheld: true,
-            kind: 'P1',
-            children: [],
-          },
-        ],
-      },
-      {
-        label: 'Schedule 2',
-        labelPath: 'schedule/2',
-        href: '/ln/ukpga/2010/15/schedule/2',
-        extent: 'E+W+S',
-        withheld: false,
-        kind: 'schedule',
-        text: 'Equality of terms',
-        children: [
-          {
-            label: 'Sch. 2 para. 4',
-            labelPath: 'schedule/2/paragraph/4',
-            href: '/ln/ukpga/2010/15/schedule/2/paragraph/4',
-            extent: 'E+W+S',
-            withheld: true,
-            kind: 'P1',
-            children: [],
-          },
-        ],
-      },
-    ],
-  },
-}
+const identity = 'ukpga/2025/1'
+const canonicalUrl = `/ln/${identity}`
+const officialUrl = `https://www.legislation.gov.uk/${identity}`
 
-const CLEAN_ACT_PAYLOAD = {
-  act: {
-    ...ACT_PAYLOAD.act,
-    identity: 'ukpga/2020/1',
-    title: 'European Union (Withdrawal Agreement) Act 2020',
-    chapter: '2020 c. 1',
-    totalCount: 1,
-    withheldCount: 0,
-    contents: [
-      {
-        label: 's. 1',
-        labelPath: 'section/1',
-        href: '/ln/ukpga/2020/1/section/1',
-        extent: 'E+W+S+N.I.',
-        withheld: false,
-        kind: 'P1',
-        children: [],
-      },
-    ],
-  },
-}
-
-const REPEALED_ACT_PAYLOAD = {
-  act: {
-    ...CLEAN_ACT_PAYLOAD.act,
-    identity: 'ukpga/1975/65',
-    title: 'Sex Discrimination Act 1975',
-    chapter: '1975 c. 65',
-    status: 'repealed' as const,
-    repealedFrom: '2010-10-01',
-    enactmentDate: '1975-11-12',
-    totalCount: 1,
-    repealedCount: 1,
-    contents: [
-      {
-        ...CLEAN_ACT_PAYLOAD.act.contents[0]!,
-        href: '/ln/ukpga/1975/65/section/1',
-        repealed: true,
-        repealedFrom: '2010-10-01',
-      },
-    ],
-  },
-}
-
-function jsonResponse(body: unknown, ok = true, status = 200): Response {
+function contentsNode(
+  labelPath: string,
+  label: string,
+  kind: 'part' | 'chapter' | 'crossheading' | 'schedule' | 'P1',
+  docOrder: number,
+) {
   return {
-    ok,
-    status,
-    json: async () => body,
-  } as Response
+    label,
+    docOrder,
+    labelPath,
+    href: `${canonicalUrl}/${labelPath}`,
+    extent: 'E+W',
+    withheld: false,
+    kind,
+    children: [],
+  }
 }
 
-function renderView(identity: string) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  })
+const sections = Array.from({ length: 30 }, (_, index) => ({
+  ...contentsNode(`section/${index + 1}`, `s. ${index + 1}`, 'P1', index + 3),
+  heading: `Section heading ${index + 1}`,
+}))
+const schedule = contentsNode(
+  'schedule/1/paragraph/1',
+  'Sch. 1 para. 1',
+  'P1',
+  34,
+)
+const part = {
+  ...contentsNode('part/1', 'Part 1', 'part', 0),
+  text: 'General provisions',
+}
+const chapter = contentsNode('part/1/chapter/1', 'Chapter 1', 'chapter', 1)
+const crossheading = contentsNode(
+  'crossheading/duties',
+  'Duties',
+  'crossheading',
+  2,
+)
+const scheduleHeading = contentsNode('schedule/1', 'Schedule 1', 'schedule', 33)
+const act = {
+  identity,
+  title: 'Example Act 2025',
+  year: 2025,
+  number: 1,
+  chapter: '2025 c. 1',
+  extent: 'E+W',
+  canonicalUrl,
+  officialUrl,
+  sourceUrl: officialUrl,
+  totalCount: 31,
+  withheldCount: 1,
+  repealedCount: 1,
+  contents: [
+    {
+      ...part,
+      children: [
+        { ...chapter, children: [{ ...crossheading, children: sections }] },
+      ],
+    },
+    { ...scheduleHeading, children: [schedule] },
+  ],
+}
+
+const entries = [
+  part,
+  chapter,
+  crossheading,
+  ...sections,
+  scheduleHeading,
+  schedule,
+].map((node) => {
+  const labelPath = node.labelPath
+  if (node.kind !== 'P1') return { labelPath }
+  const links = {
+    officialUrl: `${officialUrl}/${labelPath}`,
+    canonicalUrl: node.href,
+  }
+  if (labelPath === 'section/2') {
+    return {
+      labelPath,
+      provision: {
+        ...links,
+        legislationStatus: 'amended_not_held',
+        notice: 'Recorded amendments have yet to be applied.',
+      },
+    }
+  }
+  if (labelPath === 'section/3') {
+    return {
+      labelPath,
+      provision: {
+        ...links,
+        legislationStatus: 'repealed',
+        repealedFrom: '2025-04-01',
+        notice: 'The provision has been repealed.',
+      },
+    }
+  }
+  return {
+    labelPath,
+    provision: {
+      ...links,
+      legislationStatus: 'current',
+      text: `Wording of ${node.label}`,
+      subsections:
+        labelPath === 'section/1'
+          ? [
+              {
+                label: 's. 1(1)',
+                labelPath: 'section/1/1',
+                href: `${canonicalUrl}/section/1/1`,
+                legislationStatus: 'current',
+                text: 'Wording of the first subsection.',
+                children: [],
+              },
+            ]
+          : undefined,
+    },
+  }
+})
+
+function renderView(hash = '') {
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })
   return render(
     <ToastProvider>
-      <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={client}>
         <Suspense fallback={<div>Loading</div>}>
-          <LegislationActView identity={identity} />
+          <LegislationActView identity={identity} hash={hash} />
         </Suspense>
       </QueryClientProvider>
     </ToastProvider>,
   )
 }
 
+const scrollIntoView = mock(() => {})
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  configurable: true,
+  value: scrollIntoView,
+})
+
 describe('LegislationActView', () => {
   beforeEach(() => {
+    scrollIntoView.mockClear()
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) => {
-        if (url.includes('ukpga/2020/1')) return jsonResponse(CLEAN_ACT_PAYLOAD)
-        if (url.includes('ukpga/1975/65'))
-          return jsonResponse(REPEALED_ACT_PAYLOAD)
-        if (url.includes('ukpga/2010/15')) return jsonResponse(ACT_PAYLOAD)
-        return jsonResponse({}, false, 404)
+      vi.fn(async (input: string) => {
+        const url = new URL(input, 'http://localhost')
+        if (!url.pathname.endsWith('/text')) return Response.json({ act })
+        const offset = Number(url.searchParams.get('offset'))
+        const limit = Number(url.searchParams.get('limit'))
+        return Response.json({
+          entries: entries.slice(offset, offset + limit),
+          nextOffset: offset + limit < entries.length ? offset + limit : null,
+        })
       }),
     )
   })
@@ -220,107 +248,112 @@ describe('LegislationActView', () => {
     vi.unstubAllGlobals()
   })
 
-  it('shows the header, accurate withheld summary, and hierarchy', async () => {
-    renderView('ukpga/2010/15')
-    await waitFor(() => {
-      expect(screen.getByText('Equality Act 2010')).toBeTruthy()
-    })
-    expect(screen.getAllByText('2010 c. 15')).toHaveLength(2)
-    expect(screen.getByText('2 of 6 provisions are not shown')).toBeTruthy()
-    expect(screen.getByText('Part 2')).toBeTruthy()
-    expect(screen.getByText('Equality: key concepts')).toBeTruthy()
-    expect(screen.getByText('Schedule 2')).toBeTruthy()
-    expect(screen.getByText('Equality of terms')).toBeTruthy()
-    const labels = screen
-      .getAllByRole('link')
-      .filter((link) => link.getAttribute('data-legislation-status'))
-      .map((link) => link.querySelector('span')?.textContent)
-    expect(labels).toEqual([
-      's. 9',
-      's. 10',
-      's. 13',
-      's. 13A',
-      's. 14',
-      'Sch. 2 para. 4',
-    ])
+  it('reads the hierarchy and wording in order, including withholding and repeal', async () => {
+    renderView()
+    const text = within(await screen.findByRole('region', { name: 'Act text' }))
+    await text.findByText('Wording of s. 1')
     expect(
-      screen.getByText('Sch. 2 para. 4').closest('a')?.getAttribute('href'),
-    ).toBe('/ln/ukpga/2010/15/schedule/2/paragraph/4')
-    const withheldLink = screen.getByText('s. 14').closest('a')
-    expect(withheldLink?.getAttribute('href')).toBe(
-      '/ln/ukpga/2010/15/section/14',
-    )
-    expect(withheldLink?.getAttribute('data-legislation-status')).toBe(
-      'amended_not_held',
-    )
+      text
+        .getAllByRole('heading')
+        .slice(0, 4)
+        .map((heading) => heading.tagName),
+    ).toEqual(['H2', 'H3', 'H4', 'H5'])
+    expect(text.getByText('Wording of the first subsection.')).toBeTruthy()
     expect(
-      screen
-        .getAllByRole('link', { name: 'Open original' })[0]
-        ?.getAttribute('href'),
-    ).toBe('https://www.legislation.gov.uk/ukpga/2010/15')
+      text
+        .getByRole('link', { name: 'Open provision s. 1' })
+        .getAttribute('href'),
+    ).toBe(`${canonicalUrl}/section/1`)
+    expect(text.queryByText('Wording of s. 2')).toBeNull()
     expect(
-      screen.getAllByText('Point-in-time date not recorded').length,
-    ).toBeGreaterThan(0)
-  })
-
-  it('omits the withheld summary when nothing is withheld', async () => {
-    renderView('ukpga/2020/1')
-    await waitFor(() => {
-      expect(
-        screen.getByText('European Union (Withdrawal Agreement) Act 2020'),
-      ).toBeTruthy()
-    })
-    expect(screen.queryByText(/are not shown/)).toBeNull()
-    expect(screen.getByText('s. 1').closest('a')?.getAttribute('href')).toBe(
-      '/ln/ukpga/2020/1/section/1',
-    )
-    expect(screen.getByText('1 provision in document order')).toBeTruthy()
-  })
-
-  it('marks a repealed Act and its repealed sections', async () => {
-    renderView('ukpga/1975/65')
-    await waitFor(() => {
-      expect(screen.getByText('Sex Discrimination Act 1975')).toBeTruthy()
-    })
-    expect(
-      screen.getAllByText('Repealed from 1 Oct 2010').length,
-    ).toBeGreaterThanOrEqual(3)
-    expect(screen.getByText('12 Nov 1975')).toBeTruthy()
-    expect(screen.getByText(/1 of 1 provision has been repealed/)).toBeTruthy()
-    expect(
-      screen
-        .getByText('s. 1')
-        .closest('a')
-        ?.getAttribute('data-legislation-status'),
-    ).toBe('repealed')
-    expect(screen.queryByText('No unapplied amendments')).toBeNull()
-  })
-
-  it('shows a source failure with a retry instead of an empty Act', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockRejectedValue(new Error('network down'))
-    renderView('ukpga/2010/15')
-    expect(
-      await screen.findByText('Act could not be loaded', undefined, {
-        timeout: 3000,
-      }),
+      text.getByText('Recorded amendments have yet to be applied.'),
     ).toBeTruthy()
-    fetchMock.mockResolvedValueOnce(jsonResponse(ACT_PAYLOAD))
-    screen.getByRole('button', { name: 'Retry' }).click()
-    await waitFor(() => {
-      expect(screen.getByText('Equality Act 2010')).toBeTruthy()
+    expect(
+      text
+        .getByRole('link', { name: 'Read the official revised provision' })
+        .getAttribute('href'),
+    ).toBe(`${officialUrl}/section/2`)
+    expect(text.queryByText('Wording of s. 3')).toBeNull()
+    expect(text.getByText('Repealed from 1 Apr 2025')).toBeTruthy()
+    expect(
+      text
+        .getByRole('link', { name: 'Read the official record' })
+        .getAttribute('href'),
+    ).toBe(`${officialUrl}/section/3`)
+    expect(screen.getByText('Point-in-time date not recorded')).toBeTruthy()
+    expect(
+      screen.getByText(/1 of 31 provisions have wording withheld/),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Contents' }))
+    expect(
+      within(screen.getByRole('navigation', { name: 'Act contents' }))
+        .getByRole('link', { name: /s\. 29/ })
+        .getAttribute('href'),
+    ).toBe(`${canonicalUrl}#section-29`)
+  })
+
+  it('loads text incrementally and keeps schedules after the body', async () => {
+    renderView()
+    await screen.findByText('Wording of s. 1')
+    expect(screen.queryByText('Wording of s. 30')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Load more Act text' }))
+    await screen.findByText('Wording of Sch. 1 para. 1')
+    const text = within(screen.getByRole('region', { name: 'Act text' }))
+    expect(
+      text
+        .getAllByRole('heading')
+        .slice(-3)
+        .map((heading) => heading.id),
+    ).toEqual(['section-30', 'schedule-1', 'schedule-1-paragraph-1'])
+  })
+
+  it('loads and focuses a deep-linked heading without reading preceding pages', async () => {
+    renderView('section-29')
+    const heading = await screen.findByRole('heading', {
+      name: 's. 29 · Section heading 29',
     })
+    expect(document.activeElement).toBe(heading)
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Wording of s. 1')).toBeNull()
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.map(([url]) => url)
+        .filter((url) => String(url).includes('/text?')),
+    ).toEqual([`/api/search/legislation/${identity}/text?offset=24&limit=24`])
+    fireEvent.click(screen.getByRole('button', { name: 'Contents' }))
+    const active = within(
+      screen.getByRole('navigation', { name: 'Act contents' }),
+    ).getByRole('link', { name: /s\. 29/ })
+    expect(active.getAttribute('aria-current')).toBe('location')
+  })
+
+  it('reports a failed text request while keeping Act provenance and contents', async () => {
+    vi.stubGlobal('fetch', async (url: string) =>
+      url.includes('/text?')
+        ? Response.json({}, { status: 503 })
+        : Response.json({ act }),
+    )
+    renderView()
+    expect(
+      await screen.findByText(
+        'This part of the Act could not be loaded.',
+        undefined,
+        { timeout: 3000 },
+      ),
+    ).toBeTruthy()
+    expect(screen.getByRole('heading', { name: act.title })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
   })
 
   it('encodes each identity segment in the request URL', async () => {
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValueOnce(jsonResponse(ACT_PAYLOAD))
-    const identity = 'ukpga/2010/15 A'
-    const options = legislationActQueryOptions(identity)
-    if (!options.queryFn) throw new Error('expected queryFn to be defined')
-    await options.queryFn({} as never)
-    const requestedUrl = fetchMock.mock.calls.at(-1)?.[0] as string
-    expect(requestedUrl).toContain('/api/search/legislation/ukpga/2010/15%20A')
-    expect(options.queryKey).toEqual(['legislation-act', identity])
+    const options = legislationActQueryOptions('ukpga/2025/1 A')
+    if (typeof options.queryFn !== 'function')
+      throw new Error('Expected a query function')
+    const client = new QueryClient()
+    await client.fetchQuery(options)
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toContain(
+      '/api/search/legislation/ukpga/2025/1%20A',
+    )
   })
 })

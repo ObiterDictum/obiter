@@ -10,7 +10,7 @@ import {
   ShellError,
   ShellNotFound,
   caseLawDocumentQueryOptions,
-  legislationProvisionQueryOptions,
+  prefetchLegislationPage,
   createCanonicalCasePath,
   guardAuth,
   matterDocumentsQueryOptions,
@@ -61,7 +61,7 @@ function warmRouteChunks() {
     () => import('../../pages/search'),
     () => import('../../pages/verify'),
     () => import('@obiter/app-shell/views/case-law-document'),
-    () => import('@obiter/app-shell/views/legislation-provision'),
+    () => import('@obiter/app-shell/views/legislation-route'),
     () => import('@obiter/redact-ui/runs'),
     () => import('@obiter/redact-ui/review'),
     () => import('@obiter/app-shell/views/settings'),
@@ -86,9 +86,9 @@ const CaseLawDocumentView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/case-law-document'))
     .CaseLawDocumentView,
 }))
-const LegislationProvisionView = lazy(async () => ({
-  default: (await import('@obiter/app-shell/views/legislation-provision'))
-    .LegislationProvisionView,
+const LegislationRouteView = lazy(async () => ({
+  default: (await import('@obiter/app-shell/views/legislation-route'))
+    .LegislationRouteView,
 }))
 const MatterRouteView = lazy(async () => ({
   default: (await import('@obiter/app-shell/views/matter-detail'))
@@ -528,9 +528,7 @@ const legislationRoute = createRoute({
     if (!provisionPath) {
       throw new Error('Legislation provision path is missing.')
     }
-    return context.queryClient.prefetchQuery(
-      legislationProvisionQueryOptions(provisionPath),
-    )
+    return prefetchLegislationPage(context.queryClient, provisionPath)
   },
   component: DesktopLegislationRoute,
 })
@@ -542,7 +540,7 @@ function DesktopLegislationRoute() {
   }
   return (
     <Suspense fallback={<RouteLoading />}>
-      <LegislationProvisionView provisionPath={provisionPath} />
+      <LegislationRouteView path={provisionPath} />
     </Suspense>
   )
 }

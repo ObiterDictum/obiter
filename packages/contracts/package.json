@@ -11,6 +11,7 @@
     "./case-paths": "./src/case-paths.ts",
     "./document-name-rules": "./src/document-name-rules.ts",
     "./legislation-paths": "./src/legislation-paths.ts",
+    "./legislation-reader": "./src/legislation-reader.ts",
     "./limits": "./src/limits.ts",
     "./two-factor": "./src/two-factor.ts"
   },

@@ -1,10 +1,10 @@
-import type { LegislationStatus } from '../../legislation-status'
 import type {
   JudgmentParagraph,
   LegalSearchCitation,
   LegalSearchCitationMatch,
   LegalSearchCitationStatus,
   LegislationScheduleGuidance,
+  LegislationSearchHit,
 } from '@obiter/contracts'
 
 export type { LegislationScheduleGuidance }
@@ -58,27 +58,7 @@ export interface LegalSearchResult {
   paragraphs?: CaseLawParagraph[]
 }
 
-export interface LegislationSearchResultHit {
-  id: string
-  resultGroup: 'legislation'
-  legislationStatus: LegislationStatus
-  repealedFrom?: string
-  title: string
-  year?: number
-  provisionLabel: string
-  labelPath: string
-  documentIdentity: string
-  extent: string
-  canonicalUrl?: string
-  text?: string
-  snippets?: Array<{ text: string }>
-  officialUrl: string
-  sourceUrl: string
-  notice?: string
-  citationMatch?: LegalSearchCitationMatch
-  retrievalPath?: LegalSearchRetrievalPath
-  retrievalRank?: number
-}
+export type LegislationSearchResultHit = LegislationSearchHit
 
 interface LegalSearchFetchGroup {
   key: 'judgments' | 'legislation'

@@ -1,3 +1,4 @@
+import { LegislationProvisionBody } from './LegislationProvisionBody'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -5,7 +6,6 @@ import {
   Card,
   CardBody,
   CardHead,
-  EmptyState,
   Skeleton,
   StatusDot,
   buttonClassName,
@@ -22,7 +22,6 @@ import {
   legislationProvisionQueryOptions,
   type LegislationAmendment,
   type LegislationAmendmentHistory,
-  type LegislationProvisionSubsection,
 } from './legislation-document-query'
 
 export { legislationProvisionQueryOptions }
@@ -64,8 +63,6 @@ export function LegislationProvisionView({
   }
 
   const provision = query.data.provision
-  const withheld = provision.legislationStatus === 'amended_not_held'
-  const repealed = provision.legislationStatus === 'repealed'
   const status = legislationStatusDisplay(
     provision.legislationStatus,
     provision.repealedFrom,
@@ -118,83 +115,14 @@ export function LegislationProvisionView({
     >
       <div className="grid items-start gap-6 @pane-wide:grid-cols-[minmax(0,1fr)_320px]">
         <section className="flex min-w-0 flex-col gap-4">
-          {repealed ? (
-            <div
-              className="rounded-lg bg-fill px-6 py-4"
-              role="status"
-              data-legislation-status="repealed"
-            >
-              <p className="text-item text-ink">{status.label}</p>
-              <p className="mt-1 text-meta text-muted">{provision.notice}</p>
-              <a
-                className="mt-2 inline-block text-meta text-ink underline"
-                href={provision.officialUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                Read the official record
-              </a>
-            </div>
-          ) : withheld ? (
-            <div
-              className="rounded-lg bg-warning-soft px-6 py-4"
-              role="alert"
-              data-legislation-status="amended_not_held"
-            >
-              <p className="text-item text-warning">Amended wording withheld</p>
-              <p className="mt-1 text-meta text-muted">{provision.notice}</p>
-              <a
-                className="mt-2 inline-block text-meta text-ink underline"
-                href={provision.officialUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                Read the official revised provision
-              </a>
-            </div>
-          ) : provision.text || provision.subsections ? (
-            <article
-              role="document"
-              aria-label={[
-                provision.provisionLabel,
-                provision.heading,
-                provision.title,
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              data-legislation-status="current"
-              className="rounded-lg bg-paper px-8 py-10 font-serif text-paper-ink shadow-md md:px-12"
-            >
-              {provision.heading ? (
-                <h2 className="mb-4 font-serif text-section text-paper-ink">
-                  {provision.heading}
-                </h2>
-              ) : null}
-              {provision.text ? (
-                <p className="whitespace-pre-wrap text-[16px] leading-[1.85]">
-                  {provision.text}
-                </p>
-              ) : null}
-              {provision.subsections ? (
-                <div className="mt-2 flex flex-col">
-                  {provision.subsections.map((subsection) => (
-                    <SubsectionNode
-                      key={subsection.labelPath}
-                      node={subsection}
-                      documentIdentity={provision.documentIdentity}
-                      parentLabel={provision.provisionLabel}
-                      depth={0}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </article>
-          ) : (
-            <EmptyState
-              title="No provision text"
-              body="This Act match has no provision text. Add a section number to open a provision."
-            />
-          )}
+          <LegislationProvisionBody
+            provision={provision}
+            documentIdentity={provision.documentIdentity}
+            provisionLabel={provision.provisionLabel}
+            title={provision.title}
+            heading={provision.heading}
+            standalone
+          />
           <p className="text-caption text-subtle">
             {provision.title}, {provision.provisionLabel} · source: {sourceName}{' '}
             · point-in-time date not recorded.
@@ -267,72 +195,6 @@ export function LegislationProvisionView({
         </aside>
       </div>
     </PageScaffold>
-  )
-}
-
-function SubsectionNode({
-  node,
-  documentIdentity,
-  parentLabel,
-  depth,
-}: {
-  node: LegislationProvisionSubsection
-  documentIdentity: string
-  parentLabel: string
-  depth: number
-}) {
-  const label = node.label.startsWith(parentLabel)
-    ? node.label.slice(parentLabel.length).trim()
-    : node.label
-  const withheld = node.legislationStatus === 'amended_not_held'
-  const repealed = node.legislationStatus === 'repealed'
-  return (
-    <div className={depth > 0 ? 'ml-6 border-l border-line pl-4' : undefined}>
-      <p className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 py-1 text-[16px] leading-[1.85]">
-        <Link
-          {...provisionResultLocation({
-            documentIdentity,
-            labelPath: node.labelPath,
-            canonicalUrl: node.href,
-          })}
-          aria-label={`${node.label} of this provision`}
-          title={node.label}
-          className="pt-0.5 text-right font-sans text-meta text-paper-muted tabular-nums underline-offset-2 hover:underline"
-        >
-          {label}
-        </Link>
-        {repealed ? (
-          <span className="text-meta text-paper-muted">
-            {legislationStatusDisplay('repealed', node.repealedFrom).label}.
-          </span>
-        ) : withheld ? (
-          <span className="text-meta text-paper-muted">
-            Wording withheld: amendments are recorded but not applied.{' '}
-            <a
-              className="text-paper-ink underline"
-              href={node.href}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              Read the official revised provision
-            </a>
-          </span>
-        ) : (
-          <span className="whitespace-pre-wrap">
-            {node.text ?? 'No stored wording for this level.'}
-          </span>
-        )}
-      </p>
-      {node.children.map((child) => (
-        <SubsectionNode
-          key={child.labelPath}
-          node={child}
-          documentIdentity={documentIdentity}
-          parentLabel={node.label}
-          depth={depth + 1}
-        />
-      ))}
-    </div>
   )
 }
 

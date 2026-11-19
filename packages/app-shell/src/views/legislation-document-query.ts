@@ -1,16 +1,11 @@
-import { queryOptions } from '@tanstack/react-query'
+import { parseLegislationActPath } from '@obiter/contracts/legislation-paths'
+import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { apiUrl } from '../lib/api-url'
 import type { LegislationStatus } from '../legislation-status'
 
-export interface LegislationProvisionSubsection {
-  label: string
-  labelPath: string
-  href: string
-  legislationStatus: LegislationStatus
-  repealedFrom?: string
-  text?: string
-  children: LegislationProvisionSubsection[]
-}
+import type { LegislationProvisionSubsection } from '@obiter/contracts/legislation-reader'
+
+export type { LegislationProvisionSubsection }
 
 export interface LegislationAmendment {
   id: string
@@ -94,6 +89,7 @@ export type LegislationActContentsKind =
 
 export interface LegislationActContentsNode {
   label: string
+  docOrder?: number
   labelPath: string
   href: string
   extent: string
@@ -106,7 +102,7 @@ export interface LegislationActContentsNode {
   children: LegislationActContentsNode[]
 }
 
-interface LegislationActDocument {
+export interface LegislationActDocument {
   identity: string
   title: string
   year: number
@@ -154,4 +150,10 @@ export function legislationActQueryOptions(identity: string) {
       return (await response.json()) as LegislationActResponse
     },
   })
+}
+export function prefetchLegislationPage(client: QueryClient, path: string) {
+  const act = parseLegislationActPath(path)
+  return act
+    ? client.prefetchQuery(legislationActQueryOptions(act.documentIdentity))
+    : client.prefetchQuery(legislationProvisionQueryOptions(path))
 }
