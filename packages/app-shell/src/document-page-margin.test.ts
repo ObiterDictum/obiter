@@ -287,7 +287,7 @@ describe('footerLetterhead', () => {
       fields: [],
       unanchoredFieldParagraphIds: [],
     }
-    expect(footerLetterhead(story)?.rows).toEqual([
+    expect(footerLetterhead(story)?.rows).toMatchObject([
       { left: '+44111', right: 'www.example.com' },
       { left: '1 Street', right: 'Company Registration Number: 1' },
     ])

@@ -9,6 +9,8 @@ import { buildIdentity } from './build-provenance.mjs'
 import { applyDevServerApiOrigin } from './dev-api-origin.mjs'
 import { readPort, SHARED_WEB_PORT } from './lane-target.mjs'
 
+const iconModule = /[/\\]packages[/\\]ui[/\\]src[/\\]icons[/\\]/u
+
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 
 function devApiOriginPlugin({
@@ -54,6 +56,23 @@ export default defineConfig(({ command, mode }) => {
   if (isBuild) {
     return {
       envDir: false,
+      build: {
+        rolldownOptions: {
+          output: {
+            codeSplitting: {
+              groups: [
+                {
+                  name: 'shell-icons',
+                  test: iconModule,
+                  tags: ['$initial'],
+                  priority: 1,
+                },
+                { name: 'feature-icons', test: iconModule },
+              ],
+            },
+          },
+        },
+      },
       define: {
         __OBITER_BUILD_COMMIT__: JSON.stringify(buildIdentity(repoRoot).commit),
       },

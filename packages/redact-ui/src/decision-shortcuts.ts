@@ -7,6 +7,7 @@ export function useDecisionShortcuts(
   decide: (decision: SpanDecision) => void,
 ) {
   const onKey = useEffectEvent((event: KeyboardEvent) => {
+    const target = event.target instanceof Element ? event.target : null
     if (
       event.defaultPrevented ||
       event.isComposing ||
@@ -14,7 +15,7 @@ export function useDecisionShortcuts(
       event.ctrlKey ||
       event.metaKey ||
       event.altKey ||
-      isTypingTarget(event.target) ||
+      (isTypingTarget(target) && !target?.closest('[data-word-ranges]')) ||
       document.querySelector(
         'dialog[open], [role="dialog"]:not([data-closed]), [role="alertdialog"]:not([data-closed]), [role="menu"]:not([data-closed])',
       )
@@ -22,14 +23,10 @@ export function useDecisionShortcuts(
       return
 
     const key = event.key.toLowerCase()
-    if (event.target instanceof Element) {
-      if (
-        event.target.closest(
-          '[contenteditable]:not([contenteditable="false" i])',
-        )
-      )
+    if (target) {
+      if (target.closest('[contenteditable]:not([contenteditable="false" i])'))
         return
-      const span = event.target.closest('[data-span-id], [role="option"]')
+      const span = target.closest('[data-span-id], [role="option"]')
       if (
         span &&
         !span.matches('[aria-selected="true"], [aria-pressed="true"]')
@@ -38,7 +35,7 @@ export function useDecisionShortcuts(
       if (
         !span &&
         key === 'enter' &&
-        event.target.closest(
+        target.closest(
           'button, a[href], [role="button"], [role="tab"], [role="combobox"]',
         )
       )

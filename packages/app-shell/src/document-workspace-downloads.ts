@@ -1,56 +1,74 @@
-import { useEffect, useRef } from 'react'
-import { useQueries } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef } from 'react'
+import { useQueries, type UseQueryResult } from '@tanstack/react-query'
 import { apiFetchBlob, apiFetchBlobResult } from './api'
-import { versionQuery, workspaceKeys } from './document-workspace-queries'
+import { versionQuery } from './document-workspace-queries'
 
 export function useDocumentImageUrls(
   documentId: string,
   partNames: string[],
   versionId?: string,
 ) {
-  const queries = useQueries({
+  return useSourceImageUrls(
+    `/api/documents/${documentId}/media`,
+    partNames,
+    versionId,
+  ).urls
+}
+
+export function useSourceImageUrls(
+  path: string,
+  partNames: string[],
+  versionId?: string,
+) {
+  const images = useQueries({
     queries: partNames.map((partName) => ({
-      queryKey: [...workspaceKeys.media(documentId, versionId), partName],
-      queryFn: () => loadDocumentImage(documentId, partName, versionId),
+      queryKey: ['document-image', path, versionId, partName],
+      queryFn: () => loadDocumentImage(path, partName, versionId),
       gcTime: 0,
     })),
-  })
-  const urls: Record<string, string> = {}
-  partNames.forEach((partName, index) => {
-    const url = queries[index]?.data
-    if (url) urls[partName] = url
+    combine: useCallback(
+      (results: UseQueryResult<string | null>[]) => {
+        const urls: Record<string, string> = {}
+        partNames.forEach((partName, index) => {
+          const url = results[index]?.data
+          if (url) urls[partName] = url
+        })
+        return {
+          urls,
+          pending: results.some((result) => result.isPending),
+          failed: results.some((result) => result.isError),
+        }
+      },
+      [partNames],
+    ),
   })
   const held = useRef<Record<string, string>>({})
-  const signature = partNames
-    .map((partName) => `${partName}=${urls[partName] ?? ''}`)
-    .join('|')
   useEffect(() => {
-    const next = { ...urls }
     for (const [partName, url] of Object.entries(held.current)) {
-      if (next[partName] !== url) URL.revokeObjectURL(url)
+      if (images.urls[partName] !== url) URL.revokeObjectURL(url)
     }
-    held.current = next
-  }, [signature])
+    held.current = images.urls
+  }, [images.urls])
   useEffect(() => {
     return () => {
       for (const url of Object.values(held.current)) URL.revokeObjectURL(url)
       held.current = {}
     }
-  }, [documentId])
-  return urls
+  }, [path])
+  return images
 }
 
 const BROWSER_IMAGE = /^image\/(png|jpeg|gif|bmp|webp|svg\+xml)$/
 
 async function loadDocumentImage(
-  documentId: string,
+  path: string,
   partName: string,
   versionId?: string,
 ) {
   const search = `?part=${encodeURIComponent(partName)}${
     versionId === undefined ? '' : `&versionId=${encodeURIComponent(versionId)}`
   }`
-  const blob = await apiFetchBlob(`/api/documents/${documentId}/media${search}`)
+  const blob = await apiFetchBlob(`${path}${search}`)
   if (!BROWSER_IMAGE.test(blob.type)) return null
   return URL.createObjectURL(blob)
 }

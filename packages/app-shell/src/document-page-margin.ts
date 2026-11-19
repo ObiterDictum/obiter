@@ -42,11 +42,17 @@ export type TabStop = {
 
 const LETTERHEAD_GREY = '#A6A6A6'
 
+type FooterRow = {
+  left: string
+  right: string
+  paragraph?: DocumentParagraphWire
+}
+
 export type FooterLetterhead = {
   fill: string
   heightPx: number
   page: string
-  rows: Array<{ left: string; right: string }>
+  rows: FooterRow[]
 }
 
 export function headerLetterhead(
@@ -95,12 +101,25 @@ export function footerLetterhead(
   const rect = xmls
     .flatMap((xml) => drawingScene(xml).parts)
     .find((part) => part.kind === 'rect' && part.fill)
-  const fromBox = xmls.flatMap(textboxColumns)
-  const fromParas = story.paragraphs
-    .map((paragraph) =>
-      paddedColumns(paragraphPlainText(paragraph), Boolean(rect)),
-    )
-    .filter((row): row is { left: string; right: string } => Boolean(row))
+  const paragraphBySourceId = new Map<
+    string,
+    DocumentParagraphWire | undefined
+  >()
+  for (const paragraph of story.paragraphs) {
+    const id = paragraph.sourceParaId
+    if (id)
+      paragraphBySourceId.set(
+        id,
+        paragraphBySourceId.has(id) ? undefined : paragraph,
+      )
+  }
+  const fromBox = xmls.flatMap((xml) =>
+    textboxColumns(xml, paragraphBySourceId),
+  )
+  const fromParas = story.paragraphs.flatMap((paragraph) => {
+    const row = paddedColumns(paragraphPlainText(paragraph), Boolean(rect))
+    return row ? [{ ...row, paragraph }] : []
+  })
   const rows = uniqueFooterRows(fromBox.length > 0 ? fromBox : fromParas)
   if (!rect && rows.length === 0) return undefined
   return {
@@ -230,30 +249,39 @@ function storyBandHeight(
   )
 }
 
-function textboxColumns(xml: string): Array<{ left: string; right: string }> {
+function textboxColumns(
+  xml: string,
+  paragraphs: Map<string, DocumentParagraphWire | undefined>,
+): FooterRow[] {
   const choiceOnly = xml.replace(/<mc:Fallback\b[\s\S]*?<\/mc:Fallback>/gi, '')
-  return [...choiceOnly.matchAll(/<w:txbxContent\b[\s\S]*?<\/w:txbxContent>/gi)]
-    .flatMap((block) =>
-      [...block[0].matchAll(/<w:p\b[\s\S]*?<\/w:p>/gi)].map((match) =>
-        paddedColumns(
-          [...match[0].matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/gi)]
-            .map((item) => xmlDecode(item[1] ?? ''))
-            .join(''),
-          false,
-        ),
-      ),
-    )
-    .filter((row): row is { left: string; right: string } => Boolean(row))
+  return [
+    ...choiceOnly.matchAll(/<w:txbxContent\b[\s\S]*?<\/w:txbxContent>/gi),
+  ].flatMap((block) =>
+    [...block[0].matchAll(/<w:p\b([^>]*)>[\s\S]*?<\/w:p>/gi)].flatMap(
+      (match) => {
+        const text = [...match[0].matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/gi)]
+          .map((item) => xmlDecode(item[1] ?? ''))
+          .join('')
+        const row = paddedColumns(text, false)
+        if (!row) return []
+        const sourceId = /\bw14:paraId="([^"]+)"/u.exec(match[1] ?? '')?.[1]
+        const paragraph = sourceId ? paragraphs.get(sourceId) : undefined
+        return [
+          paragraph && paragraphPlainText(paragraph) === text
+            ? { ...row, paragraph }
+            : row,
+        ]
+      },
+    ),
+  )
 }
 
-function uniqueFooterRows(
-  rows: Array<{ left: string; right: string }>,
-): Array<{ left: string; right: string }> {
+function uniqueFooterRows(rows: FooterRow[]): FooterRow[] {
   const compact = rows.filter((row) => row.left.length + row.right.length < 200)
   const source = compact.length > 0 ? compact : rows
   const seenLeft = new Set<string>()
   const seenRight = new Set<string>()
-  const unique: Array<{ left: string; right: string }> = []
+  const unique: FooterRow[] = []
   for (const row of source) {
     const left = row.left.toLowerCase()
     const right = row.right.toLowerCase()

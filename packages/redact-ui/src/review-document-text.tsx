@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@obiter/ui'
 import {
+  categoryClasses,
   categoryLabel,
   confidenceLabel,
   decisionMarkClass,
@@ -9,25 +10,6 @@ import {
   spanDecisionState,
 } from './span-copy'
 import type { RedactionRun } from './types'
-
-export const categoryClasses = {
-  person_name: 'bg-span-person-name text-span-person-name-fg',
-  email: 'bg-span-email text-span-email-fg',
-  phone: 'bg-span-phone text-span-phone-fg',
-  address: 'bg-span-address text-span-address-fg',
-  date: 'bg-span-date text-span-date-fg',
-  government_id: 'bg-span-government-id text-span-government-id-fg',
-  account_number: 'bg-span-account-number text-span-account-number-fg',
-  passport: 'bg-span-passport text-span-passport-fg',
-  drivers_license: 'bg-span-drivers-license text-span-drivers-license-fg',
-  url: 'bg-span-url text-span-url-fg',
-  ip_address: 'bg-span-ip-address text-span-ip-address-fg',
-  national_insurance:
-    'bg-span-national-insurance text-span-national-insurance-fg',
-  case_reference: 'bg-span-case-reference text-span-case-reference-fg',
-  organisation_name: 'bg-span-organisation-name text-span-organisation-name-fg',
-  secret: 'bg-span-secret text-span-secret-fg',
-} satisfies Record<RedactionSpan['category'], string>
 
 const sourceClasses = {
   rampart_model: 'border-solid',

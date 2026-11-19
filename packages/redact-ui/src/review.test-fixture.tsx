@@ -57,7 +57,7 @@ const sourcePreviewHooks = vi.hoisted(() => ({
   })),
 }))
 
-const appShell = { currentUserId: 'usr_me' }
+const appShell = { currentUserId: 'usr_me', apiFetch: vi.fn() }
 
 const hooksKeys = Object.fromEntries(
   Object.keys(await import('./hooks')).map((key) => [key, undefined]),
@@ -75,6 +75,7 @@ mock.module('./source-preview-hooks', () =>
 const { isTypingTarget } = await import('@obiter/app-shell')
 mock.module('@obiter/app-shell', () => ({
   isTypingTarget,
+  apiFetch: appShell.apiFetch,
   useCurrentUser: () => ({ data: { user: { id: appShell.currentUserId } } }),
   PageScaffold: ({
     title,
@@ -199,6 +200,7 @@ function renderRun(overrides: Partial<RedactionRun> = {}) {
 beforeEach(() => {
   onOpenRun.mockReset()
   appShell.currentUserId = 'usr_me'
+  appShell.apiFetch.mockReset()
   hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
   hooks.useFinalizeRun.mockReturnValue({ mutate: vi.fn(), isPending: false })
   hooks.useRedetectRun.mockReturnValue({
