@@ -354,7 +354,7 @@ function ActTextEntry({
         id={entry.anchor}
         ref={headingRef}
         tabIndex={-1}
-        className={`scroll-mt-6 font-serif ${provision ? 'text-item' : 'text-section'}`}
+        className={`scroll-mt-5 font-serif ${provision ? 'text-item' : 'text-section'}`}
       >
         {entryLabel(entry)}
       </Heading>

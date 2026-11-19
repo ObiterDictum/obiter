@@ -3864,11 +3864,11 @@
                   </td>
                   <td class="id">legal-search/legislation-page-routes.ts</td>
                   <td>
-                    Public, bounded Act text pages in stored document order. The
-                    contents response gives headings and provision paths so the
-                    reader can calculate the page for a deep link. The text
-                    route uses the provision reader's withholding and repeal
-                    rules. It reads Postgres only.
+                    Public Act text pages in stored document order. The reader
+                    requests 24 entries per page and uses the contents metadata
+                    to start on the page containing a deep-linked heading. The
+                    text route reads Postgres and excludes wording under the
+                    provision reader's withholding and repeal rules.
                   </td>
                 </tr>
                 <tr>
