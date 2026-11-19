@@ -22,25 +22,17 @@ import {
   useSpanDecision,
 } from './hooks'
 import { useRedactionSource } from './source-preview-hooks'
-import { PdfReviewDocument } from './pdf-review-document'
+import { ReviewSourceDocument } from './review-source-document'
+import type { WordCoverage } from './word-review-marks'
 import { DetectionRetryWarning } from './detection-retry-warning'
 import { DetectionFailure, zeroSpanBody } from './detection-failure'
 import { FinalizeDialog } from './finalize-dialog'
 import { FinalizedOutput } from './finalized-output'
 import { DecisionBar } from './decision-bar'
-import {
-  CategoryLegend,
-  HighlightedText,
-  Paper,
-  categoryClasses,
-} from './review-document-text'
+import { CategoryLegend } from './review-document-text'
 import { ReviewPanel, type SpanFilter } from './review-panel'
 import { decisionCounts, spanDecisionState } from './span-copy'
-import { hasRedactionDocumentText, type RedactionRun } from './types'
-
-function runPosition(run: RedactionRun) {
-  return run.matterName ?? 'Not filed in a matter'
-}
+import { hasRedactionDocumentText } from './types'
 
 export function RedactionReviewView({
   runId,
@@ -65,7 +57,8 @@ export function RedactionReviewView({
   const pdfPreviewEnabled =
     !detecting &&
     runQuery.data?.status !== 'failed' &&
-    runQuery.data?.sourcePreview?.available === true
+    runQuery.data?.sourcePreview?.kind === 'pdf' &&
+    runQuery.data.sourcePreview.available
   const sourceFileQuery = useRedactionSource(
     runId,
     'source-file',
@@ -77,6 +70,8 @@ export function RedactionReviewView({
     runQuery.data?.status === 'finalized',
   )
   const replaceRun = useCreateUploadedRedactionRun()
+  const [renderedWord, setWordCoverage] = useState<WordCoverage>()
+  const [wordFocus, setWordFocus] = useState<{ id: string } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>()
   const [filter, setFilter] = useState<SpanFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -93,7 +88,9 @@ export function RedactionReviewView({
     }
     if (!selectedId) return
     reviewRef.current
-      ?.querySelector('[data-span-id][aria-pressed="true"]')
+      ?.querySelector(
+        '[data-span-id]:not([data-word-ranges])[aria-pressed="true"]',
+      )
       ?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
     listRef.current
       ?.querySelector('[aria-selected="true"]')
@@ -136,6 +133,8 @@ export function RedactionReviewView({
 
   const run = runQuery.data
   const currentUserId = me?.user.id
+  const wordCoverage = renderedWord?.runId === run.id ? renderedWord : undefined
+  const word = run.sourcePreview?.kind === 'docx'
 
   if (detecting)
     return (
@@ -229,8 +228,10 @@ export function RedactionReviewView({
   const position = selected
     ? run.spans.findIndex((span) => span.id === selected.id) + 1
     : 0
-  const pageCount = layoutQuery.data?.pages.length ?? null
+  const pageCount =
+    wordCoverage?.pageCount ?? layoutQuery.data?.pages.length ?? null
   const pageFor = (span: RedactionSpan): number | null => {
+    if (word) return wordCoverage?.bySpan.get(span.id) ?? null
     const layout = layoutQuery.data
     if (!layout) return null
     const segment = layout.segments.find(
@@ -317,7 +318,7 @@ export function RedactionReviewView({
               {run.sourceFilename}
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-muted">
-              <span>{runPosition(run)}</span>
+              <span>{run.matterName ?? 'Not filed in a matter'}</span>
               <span aria-hidden="true">·</span>
               <span>Redaction review</span>
               {run.replacementRunId ? (
@@ -389,7 +390,7 @@ export function RedactionReviewView({
         </div>
       ) : null}
 
-      {run.spans.length === 0 ? (
+      {run.spans.length === 0 && !word ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-12 py-8 @max-pane:px-8">
           <EmptyState
             title="No sensitive data was detected in this document"
@@ -401,28 +402,26 @@ export function RedactionReviewView({
         <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto bg-canvas">
-              {pdfPreviewEnabled && sourceFileQuery.data && layoutQuery.data ? (
-                <PdfReviewDocument
-                  file={sourceFileQuery.data}
-                  layout={layoutQuery.data}
-                  spans={run.spans}
-                  decisions={run.decisions}
-                  selectedId={selected?.id ?? null}
-                  onSelect={setSelectedId}
-                  categoryClassName={categoryClasses}
-                />
-              ) : (
-                <Paper>
-                  <HighlightedText
-                    text={textQuery.data.text}
-                    run={run}
-                    selectedId={selected?.id ?? null}
-                    onSelect={setSelectedId}
-                  />
-                </Paper>
-              )}
+              <ReviewSourceDocument
+                run={run}
+                text={textQuery.data.text}
+                selectedId={selected?.id ?? null}
+                focusRequest={wordFocus}
+                onSelect={setSelectedId}
+                word={word}
+                onWordCoverage={setWordCoverage}
+                pdf={
+                  pdfPreviewEnabled && sourceFileQuery.data && layoutQuery.data
+                    ? { file: sourceFileQuery.data, layout: layoutQuery.data }
+                    : null
+                }
+              />
             </div>
-            {run.replacementRunId ? (
+            {run.spans.length === 0 ? (
+              <p className="border-t border-line px-5 py-3 text-meta text-muted">
+                {zeroSpanBody(run)}
+              </p>
+            ) : run.replacementRunId ? (
               <p className="border-t border-line bg-surface px-12 py-3 text-meta text-muted @max-pane:px-8">
                 A newer model-detected run is available, so this run can no
                 longer take decisions or be finalised. Open the replacement run
@@ -453,28 +452,38 @@ export function RedactionReviewView({
               />
             )}
           </div>
-          <ReviewPanel
-            spans={filtered}
-            decisions={run.decisions}
-            counts={counts}
-            currentUserId={currentUserId}
-            bySource={run.summary.bySource}
-            filter={filter}
-            onFilterChange={(next) => changeFilter(() => setFilter(next))}
-            category={categoryFilter}
-            onCategoryChange={(next) =>
-              changeFilter(() => setCategoryFilter(next))
-            }
-            source={sourceFilter}
-            onSourceChange={(next) => changeFilter(() => setSourceFilter(next))}
-            categories={categories}
-            selectedId={selected?.id ?? null}
-            onSelect={setSelectedId}
-            onKeyDown={onListKeys}
-            listRef={listRef}
-            pageFor={pageFor}
-            pageCount={pageCount}
-          />
+          {run.spans.length > 0 ? (
+            <ReviewPanel
+              spans={filtered}
+              decisions={run.decisions}
+              counts={counts}
+              currentUserId={currentUserId}
+              bySource={run.summary.bySource}
+              filter={filter}
+              onFilterChange={(next) => changeFilter(() => setFilter(next))}
+              category={categoryFilter}
+              onCategoryChange={(next) =>
+                changeFilter(() => setCategoryFilter(next))
+              }
+              source={sourceFilter}
+              onSourceChange={(next) =>
+                changeFilter(() => setSourceFilter(next))
+              }
+              categories={categories}
+              selectedId={selected?.id ?? null}
+              onSelect={(id) => {
+                setSelectedId(id)
+                if (word) setWordFocus({ id })
+              }}
+              missingFromWord={
+                wordCoverage ? (id) => !wordCoverage.bySpan.has(id) : undefined
+              }
+              onKeyDown={onListKeys}
+              listRef={listRef}
+              pageFor={pageFor}
+              pageCount={pageCount}
+            />
+          ) : null}
         </div>
       )}
     </div>

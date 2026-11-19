@@ -4005,8 +4005,9 @@
                   <td class="id">GET /api/redaction-runs/:runId/source-file</td>
                   <td class="id">redact-review.ts</td>
                   <td>
-                    Original upload or matter document bytes for PDF preview,
-                    under the same current/historical gate as
+                    Original upload or matter document bytes for PDF preview.
+                    For Word, <code>?part=</code> serves an image from the
+                    source under the same current/historical gate as
                     <code>document-text</code>.
                   </td>
                 </tr>
@@ -4017,6 +4018,15 @@
                     PDF text-layout geometry aligned to extracted text offsets,
                     under the same current/historical gate as
                     <code>document-text</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/redaction-runs/:runId/word-layout</td>
+                  <td class="id">redact-review.ts</td>
+                  <td>
+                    Word model and candidate ranges derived from the burn map
+                    for the run's source, under the same current/historical gate
+                    as <code>document-text</code>.
                   </td>
                 </tr>
                 <tr>

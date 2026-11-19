@@ -201,20 +201,22 @@ function cssLengthToPx(match: RegExpMatchArray | null): number | undefined {
 
 export function tabColumns(
   paragraph: DocumentParagraphWire,
-): DocumentTextRunWire[][] | undefined {
-  const groups: DocumentTextRunWire[][] = [[]]
+): Array<Array<DocumentTextRunWire & { from?: number }>> | undefined {
+  const groups: Array<Array<DocumentTextRunWire & { from?: number }>> = [[]]
   let sawTab = false
   for (const run of paragraph.runs) {
     const carriesInstruction = run.preservedXmlFragments.some((xml) =>
       /<w:instrText\b/i.test(xml),
     )
+    let from = 0
     for (const [index, piece] of run.text.split('\t').entries()) {
       if (index > 0) {
         sawTab = true
         groups.push([])
       }
-      if (piece) groups[groups.length - 1]?.push({ ...run, text: piece })
+      if (piece) groups[groups.length - 1]?.push({ ...run, text: piece, from })
       else if (index === 0 && carriesInstruction) groups.at(-1)?.push(run)
+      from += piece.length + 1
     }
   }
   return sawTab ? groups : undefined

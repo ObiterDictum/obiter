@@ -1,5 +1,6 @@
 import { effectiveParagraph } from '../../document-model-text'
-import { useMemo } from 'react'
+import { use, useMemo } from 'react'
+import { DocumentRunPaintContext } from './document-run-paint'
 import {
   pendingParagraphChanges,
   type PendingRedlines,
@@ -370,6 +371,7 @@ function MarginParagraph({
   background?: string
   pageNumber: number
 }) {
+  const paint = use(DocumentRunPaintContext)
   const face = paragraphFace(paragraph, styles)
   const images = paragraphImageXml(paragraph).filter(
     (xml) =>
@@ -387,7 +389,7 @@ function MarginParagraph({
   const columns = tabColumns(projected)
   const stops = paragraphTabStops(paragraph)
   const fill = background ?? paragraphFill(paragraph)
-  const runs = (items: typeof paragraph.runs) =>
+  const runs = (items: Array<DocumentTextRunWire & { from?: number }>) =>
     items.map((run) => {
       const text = runDisplayText(run, pageNumber)
       if (!text) return null
@@ -421,7 +423,9 @@ function MarginParagraph({
         readableRunColor(faceRun.color, fill) ?? contrastFillText(fill)
       return (
         <span key={run.id} style={runCss({ ...faceRun, color })}>
-          {text}
+          {paint && text === run.text
+            ? paint(paragraph.id, run.id, text, run.from ?? 0)
+            : text}
         </span>
       )
     })

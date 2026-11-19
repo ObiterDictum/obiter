@@ -1,4 +1,6 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { Fragment, use, type CSSProperties, type ReactNode } from 'react'
+import { paragraphPlainText } from '../../document-model-text'
+import { DocumentRunPaintContext } from './document-run-paint'
 import type {
   DocumentParagraphWire,
   DocumentRelationshipWire,
@@ -65,6 +67,40 @@ export function FooterBand({
   letterhead: FooterLetterhead
   inset: { left: number; right: number }
 }) {
+  const paint = use(DocumentRunPaintContext)
+  const column = (
+    row: FooterLetterhead['rows'][number],
+    side: 'left' | 'right',
+  ) => {
+    const text = row[side]
+    const paragraph = row.paragraph
+    if (!paint || !paragraph || !text) return text
+    const source = paragraphPlainText(paragraph)
+    const from =
+      side === 'left'
+        ? source.length - source.trimStart().length
+        : source.trimEnd().length - text.length
+    if (from < 0 || source.slice(from, from + text.length) !== text) return text
+    let offset = 0
+    return paragraph.runs.map((run) => {
+      const start = offset
+      offset += run.text.length
+      const left = Math.max(start, from)
+      const right = Math.min(offset, from + text.length)
+      if (left >= right) return null
+      const local = left - start
+      return (
+        <Fragment key={run.id}>
+          {paint(
+            paragraph.id,
+            run.id,
+            run.text.slice(local, right - start),
+            local,
+          )}
+        </Fragment>
+      )
+    })
+  }
   return (
     <div
       className="flex w-full items-center text-[10px] leading-[1.25] text-white"
@@ -79,7 +115,9 @@ export function FooterBand({
     >
       <div className="min-w-0 flex-1">
         {letterhead.rows.map((row, index) =>
-          row.left ? <div key={`left-${index}`}>{row.left}</div> : null,
+          row.left ? (
+            <div key={`left-${index}`}>{column(row, 'left')}</div>
+          ) : null,
         )}
       </div>
       <div className="shrink-0 px-3 text-center text-[12px]">
@@ -87,7 +125,9 @@ export function FooterBand({
       </div>
       <div className="min-w-0 flex-1 text-right">
         {letterhead.rows.map((row, index) =>
-          row.right ? <div key={`right-${index}`}>{row.right}</div> : null,
+          row.right ? (
+            <div key={`right-${index}`}>{column(row, 'right')}</div>
+          ) : null,
         )}
       </div>
     </div>

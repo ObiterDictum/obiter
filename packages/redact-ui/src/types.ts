@@ -23,7 +23,7 @@ export interface RedactionRun {
   sourceFilename: string
   sourceMimeType?: string | null
   sourcePreview?: {
-    kind: 'pdf' | 'text'
+    kind: 'pdf' | 'docx' | 'text'
     available: boolean
   }
   status: RedactionRunStatus

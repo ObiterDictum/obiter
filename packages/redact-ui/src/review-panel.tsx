@@ -50,6 +50,7 @@ export function ReviewPanel({
   categories,
   selectedId,
   onSelect,
+  missingFromWord,
   onKeyDown,
   listRef,
   pageFor,
@@ -73,6 +74,7 @@ export function ReviewPanel({
   categories: SpanCategory[]
   selectedId: string | null
   onSelect: (spanId: string) => void
+  missingFromWord?: (spanId: string) => boolean
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
   listRef: RefObject<HTMLDivElement | null>
   pageFor: (span: RedactionSpan) => number | null
@@ -196,6 +198,11 @@ export function ReviewPanel({
                       {confidenceLabel[span.confidence].toLowerCase()}{' '}
                       confidence
                     </span>
+                    {missingFromWord?.(span.id) ? (
+                      <span className="text-caption font-medium text-warning">
+                        Not shown on the page
+                      </span>
+                    ) : null}
                     {record ? (
                       <span className="text-caption text-ink">
                         {decisionRecord(record, currentUserId)}

@@ -39,6 +39,16 @@ containing span rather than keeping both. Decisions and finalisation retain thei
 reviewable-state guards. All user-facing reads and retries retain organisation and
 matter ACLs.
 
+`GET /api/redaction-runs/:runId/word-layout`
+
+Returns the Word model for the run's source and per-span model ranges derived from
+the burn map. It uses the same source access checks as extracted text and source
+bytes. The review flags candidates missing from the page in the queue and shows
+extracted text when the Word layout cannot be loaded.
+
+`GET /api/redaction-runs/:runId/source-file?part=…` serves an image from the same
+Word source under the same access checks.
+
 `POST /api/redaction-runs/:runId/spans/:spanId/decision`
 
 `POST /api/redaction-runs/:runId/finalize`
