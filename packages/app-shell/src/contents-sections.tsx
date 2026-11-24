@@ -291,6 +291,7 @@ function verificationTag(run: VerificationRun) {
   if (run.summary.flaggedCount > 0) return 'flagged'
   if (run.summary.reviewRequiredCount > 0) return 'needs review'
   if (run.summary.notCheckedCount > 0) return 'not checked'
+  if (run.summary.findingCount === 0) return 'no citations found'
   return 'matches'
 }
 

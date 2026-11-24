@@ -24,6 +24,7 @@ import {
 import { VerifyDismissDialog } from '../components/verification/verify-dismiss-dialog'
 import { VerifyFinding } from '../components/verification/verify-finding'
 import {
+  dedupeFindings,
   findingMatchesFilter,
   sortFindings,
   type VerifyDocumentGroup,
@@ -72,9 +73,11 @@ export function VerifyDocument({
     : null
   const documentLabel = `${filename}${checkedNumber === undefined ? '' : ` · version ${String(checkedNumber)}`}`
 
-  const shown = sortFindings(
-    findings.findings.filter((finding) =>
-      findingMatchesFilter(finding, filter),
+  const shown = dedupeFindings(
+    sortFindings(
+      findings.findings.filter((finding) =>
+        findingMatchesFilter(finding, filter),
+      ),
     ),
   )
   const matches =

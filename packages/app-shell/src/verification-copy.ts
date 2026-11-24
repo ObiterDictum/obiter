@@ -219,7 +219,7 @@ export function verificationCountsLabel(counts: VerificationFindingCounts) {
       `${counts.matched} ${counts.matched === 1 ? 'matches' : 'match'} the checked source`,
     )
   if (counts.dismissed > 0) parts.push(`${counts.dismissed} dismissed`)
-  return parts.length > 0 ? parts.join(' · ') : 'No findings'
+  return parts.length > 0 ? parts.join(' · ') : 'No citations found'
 }
 
 export function verificationRunTimestamp(run: VerificationRun) {

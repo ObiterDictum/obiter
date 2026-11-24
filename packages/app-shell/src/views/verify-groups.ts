@@ -91,6 +91,20 @@ export function sortFindings(
   )
 }
 
+export function dedupeFindings(
+  findings: readonly VerificationFindingView[],
+): VerificationFindingView[] {
+  const seen = new Set<string>()
+  const kept: VerificationFindingView[] = []
+  for (const finding of findings) {
+    const key = `${finding.location.kind}:${finding.location.start}:${finding.location.end}:${finding.excerpt}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    kept.push(finding)
+  }
+  return kept
+}
+
 export function findingMatchesFilter(
   finding: VerificationFindingView,
   filter: VerifyFilter,

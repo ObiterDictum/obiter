@@ -13,6 +13,7 @@ import {
   verificationStoredVersionNote,
   verificationUnmappedLabel,
 } from '../../verification-copy'
+import { dedupeFindings } from '../../views/verify-groups'
 import type { UnmappedReason } from './verification-mapping'
 import { VerifyDismissDialog } from './verify-dismiss-dialog'
 import { VerifyFinding } from './verify-finding'
@@ -96,7 +97,7 @@ export function VerificationFindingsIndex({
           </p>
         ) : (
           <div className="flex flex-col pt-2">
-            {verification.findings.map((finding) => (
+            {dedupeFindings(verification.findings).map((finding) => (
               <div key={finding.id} className="flex flex-col">
                 <VerifyFinding
                   finding={finding}
