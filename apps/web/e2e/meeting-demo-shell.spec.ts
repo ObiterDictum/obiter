@@ -175,9 +175,10 @@ async function signInWithMockedVerifyData(
   request: APIRequestContext,
 ) {
   const { email, password } = await createAccount(request, 'Demo')
+  await signIn(page, email, password)
   await mockSession(page)
   await mockVerifyData(page)
-  await signIn(page, email, password)
+  await page.reload()
 }
 
 async function openVerify(page: Page) {
@@ -201,9 +202,12 @@ test('Verify is live, names its runs, and guides an empty list to a document', a
   await expect(verifyMode).toBeVisible()
   await expect(verifyMode).toHaveAttribute('aria-current', 'page')
   await expect(workspaceNav(page).getByText('Soon')).toHaveCount(0)
-  await expect(
-    workspaceNav(page).getByRole('button', { name: 'Agent' }),
-  ).toBeVisible()
+  const agent = workspaceNav(page).getByRole('link', {
+    name: 'Agent',
+    exact: true,
+  })
+  await expect(agent).toBeVisible()
+  await expect(agent).toHaveAttribute('href', '/agent')
 
   await expect(
     page.locator('main').getByText('Potanina-skeleton-argument.docx'),
