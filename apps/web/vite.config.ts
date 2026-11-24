@@ -13,6 +13,24 @@ const iconModule = /[/\\]packages[/\\]ui[/\\]src[/\\]icons[/\\]/u
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 
+function pruneUnusedPdfGlobal(): Plugin {
+  const pdfModule = /[/\\]pdfjs-dist[/\\]build[/\\]pdf\.mjs$/u
+  const viewerGlobal =
+    /^globalThis\.pdfjsLib = \{(?:\r?\n  \w+: \w+,?)+\r?\n\};$/mu
+
+  return {
+    name: 'obiter:prune-unused-pdf-global',
+    applyToEnvironment: (environment) => environment.name === 'client',
+    transform(code, id) {
+      if (!pdfModule.test(id)) return
+      const trimmed = code.replace(viewerGlobal, (block) =>
+        block.replace(/[^\r\n]/gu, ' '),
+      )
+      if (trimmed !== code) return { code: trimmed, map: null }
+    },
+  }
+}
+
 function devApiOriginPlugin({
   processEnv = process.env,
   fileEnv,
@@ -79,7 +97,12 @@ export default defineConfig(({ command, mode }) => {
       resolve: {
         tsconfigPaths: true,
       },
-      plugins: [tanstackStart(), tailwindcss(), react()],
+      plugins: [
+        tanstackStart(),
+        tailwindcss(),
+        react(),
+        pruneUnusedPdfGlobal(),
+      ],
     }
   }
 
