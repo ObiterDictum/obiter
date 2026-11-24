@@ -12,7 +12,10 @@ import {
 } from '@obiter/ui'
 import { ShieldCheck } from '@obiter/ui/icons'
 import { useCurrentUser } from '../current-user'
-import { useCitationTargets } from '../documents'
+import { useQuery } from '@tanstack/react-query'
+import type { CitationTargetsResponse } from '@obiter/contracts'
+import { apiFetch } from '../api'
+import { documentsKeys } from '../documents'
 import { useMattersList } from '../matters'
 import { PageScaffold } from '../page-scaffold'
 import {
@@ -106,7 +109,7 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
         />
       ) : groups.length === 0 ? (
         <>
-          <VerifyDocuments matterId={matterId} />
+          <VerifyDocuments matterId={matterId} enabled={hasOrganisation} />
           <EmptyState
             icon={<ShieldCheck size={28} className="text-muted" />}
             title={
@@ -132,7 +135,7 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
         </>
       ) : (
         <>
-          <VerifyDocuments matterId={matterId} />
+          <VerifyDocuments matterId={matterId} enabled={hasOrganisation} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Tabs
               value={filter}
@@ -214,8 +217,22 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
   )
 }
 
-function VerifyDocuments({ matterId }: { matterId?: string }) {
-  const targets = useCitationTargets()
+function VerifyDocuments({
+  matterId,
+  enabled,
+}: {
+  matterId?: string
+  enabled: boolean
+}) {
+  const targets = useQuery({
+    queryKey: documentsKeys.citationTargets(),
+    queryFn: () =>
+      apiFetch<CitationTargetsResponse>('/api/documents/citation-targets').then(
+        (response) => response.documents,
+      ),
+    staleTime: 30_000,
+    enabled,
+  })
   const documents = (targets.data ?? [])
     .filter((document) => !matterId || document.matterId === matterId)
     .sort((a, b) => b.openedAt.localeCompare(a.openedAt))
@@ -224,7 +241,7 @@ function VerifyDocuments({ matterId }: { matterId?: string }) {
   return (
     <Card aria-labelledby="verify-documents">
       <CardHead titleId="verify-documents" title="Documents" />
-      <ul className="flex flex-col pb-2">
+      <ul>
         {documents.map((document) => {
           const params = {
             matterId: document.matterId,
@@ -233,23 +250,21 @@ function VerifyDocuments({ matterId }: { matterId?: string }) {
           return (
             <li
               key={document.documentId}
-              className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 py-2.5 [&+li]:border-t [&+li]:border-line"
+              className="flex items-center gap-x-4 px-6 py-2.5 [&+li]:border-t [&+li]:border-line"
             >
-              <div className="min-w-0 flex-1">
-                <Link
-                  to="/matters/$matterId/documents/$documentId"
-                  params={params}
-                  search={{ verify: 'open' }}
-                  className="block truncate text-item text-ink hover:text-brand"
-                >
-                  {document.filename}
-                </Link>
-                {!matterId ? (
-                  <span className="text-caption text-subtle">
-                    {document.matterName}
-                  </span>
-                ) : null}
-              </div>
+              <Link
+                to="/matters/$matterId/documents/$documentId"
+                params={params}
+                search={{ verify: 'open' }}
+                className="min-w-0 flex-1 truncate text-item text-ink hover:text-brand"
+              >
+                {document.filename}
+              </Link>
+              {!matterId ? (
+                <span className="shrink-0 text-caption text-subtle">
+                  {document.matterName}
+                </span>
+              ) : null}
               <Link
                 to="/matters/$matterId/documents/$documentId"
                 params={params}
