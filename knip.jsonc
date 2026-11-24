@@ -1,22 +1,30 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
-  // Tailwind is consumed from CSS (`@import 'tailwindcss'` through
-  // packages/ui/tailwind.css), which knip cannot follow from the manifest.
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreDependencies": ["tailwindcss"],
+  "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      // Operational entry points run by hand or by a documented command, not
-      // imported by product code. Keep them; deleting them would remove the
-      // only way to run the job.
       "entry": [
         "scripts/generate-pdf-fixtures.mjs",
         "tools/oxlint/anti-slop/effect/index.ts",
       ],
     },
     "apps/web": {
-      // Declarations for lane-target.mjs, which stays .mjs so Node can load it
-      // from playwright.config.ts. TypeScript uses this file; knip cannot.
-      "entry": ["lane-target.d.mts"],
+      "entry": [
+        "lane-target.d.mts",
+        "playwright.config.ts",
+        "e2e/{global-setup,renderer-server}.ts",
+        "e2e/**/*.spec.ts",
+        "src/routes/**/*.{ts,tsx}",
+      ],
+      "playwright": false,
+      "ignoreBinaries": ["psql"],
+      "ignoreDependencies": ["unpdf"],
+    },
+    "packages/contracts": {
+      "ignoreIssues": {
+        "src/agent-api.ts": ["duplicates"],
+      },
     },
   },
 }
