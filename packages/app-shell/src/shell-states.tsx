@@ -147,25 +147,13 @@ const NOT_FOUND_BODY =
 
 const NOT_FOUND_COPY = new Map<
   string,
-  { title: string; to: '/matters' | '/verify' | '/redact' }
+  { noun: string; to: '/matters' | '/verify' | '/redact' }
 >([
-  ['matter_not_found', { title: 'This matter does not exist', to: '/matters' }],
-  [
-    'matter_share_not_found',
-    { title: 'This matter does not exist', to: '/matters' },
-  ],
-  [
-    'document_not_found',
-    { title: 'This document does not exist', to: '/matters' },
-  ],
-  [
-    'redaction_run_not_found',
-    { title: 'This redaction run does not exist', to: '/redact' },
-  ],
-  [
-    'verification_run_not_found',
-    { title: 'This verification run does not exist', to: '/verify' },
-  ],
+  ['matter_not_found', { noun: 'matter', to: '/matters' }],
+  ['matter_share_not_found', { noun: 'matter', to: '/matters' }],
+  ['document_not_found', { noun: 'document', to: '/matters' }],
+  ['redaction_run_not_found', { noun: 'redaction run', to: '/redact' }],
+  ['verification_run_not_found', { noun: 'verification run', to: '/verify' }],
 ])
 
 export function ShellNotFound() {
@@ -203,7 +191,7 @@ function ShellEntityNotFound({ error }: { error: ApiError }) {
     <StatePage
       tone="neutral"
       icon={<MagnifyingGlass size={20} aria-hidden />}
-      title={copy.title}
+      title={`This ${copy.noun} does not exist`}
       description={NOT_FOUND_BODY}
       actions={
         <>

@@ -209,11 +209,16 @@ export function VerificationWorkspaceProvider({
   const canStartRun = startAvailability.available
   const autoRunSeq = useRef(0)
   useEffect(() => {
-    if (verifyRequest?.value !== 'run') return
-    if (verifyRequest.seq === autoRunSeq.current) return
-    if (!canStartRun) return
+    if (
+      verifyRequest?.value !== 'run' ||
+      verifyRequest.seq === autoRunSeq.current ||
+      !canStartRun ||
+      !ready ||
+      !version
+    )
+      return
     autoRunSeq.current = verifyRequest.seq
-    if (ready && version) create.mutate(version.id)
+    create.mutate(version.id)
   }, [verifyRequest, canStartRun, ready, version, create])
 
   useEffect(() => {

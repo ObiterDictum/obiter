@@ -305,7 +305,6 @@ export function CommandPaletteDialog({
                 {
                   id: 'run-verify',
                   label: 'Run Verify',
-                  hint: 'Run Verify on the open document',
                   target: {
                     kind: 'document',
                     matterId: currentMatterId,
