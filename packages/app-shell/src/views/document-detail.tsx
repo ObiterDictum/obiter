@@ -258,10 +258,7 @@ function DocumentDetailBody({
     <div className="flex flex-col">
       {rightSlotPanels}
       <div className="flex h-[calc(100dvh-5.5rem)] min-h-[34rem] shrink-0 flex-col">
-        <DocumentTitle
-          document={loaded.document}
-          renameSignal={renameSignal}
-        />
+        <DocumentTitle document={loaded.document} renameSignal={renameSignal} />
         {viewingHistorical && selectedVersion ? (
           <ContentFrame className="flex min-h-0 flex-1 flex-col py-8">
             <DocumentVersionView

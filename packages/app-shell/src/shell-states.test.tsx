@@ -94,9 +94,7 @@ describe('ShellError', () => {
     await screen.findByRole('heading', {
       name: 'This matter does not exist',
     })
-    expect(
-      screen.getByRole('link', { name: 'Back to matters' }),
-    ).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Back to matters' })).toBeTruthy()
   })
 
   it('keeps the generic page state for an unclassified 404', async () => {

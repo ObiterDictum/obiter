@@ -5,10 +5,7 @@ import {
   useRecordDocumentOpen,
 } from '@obiter/app-shell'
 import { RedactionRunsRegion } from '@obiter/redact-ui'
-import {
-  createFileRoute,
-  useNavigate,
-} from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 
 export const Route = createFileRoute(
