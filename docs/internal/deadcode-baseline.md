@@ -30,15 +30,13 @@ left no dependency findings in the layer 4 report.
 
 | Finding                          | File                                                         | Reason                                                                            | Status                  |
 | -------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- | ----------------------- |
-| `useCreateAgentRun`              | `packages/app-shell/src/agent-runs.ts`                       | Part of the documented agent feature.                                             | Awaiting human decision |
-| `hasDarwinWindowControls`        | `packages/app-shell/src/lib/desktop-bridge.ts`               | Part of the shared shell's desktop window-controls support.                       | Awaiting human decision |
+| `hasDarwinWindowControls`        | `packages/app-shell/src/lib/desktop-bridge.ts`               | Mac desktop support is planned.                                                   | Kept: planned           |
 | `mapCategoryToRampart`           | `scripts/export-training-data.ts`                            | Part of the training export command documented in the redaction fine-tuning spec. | Awaiting human decision |
 | `cumulativeSpend`                | `scripts/synthetic-v2/budget.ts`                             | Part of spending tracking in the documented synthetic-v2 pipeline.                | Awaiting human decision |
 | `datasetManifest`                | `scripts/synthetic-v2/governance.ts`                         | Part of governance in the documented synthetic-v2 pipeline.                       | Awaiting human decision |
 | `openRouterBenchmarkModel`       | `scripts/synthetic-v2/models.ts`                             | Part of model selection in the documented synthetic-v2 pipeline.                  | Awaiting human decision |
 | `openRouterQaModel`              | `scripts/synthetic-v2/models.ts`                             | Part of model selection in the documented synthetic-v2 pipeline.                  | Awaiting human decision |
 | `normalizeGenerated`             | `scripts/synthetic-v2/validation.ts`                         | Part of output validation in the documented synthetic-v2 pipeline.                | Awaiting human decision |
-| `isPopulatedObjectExpression`    | `tools/oxlint/anti-slop/shared/dictionary-types.ts`          | Part of the shared anti-slop rules. Confirm upstream ownership before removal.    | Awaiting human decision |
 | `LegislationProvisionSubsection` | `packages/app-shell/src/views/legislation-document-query.ts` | The underlying subsection type has active readers.                                | Awaiting human decision |
 | `LegislationActResponse`         | `packages/app-shell/src/views/LegislationActView.tsx`        | The type sits alongside ongoing Act reader work.                                  | Awaiting human decision |
 
