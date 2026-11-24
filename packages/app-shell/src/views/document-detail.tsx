@@ -7,7 +7,8 @@ import {
 } from '../components/document-workspace/document-draft-status'
 import { useState, type ReactNode } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
-import { EmptyState, Skeleton, useToast } from '@obiter/ui'
+import { EmptyState, Skeleton, useToast, Button } from '@obiter/ui'
+import { classifyShellFailure } from '../shell-states'
 import { useDocument } from '../documents'
 import { useMatter } from '../matters'
 import { ContentFrame } from '../content-frame'
@@ -174,13 +175,37 @@ function DocumentDetailBody({
     )
   }
   if (document.isError) {
+    const failure = classifyShellFailure(document.error)
     return (
       <ContentFrame className="py-14">
         {rightSlotPanels}
-        <EmptyState
-          title="Document not found"
-          body="This document does not exist in your organisation, or your session may have expired."
-        />
+        {failure === 'error' ? (
+          <EmptyState
+            title="This document could not be loaded"
+            body={document.error.message}
+            action={
+              <Button
+                variant="secondary"
+                onClick={() => void document.refetch()}
+              >
+                Try again
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title={
+              failure === 'forbidden'
+                ? 'You do not have access to this document'
+                : 'Document not found'
+            }
+            body={
+              failure === 'forbidden'
+                ? 'This document exists in another matter you cannot open, or your session may have expired.'
+                : 'This document does not exist in your organisation, or your session may have expired.'
+            }
+          />
+        )}
       </ContentFrame>
     )
   }

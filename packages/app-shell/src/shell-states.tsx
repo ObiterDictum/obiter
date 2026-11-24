@@ -84,7 +84,8 @@ export function classifyShellFailure(error: unknown): ShellFailure {
     return 'staff-two-factor-required'
   if (error.code === 'forbidden' || error.code === 'no_organisation')
     return 'forbidden'
-  if (NOT_FOUND_CODES.has(error.code)) return 'not-found'
+  if (error.status === 404 || NOT_FOUND_CODES.has(error.code))
+    return 'not-found'
   return 'error'
 }
 
@@ -141,24 +142,98 @@ function StatePage({
   )
 }
 
-export function ShellNotFound() {
+const NOT_FOUND_COPY: Record<
+  string,
+  { title: string; body: string; to: '/matters' | '/verify' | '/redact' }
+> = {
+  matter_not_found: {
+    title: 'This matter does not exist',
+    body: 'The matter may have been removed, or you may not have access to it.',
+    to: '/matters',
+  },
+  matter_share_not_found: {
+    title: 'This matter does not exist',
+    body: 'The matter may have been removed, or you may not have access to it.',
+    to: '/matters',
+  },
+  document_not_found: {
+    title: 'This document does not exist',
+    body: 'The document may have been removed, or you may not have access to it.',
+    to: '/matters',
+  },
+  document_version_not_found: {
+    title: 'This document version does not exist',
+    body: 'The version may have been removed, or you may not have access to it.',
+    to: '/matters',
+  },
+  redaction_run_not_found: {
+    title: 'This redaction run does not exist',
+    body: 'The run may have been removed, or you may not have access to it.',
+    to: '/redact',
+  },
+  output_not_found: {
+    title: 'This redaction output does not exist',
+    body: 'The output may have been removed, or you may not have access to it.',
+    to: '/redact',
+  },
+  span_not_found: {
+    title: 'This redaction span does not exist',
+    body: 'The span may have been removed, or the run may have been replaced.',
+    to: '/redact',
+  },
+  verification_run_not_found: {
+    title: 'This verification run does not exist',
+    body: 'The run may have been removed, or you may not have access to it.',
+    to: '/verify',
+  },
+}
+
+export function ShellNotFound({ error }: { error?: unknown } = {}) {
+  const code = error instanceof ApiError ? error.code : null
+  const copy = code ? NOT_FOUND_COPY[code] : undefined
+  if (!copy) {
+    return (
+      <StatePage
+        tone="neutral"
+        icon={<MagnifyingGlass size={20} aria-hidden />}
+        title="We cannot find that page"
+        description="The link may be out of date, or the page may have moved. Nothing in your matters has changed."
+        actions={
+          <>
+            <Link to="/" className={linkClass.primary}>
+              Go to Home
+            </Link>
+            <Link to="/matters" className={linkClass.secondary}>
+              Open your matters
+            </Link>
+          </>
+        }
+        footer="Check the address, or use the sidebar to reach the page you need."
+      />
+    )
+  }
+  const backLabel =
+    copy.to === '/matters'
+      ? 'Back to matters'
+      : copy.to === '/verify'
+        ? 'Open Verify'
+        : 'Open Redact'
   return (
     <StatePage
       tone="neutral"
       icon={<MagnifyingGlass size={20} aria-hidden />}
-      title="We cannot find that page"
-      description="The link may be out of date, or the page may have moved. Nothing in your matters has changed."
+      title={copy.title}
+      description={copy.body}
       actions={
         <>
-          <Link to="/" className={linkClass.primary}>
-            Go to Home
+          <Link to={copy.to} className={linkClass.primary}>
+            {backLabel}
           </Link>
-          <Link to="/matters" className={linkClass.secondary}>
-            Open your matters
+          <Link to="/" className={linkClass.secondary}>
+            Go to Home
           </Link>
         </>
       }
-      footer="Check the address, or use the sidebar to reach the page you need."
     />
   )
 }
@@ -218,7 +293,7 @@ export function ShellError({
 }) {
   reportError(error)
   const failure = classifyShellFailure(error)
-  if (failure === 'not-found') return <ShellNotFound />
+  if (failure === 'not-found') return <ShellNotFound error={error} />
   if (failure === 'forbidden') return <ShellPermissionDenied />
   if (failure === 'staff-two-factor-required')
     return <ShellStaffTwoFactorRequired />
