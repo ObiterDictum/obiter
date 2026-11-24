@@ -7,13 +7,17 @@ import type { RedactionRun } from './types'
 
 const apiFetch = vi.hoisted(() => vi.fn())
 
-const { isTypingTarget } = await import('@obiter/app-shell')
+const appShell = await import('@obiter/app-shell')
+const { isTypingTarget } = appShell
 const appShellKeys = Object.fromEntries(
-  Object.keys(await import('@obiter/app-shell')).map((key) => [key, undefined]),
+  Object.keys(appShell).map((key) => [key, undefined]),
+)
+const splitScale = Object.fromEntries(
+  Object.entries(appShell).filter(([key]) => /split/i.test(key)),
 )
 mock.module('@obiter/app-shell', () =>
   Object.assign(
-    { ...appShellKeys },
+    { ...appShellKeys, ...splitScale },
     {
       isTypingTarget,
       apiFetch: (...args: unknown[]) => apiFetch(...args),
