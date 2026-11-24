@@ -2,6 +2,14 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreDependencies": ["tailwindcss"],
   "ignoreExportsUsedInFile": true,
+  "ignoreIssues": {
+    "scripts/export-training-data.ts": ["exports"],
+    "scripts/synthetic-v2/budget.ts": ["exports"],
+    "scripts/synthetic-v2/governance.ts": ["exports"],
+    "scripts/synthetic-v2/models.ts": ["exports"],
+    "scripts/synthetic-v2/validation.ts": ["exports"],
+    "tools/oxlint/anti-slop/shared/dictionary-types.ts": ["exports"],
+  },
   "workspaces": {
     ".": {
       "entry": [
@@ -20,6 +28,14 @@
       "playwright": false,
       "ignoreBinaries": ["psql"],
       "ignoreDependencies": ["unpdf"],
+    },
+    "packages/app-shell": {
+      "ignoreIssues": {
+        "src/agent-runs.ts": ["exports"],
+        "src/lib/desktop-bridge.ts": ["exports"],
+        "src/views/LegislationActView.tsx": ["types"],
+        "src/views/legislation-document-query.ts": ["types"],
+      },
     },
     "packages/contracts": {
       "ignoreIssues": {
