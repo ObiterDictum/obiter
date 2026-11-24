@@ -1,5 +1,6 @@
 import {
   DocumentDetailLayoutView,
+  type VerifyPanelRequest,
   prefetchDocumentRouteData,
   useMatterTabsOptional,
   useRecordDocumentOpen,
@@ -30,10 +31,7 @@ export const Route = createFileRoute(
 function DocumentDetailRouteComponent() {
   const { matterId, documentId } = Route.useParams()
   const verify = Route.useSearch().verify
-  const [pending, setPending] = useState<{
-    value: 'open' | 'run'
-    seq: number
-  } | null>(null)
+  const [pending, setPending] = useState<VerifyPanelRequest | null>(null)
   const navigate = useNavigate()
   const tabs = useMatterTabsOptional()
   useRecordDocumentOpen(documentId)
