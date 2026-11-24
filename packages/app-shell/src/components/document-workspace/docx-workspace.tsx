@@ -1,5 +1,5 @@
 import { WorkspaceTableSurface } from './workspace-table-surface'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
 import { documentStory } from '../../document-model-text'
@@ -21,11 +21,8 @@ import {
   DocxWorkspaceChrome,
   docxWorkspaceChrome,
 } from './docx-workspace-chrome'
-import {
-  useWorkspacePanels,
-  workspaceKeyDown,
-  type WorkspacePanel,
-} from './use-workspace-panels'
+import { useWorkspacePanels, workspaceKeyDown } from './use-workspace-panels'
+import { useWorkspacePageActions } from './use-workspace-page-actions'
 import type { VerifyPanelRequest } from '../verification/verification-context'
 import {
   pageZoomFor,
@@ -53,8 +50,6 @@ import { checksLoad, DocxRightSlotTabs } from './document-right-slot'
 import { useSplitScale } from '../../matter-split-scale'
 import { usePublishDocumentTabStatus } from '../../document-tab-status'
 import { useOffline } from '../../shell-states'
-import { isForeignFormField } from '../../document-workspace-keys'
-import { isPrimaryModifier } from '../../keyboard-platform'
 import {
   DocumentLoadError,
   LoadingBlock,
@@ -116,16 +111,11 @@ export function DocxWorkspace({
   const [zoom, setZoom] = useState(100)
   const splitScale = useSplitScale()
   const panels = useWorkspacePanels()
-  const verifyPanelSeq = useRef(0)
-  useEffect(() => {
-    if (!verifyRequest || verifyRequest.seq === verifyPanelSeq.current) return
-    verifyPanelSeq.current = verifyRequest.seq
-    panels.open('verify')
-  }, [verifyRequest, panels])
   const legalTools = useLegalToolsState(documentId)
   const trackChanges = drafts.trackChangesFlip ?? model?.trackRevisions ?? false
   const [banner, setBanner] = useState<string | null>(null)
   const { printBanner, printDocument } = useDocumentPrint()
+  const workspace = useWorkspaceView(Boolean(model))
   const {
     view,
     setView,
@@ -138,12 +128,11 @@ export function DocxWorkspace({
     rulerOn,
     toggleRuler,
     navOpen,
-    toggleNavPane,
     spelling,
     columnRef,
     flow,
     toggleSpelling,
-  } = useWorkspaceView(Boolean(model))
+  } = workspace
 
   const presence = syncQuery.data?.participants ?? []
   const presenceNames = usePresenceNames()
@@ -320,31 +309,9 @@ export function DocxWorkspace({
         insertAuthority(text, legalTools.citationStyle === 'house')
     }),
   )
-  function togglePanel(panel: WorkspacePanel) {
-    if (navOpen) toggleNavPane()
-    panels.toggle(panel)
-  }
-  function toggleNavigation() {
-    if (!navOpen) panels.dismiss()
-    toggleNavPane()
-  }
   const openNoteEditing = (id: string) => openEditingStory('footnotes', id)
-  const commentSelection = useLatestCallback(() => panels.tabs.open('comments'))
-  const reviewPanel = useLatestCallback(() => togglePanel('review'))
-  const openPalette = useLatestCallback(() => request('palette'))
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented) return
-      if (!isPrimaryModifier(event) || !event.shiftKey) return
-      if (event.key.toLowerCase() !== 'p') return
-      if (isForeignFormField(event.target)) return
-      event.preventDefault()
-      openPalette()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openPalette])
+  const { togglePanel, toggleNavigation, commentSelection, reviewPanel } =
+    useWorkspacePageActions(workspace, panels, verifyRequest)
 
   const chrome = useLatestHandlers(
     docxWorkspaceChrome({

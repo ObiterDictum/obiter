@@ -1568,6 +1568,7 @@ describe('document-format-edits module size', () => {
       './components/document-workspace/paragraph-arrow.ts',
       './components/document-workspace/use-workspace-caret.ts',
       './components/document-workspace/use-workspace-drafts.ts',
+      './components/document-workspace/use-workspace-page-actions.ts',
       './components/document-workspace/docx-workspace.tsx',
     ]
     for (const file of files) {
