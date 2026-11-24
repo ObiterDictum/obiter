@@ -167,3 +167,31 @@ it('explains the text fallback when the Word layout is unavailable', async () =>
   ).toBeTruthy()
   expect(screen.getAllByRole('option')).toHaveLength(2)
 })
+
+it('fits the Word page to the pane width and follows the zoom controls', async () => {
+  appShell.apiFetch.mockResolvedValue(wordLayout)
+  Object.defineProperties(HTMLElement.prototype, {
+    offsetWidth: { configurable: true, get: () => 593 },
+    clientWidth: { configurable: true, get: () => 593 },
+  })
+  try {
+    renderWordReview()
+    await screen.findByRole('article', { name: 'Document page' })
+    const frame = () =>
+      window.document
+        .querySelector('[data-document-sheet-frame]')
+        ?.getAttribute('data-page-zoom')
+    expect(frame()).toBe('66')
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(frame()).toBe('73')
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom to 100%' }))
+    expect(frame()).toBe('100')
+    fireEvent.click(screen.getByRole('button', { name: 'Fit width' }))
+    expect(frame()).toBe('66')
+  } finally {
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>)
+      .offsetWidth
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>)
+      .clientWidth
+  }
+})

@@ -57,6 +57,24 @@ Span repair is bounded: it stops after 32 convergence iterations so rows full of
 same-label fragments cannot loop between rescue and bridging. Healthy text converges
 in a handful.
 
+## Review pane scale and narrow panes
+
+The review document fits the pane width by default, for both Word pages and PDF
+pages, and re-fits when the pane or window resizes. One shared control handles
+both formats: fit width, zoom out, zoom in and 100%. Fit is expressed as a
+percentage of the page's own size, so a pane narrower than the page renders below
+100%. The fit and page-zoom maths come from the split-view scale in
+`packages/app-shell`, not a second implementation.
+
+Below a 56rem pane the page and the span list cannot both be read, so the review
+shows one at a time behind a Page/Spans switch. The decision bar stays visible in
+both, and neither view is ever overlaid by the other.
+
+Span outlines are drawn inside the span's own box. A 2px outer outline with a
+1px offset reaches into the line above and below at single line spacing, so the
+marks use an inset ring; the selected span keeps an inset ring in the focus
+colour.
+
 ## Finalise gate (approved divergence)
 
 Redact PRD 2 allowed finalising with unreviewed spans after a warning. The review

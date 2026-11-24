@@ -123,7 +123,10 @@ export function DecisionBar({
           <p className="mt-0.5 max-w-[68ch] text-caption text-subtle">
             {sourceLabel[span.source]} ·{' '}
             {confidenceLabel[span.confidence].toLowerCase()} confidence —{' '}
-            {confidenceExplanation[span.confidence]}. {CONFIDENCE_CAVEAT}
+            <span className="@max-pane:hidden">
+              {confidenceExplanation[span.confidence]}.{' '}
+            </span>
+            {CONFIDENCE_CAVEAT}
           </p>
           {where ? (
             <p className="mt-0.5 text-caption text-subtle">{where}</p>

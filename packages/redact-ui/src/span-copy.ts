@@ -139,8 +139,8 @@ export const decisionStateTone = {
 export const decisionMarkClass = {
   accepted: '',
   rejected: 'opacity-55',
-  pseudonymised: 'ring-1 ring-info',
-  pending: 'outline-2 outline-offset-1 outline-warning',
+  pseudonymised: 'inset-ring-1 inset-ring-info',
+  pending: 'inset-ring-2 inset-ring-warning',
 } satisfies Record<SpanDecisionState, string>
 
 const dateFormat = new Intl.DateTimeFormat('en-GB', {

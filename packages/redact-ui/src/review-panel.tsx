@@ -55,6 +55,7 @@ export function ReviewPanel({
   listRef,
   pageFor,
   pageCount,
+  className,
 }: {
   spans: RedactionSpan[]
   decisions: Decisions
@@ -79,12 +80,16 @@ export function ReviewPanel({
   listRef: RefObject<HTMLDivElement | null>
   pageFor: (span: RedactionSpan) => number | null
   pageCount: number | null
+  className?: string
 }) {
   const decided =
     counts.accepted + counts.rejected + counts.pseudonymised + counts.pending
   return (
     <aside
-      className="flex min-h-0 w-panel max-w-full shrink-0 flex-col border-l border-line bg-surface @max-pane:w-[320px]"
+      className={cn(
+        'flex min-h-0 w-panel max-w-full shrink-0 flex-col border-l border-line bg-surface @max-pane:w-full @max-pane:flex-1',
+        className,
+      )}
       aria-label="Detected spans"
     >
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-6 py-3">
@@ -107,7 +112,7 @@ export function ReviewPanel({
         onValueChange={(value) => {
           if (isSpanFilter(value)) onFilterChange(value)
         }}
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
         <div className="shrink-0 border-b border-line px-6 py-3">
           <TabsList aria-label="Filter spans">
@@ -216,7 +221,7 @@ export function ReviewPanel({
         </TabsContent>
       </Tabs>
 
-      <div className="flex shrink-0 flex-col gap-2 border-t border-line px-6 py-3">
+      <div className="flex shrink-0 flex-col gap-2 border-t border-line px-6 py-3 @max-pane:hidden">
         <p className="text-caption text-muted">{detectionSummary(bySource)}</p>
         <p className="text-caption text-subtle">
           The redaction schedule is a separate file. It lists each decision

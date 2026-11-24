@@ -104,7 +104,7 @@ export function wordRunPaint(
             'pointer-events-auto cursor-pointer rounded-[1px] focus-visible:outline-2 focus-visible:outline-ring',
             categoryClasses[span.category],
             decisionMarkClass[spanDecisionState(decisions[span.id]?.decision)],
-            selected && 'ring-2 ring-ring',
+            selected && 'inset-ring-2 inset-ring-ring',
           )}
         >
           {content}

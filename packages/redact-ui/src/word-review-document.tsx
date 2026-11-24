@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RedactionWordLayout } from '@obiter/contracts'
 import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
+import { useSplitScale } from '@obiter/app-shell'
 import {
   documentImagePartNames,
   layoutDocumentPages,
@@ -51,6 +52,7 @@ export function WordReviewDocument({
   )
   const focusedRequest = useRef<typeof focusRequest>(null)
   const [limit, setLimit] = useState(PAGE_BATCH)
+  const [hostVisible, setHostVisible] = useState(false)
   const imageParts = useMemo(
     () => documentImagePartNames(layout.model),
     [layout.model],
@@ -59,12 +61,25 @@ export function WordReviewDocument({
     () => wordRunPaint(ranges.byRun, spanById, decisions, selectedId, onSelect),
     [ranges, spanById, decisions, selectedId, onSelect],
   )
+  const zoom = useSplitScale()?.pageZoom ?? 100
   const images = useSourceImageUrls(
     `/api/redaction-runs/${encodeURIComponent(runId)}/source-file`,
     imageParts,
   )
 
   useEffect(() => {
+    const element = host.current
+    if (!element) return
+    const publish = () => setHostVisible(element.getClientRects().length > 0)
+    publish()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(publish)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!hostVisible) return
     const frame = requestAnimationFrame(() => {
       const sheets = host.current?.querySelectorAll<HTMLElement>(
         '[data-document-sheet]',
@@ -83,7 +98,7 @@ export function WordReviewDocument({
         )
     })
     return () => cancelAnimationFrame(frame)
-  }, [limit, onCoverage, pages.length, ranges, runId])
+  }, [hostVisible, limit, onCoverage, pages.length, ranges, runId])
 
   useEffect(() => {
     if (
@@ -120,6 +135,7 @@ export function WordReviewDocument({
       <StaticDocumentPages
         model={layout.model}
         pages={pages}
+        zoom={zoom}
         pageLimit={limit}
         imageUrls={images.urls}
         paintRun={paintRun}

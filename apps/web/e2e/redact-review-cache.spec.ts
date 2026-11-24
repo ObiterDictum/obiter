@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import type { RedactionRun } from '@obiter/redact-ui'
 import { mockSession } from './shell-harness'
+import { showRedactionSpans } from './support'
 
 const initialRun: RedactionRun = {
   id: 'red_cache',
@@ -95,6 +96,7 @@ test('a span decision refreshes the prefetched run list before returning to Reda
   await navigation.getByRole('link', { name: /Redact/ }).click()
   await expect(page.getByText('0 of 1 decided', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await showRedactionSpans(page)
   const spans = page.getByRole('listbox', { name: 'Detected spans' })
   await spans.focus()
   await page.keyboard.press('Enter')
