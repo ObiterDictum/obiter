@@ -1,6 +1,6 @@
 import { reportError } from './error-reporting'
 import { Link } from '@tanstack/react-router'
-import { Button, ObiterMark, Skeleton, cn } from '@obiter/ui'
+import { Button, EmptyState, ObiterMark, Skeleton, cn } from '@obiter/ui'
 import {
   ArrowClockwise,
   House,
@@ -84,7 +84,8 @@ export function classifyShellFailure(error: unknown): ShellFailure {
     return 'staff-two-factor-required'
   if (error.code === 'forbidden' || error.code === 'no_organisation')
     return 'forbidden'
-  if (NOT_FOUND_CODES.has(error.code)) return 'not-found'
+  if (error.status === 404 || NOT_FOUND_CODES.has(error.code))
+    return 'not-found'
   return 'error'
 }
 
@@ -141,6 +142,20 @@ function StatePage({
   )
 }
 
+const NOT_FOUND_BODY =
+  'It may have been removed, or you may not have access to it.'
+
+const NOT_FOUND_COPY = new Map<
+  string,
+  { noun: string; to: '/matters' | '/verify' | '/redact' }
+>([
+  ['matter_not_found', { noun: 'matter', to: '/matters' }],
+  ['matter_share_not_found', { noun: 'matter', to: '/matters' }],
+  ['document_not_found', { noun: 'document', to: '/matters' }],
+  ['redaction_run_not_found', { noun: 'redaction run', to: '/redact' }],
+  ['verification_run_not_found', { noun: 'verification run', to: '/verify' }],
+])
+
 export function ShellNotFound() {
   return (
     <StatePage
@@ -159,6 +174,67 @@ export function ShellNotFound() {
         </>
       }
       footer="Check the address, or use the sidebar to reach the page you need."
+    />
+  )
+}
+
+function ShellEntityNotFound({ error }: { error: ApiError }) {
+  const copy = NOT_FOUND_COPY.get(error.code)
+  if (!copy) return <ShellNotFound />
+  const backLabel =
+    copy.to === '/matters'
+      ? 'Back to matters'
+      : copy.to === '/verify'
+        ? 'Open Verify'
+        : 'Open Redact'
+  return (
+    <StatePage
+      tone="neutral"
+      icon={<MagnifyingGlass size={20} aria-hidden />}
+      title={`This ${copy.noun} does not exist`}
+      description={NOT_FOUND_BODY}
+      actions={
+        <>
+          <Link to={copy.to} className={linkClass.primary}>
+            {backLabel}
+          </Link>
+          <Link to="/" className={linkClass.secondary}>
+            Go to Home
+          </Link>
+        </>
+      }
+    />
+  )
+}
+
+export function ShellQueryError({
+  error,
+  label,
+  backAction,
+}: {
+  error: unknown
+  label: string
+  backAction?: ReactNode
+}) {
+  const failure = classifyShellFailure(error)
+  const missing = failure === 'not-found' || failure === 'forbidden'
+  return (
+    <EmptyState
+      title={
+        !missing
+          ? `This ${label} could not be loaded`
+          : failure === 'forbidden'
+            ? `You do not have access to this ${label}`
+            : `This ${label} does not exist`
+      }
+      body={
+        missing
+          ? NOT_FOUND_BODY
+          : error instanceof Error
+            ? error.message
+            : 'The request failed. Try again in a moment.'
+      }
+      action={backAction}
     />
   )
 }
@@ -218,7 +294,13 @@ export function ShellError({
 }) {
   reportError(error)
   const failure = classifyShellFailure(error)
-  if (failure === 'not-found') return <ShellNotFound />
+  if (failure === 'not-found') {
+    return error instanceof ApiError ? (
+      <ShellEntityNotFound error={error} />
+    ) : (
+      <ShellNotFound />
+    )
+  }
   if (failure === 'forbidden') return <ShellPermissionDenied />
   if (failure === 'staff-two-factor-required')
     return <ShellStaffTwoFactorRequired />

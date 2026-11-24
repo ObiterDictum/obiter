@@ -219,7 +219,7 @@ export function verificationCountsLabel(counts: VerificationFindingCounts) {
       `${counts.matched} ${counts.matched === 1 ? 'matches' : 'match'} the checked source`,
     )
   if (counts.dismissed > 0) parts.push(`${counts.dismissed} dismissed`)
-  return parts.length > 0 ? parts.join(' · ') : 'No findings'
+  return parts.length > 0 ? parts.join(' · ') : 'No citations found'
 }
 
 export function verificationRunTimestamp(run: VerificationRun) {
@@ -354,4 +354,18 @@ export function verificationDismissalRecord(
           dismissal.dismissedByFormerMember,
         )
   return `Dismissed by ${who} · ${time}`
+}
+
+export function dedupeFindings(
+  findings: readonly VerificationFindingView[],
+): VerificationFindingView[] {
+  const seen = new Set<string>()
+  const kept: VerificationFindingView[] = []
+  for (const finding of findings) {
+    const key = `${finding.location.kind}:${finding.location.start}:${finding.location.end}:${finding.excerpt}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    kept.push(finding)
+  }
+  return kept
 }

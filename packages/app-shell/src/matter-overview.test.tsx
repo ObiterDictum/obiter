@@ -6,6 +6,7 @@ import {
   RouterProvider,
   createMemoryHistory,
   createRootRoute,
+  createRoute,
   createRouter,
 } from '@tanstack/react-router'
 import type { MatterRecord } from './matters'
@@ -46,16 +47,27 @@ function renderOverview(props: {
   openWork: MatterOpenWork | null
   openWorkUnavailable?: boolean
 }) {
+  const rootRoute = createRootRoute({
+    component: () => (
+      <MatterOverview
+        matter={matter}
+        openWork={props.openWork}
+        openWorkUnavailable={props.openWorkUnavailable ?? false}
+      />
+    ),
+  })
+  const matterVerify = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/matters/$matterId/verify',
+    component: () => null,
+  })
+  const redact = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/redact',
+    component: () => null,
+  })
   const router = createRouter({
-    routeTree: createRootRoute({
-      component: () => (
-        <MatterOverview
-          matter={matter}
-          openWork={props.openWork}
-          openWorkUnavailable={props.openWorkUnavailable ?? false}
-        />
-      ),
-    }),
+    routeTree: rootRoute.addChildren([matterVerify, redact]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
   render(
@@ -93,6 +105,31 @@ describe('MatterOverview', () => {
     expect(
       within(openWorkRegion).getByRole('link', { name: 'Review in Verify' }),
     ).toBeTruthy()
+    expect(
+      within(openWorkRegion).queryByRole('link', { name: 'Review in Redact' }),
+    ).toBeNull()
+  })
+
+  it('sends redaction decisions to the Redact queue', async () => {
+    renderOverview({
+      openWork: openWork({
+        flaggedFindings: 0,
+        reviewFindings: 0,
+        redactionDecisions: 2,
+        total: 2,
+      }),
+    })
+
+    const openWorkRegion = await screen.findByRole('region', {
+      name: 'Open work',
+    })
+    expect(
+      within(openWorkRegion).queryByRole('link', { name: 'Review in Verify' }),
+    ).toBeNull()
+    const redactLink = within(openWorkRegion).getByRole('link', {
+      name: 'Review in Redact',
+    })
+    expect(redactLink.getAttribute('href')).toBe('/redact')
   })
 
   it('says a matter is clear rather than leaving the card empty', async () => {

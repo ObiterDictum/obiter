@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  EmptyState,
   Menu,
   MenuContent,
   MenuItem,
@@ -27,6 +26,7 @@ import { documentDisplayName, useMatterDocuments } from '../documents'
 import { useDeleteMatter, useMatter } from '../matters'
 import type { MatterRecord } from '../matters'
 import { useRedactionRunsList } from '../redaction-runs'
+import { ShellQueryError } from '../shell-states'
 import { PageScaffold } from '../page-scaffold'
 import { useOrganisationVerificationRuns } from '../verification-runs'
 import { buildAttentionItems } from './home-attention'
@@ -58,10 +58,10 @@ export function MatterRouteView({
 
   if (matter.isError && !matter.isLoading) {
     return (
-      <EmptyState
-        title="Matter not found"
-        body="This matter does not exist in your organisation, or your session may have expired."
-        action={
+      <ShellQueryError
+        error={matter.error}
+        label="matter"
+        backAction={
           <Link
             to="/matters"
             className={buttonClassName({ variant: 'secondary', size: 'md' })}

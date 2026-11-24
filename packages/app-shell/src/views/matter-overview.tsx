@@ -14,6 +14,10 @@ export function MatterOverview({
   openWork: MatterOpenWork | null
   openWorkUnavailable: boolean
 }) {
+  const queueLinkClass = buttonClassName({
+    variant: 'secondary',
+    size: 'sm',
+  })
   return (
     <div className="flex flex-col gap-6">
       <Card aria-labelledby="matter-details">
@@ -56,16 +60,22 @@ export function MatterOverview({
                   </li>
                 ))}
               </ul>
-              <Link
-                to="/verify"
-                className={buttonClassName({
-                  variant: 'secondary',
-                  size: 'sm',
-                  className: 'self-start',
-                })}
-              >
-                Review in Verify
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                {openWork.flaggedFindings + openWork.reviewFindings > 0 ? (
+                  <Link
+                    to="/matters/$matterId/verify"
+                    params={{ matterId: matter.id }}
+                    className={queueLinkClass}
+                  >
+                    Review in Verify
+                  </Link>
+                ) : null}
+                {openWork.redactionDecisions + openWork.failed > 0 ? (
+                  <Link to="/redact" className={queueLinkClass}>
+                    Review in Redact
+                  </Link>
+                ) : null}
+              </div>
             </div>
           )}
         </CardBody>

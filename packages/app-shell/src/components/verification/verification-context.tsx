@@ -36,6 +36,11 @@ type StartAvailability =
 
 export const verificationDockId = 'document-verification'
 
+export type VerifyPanelRequest = {
+  value: 'open' | 'run'
+  seq: number
+}
+
 export type VerificationWorkspaceValue = {
   documentId: string
   mappable: boolean
@@ -106,10 +111,12 @@ function useViewportWidth() {
 export function VerificationWorkspaceProvider({
   documentId,
   mappable,
+  verifyRequest,
   children,
 }: {
   documentId: string
   mappable: boolean
+  verifyRequest?: VerifyPanelRequest | null
   children: ReactNode
 }) {
   const document = useDocument(documentId)
@@ -198,6 +205,21 @@ export function VerificationWorkspaceProvider({
               : dirty
                 ? { available: false, reason: 'save before verification' }
                 : { available: true }
+
+  const canStartRun = startAvailability.available
+  const autoRunSeq = useRef(0)
+  useEffect(() => {
+    if (
+      verifyRequest?.value !== 'run' ||
+      verifyRequest.seq === autoRunSeq.current ||
+      !canStartRun ||
+      !ready ||
+      !version
+    )
+      return
+    autoRunSeq.current = verifyRequest.seq
+    create.mutate(version.id)
+  }, [verifyRequest, canStartRun, ready, version, create])
 
   useEffect(() => {
     if (!revealPending || !startAnchor) return

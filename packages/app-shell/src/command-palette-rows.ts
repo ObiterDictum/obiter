@@ -24,7 +24,7 @@ export type PaletteCreateId =
 
 type PaletteTarget =
   | { kind: 'matter'; matterId: string }
-  | { kind: 'document'; matterId: string; documentId: string }
+  | { kind: 'document'; matterId: string; documentId: string; verify?: 'run' }
   | { kind: 'verify' }
   | { kind: 'redaction'; runId: string }
   | { kind: 'law'; query: string }

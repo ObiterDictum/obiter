@@ -706,15 +706,24 @@ describe('HomeRouteView — getting started checklist', () => {
       within(checklist).getByRole('link', { name: 'Invite in Settings' }),
     ).toBeTruthy()
     expect(
-      within(checklist).getByRole('link', { name: 'Open Verify' }),
+      within(checklist).getByRole('link', { name: 'Run Verify' }),
     ).toBeTruthy()
     expect(
       within(checklist).queryByRole('button', { name: 'New matter' }),
     ).toBeNull()
+    expect(within(checklist).getAllByRole('listitem')).toHaveLength(2)
     expect(
-      within(checklist).getByRole('link', {
+      within(checklist).getByText('Create a matter \u00b7 Upload a document'),
+    ).toBeTruthy()
+    expect(
+      within(checklist).queryByRole('link', {
         name: 'Review your organisation settings',
       }),
+    ).toBeNull()
+    expect(
+      within(checklist).getByText(
+        'Steps tick from the work already stored here.',
+      ),
     ).toBeTruthy()
   })
 

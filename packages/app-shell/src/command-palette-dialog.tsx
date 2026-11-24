@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { currentUserQueryOptions } from './current-user'
-import { matterIdFromPath } from './navigation'
+import { documentIdFromPath, matterIdFromPath } from './navigation'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings-sections'
 import { useAppTheme } from './use-app-theme'
 import {
@@ -92,6 +92,7 @@ function PaletteLink({
         <Link
           to="/matters/$matterId/documents/$documentId"
           params={{ matterId: target.matterId, documentId: target.documentId }}
+          search={target.verify ? { verify: target.verify } : undefined}
           {...shared}
         />
       )
@@ -274,9 +275,11 @@ export function CommandPaletteDialog({
   const [pickFor, setPickFor] = useState<PaletteCreateId | null>(null)
 
   const matters = useMattersList().data ?? []
-  const currentMatterId = useRouterState({
-    select: (state) => matterIdFromPath(state.location.pathname),
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
   })
+  const currentMatterId = matterIdFromPath(pathname)
+  const currentDocumentId = documentIdFromPath(pathname)
   const currentMatterName =
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
   const actions = useActionRows(currentMatterId)
@@ -297,6 +300,20 @@ export function CommandPaletteDialog({
         currentMatterName,
         actions: [
           ...actions,
+          ...(currentDocumentId && currentMatterId
+            ? [
+                {
+                  id: 'run-verify',
+                  label: 'Run Verify',
+                  target: {
+                    kind: 'document',
+                    matterId: currentMatterId,
+                    documentId: currentDocumentId,
+                    verify: 'run',
+                  },
+                } satisfies PaletteRow,
+              ]
+            : []),
           {
             id: 'welcome-guide',
             label: 'Show welcome guide',

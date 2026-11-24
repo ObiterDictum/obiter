@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@obiter/ui'
 import {
+  dedupeFindings,
   formatRunTime,
   verificationStoredVersionNote,
   verificationUnmappedLabel,
@@ -96,7 +97,7 @@ export function VerificationFindingsIndex({
           </p>
         ) : (
           <div className="flex flex-col pt-2">
-            {verification.findings.map((finding) => (
+            {dedupeFindings(verification.findings).map((finding) => (
               <div key={finding.id} className="flex flex-col">
                 <VerifyFinding
                   finding={finding}

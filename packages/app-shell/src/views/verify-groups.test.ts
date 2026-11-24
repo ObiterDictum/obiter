@@ -3,7 +3,7 @@ import type {
   VerificationFindingView,
   VerificationRun,
 } from '@obiter/contracts'
-import { verificationFindingCounts } from '../verification-copy'
+import { dedupeFindings, verificationFindingCounts } from '../verification-copy'
 import {
   buildVerifyGroups,
   findingMatchesFilter,
@@ -165,6 +165,33 @@ describe('sortFindings', () => {
       'earlier',
       'later',
     ])
+  })
+})
+
+describe('dedupeFindings', () => {
+  it('keeps one finding when authority and citation checks share a span', () => {
+    const citation = finding({
+      id: 'vf_citation',
+      type: 'citation_resolution',
+      state: 'clear',
+    })
+    const authority = finding({
+      id: 'vf_authority',
+      type: 'authority_existence',
+      state: 'flagged',
+    })
+    const kept = dedupeFindings(sortFindings([citation, authority]))
+    expect(kept.map((item) => item.id)).toEqual(['vf_authority'])
+  })
+
+  it('keeps findings that differ by span or text', () => {
+    const first = finding({ id: 'vf_1' })
+    const otherSpan = finding({
+      id: 'vf_2',
+      location: { paragraphId: 'p1', start: 20, end: 33 },
+    })
+    const otherText = finding({ id: 'vf_3', excerpt: '[2020] EWCA Civ 1' })
+    expect(dedupeFindings([first, otherSpan, otherText])).toHaveLength(3)
   })
 })
 

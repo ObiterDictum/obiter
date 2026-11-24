@@ -279,7 +279,6 @@ function HomeDashboard({ me }: { me: MeResponse }) {
       {showChecklist ? (
         <FirstRunChecklist
           steps={checklistSteps}
-          showOrganisationSettings={managesOrganisation}
           onDismiss={dismissChecklist}
         />
       ) : null}

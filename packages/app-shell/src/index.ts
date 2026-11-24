@@ -105,6 +105,7 @@ export {
   validateStaffErrorsSearch,
 } from './staff-search'
 export { DocumentDetailLayoutView } from './views/document-detail'
+export type { VerifyPanelRequest } from './components/document-workspace/workspace'
 export { caseResultLocation } from './case-navigation'
 export { provisionResultLocation } from './legislation-navigation'
 

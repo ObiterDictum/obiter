@@ -7,6 +7,7 @@ import type {
   VerificationRun,
 } from '@obiter/contracts'
 import {
+  dedupeFindings,
   formatRunTime,
   verificationCountsLabel,
   verificationFailureLabel,
@@ -72,9 +73,11 @@ export function VerifyDocument({
     : null
   const documentLabel = `${filename}${checkedNumber === undefined ? '' : ` · version ${String(checkedNumber)}`}`
 
-  const shown = sortFindings(
-    findings.findings.filter((finding) =>
-      findingMatchesFilter(finding, filter),
+  const shown = dedupeFindings(
+    sortFindings(
+      findings.findings.filter((finding) =>
+        findingMatchesFilter(finding, filter),
+      ),
     ),
   )
   const matches =

@@ -21,11 +21,9 @@ import {
   DocxWorkspaceChrome,
   docxWorkspaceChrome,
 } from './docx-workspace-chrome'
-import {
-  useWorkspacePanels,
-  workspaceKeyDown,
-  type WorkspacePanel,
-} from './use-workspace-panels'
+import { useWorkspacePanels, workspaceKeyDown } from './use-workspace-panels'
+import { useWorkspacePageActions } from './use-workspace-page-actions'
+import type { VerifyPanelRequest } from '../verification/verification-context'
 import {
   pageZoomFor,
   useWorkspaceSurface,
@@ -70,8 +68,10 @@ export function DocxWorkspace({
   versions = [],
   headerLinks,
   onViewVersion,
+  verifyRequest,
 }: {
   documentId: string
+  verifyRequest?: VerifyPanelRequest | null
   versionId: string
   matterId: string
   filename: string
@@ -115,6 +115,7 @@ export function DocxWorkspace({
   const trackChanges = drafts.trackChangesFlip ?? model?.trackRevisions ?? false
   const [banner, setBanner] = useState<string | null>(null)
   const { printBanner, printDocument } = useDocumentPrint()
+  const workspace = useWorkspaceView(Boolean(model))
   const {
     view,
     setView,
@@ -127,12 +128,11 @@ export function DocxWorkspace({
     rulerOn,
     toggleRuler,
     navOpen,
-    toggleNavPane,
     spelling,
     columnRef,
     flow,
     toggleSpelling,
-  } = useWorkspaceView(Boolean(model))
+  } = workspace
 
   const presence = syncQuery.data?.participants ?? []
   const presenceNames = usePresenceNames()
@@ -309,17 +309,9 @@ export function DocxWorkspace({
         insertAuthority(text, legalTools.citationStyle === 'house')
     }),
   )
-  function togglePanel(panel: WorkspacePanel) {
-    if (navOpen) toggleNavPane()
-    panels.toggle(panel)
-  }
-  function toggleNavigation() {
-    if (!navOpen) panels.dismiss()
-    toggleNavPane()
-  }
   const openNoteEditing = (id: string) => openEditingStory('footnotes', id)
-  const commentSelection = useLatestCallback(() => panels.tabs.open('comments'))
-  const reviewPanel = useLatestCallback(() => togglePanel('review'))
+  const { togglePanel, toggleNavigation, commentSelection, reviewPanel } =
+    useWorkspacePageActions(workspace, panels, verifyRequest)
 
   const chrome = useLatestHandlers(
     docxWorkspaceChrome({

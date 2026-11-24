@@ -4,7 +4,7 @@ import {
   checkDocumentName,
   DOCUMENT_NAME_MAX_LENGTH,
 } from '@obiter/contracts/document-name-rules'
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   documentDisplayName,
   documentRenameErrorMessage,
@@ -12,6 +12,7 @@ import {
   type MatterDocumentRecord,
 } from '../../documents'
 import { formatShortcut, shortcutAttribute } from '../../keyboard-platform'
+import { isTypingTarget } from '../../shell-shortcuts'
 
 export function DocumentTitle({
   document,
@@ -28,6 +29,21 @@ export function DocumentTitle({
 
   const stem = document.name ?? name
   const extension = document.currentVersion?.fileType
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const inOverlay =
+        event.target instanceof HTMLElement &&
+        event.target.closest('[role=dialog],[role=menu],[role=listbox]')
+      if (event.key !== 'F2' || event.defaultPrevented || inOverlay) return
+      if (isTypingTarget(event.target)) return
+      event.preventDefault()
+      setDraft(stem)
+      setError(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [stem])
 
   function startEditing() {
     setDraft(stem)

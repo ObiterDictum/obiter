@@ -23,6 +23,7 @@ import {
 import {
   VerificationWorkspaceProvider,
   useVerificationWorkspace,
+  type VerifyPanelRequest,
 } from '../verification/verification-context'
 import { verificationFailureLabel } from '../../verification-copy'
 import { VerificationDock } from '../verification/verification-dock'
@@ -40,6 +41,8 @@ import {
 } from './workspace-chrome'
 import type { DocumentWorkspaceLayout } from './workspace-chrome'
 
+export type { VerifyPanelRequest }
+
 type DocumentWorkspaceProps = {
   documentId: string
   version: DocumentVersionRecord | null | undefined
@@ -49,6 +52,7 @@ type DocumentWorkspaceProps = {
   headerLinks?: { matter?: ReactNode }
   onViewVersion?: (versionId: string) => void
   onDocumentEdited?: () => void
+  verifyRequest?: VerifyPanelRequest | null
 }
 
 export function DocumentWorkspace(props: DocumentWorkspaceProps) {
@@ -60,6 +64,7 @@ export function DocumentWorkspace(props: DocumentWorkspaceProps) {
         key={kind === 'pdf' ? props.version?.id : undefined}
         documentId={props.documentId}
         mappable={kind === 'docx'}
+        verifyRequest={props.verifyRequest}
       >
         <DocumentWorkspaceBody key={props.documentId} {...props} />
       </VerificationWorkspaceProvider>
@@ -73,6 +78,7 @@ export function DocumentWorkspace(props: DocumentWorkspaceProps) {
         key={kind === 'pdf' ? props.version?.id : undefined}
         documentId={props.documentId}
         mappable={kind === 'docx'}
+        verifyRequest={props.verifyRequest}
       >
         <DocumentWorkspaceBody key={props.documentId} {...props} />
       </VerificationWorkspaceProvider>
@@ -88,6 +94,7 @@ function DocumentWorkspaceBody({
   versions = [],
   headerLinks,
   onViewVersion,
+  verifyRequest,
 }: DocumentWorkspaceProps) {
   const kind = workspaceKind(version?.fileType)
   const ready = version?.documentStatus === 'ready'
@@ -173,6 +180,7 @@ function DocumentWorkspaceBody({
     <VerifiedViewer dock={false}>
       <DocxWorkspace
         documentId={documentId}
+        verifyRequest={verifyRequest}
         versionId={version.id}
         versionNumber={version.versionNumber}
         matterId={version.matterId}

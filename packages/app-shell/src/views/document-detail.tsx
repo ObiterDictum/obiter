@@ -8,10 +8,14 @@ import {
 import { useState, type ReactNode } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
 import { EmptyState, Skeleton, useToast } from '@obiter/ui'
+import { ShellQueryError } from '../shell-states'
 import { useDocument } from '../documents'
 import { useMatter } from '../matters'
 import { ContentFrame } from '../content-frame'
-import { DocumentWorkspace } from '../components/document-workspace/workspace'
+import {
+  DocumentWorkspace,
+  type VerifyPanelRequest,
+} from '../components/document-workspace/workspace'
 import { DocumentTitle } from '../components/document-workspace/document-title'
 import { DocumentVersionView } from '../components/document-workspace/document-version-view'
 import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
@@ -40,11 +44,13 @@ function DocumentDetailBody({
   documentId,
   redactionRunsRegion,
   onDocumentEdited,
+  verifyRequest,
 }: {
   matterId: string
   documentId: string
   redactionRunsRegion?: ReactNode
   onDocumentEdited?: () => void
+  verifyRequest?: VerifyPanelRequest | null
 }) {
   const document = useDocument(documentId)
   const queryClient = useQueryClient()
@@ -177,10 +183,7 @@ function DocumentDetailBody({
     return (
       <ContentFrame className="py-14">
         {rightSlotPanels}
-        <EmptyState
-          title="Document not found"
-          body="This document does not exist in your organisation, or your session may have expired."
-        />
+        <ShellQueryError error={document.error} label="document" />
       </ContentFrame>
     )
   }
@@ -224,6 +227,7 @@ function DocumentDetailBody({
           <DocumentWorkspace
             key={restoredVersionId ?? documentId}
             documentId={documentId}
+            verifyRequest={verifyRequest}
             version={loaded.document.currentVersion}
             document={loaded.document}
             versions={loaded.versions}
