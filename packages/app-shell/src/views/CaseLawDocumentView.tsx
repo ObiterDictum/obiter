@@ -1,3 +1,4 @@
+import { SourcePageLinks } from './SourcePageLinks'
 import { placePages } from './judgment-pages'
 import {
   anchorOwners,
@@ -7,7 +8,6 @@ import {
 } from './judgment-structure'
 import { JudgmentCover, JudgmentEntry, OpinionsCard } from './JudgmentStructure'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import {
   Button,
   Card,
@@ -144,21 +144,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
               sourceUrl: data.sourceUrl,
             }}
           />
-          <a
-            className={buttonClassName({ variant: 'secondary', size: 'md' })}
-            href={data.sourceUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            Open original
-            <ArrowUpRight aria-hidden size={14} />
-          </a>
-          <Link
-            className={buttonClassName({ variant: 'ghost', size: 'md' })}
-            to="/search"
-          >
-            Back to search
-          </Link>
+          <SourcePageLinks sourceUrl={data.sourceUrl} />
         </>
       }
     >
