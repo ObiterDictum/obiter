@@ -10,11 +10,9 @@ import { CreateMatterDialog } from './create-matter-dialog'
 
 export function FirstRunChecklist({
   steps,
-  showOrganisationSettings,
   onDismiss,
 }: {
   steps: FirstRunStep[]
-  showOrganisationSettings: boolean
   onDismiss: () => void
 }) {
   const { done, total } = firstRunProgress(steps)
@@ -68,19 +66,9 @@ export function FirstRunChecklist({
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-line px-6 py-3">
-          {showOrganisationSettings ? (
-            <Link
-              to="/settings"
-              search={{ section: 'organisation' }}
-              className="text-meta text-muted hover:text-ink"
-            >
-              Review your organisation settings
-            </Link>
-          ) : (
-            <span className="text-meta text-subtle">
-              Steps tick from the work already stored here.
-            </span>
-          )}
+          <span className="text-meta text-subtle">
+            Steps tick from the work already stored here.
+          </span>
           <Button variant="ghost" size="sm" onClick={onDismiss}>
             Hide checklist
           </Button>
@@ -125,7 +113,7 @@ function stepAction(id: FirstRunStepId) {
           to="/verify"
           className={buttonClassName({ variant: 'secondary', size: 'sm' })}
         >
-          Open Verify
+          Run Verify
         </Link>
       )
     case 'search':
