@@ -3,10 +3,9 @@ import type {
   VerificationFindingView,
   VerificationRun,
 } from '@obiter/contracts'
-import { verificationFindingCounts } from '../verification-copy'
+import { dedupeFindings, verificationFindingCounts } from '../verification-copy'
 import {
   buildVerifyGroups,
-  dedupeFindings,
   findingMatchesFilter,
   groupMatchesFilter,
   sortFindings,

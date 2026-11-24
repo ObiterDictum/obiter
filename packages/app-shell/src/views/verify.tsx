@@ -225,11 +225,7 @@ function VerifyDocuments({ matterId }: { matterId?: string }) {
   if (documents.length === 0) return null
   return (
     <Card aria-labelledby="verify-documents">
-      <CardHead titleId="verify-documents" title="Documents">
-        <span className="text-caption text-subtle">
-          In a document, Verify lives in the Review tab’s Checks group.
-        </span>
-      </CardHead>
+      <CardHead titleId="verify-documents" title="Documents" />
       <ul className="flex flex-col pb-2">
         {documents.map((document) => (
           <li

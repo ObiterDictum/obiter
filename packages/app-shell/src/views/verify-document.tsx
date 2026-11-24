@@ -7,6 +7,7 @@ import type {
   VerificationRun,
 } from '@obiter/contracts'
 import {
+  dedupeFindings,
   formatRunTime,
   verificationCountsLabel,
   verificationFailureLabel,
@@ -24,7 +25,6 @@ import {
 import { VerifyDismissDialog } from '../components/verification/verify-dismiss-dialog'
 import { VerifyFinding } from '../components/verification/verify-finding'
 import {
-  dedupeFindings,
   findingMatchesFilter,
   sortFindings,
   type VerifyDocumentGroup,

@@ -316,7 +316,7 @@ export function CommandPaletteDialog({
                 {
                   id: 'run-verify',
                   label: 'Run Verify',
-                  hint: `On ${documents.find((document) => document.documentId === currentDocumentId)?.filename ?? 'the open document'}`,
+                  hint: 'Run Verify on the open document',
                   target: {
                     kind: 'verify-run',
                     matterId: currentMatterId,

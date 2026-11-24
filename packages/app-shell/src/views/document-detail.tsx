@@ -5,11 +5,10 @@ import {
   DocumentDraftStatusProvider,
   useDocumentDraftStatus,
 } from '../components/document-workspace/document-draft-status'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
 import { EmptyState, Skeleton, useToast, Button } from '@obiter/ui'
 import { classifyShellFailure } from '../shell-states'
-import { isTypingTarget } from '../shell-shortcuts'
 import { useDocument } from '../documents'
 import { useMatter } from '../matters'
 import { ContentFrame } from '../content-frame'
@@ -57,25 +56,7 @@ function DocumentDetailBody({
   const queryClient = useQueryClient()
   const draft = useDocumentDraftStatus()
   const [restoredVersionId, setRestoredVersionId] = useState<string>()
-  const [renameSignal, setRenameSignal] = useState(0)
   const { toast } = useToast()
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'F2' || event.defaultPrevented) return
-      if (isTypingTarget(event.target)) return
-      if (
-        event.target instanceof HTMLElement &&
-        event.target.closest('[role="dialog"],[role="menu"],[role="listbox"]')
-      ) {
-        return
-      }
-      event.preventDefault()
-      setRenameSignal((signal) => signal + 1)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
   const restore = useMutation({
     mutationFn: async (versionId: string) => {
       if (draft?.dirty) throw new Error('Save or discard your changes first.')
@@ -258,7 +239,7 @@ function DocumentDetailBody({
     <div className="flex flex-col">
       {rightSlotPanels}
       <div className="flex h-[calc(100dvh-5.5rem)] min-h-[34rem] shrink-0 flex-col">
-        <DocumentTitle document={loaded.document} renameSignal={renameSignal} />
+        <DocumentTitle document={loaded.document} />
         {viewingHistorical && selectedVersion ? (
           <ContentFrame className="flex min-h-0 flex-1 flex-col py-8">
             <DocumentVersionView

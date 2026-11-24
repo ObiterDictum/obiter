@@ -12,13 +12,12 @@ import {
   type MatterDocumentRecord,
 } from '../../documents'
 import { formatShortcut, shortcutAttribute } from '../../keyboard-platform'
+import { isTypingTarget } from '../../shell-shortcuts'
 
 export function DocumentTitle({
   document,
-  renameSignal = 0,
 }: {
   document: MatterDocumentRecord
-  renameSignal?: number
 }) {
   const name = documentDisplayName(document)
   const rename = useRenameDocument()
@@ -27,17 +26,27 @@ export function DocumentTitle({
   const [error, setError] = useState<string | null>(null)
   const errorId = `document-title-error-${document.id}`
   const titleRef = useRef<HTMLButtonElement>(null)
-  const lastSignal = useRef(0)
 
   const stem = document.name ?? name
   const extension = document.currentVersion?.fileType
 
   useEffect(() => {
-    if (!renameSignal || renameSignal === lastSignal.current) return
-    lastSignal.current = renameSignal
-    setDraft((current) => current ?? stem)
-    setError(null)
-  }, [renameSignal, stem])
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'F2' || event.defaultPrevented) return
+      if (isTypingTarget(event.target)) return
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('[role="dialog"],[role="menu"],[role="listbox"]')
+      ) {
+        return
+      }
+      event.preventDefault()
+      setDraft(stem)
+      setError(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [stem])
 
   function startEditing() {
     setDraft(stem)

@@ -9,11 +9,11 @@ import {
   DialogTitle,
 } from '@obiter/ui'
 import {
+  dedupeFindings,
   formatRunTime,
   verificationStoredVersionNote,
   verificationUnmappedLabel,
 } from '../../verification-copy'
-import { dedupeFindings } from '../../views/verify-groups'
 import type { UnmappedReason } from './verification-mapping'
 import { VerifyDismissDialog } from './verify-dismiss-dialog'
 import { VerifyFinding } from './verify-finding'
