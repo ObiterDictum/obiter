@@ -20,7 +20,7 @@ Verified 2026-07-27 against `dev`:
 | `@obiter/api`               | 240 pass, 14 skipped |
 | Typecheck, all four         | clean                |
 
-Structural checks confirmed: migration `0005_redaction.sql` and successors; all eight contract schemas; all six error codes; every `redaction-policy` module; all API routes including `/spans/:spanId/decision`, `/finalize` and `/audit`; `document-extraction.ts`; `redaction-audit-report.ts` with JSON, Markdown and HTML renderers; `generate-synthetic-data.ts`, `scripts/synthetic-v2/` and `export-training-data.ts`.
+Structural checks confirmed: migration `0005_redaction.sql` and successors; all eight contract schemas; all six error codes; every `redaction-policy` module; all API routes including `/spans/:spanId/decision`, `/finalize` and `/audit`; `document-extraction.ts`; `redaction-audit-report.ts` with JSON, Markdown and HTML renderers; and `generate-synthetic-data.ts`. The Synthetic v2 pipeline and training exporter live in a separate private repository.
 
 Gate 2 verification on 2026-07-29, compared with that baseline: `@obiter/redaction-policy` 51 passed; `@obiter/redact-ui` 15 passed; `@obiter/rampart-inference` 4 passed; `@obiter/api` 304 passed and 14 live-provider tests skipped; all four package typechecks clean. The additional deterministic synthetic-generator acceptance test passed with 300 documents across 7 types.
 

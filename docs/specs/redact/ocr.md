@@ -61,10 +61,9 @@ act on it.
 
 ## Benchmark
 
-The existing synthetic programme (`synthetic-data-plan.md`, `synthetic-v2-*`,
-`fine-tuning.md`, `bench:guard`) covers **detection**. OCR needs a separate benchmark
-measuring a different thing: character accuracy and box quality under image
-degradation.
+The synthetic corpus programme lives in a separate private repository and
+evaluates redaction detection. The OCR benchmark measures character accuracy
+and box quality under image degradation.
 
 **Method: work backwards from text we already hold.** Render source text to PDF, then
 apply synthetic degradation (skew, noise, JPEG artefacts, fax-grade downsampling,

@@ -36,16 +36,16 @@ This PRD explicitly rejects splitting product code. Where a boundary is wanted i
 
 Verified 2026-07-27 against `dev`.
 
-| Area                               | Imports from product packages                  | Verdict    |
-| ---------------------------------- | ---------------------------------------------- | ---------- |
-| `scripts/synthetic-v2/` (50 files) | none: node builtins, bun:test, typescript only | Clean lift |
-| `scripts/eval-redact.ts`           | none                                           | Clean lift |
-| `scripts/export-training-data.ts`  | none                                           | Clean lift |
-| `scripts/bench-guard.ts`           | none                                           | Clean lift |
-| `scripts/architecture-*.py`        | none                                           | Clean lift |
-| `data/evals/redact/*` fixtures     | loaded by three API test files                 | **Pinned** |
+| Area                               | Imports from product packages                | Verdict    |
+| ---------------------------------- | -------------------------------------------- | ---------- |
+| `scripts/synthetic-v2/` (50 files) | Pinned redaction policy and shared contracts | Clean lift |
+| `scripts/eval-redact.ts`           | none                                         | Clean lift |
+| `scripts/export-training-data.ts`  | none                                         | Clean lift |
+| `scripts/bench-guard.ts`           | none                                         | Clean lift |
+| `scripts/architecture-*.py`        | none                                         | Clean lift |
+| `data/evals/redact/*` fixtures     | loaded by three API test files               | **Pinned** |
 
-The data-generation programme has zero build-time coupling to the product. That makes this a move rather than an untangling, and it is why this split is worth doing and the product split is not.
+The product build has no dependency on the corpus programme. That makes this a move rather than an untangling, and it is why this split is worth doing and the product split is not.
 
 **The one real constraint:** seven fixtures under `data/evals/redact/` are loaded directly by product tests (`app.test.ts`, `document-extraction.test.ts`, `documents-upload.test.ts`): `demo-fixture.docx` and six PDF fixtures covering the text-layer, low-text, spaced-PII, zero-width and scanned-like cases that extraction must handle or reject. These are test fixtures for shipped code and stay with the code they test.
 
@@ -55,21 +55,11 @@ The rule that follows: **a fixture a product test loads stays; evaluation corpor
 
 Three repositories, not four.
 
-| Repository      | Visibility       | Holds                                                                        |
-| --------------- | ---------------- | ---------------------------------------------------------------------------- |
-| `obiter`        | Public, ELv2     | Product: apps, packages, services, product PRDs and specs, infra, fixtures   |
-| `obiter-corpus` | Private, renamed | The corpus programme: generation code, evaluation harness, and its artifacts |
-| `obiter-ops`    | Private, exists  | Operating model, system reference and its generators, internal assessments   |
-
-### Naming
-
-`obiter-redaction-data-private` is renamed to `obiter-corpus`. Three problems with the old name:
-
-- **Visibility does not belong in a name.** Whether a repository is private is a setting, not an identity. If the benchmark is ever released the name becomes a lie, and renaming under pressure is worse than renaming now.
-- **`redaction-` scopes it too narrowly.** The programme already produces evaluation material that Search wants, and the benchmark is a general UK legal PII set rather than a Redact-only asset.
-- **It is long,** against a house style where the existing sibling is `obiter-ops`.
-
-GitHub redirects the old name after a rename, so existing clones and links keep working.
+| Repository                 | Visibility   | Holds                                                                        |
+| -------------------------- | ------------ | ---------------------------------------------------------------------------- |
+| `obiter`                   | Public, ELv2 | Product: apps, packages, services, product PRDs and specs, infra, fixtures   |
+| Separate corpus repository | Private      | The corpus programme: generation code, evaluation harness, and its artifacts |
+| Operations repository      | Private      | Operating model, system reference and its generators, internal assessments   |
 
 ### Generation code and artifacts live together
 
@@ -97,14 +87,13 @@ kept below because the licence, not the security argument, is what changed.
 
 ## Inventory
 
-### Moves to `obiter-corpus`
+### Corpus programme inventory
 
 - `scripts/synthetic-v2/` entire directory, 50 files
-- `scripts/generate-synthetic-data.ts`, `scripts/export-training-data.ts`, `scripts/eval-redact.ts`, `scripts/bench-guard.ts` and their tests
-- `data/evals/redact/synthetic_validation.jsonl`, consumed by bench-guard and export-training-data
-- `data/bench/uk-legal-pii/` release contract, including the unpublished benchmark's `LICENSE`, `DATASHEET.md` and manifest placeholder
+- The training exporter, benchmark guard, and their tests.
+- Existing product evaluation scripts, fixtures and release contract files stay in the product repository.
 - `docs/specs/redact/synthetic-v2-programme.md`
-- The Synthetic Redaction Corpus rules currently in `AGENTS.md`
+- The Synthetic Redaction Corpus rules
 
 ### Moves to `obiter-ops`
 
@@ -127,14 +116,14 @@ Generator and output move together. Separating them leaves a generated artifact 
 Each of these must be handled in the same change that moves the files.
 
 - **Root scripts.** Four `synthetic-v2:*` entries in `package.json` go. The `test` script loses its `bun test scripts/synthetic-v2` tail and `typecheck` loses its synthetic-v2 tsconfig pass.
-- **CI.** The `checks` job currently covers synthetic-v2 through those root scripts. `obiter-corpus` needs its own equivalent workflow, or the programme ships untested.
+- **CI.** The `checks` job currently covers synthetic-v2 through those root scripts. The separate private repository needs equivalent verification, or the programme ships untested.
 - **`AGENTS.md`.** The Synthetic Redaction Corpus section and the System Reference section both point at files that will have moved. Both need cross-repository pointers, following the precedent already set for `obiter-ops`.
 - **Documentation cross-references.** `docs/prds/bench.md`, `docs/specs/redact/demo.md`, `fine-tuning.md`, `milestones.md` and `synthetic-data-plan.md` all reference `data/evals` or `data/bench` paths.
 - **Agent context.** An agent working in `obiter` loses the system reference. This is a genuine cost, weighed against the reason for moving it.
 
 ## Migration Mechanics
 
-Use `git subtree split -P scripts/synthetic-v2` to preserve history. That programme has an audit trail worth keeping: provider qualification evidence, spend records and the fail-closed work in PR #42 are all reasons a future reader needs to see why a decision was made.
+Preserve the pipeline and helper history with a path-filtered import. That programme has an audit trail worth keeping: provider qualification evidence, spend records and the fail-closed work in PR #42 are all reasons a future reader needs to see why a decision was made.
 
 For the smaller moves, a single import commit is sufficient and simpler.
 
@@ -144,7 +133,7 @@ For the smaller moves, a single import commit is sufficient and simpler.
 
 **Gate 0: Decide the boundary.** Confirm the inventory above, particularly whether `redact-4-hardening.md` and the system reference are private. Blocking: nothing else should push until this is settled.
 
-**Gate 1: Extract data generation.** Create `obiter-corpus`, subtree-split `scripts/synthetic-v2`, move the associated scripts and evaluation data, stand up its CI, and confirm it runs standalone before removing anything from `obiter`.
+**Gate 1: Extract data generation.** Import the Synthetic v2 pipeline and its helpers into a separate private repository, then verify that it runs standalone before removing the source copy.
 _Exit:_ the corpus programme runs green in its own repository; `obiter` still passes typecheck, lint and test after removal.
 
 **Gate 2: Extract operations.** Move the system reference and its generators to `obiter-ops`, update `AGENTS.md` to point across repositories.
@@ -165,11 +154,11 @@ _Exit:_ no reference in `obiter` points at a path that has moved.
 - **Cross-repository references rot faster than in-repo ones.** Nothing type-checks a link between repositories. Mitigation is to keep the number of such references small and listed in one place per repo.
 - **The corpus programme loses CI coverage in transit.** Gate 1 requires it green in the new repository before removal from the old, not after.
 - **Agents lose the system map.** If this proves costly, the fallback is a short public summary in `obiter` pointing at the full private reference.
-- **Compliance rules get orphaned.** The corpus governance rules in `AGENTS.md` protect against committing real personal data. They must land in `obiter-corpus` before the programme does, not after.
+- **Compliance rules get orphaned.** The corpus governance rules in `AGENTS.md` protect against committing real personal data. Keep those rules with the programme in the separate private repository.
 
 ## Open Questions
 
-- Does `obiter-corpus` need the fixtures `generate-pdf-fixtures.mjs` produces, or only the product?
+- Does the corpus programme need the fixtures `generate-pdf-fixtures.mjs` produces, or only the product?
 - Does the Find Case Law licence say anything about publishing acquisition code, as distinct from the data? Blocking for `services/legal-ingestor` staying public.
 - Where do billing and tenant provisioning land when they arrive: `obiter-ops`, or a fourth repository?
 - Is `redact-4-hardening.md` private permanently, or public once Gate 1 of that PRD lands?

@@ -10,16 +10,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "oxlint && eslint . && bun scripts/lint/check-comments.mjs && bun scripts/lint/check-private-paths.mjs",
-    "bench:guard": "bun scripts/bench-guard.ts",
     "perf:bundle-budget": "bun scripts/perf/bundle-budget.mjs",
     "perf:desktop-budget": "bun scripts/perf/desktop-budget.mjs",
     "ratio:avatars": "bun scripts/ratio-avatars.ts",
-    "synthetic-v2:smoke": "bun scripts/synthetic-v2/smoke.ts",
-    "synthetic-v2:canary": "bun scripts/synthetic-v2/smoke.ts --profile=tournament-canary",
-    "synthetic-v2:tournament": "bun scripts/synthetic-v2/run.ts --stage=tournament",
-    "synthetic-v2:tournament:assemble": "bun scripts/synthetic-v2/run.ts --assemble-tournament",
-    "test": "bun run --workspaces --if-present test && bun test --isolate scripts/perf scripts/synthetic-v2 scripts/redact-acceptance scripts/lint",
-    "typecheck": "bun run --workspaces --if-present typecheck && tsc --noEmit -p scripts/synthetic-v2/tsconfig.json && tsc --noEmit -p scripts/redact-acceptance/tsconfig.json"
+    "test": "bun run --workspaces --if-present test && bun test --isolate scripts/perf scripts/redact-acceptance scripts/lint",
+    "typecheck": "bun run --workspaces --if-present typecheck && tsc --noEmit -p scripts/redact-acceptance/tsconfig.json"
   },
   "_comment:oxlint-coupled": "oxlint and @oxlint/plugins must be on the same exact version (1.73.0) — update together; bun update would otherwise break the plugin",
   "_comment:oxlint": "1.73.0 must match @oxlint/plugins — see _comment:oxlint-coupled",

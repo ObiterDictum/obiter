@@ -3030,34 +3030,14 @@
               </thead>
               <tbody>
                 <tr>
-                  <td class="id">synthetic-v2/</td>
-                  <td class="id">bun run synthetic-v2:*</td>
-                  <td>
-                    The corpus pipeline: smoke, canary, tournament, assemble.
-                    See <a href="#corpus">Synthetic corpus pipeline</a>.
-                  </td>
-                </tr>
-                <tr>
                   <td class="id">generate-synthetic-data.ts</td>
                   <td class="id">tsx</td>
                   <td>First-generation synthetic document generation</td>
                 </tr>
                 <tr>
-                  <td class="id">export-training-data.ts</td>
-                  <td class="id">tsx</td>
-                  <td>
-                    Exports finalized, reviewed runs as JSONL for training
-                  </td>
-                </tr>
-                <tr>
                   <td class="id">eval-redact.ts</td>
                   <td class="id">tsx</td>
                   <td>Scores redaction detection against a labelled set</td>
-                </tr>
-                <tr>
-                  <td class="id">bench-guard.ts</td>
-                  <td class="id">bun run bench:guard</td>
-                  <td>Guards benchmark regressions</td>
                 </tr>
                 <tr>
                   <td class="id">search-corpus-relevance/</td>
@@ -6536,11 +6516,9 @@
         <section id="corpus">
           <h2>Synthetic corpus pipeline</h2>
           <p class="lede">
-            Redaction needs training and evaluation data with known personal
-            data in known positions. Real client documents cannot serve that
-            purpose, so <code>scripts/synthetic-v2/</code> generates synthetic
-            UK legal documents with ground-truth spans. Twenty-six modules, and
-            the most safety-engineered part of the codebase.
+            A separate private repository houses the pipeline that generates
+            synthetic UK legal documents with ground-truth spans for redaction
+            training and evaluation.
           </p>
 
           <figure class="diagram">
@@ -6555,9 +6533,10 @@
                   Synthetic corpus pipeline
                 </title>
                 <desc>
-                  Gates from provider connectivity through to a canonical
-                  tournament dataset. Each gate refuses to spend without
-                  evidence the previous one passed.
+                  Gates in a separate private repository from provider
+                  connectivity through to a canonical tournament dataset. Each
+                  gate refuses to spend without evidence the previous one
+                  passed.
                 </desc>
                 <defs>
                   <marker
@@ -6810,18 +6789,18 @@
                   <rect
                     x="680"
                     y="286"
-                    width="136.9"
+                    width="122.7"
                     height="41"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--info)"
                     stroke-dasharray="3 3"
                   />
-                  <text x="748.45" y="303" text-anchor="middle" class="n">
-                    private corpus repo
+                  <text x="741.35" y="303" text-anchor="middle" class="n">
+                    private release
                   </text>
-                  <text x="748.45" y="314" text-anchor="middle" class="s">
-                    never this repo
+                  <text x="741.35" y="314" text-anchor="middle" class="s">
+                    separate repository
                   </text>
                 </g>
                 <path
@@ -7009,11 +6988,10 @@
               <span
                 ><b>Corpus data never enters this repository.</b> Private
                 training, development, tournament and benchmark-candidate
-                artifacts live in the sibling
-                <code>obiter-redaction-data-private</code> repository. A
-                benchmark candidate is not a release: promotion needs an
-                explicit release root, a sentinel file, evidence and a new
-                immutable version.</span
+                artifacts live in a separate private repository. A benchmark
+                candidate is not a release: promotion needs an explicit release
+                root, a sentinel file, evidence and a new immutable
+                version.</span
               >
             </li>
           </ul>
@@ -7063,7 +7041,7 @@
                   <td class="id">bun run test</td>
                   <td>
                     Every workspace's own test script, then the root script
-                    suites (perf, synthetic-v2, redact-acceptance, lint)
+                    suites (perf, redact-acceptance, lint)
                   </td>
                 </tr>
                 <tr>
@@ -7510,23 +7488,19 @@
             </li>
             <li>
               <span
-                ><b>Files stay under 500 lines.</b> Eight non-test TypeScript
+                ><b>Files stay under 500 lines.</b> Four non-test TypeScript
                 source files in this repository currently exceed it. Files in
                 the private
                 <a href="https://github.com/ObiterDictum/backend">backend</a>
                 repository are measured there:</span
               >
               <ul>
-                <li><code>scripts/synthetic-v2/run.ts</code> (1881)</li>
-                <li><code>scripts/synthetic-v2/providers.ts</code> (1426)</li>
                 <li>
                   <code
                     >packages/app-shell/src/components/document-workspace/editor-commands.tsx</code
                   >
                   (941)
                 </li>
-                <li><code>scripts/synthetic-v2/governance.ts</code> (722)</li>
-                <li><code>scripts/synthetic-v2/qa.ts</code> (720)</li>
                 <li>
                   <code>packages/rampart-inference/src/ner/classifier.ts</code>
                   (621)
@@ -7620,9 +7594,9 @@
             is the entry point and is deliberately short, pointing at the
             roadmap, rules and specs rather than restating them. The other agent
             directories at the repository root (<code>.pi-subagents</code>,
-            <code>.synthetic-v2</code>, <code>.code-review</code>,
-            <code>.claude</code>, <code>.cursor</code>) are machine-local
-            scratch and gitignored, so a clone never sees them.
+            <code>.code-review</code>, <code>.claude</code>,
+            <code>.cursor</code>) are machine-local scratch and gitignored, so a
+            clone never sees them.
           </p>
         </section>
 

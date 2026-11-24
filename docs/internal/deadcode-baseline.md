@@ -1,8 +1,8 @@
 # Dead code detection baseline
 
-The first report with the tuned configuration contains 18 candidates: one unused
-development dependency, 14 unused exports and three unused exported types.
-These are candidates for review before removal.
+The first report excerpt below contains 12 candidates after removing the findings
+for the relocated corpus programme. It lists one unused development dependency,
+eight unused exports and three unused exported types.
 
 Run `bun run deadcode` from the repository root. CI fails when Knip
 reports a finding outside the configured exemptions.
@@ -28,24 +28,18 @@ once the retained exports have been resolved. The reasons come from the
 [layer 3 dependency review](https://github.com/ObiterDictum/obiter/pull/565)
 left no dependency findings in the layer 4 report.
 
-| Finding                          | File                                                         | Reason                                                                            | Status                  |
-| -------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- | ----------------------- |
-| `hasDarwinWindowControls`        | `packages/app-shell/src/lib/desktop-bridge.ts`               | Mac desktop support is planned.                                                   | Kept: planned           |
-| `mapCategoryToRampart`           | `scripts/export-training-data.ts`                            | Part of the training export command documented in the redaction fine-tuning spec. | Awaiting human decision |
-| `cumulativeSpend`                | `scripts/synthetic-v2/budget.ts`                             | Part of spending tracking in the documented synthetic-v2 pipeline.                | Awaiting human decision |
-| `datasetManifest`                | `scripts/synthetic-v2/governance.ts`                         | Part of governance in the documented synthetic-v2 pipeline.                       | Awaiting human decision |
-| `openRouterBenchmarkModel`       | `scripts/synthetic-v2/models.ts`                             | Part of model selection in the documented synthetic-v2 pipeline.                  | Awaiting human decision |
-| `openRouterQaModel`              | `scripts/synthetic-v2/models.ts`                             | Part of model selection in the documented synthetic-v2 pipeline.                  | Awaiting human decision |
-| `normalizeGenerated`             | `scripts/synthetic-v2/validation.ts`                         | Part of output validation in the documented synthetic-v2 pipeline.                | Awaiting human decision |
-| `LegislationProvisionSubsection` | `packages/app-shell/src/views/legislation-document-query.ts` | The underlying subsection type has active readers.                                | Awaiting human decision |
-| `LegislationActResponse`         | `packages/app-shell/src/views/LegislationActView.tsx`        | The type sits alongside ongoing Act reader work.                                  | Awaiting human decision |
+| Finding                          | File                                                         | Reason                                             | Status                  |
+| -------------------------------- | ------------------------------------------------------------ | -------------------------------------------------- | ----------------------- |
+| `hasDarwinWindowControls`        | `packages/app-shell/src/lib/desktop-bridge.ts`               | Mac desktop support is planned.                    | Kept: planned           |
+| `LegislationProvisionSubsection` | `packages/app-shell/src/views/legislation-document-query.ts` | The underlying subsection type has active readers. | Awaiting human decision |
+| `LegislationActResponse`         | `packages/app-shell/src/views/LegislationActView.tsx`        | The type sits alongside ongoing Act reader work.   | Awaiting human decision |
 
-## First report
+## First report excerpt
 
 ```text
 Unused devDependencies (1)
 simple-icons  package.json:42:6
-Unused exports (14)
+Unused exports (8)
 useCreateAgentRun                 function  packages/app-shell/src/agent-runs.ts:87:17
 clearStoredDocumentDraftsForUser            packages/app-shell/src/document-draft-store.ts:29:3
 suspendDocumentDraftWrites                  packages/app-shell/src/document-draft-store.ts:36:3
@@ -53,12 +47,6 @@ pictureSizeInCentimetres          function  packages/app-shell/src/document-pict
 pictureChanged                    function  packages/app-shell/src/document-picture-resize.ts:155:17
 hasDarwinWindowControls           function  packages/app-shell/src/lib/desktop-bridge.ts:33:17
 DOCUMENT_EDIT_TEXT_MAX_LENGTH               packages/contracts/src/document-edit-format.ts:146:41
-mapCategoryToRampart              function  scripts/export-training-data.ts:67:17
-cumulativeSpend                   function  scripts/synthetic-v2/budget.ts:98:17
-datasetManifest                   function  scripts/synthetic-v2/governance.ts:582:17
-openRouterBenchmarkModel          function  scripts/synthetic-v2/models.ts:4:17
-openRouterQaModel                 function  scripts/synthetic-v2/models.ts:10:17
-normalizeGenerated                function  scripts/synthetic-v2/validation.ts:26:17
 isPopulatedObjectExpression       function  tools/oxlint/anti-slop/shared/dictionary-types.ts:467:17
 Unused exported types (3)
 LegislationProvisionSubsection  type  packages/app-shell/src/views/legislation-document-query.ts:8:15

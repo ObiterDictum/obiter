@@ -304,7 +304,7 @@ d5.parts.append(
 
 # ------------------------------------------------------- synthetic-v2 corpus
 d6 = Diagram(920, 400, "Synthetic corpus pipeline",
-             "Gates from provider connectivity through to a canonical "
+             "Gates in a separate private repository from provider connectivity through to a canonical "
              "tournament dataset. Each gate refuses to spend without evidence "
              "the previous one passed.")
 d6.band(8, 8, 904, 96, "QUALIFICATION", "var(--warning)")
@@ -330,7 +330,7 @@ d6.node("assemble", 250, 286, "assemble", "no provider calls",
         accent="var(--success)")
 d6.node("dataset", 450, 286, "tournament dataset", "canonical",
         accent="var(--success)")
-d6.node("private", 680, 286, "private corpus repo", "never this repo",
+d6.node("private", 680, 286, "private release", "separate repository",
         accent="var(--info)", kind="dashed")
 
 d6.edge("smoke", "canary", sa="r", sb="l")

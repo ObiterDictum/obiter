@@ -191,8 +191,6 @@ mode, not a hypothetical.
 - [ ] No duplicated state machine across web, desktop, API and workers
 - [ ] No `useEffect` for data fetching or derived state
 - [ ] No em-dashes, and British English in prose
-- [ ] The `scripts/synthetic-v2/` pricing and provider fixtures are data. Do not
-      "update" model ids in them
 
 ## Recurring defect patterns
 

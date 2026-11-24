@@ -29,11 +29,11 @@ Follow the milestone order in [docs/roadmap.md](docs/roadmap.md). Do not jump ah
 
 ## Synthetic Redaction Corpus
 
-- Keep the synthetic-v2 pipeline, label policy, schemas, manifests, and evaluation harness in this repository.
+- The Synthetic v2 pipeline, label policy, schemas, manifests, and evaluation harness live in a separate private repository.
 - Do not commit generated private training/development documents, raw provider output, run logs, or human-review annotations here; use the separate private corpus store/repository.
 - Publish a frozen, versioned benchmark separately once approved so external redaction systems can evaluate against it without product-repository coupling.
 - Never put corpus material or raw legal text in the `review` knowledge repository.
-- Read [synthetic-v2-programme.md](docs/specs/redact/synthetic-v2-programme.md) before changing synthetic-v2 stages, data splits, or evaluation criteria.
+- Read the corpus programme specification in that repository before changing its stages, data splits, or evaluation criteria.
 
 ## System Reference
 
