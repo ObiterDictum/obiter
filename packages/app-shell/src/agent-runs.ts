@@ -10,7 +10,6 @@ import {
   agentRunStreamMessageSchema,
   isAgentRunLive,
   type AgentRun,
-  type AgentRunCreateRequest,
   type AgentRunDetailResponse,
   type AgentRunListResponse,
   type AgentRunResponse,
@@ -82,29 +81,6 @@ export function applyAgentStreamMessage(
   const lastSeq = previous.events.at(-1)?.seq ?? 0
   if (message.event.seq <= lastSeq) return previous
   return { ...previous, events: [...previous.events, message.event] }
-}
-
-export function useCreateAgentRun(matterId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async (input: AgentRunCreateRequest) =>
-      (
-        await apiFetch<AgentRunResponse>(
-          `/api/matters/${matterId}/agent-runs`,
-          { method: 'POST', body: JSON.stringify(input) },
-        )
-      ).run,
-    onSuccess: (run) => {
-      queryClient.setQueryData<AgentRunDetailResponse>(
-        agentRunKeys.detail(run.id),
-        (previous) => previous ?? { run, steps: [], toolCalls: [], events: [] },
-      )
-      storeRun(queryClient, run)
-      void queryClient.invalidateQueries({
-        queryKey: agentRunKeys.forMatter(matterId),
-      })
-    },
-  })
 }
 
 export function useCancelAgentRun() {

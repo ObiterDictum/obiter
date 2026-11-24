@@ -8,7 +8,6 @@
     "scripts/synthetic-v2/governance.ts": ["exports"],
     "scripts/synthetic-v2/models.ts": ["exports"],
     "scripts/synthetic-v2/validation.ts": ["exports"],
-    "tools/oxlint/anti-slop/shared/dictionary-types.ts": ["exports"],
   },
   "workspaces": {
     ".": {
@@ -31,7 +30,6 @@
     },
     "packages/app-shell": {
       "ignoreIssues": {
-        "src/agent-runs.ts": ["exports"],
         "src/lib/desktop-bridge.ts": ["exports"],
         "src/views/LegislationActView.tsx": ["types"],
         "src/views/legislation-document-query.ts": ["types"],
