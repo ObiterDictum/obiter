@@ -17,6 +17,17 @@ import {
 } from '@testing-library/react'
 import { ToastProvider } from '@obiter/ui'
 
+function linkHref(
+  to: string | undefined,
+  params: ({ _splat?: string } & Record<string, string>) | undefined,
+  hash: string | undefined,
+) {
+  const path = (to ?? '')
+    .replace(/\/\$$/, `/${params?._splat ?? ''}`)
+    .replace(/\$([A-Za-z0-9_]+)/g, (_, key: string) => params?.[key] ?? '')
+  return `${path}${hash ? `#${hash}` : ''}`
+}
+
 const tanstackReactRouterModuleKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
     key,
@@ -30,13 +41,12 @@ mock.module('@tanstack/react-router', () =>
       createLink:
         (Anchor: ComponentType<AnchorHTMLAttributes<HTMLAnchorElement>>) =>
         ({
-          href,
           hash,
           hashScrollIntoView: _scroll,
           resetScroll: _reset,
           preload: _preload,
-          to: _to,
-          params: _params,
+          to,
+          params,
           ...props
         }: AnchorHTMLAttributes<HTMLAnchorElement> & {
           hash?: string
@@ -44,15 +54,18 @@ mock.module('@tanstack/react-router', () =>
           resetScroll?: boolean
           preload?: boolean
           to?: string
-          params?: unknown
+          params?: { _splat: string }
         }) => (
-          <Anchor {...props} href={`${href}#${hash}`} aria-current="page" />
+          <Anchor
+            {...props}
+            href={linkHref(to, params, hash)}
+            aria-current="page"
+          />
         ),
       Link: ({
         children,
         to,
         params,
-        href,
         hash,
         hashScrollIntoView: _hashScrollIntoView,
         resetScroll: _resetScroll,
@@ -61,15 +74,10 @@ mock.module('@tanstack/react-router', () =>
         children: ReactNode
         to?: string
         params?: { _splat: string }
-        href?: string
         hash?: string
         [key: string]: unknown
       }) => (
-        <a
-          href={hash ? `${href}#${hash}` : (href ?? to)}
-          data-params={params?._splat}
-          {...props}
-        >
+        <a href={linkHref(to, params, hash)} {...props}>
           {children}
         </a>
       ),
@@ -102,7 +110,7 @@ function contentsNode(
   }
 }
 
-const sections = Array.from({ length: 30 }, (_, index) => ({
+const sections = Array.from({ length: 60 }, (_, index) => ({
   ...contentsNode(`section/${index + 1}`, `s. ${index + 1}`, 'P1', index + 3),
   heading: `Section heading ${index + 1}`,
 }))
@@ -110,7 +118,7 @@ const schedule = contentsNode(
   'schedule/1/paragraph/1',
   'Sch. 1 para. 1',
   'P1',
-  34,
+  64,
 )
 const part = {
   ...contentsNode('part/1', 'Part 1', 'part', 0),
@@ -123,7 +131,7 @@ const crossheading = contentsNode(
   'crossheading',
   2,
 )
-const scheduleHeading = contentsNode('schedule/1', 'Schedule 1', 'schedule', 33)
+const scheduleHeading = contentsNode('schedule/1', 'Schedule 1', 'schedule', 63)
 const act = {
   identity,
   title: 'Example Act 2025',
@@ -134,7 +142,7 @@ const act = {
   canonicalUrl,
   officialUrl,
   sourceUrl: officialUrl,
-  totalCount: 31,
+  totalCount: 61,
   withheldCount: 1,
   repealedCount: 1,
   contents: [
@@ -282,7 +290,7 @@ describe('LegislationActView', () => {
     ).toBe(`${officialUrl}/section/3`)
     expect(screen.getByText('Point-in-time date not recorded')).toBeTruthy()
     expect(
-      screen.getByText(/1 of 31 provisions have wording withheld/),
+      screen.getByText(/1 of 61 provisions have wording withheld/),
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Contents' }))
     expect(
@@ -295,7 +303,7 @@ describe('LegislationActView', () => {
   it('loads text incrementally and keeps schedules after the body', async () => {
     renderView()
     await screen.findByText('Wording of s. 1')
-    expect(screen.queryByText('Wording of s. 30')).toBeNull()
+    expect(screen.queryByText('Wording of s. 55')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Load more Act text' }))
     await screen.findByText('Wording of Sch. 1 para. 1')
     const text = within(screen.getByRole('region', { name: 'Act text' }))
@@ -304,13 +312,13 @@ describe('LegislationActView', () => {
         .getAllByRole('heading')
         .slice(-3)
         .map((heading) => heading.id),
-    ).toEqual(['section-30', 'schedule-1', 'schedule-1-paragraph-1'])
+    ).toEqual(['section-60', 'schedule-1', 'schedule-1-paragraph-1'])
   })
 
   it('loads and focuses a deep-linked heading without reading preceding pages', async () => {
-    renderView('section-29')
+    renderView('section-55')
     const heading = await screen.findByRole('heading', {
-      name: 's. 29 · Section heading 29',
+      name: 's. 55 · Section heading 55',
     })
     expect(document.activeElement).toBe(heading)
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
@@ -320,11 +328,11 @@ describe('LegislationActView', () => {
         .mocked(fetch)
         .mock.calls.map(([url]) => url)
         .filter((url) => String(url).includes('/text?')),
-    ).toEqual([`/api/search/legislation/${identity}/text?offset=24&limit=24`])
+    ).toEqual([`/api/search/legislation/${identity}/text?offset=50&limit=50`])
     fireEvent.click(screen.getByRole('button', { name: 'Contents' }))
     const active = within(
       screen.getByRole('navigation', { name: 'Act contents' }),
-    ).getByRole('link', { name: /s\. 29/ })
+    ).getByRole('link', { name: /s\. 55/ })
     expect(active.getAttribute('aria-current')).toBe('location')
   })
 

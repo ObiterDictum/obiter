@@ -23,13 +23,15 @@ mock.module('@tanstack/react-router', () =>
         children: ReactNode
         to?: string
         hash?: string
-        params?: Record<string, string>
+        params?: { _splat?: string } & Record<string, string>
         [key: string]: unknown
       }) => {
-        const path = (to ?? '').replace(
-          /\$([A-Za-z0-9_]+)/g,
-          (_, key: string) => params?.[key] ?? '',
-        )
+        const path = (to ?? '')
+          .replace(/\/\$$/, `/${params?._splat ?? ''}`)
+          .replace(
+            /\$([A-Za-z0-9_]+)/g,
+            (_, key: string) => params?.[key] ?? '',
+          )
         return (
           <a href={`${path}${hash ? `#${hash}` : ''}`} {...props}>
             {children}

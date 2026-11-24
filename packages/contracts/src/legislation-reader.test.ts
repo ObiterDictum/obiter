@@ -7,7 +7,7 @@ describe('Act reading contracts', () => {
   it('defaults to the first bounded page and validates URL query strings', () => {
     expect(legislationActTextQuerySchema.parse({})).toEqual({
       offset: 0,
-      limit: 24,
+      limit: 50,
     })
     expect(
       legislationActTextQuerySchema.parse({ offset: '240', limit: '50' }),

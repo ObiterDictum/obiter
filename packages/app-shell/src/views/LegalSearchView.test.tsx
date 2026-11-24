@@ -26,24 +26,23 @@ mock.module('@tanstack/react-router', () =>
         className,
         to,
         params,
-        href,
         ...props
       }: {
         children: ReactNode
         className?: string
         to?: string
-        params?: Record<string, string>
-        href?: string
+        params?: { _splat?: string } & Record<string, string>
         [key: string]: unknown
       }) => {
         const resolvedHref =
-          href ??
-          (typeof to === 'string'
-            ? to.replace(
-                /\$([A-Za-z0-9_]+)/g,
-                (_, key: string) => params?.[key] ?? '',
-              )
-            : undefined)
+          typeof to === 'string'
+            ? to
+                .replace(/\/\$$/, `/${params?._splat ?? ''}`)
+                .replace(
+                  /\$([A-Za-z0-9_]+)/g,
+                  (_, key: string) => params?.[key] ?? '',
+                )
+            : undefined
         return (
           <a className={className} href={resolvedHref} {...props}>
             {children}
