@@ -159,20 +159,8 @@ const NOT_FOUND_COPY = new Map<
     { title: 'This document does not exist', to: '/matters' },
   ],
   [
-    'document_version_not_found',
-    { title: 'This document version does not exist', to: '/matters' },
-  ],
-  [
     'redaction_run_not_found',
     { title: 'This redaction run does not exist', to: '/redact' },
-  ],
-  [
-    'output_not_found',
-    { title: 'This redaction output does not exist', to: '/redact' },
-  ],
-  [
-    'span_not_found',
-    { title: 'This redaction span does not exist', to: '/redact' },
   ],
   [
     'verification_run_not_found',
@@ -269,11 +257,7 @@ export function ShellQueryError({
           ? `You do not have access to this ${label}`
           : `This ${label} does not exist`
       }
-      body={
-        failure === 'forbidden'
-          ? 'It belongs to an area of the organisation you cannot open, or your session may have expired.'
-          : NOT_FOUND_BODY
-      }
+      body={NOT_FOUND_BODY}
       action={backAction}
     />
   )

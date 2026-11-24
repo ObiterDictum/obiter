@@ -36,7 +36,7 @@ export function DocumentTitle({
       if (isTypingTarget(event.target)) return
       if (
         event.target instanceof HTMLElement &&
-        event.target.closest('[role="dialog"],[role="menu"],[role="listbox"]')
+        event.target.closest('[role=dialog],[role=menu],[role=listbox]')
       ) {
         return
       }

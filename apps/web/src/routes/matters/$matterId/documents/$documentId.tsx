@@ -6,17 +6,16 @@ import {
 } from '@obiter/app-shell'
 import { RedactionRunsRegion } from '@obiter/redact-ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export const Route = createFileRoute(
   '/matters/$matterId/documents/$documentId',
 )({
-  validateSearch: (search: Record<string, unknown>) => {
-    const verify =
-      search.verify === 'run' || search.verify === 'open'
-        ? search.verify
-        : undefined
-    return verify === undefined ? {} : { verify }
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { verify?: 'run' | 'open' } => {
+    const verify = search.verify
+    return verify === 'run' || verify === 'open' ? { verify } : {}
   },
   loader: ({ context, params, location }) =>
     prefetchDocumentRouteData(
@@ -30,22 +29,21 @@ export const Route = createFileRoute(
 
 function DocumentDetailRouteComponent() {
   const { matterId, documentId } = Route.useParams()
-  const searchVerify = Route.useSearch().verify
-  const verify =
-    searchVerify === 'run' || searchVerify === 'open' ? searchVerify : undefined
+  const verify = Route.useSearch().verify
   const [pending, setPending] = useState<{
     value: 'open' | 'run'
     seq: number
   } | null>(null)
-  const seq = useRef(0)
   const navigate = useNavigate()
   const tabs = useMatterTabsOptional()
   useRecordDocumentOpen(documentId)
 
   useEffect(() => {
     if (!verify) return
-    seq.current += 1
-    setPending({ value: verify, seq: seq.current })
+    setPending((previous) => ({
+      value: verify,
+      seq: (previous?.seq ?? 0) + 1,
+    }))
     void navigate({
       to: '/matters/$matterId/documents/$documentId',
       params: { matterId, documentId },

@@ -214,14 +214,12 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
   )
 }
 
-const VERIFY_DOCUMENT_LIMIT = 8
-
 function VerifyDocuments({ matterId }: { matterId?: string }) {
   const targets = useCitationTargets()
   const documents = (targets.data ?? [])
     .filter((document) => !matterId || document.matterId === matterId)
     .sort((a, b) => b.openedAt.localeCompare(a.openedAt))
-    .slice(0, VERIFY_DOCUMENT_LIMIT)
+    .slice(0, 8)
   if (documents.length === 0) return null
   return (
     <Card aria-labelledby="verify-documents">
