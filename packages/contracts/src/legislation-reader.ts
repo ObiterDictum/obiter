@@ -7,7 +7,7 @@ export const legislationStatusSchema = z.enum([
 ])
 export type LegislationStatus = z.infer<typeof legislationStatusSchema>
 
-export const legislationActTextPageSize = 24
+export const legislationActTextPageSize = 50
 export const legislationSubsectionSchema = z.object({
   label: z.string(),
   labelPath: z.string(),

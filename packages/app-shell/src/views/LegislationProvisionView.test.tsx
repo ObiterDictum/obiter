@@ -19,13 +19,18 @@ mock.module('@tanstack/react-router', () =>
       Link: ({
         children,
         to,
+        params,
         ...props
       }: {
         children: ReactNode
         to: string
+        params?: { _splat?: string } & Record<string, string>
         [key: string]: unknown
       }) => (
-        <a href={to} {...props}>
+        <a
+          href={(to ?? '').replace(/\/\$$/, `/${params?._splat ?? ''}`)}
+          {...props}
+        >
           {children}
         </a>
       ),

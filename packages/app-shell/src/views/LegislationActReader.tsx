@@ -125,6 +125,7 @@ function ActReaderPages({
       pageOffset > 0
         ? Math.max(0, pageOffset - legislationActTextPageSize)
         : undefined,
+    maxPages: 10,
     retry: 1,
   })
   const pages = query.data?.pages
@@ -277,6 +278,9 @@ function ActReaderPages({
           </p>
         ) : null}
         {query.isPending ? <p role="status">Loading Act text…</p> : null}
+        <p className="sr-only" role="status">
+          {query.isFetchingNextPage ? 'Loading more Act text…' : ''}
+        </p>
         {query.isError ? (
           <div role="alert" className="space-y-2 text-meta">
             <p>This part of the Act could not be loaded.</p>
@@ -372,7 +376,6 @@ function ActTextEntry({
               {...provisionResultLocation({
                 documentIdentity: act.identity,
                 labelPath: entry.node.labelPath,
-                canonicalUrl: provision.canonicalUrl,
               })}
               aria-label={`Open provision ${entry.node.label}`}
               className="underline underline-offset-2"

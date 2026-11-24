@@ -257,7 +257,6 @@ function AmendmentHistory({
                             '',
                           ),
                           labelPath: '',
-                          canonicalUrl: amendment.affecting.href,
                         })}
                         className="text-ink underline-offset-2 hover:underline"
                       >

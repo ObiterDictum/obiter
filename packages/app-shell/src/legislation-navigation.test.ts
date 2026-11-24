@@ -7,12 +7,10 @@ describe('provisionResultLocation', () => {
       provisionResultLocation({
         documentIdentity: 'ukpga/2010/15',
         labelPath: 'section/13',
-        canonicalUrl: '/ln/ukpga/2010/15/section/13',
       }),
     ).toEqual({
       to: '/ln/$',
       params: { _splat: 'ukpga/2010/15/section/13' },
-      href: '/ln/ukpga/2010/15/section/13',
     })
   })
 })

@@ -135,7 +135,6 @@ function SubsectionNode({
           {...provisionResultLocation({
             documentIdentity,
             labelPath: node.labelPath,
-            canonicalUrl: node.href,
           })}
           aria-label={`${node.label} of this provision`}
           title={node.label}
