@@ -58,6 +58,11 @@ describe('classifyShellFailure', () => {
     expect(classifyShellFailure(apiError('redaction_run_not_found'))).toBe(
       'not-found',
     )
+    expect(
+      classifyShellFailure(
+        new ApiError('storage_unavailable', 'missing', 404, 'req_test'),
+      ),
+    ).toBe('not-found')
   })
 
   it('treats an outage and anything unclassified as a retryable error', () => {
@@ -86,7 +91,23 @@ describe('ShellError', () => {
 
   it('renders the not-found state for a missing matter', async () => {
     renderAt('/', () => <ShellError error={apiError('matter_not_found')} />)
-    await screen.findByRole('heading', { name: 'We cannot find that page' })
+    await screen.findByRole('heading', {
+      name: 'This matter does not exist',
+    })
+    expect(
+      screen.getByRole('link', { name: 'Back to matters' }),
+    ).toBeTruthy()
+  })
+
+  it('keeps the generic page state for an unclassified 404', async () => {
+    renderAt('/', () => (
+      <ShellError
+        error={new ApiError('storage_unavailable', 'missing', 404, 'req_test')}
+      />
+    ))
+    await screen.findByRole('heading', {
+      name: 'We cannot find that page',
+    })
   })
 })
 

@@ -188,30 +188,31 @@ const NOT_FOUND_COPY: Record<
   },
 }
 
-export function ShellNotFound({ error }: { error?: unknown } = {}) {
-  const code = error instanceof ApiError ? error.code : null
-  const copy = code ? NOT_FOUND_COPY[code] : undefined
-  if (!copy) {
-    return (
-      <StatePage
-        tone="neutral"
-        icon={<MagnifyingGlass size={20} aria-hidden />}
-        title="We cannot find that page"
-        description="The link may be out of date, or the page may have moved. Nothing in your matters has changed."
-        actions={
-          <>
-            <Link to="/" className={linkClass.primary}>
-              Go to Home
-            </Link>
-            <Link to="/matters" className={linkClass.secondary}>
-              Open your matters
-            </Link>
-          </>
-        }
-        footer="Check the address, or use the sidebar to reach the page you need."
-      />
-    )
-  }
+export function ShellNotFound() {
+  return (
+    <StatePage
+      tone="neutral"
+      icon={<MagnifyingGlass size={20} aria-hidden />}
+      title="We cannot find that page"
+      description="The link may be out of date, or the page may have moved. Nothing in your matters has changed."
+      actions={
+        <>
+          <Link to="/" className={linkClass.primary}>
+            Go to Home
+          </Link>
+          <Link to="/matters" className={linkClass.secondary}>
+            Open your matters
+          </Link>
+        </>
+      }
+      footer="Check the address, or use the sidebar to reach the page you need."
+    />
+  )
+}
+
+function ShellEntityNotFound({ error }: { error: ApiError }) {
+  const copy = NOT_FOUND_COPY[error.code]
+  if (!copy) return <ShellNotFound />
   const backLabel =
     copy.to === '/matters'
       ? 'Back to matters'
@@ -293,7 +294,13 @@ export function ShellError({
 }) {
   reportError(error)
   const failure = classifyShellFailure(error)
-  if (failure === 'not-found') return <ShellNotFound error={error} />
+  if (failure === 'not-found') {
+    return error instanceof ApiError ? (
+      <ShellEntityNotFound error={error} />
+    ) : (
+      <ShellNotFound />
+    )
+  }
   if (failure === 'forbidden') return <ShellPermissionDenied />
   if (failure === 'staff-two-factor-required')
     return <ShellStaffTwoFactorRequired />
