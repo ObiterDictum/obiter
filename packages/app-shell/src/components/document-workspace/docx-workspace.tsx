@@ -1,5 +1,5 @@
 import { WorkspaceTableSurface } from './workspace-table-surface'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
 import { documentStory } from '../../document-model-text'
@@ -26,6 +26,7 @@ import {
   workspaceKeyDown,
   type WorkspacePanel,
 } from './use-workspace-panels'
+import type { VerifyPanelRequest } from '../verification/verification-context'
 import {
   pageZoomFor,
   useWorkspaceSurface,
@@ -72,8 +73,10 @@ export function DocxWorkspace({
   versions = [],
   headerLinks,
   onViewVersion,
+  verifyRequest,
 }: {
   documentId: string
+  verifyRequest?: VerifyPanelRequest | null
   versionId: string
   matterId: string
   filename: string
@@ -113,6 +116,12 @@ export function DocxWorkspace({
   const [zoom, setZoom] = useState(100)
   const splitScale = useSplitScale()
   const panels = useWorkspacePanels()
+  const verifyPanelSeq = useRef(0)
+  useEffect(() => {
+    if (!verifyRequest || verifyRequest.seq === verifyPanelSeq.current) return
+    verifyPanelSeq.current = verifyRequest.seq
+    panels.open('verify')
+  }, [verifyRequest, panels])
   const legalTools = useLegalToolsState(documentId)
   const trackChanges = drafts.trackChangesFlip ?? model?.trackRevisions ?? false
   const [banner, setBanner] = useState<string | null>(null)

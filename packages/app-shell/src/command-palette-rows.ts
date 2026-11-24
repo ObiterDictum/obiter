@@ -26,6 +26,7 @@ type PaletteTarget =
   | { kind: 'matter'; matterId: string }
   | { kind: 'document'; matterId: string; documentId: string }
   | { kind: 'verify' }
+  | { kind: 'verify-run'; matterId: string; documentId: string }
   | { kind: 'redaction'; runId: string }
   | { kind: 'law'; query: string }
   | { kind: 'action'; id: PaletteActionId }

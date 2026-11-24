@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { currentUserQueryOptions } from './current-user'
-import { matterIdFromPath } from './navigation'
+import { documentIdFromPath, matterIdFromPath } from './navigation'
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './settings-sections'
 import { useAppTheme } from './use-app-theme'
 import {
@@ -105,6 +105,18 @@ function PaletteLink({
       )
     case 'verify':
       return <Link to="/verify" {...shared} />
+    case 'verify-run':
+      return (
+        <Link
+          to="/matters/$matterId/documents/$documentId"
+          params={{
+            matterId: target.matterId,
+            documentId: target.documentId,
+          }}
+          search={{ verify: 'run' }}
+          {...shared}
+        />
+      )
     case 'law':
       return <Link to="/search" search={{ q: target.query }} {...shared} />
     default:
@@ -274,9 +286,11 @@ export function CommandPaletteDialog({
   const [pickFor, setPickFor] = useState<PaletteCreateId | null>(null)
 
   const matters = useMattersList().data ?? []
-  const currentMatterId = useRouterState({
-    select: (state) => matterIdFromPath(state.location.pathname),
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
   })
+  const currentMatterId = matterIdFromPath(pathname)
+  const currentDocumentId = documentIdFromPath(pathname)
   const currentMatterName =
     matters.find((matter) => matter.id === currentMatterId)?.name ?? null
   const actions = useActionRows(currentMatterId)
@@ -297,6 +311,20 @@ export function CommandPaletteDialog({
         currentMatterName,
         actions: [
           ...actions,
+          ...(currentDocumentId && currentMatterId
+            ? [
+                {
+                  id: 'run-verify',
+                  label: 'Run Verify',
+                  hint: `On ${documents.find((document) => document.documentId === currentDocumentId)?.filename ?? 'the open document'}`,
+                  target: {
+                    kind: 'verify-run',
+                    matterId: currentMatterId,
+                    documentId: currentDocumentId,
+                  },
+                } satisfies PaletteRow,
+              ]
+            : []),
           {
             id: 'welcome-guide',
             label: 'Show welcome guide',

@@ -253,11 +253,19 @@ export function MatterDocumentsTable({
                       </div>
                     </TD>
                     <TD className="px-3 whitespace-nowrap">
-                      <VerifyWords
-                        parts={documentVerifyParts(
-                          verify.get(file.id) ?? { status: 'pending' },
-                        )}
-                      />
+                      <Link
+                        to="/matters/$matterId/documents/$documentId"
+                        params={{ matterId, documentId: file.id }}
+                        search={{ verify: 'open' }}
+                        aria-label={`Open Verify for ${filename}`}
+                        className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        <VerifyWords
+                          parts={documentVerifyParts(
+                            verify.get(file.id) ?? { status: 'pending' },
+                          )}
+                        />
+                      </Link>
                     </TD>
                     <TD className="px-3 whitespace-nowrap">
                       <VerifyWords

@@ -14,6 +14,7 @@ import {
 } from '@tanstack/react-router'
 
 import type { DocumentDetailResponse } from './documents'
+import { ApiError } from './api'
 
 const docs = vi.hoisted(() => ({
   useDocument: vi.fn(),
@@ -97,7 +98,14 @@ function loadingQuery() {
   return { isLoading: true, isError: false, isSuccess: false, data: undefined }
 }
 function errorQuery() {
-  return { isLoading: false, isError: true, isSuccess: false, data: undefined }
+  return {
+    isLoading: false,
+    isError: true,
+    isSuccess: false,
+    data: undefined,
+    error: new ApiError('document_not_found', 'Document not found', 404, 'req'),
+    refetch: async () => ({}),
+  }
 }
 function successQuery(data: DocumentDetailResponse) {
   return { isLoading: false, isError: false, isSuccess: true, data }

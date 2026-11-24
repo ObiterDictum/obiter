@@ -12,6 +12,7 @@ import {
 } from '@obiter/ui'
 import { ShieldCheck } from '@obiter/ui/icons'
 import { useCurrentUser } from '../current-user'
+import { useCitationTargets } from '../documents'
 import { useMattersList } from '../matters'
 import { PageScaffold } from '../page-scaffold'
 import {
@@ -104,30 +105,34 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
           }
         />
       ) : groups.length === 0 ? (
-        <EmptyState
-          icon={<ShieldCheck size={28} className="text-muted" />}
-          title={
-            matterId
-              ? 'Nothing verified in this matter'
-              : 'No verification runs yet'
-          }
-          body={
-            matterId
-              ? 'Verify checks a document’s citations, quotations and authorities against stored UK sources. Start a run from this matter’s + menu or a document.'
-              : 'Verify checks a document’s citations, quotations and authorities against stored UK sources. Open a document in a matter and run it there.'
-          }
-          action={
-            <Link
-              to={matterId ? '/matters/$matterId' : '/matters'}
-              params={matterId ? { matterId } : undefined}
-              className="font-semibold text-brand hover:text-brand-pressed"
-            >
-              {matterId ? 'Back to the matter' : 'Open matters'}
-            </Link>
-          }
-        />
+        <>
+          <VerifyDocuments matterId={matterId} />
+          <EmptyState
+            icon={<ShieldCheck size={28} className="text-muted" />}
+            title={
+              matterId
+                ? 'Nothing verified in this matter'
+                : 'No verification runs yet'
+            }
+            body={
+              matterId
+                ? 'Verify checks a document’s citations, quotations and authorities against stored UK sources. Choose a document above and run it, or start one from the document itself.'
+                : 'Verify checks a document’s citations, quotations and authorities against stored UK sources. Choose a document above and run it, or open a document in a matter.'
+            }
+            action={
+              <Link
+                to={matterId ? '/matters/$matterId' : '/matters'}
+                params={matterId ? { matterId } : undefined}
+                className="font-semibold text-brand hover:text-brand-pressed"
+              >
+                {matterId ? 'Back to the matter' : 'Open matters'}
+              </Link>
+            }
+          />
+        </>
       ) : (
         <>
+          <VerifyDocuments matterId={matterId} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Tabs
               value={filter}
@@ -206,5 +211,63 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
         </>
       )}
     </PageScaffold>
+  )
+}
+
+const VERIFY_DOCUMENT_LIMIT = 8
+
+function VerifyDocuments({ matterId }: { matterId?: string }) {
+  const targets = useCitationTargets()
+  const documents = (targets.data ?? [])
+    .filter((document) => !matterId || document.matterId === matterId)
+    .sort((a, b) => b.openedAt.localeCompare(a.openedAt))
+    .slice(0, VERIFY_DOCUMENT_LIMIT)
+  if (documents.length === 0) return null
+  return (
+    <Card aria-labelledby="verify-documents">
+      <CardHead titleId="verify-documents" title="Documents">
+        <span className="text-caption text-subtle">
+          In a document, Verify lives in the Review tab’s Checks group.
+        </span>
+      </CardHead>
+      <ul className="flex flex-col pb-2">
+        {documents.map((document) => (
+          <li
+            key={document.documentId}
+            className="flex flex-wrap items-center gap-x-4 gap-y-1 px-6 py-2.5 [&+li]:border-t [&+li]:border-line"
+          >
+            <div className="min-w-0 flex-1">
+              <Link
+                to="/matters/$matterId/documents/$documentId"
+                params={{
+                  matterId: document.matterId,
+                  documentId: document.documentId,
+                }}
+                search={{ verify: 'open' }}
+                className="block truncate text-item text-ink hover:text-brand"
+              >
+                {document.filename}
+              </Link>
+              {!matterId ? (
+                <span className="text-caption text-subtle">
+                  {document.matterName}
+                </span>
+              ) : null}
+            </div>
+            <Link
+              to="/matters/$matterId/documents/$documentId"
+              params={{
+                matterId: document.matterId,
+                documentId: document.documentId,
+              }}
+              search={{ verify: 'run' }}
+              className="shrink-0 text-meta font-semibold text-brand hover:text-brand-pressed"
+            >
+              Run Verify
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
   )
 }

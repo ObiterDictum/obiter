@@ -13,7 +13,10 @@ import { isTypingTarget } from '../shell-shortcuts'
 import { useDocument } from '../documents'
 import { useMatter } from '../matters'
 import { ContentFrame } from '../content-frame'
-import { DocumentWorkspace } from '../components/document-workspace/workspace'
+import {
+  DocumentWorkspace,
+  type VerifyPanelRequest,
+} from '../components/document-workspace/workspace'
 import { DocumentTitle } from '../components/document-workspace/document-title'
 import { DocumentVersionView } from '../components/document-workspace/document-version-view'
 import { documentRedactionRunsId } from '../components/document-workspace/document-actions'
@@ -42,11 +45,13 @@ function DocumentDetailBody({
   documentId,
   redactionRunsRegion,
   onDocumentEdited,
+  verifyRequest,
 }: {
   matterId: string
   documentId: string
   redactionRunsRegion?: ReactNode
   onDocumentEdited?: () => void
+  verifyRequest?: VerifyPanelRequest | null
 }) {
   const document = useDocument(documentId)
   const queryClient = useQueryClient()
@@ -201,7 +206,11 @@ function DocumentDetailBody({
         {failure === 'error' ? (
           <EmptyState
             title="This document could not be loaded"
-            body={document.error.message}
+            body={
+              document.error instanceof Error
+                ? document.error.message
+                : 'The document could not be loaded. Try again.'
+            }
             action={
               <Button
                 variant="secondary"
@@ -271,6 +280,7 @@ function DocumentDetailBody({
           <DocumentWorkspace
             key={restoredVersionId ?? documentId}
             documentId={documentId}
+            verifyRequest={verifyRequest}
             version={loaded.document.currentVersion}
             document={loaded.document}
             versions={loaded.versions}

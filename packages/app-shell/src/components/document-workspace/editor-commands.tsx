@@ -29,7 +29,6 @@ import {
   RectangleDashed,
   Ruler,
   Scales,
-  ShieldCheck,
   SidebarSimple,
   SplitVertical,
   Table,
@@ -941,7 +940,6 @@ export function editorMenus(
             {
               id: 'verify',
               label: 'Verify citations',
-              icon: <ShieldCheck size={16} aria-hidden />,
               opensSurface: true,
               status: props.verify?.label,
               disabled: props.verify === undefined,
