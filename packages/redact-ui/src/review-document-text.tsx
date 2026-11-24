@@ -60,7 +60,7 @@ export function HighlightedText({
   let position = 0
   return (
     <article
-      className="max-w-[68ch] text-base leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
+      className="max-w-[68ch] text-base leading-relaxed whitespace-pre-wrap wrap-anywhere"
       aria-label="Original document text"
     >
       {spans.map((span) => {

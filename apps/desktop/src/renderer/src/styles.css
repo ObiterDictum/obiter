@@ -19,6 +19,12 @@
 @source "../../../../../packages/ui/src";
 @source "../../../../../packages/app-shell/src";
 @source "../../../../../packages/redact-ui/src";
+@source not "../../../../../packages/{ui,app-shell,redact-ui}/src/**/*.test.{ts,tsx}";
+@source not "./**/*.test.{ts,tsx}";
+@source not "../../../../../packages/{ui,app-shell,redact-ui}/src/**/*.test-fixture.{ts,tsx}";
+@source not "../../../../../packages/{ui,app-shell,redact-ui}/src/**/*-{test-support,harness}.{ts,tsx}";
+@source not "../../../../../packages/app-shell/src/views/{bot-check,request-access,request-access-confirm,request-access-form}.{ts,tsx}";
+@source not "../../../../../packages/app-shell/src/components/verification/verification-anchor.ts";
 
 html,
 body,

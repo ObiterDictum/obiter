@@ -220,7 +220,7 @@ export function DatePicker({
                     className={cn(
                       'flex size-7 items-center justify-center rounded-sm text-caption tabular-nums',
                       'hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                      'aria-[current=true]:bg-brand aria-[current=true]:text-brand-fg',
+                      'aria-[current]:bg-brand aria-[current]:text-brand-fg',
                     )}
                     onClick={() => pick(day)}
                   >

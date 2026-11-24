@@ -75,7 +75,7 @@ export function DocumentHistoryTab({
                 'flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left',
                 'hover:bg-fill focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
                 'disabled:cursor-not-allowed disabled:hover:bg-transparent',
-                'aria-[current=true]:bg-fill',
+                'aria-[current]:bg-fill',
               )}
             >
               <VersionSummary version={version} currentVersionId={currentId} />

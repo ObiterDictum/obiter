@@ -26,8 +26,7 @@ export function MenuContent({
           className={cn(
             'w-72 rounded-lg border border-line bg-raised p-2 text-ink shadow-lg outline-none',
             'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
-            'data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0',
-            'data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0',
+            'popup-edge-state',
             className,
           )}
           {...props}

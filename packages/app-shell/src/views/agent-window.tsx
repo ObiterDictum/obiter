@@ -98,7 +98,7 @@ export function AgentConversation({
       <div
         className={
           sessionId
-            ? 'sticky bottom-0 bg-surface py-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:from-[var(--obiter-surface)] before:to-transparent'
+            ? 'sticky bottom-0 bg-surface py-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-8 before:h-8 before:bg-gradient-to-t before:from-surface before:to-transparent'
             : 'py-4'
         }
       >
