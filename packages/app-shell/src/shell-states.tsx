@@ -142,51 +142,78 @@ function StatePage({
   )
 }
 
-const NOT_FOUND_COPY: Record<
-  string,
-  { title: string; body: string; to: '/matters' | '/verify' | '/redact' }
-> = {
-  matter_not_found: {
-    title: 'This matter does not exist',
-    body: 'The matter may have been removed, or you may not have access to it.',
-    to: '/matters',
-  },
-  matter_share_not_found: {
-    title: 'This matter does not exist',
-    body: 'The matter may have been removed, or you may not have access to it.',
-    to: '/matters',
-  },
-  document_not_found: {
-    title: 'This document does not exist',
-    body: 'The document may have been removed, or you may not have access to it.',
-    to: '/matters',
-  },
-  document_version_not_found: {
-    title: 'This document version does not exist',
-    body: 'The version may have been removed, or you may not have access to it.',
-    to: '/matters',
-  },
-  redaction_run_not_found: {
-    title: 'This redaction run does not exist',
-    body: 'The run may have been removed, or you may not have access to it.',
-    to: '/redact',
-  },
-  output_not_found: {
-    title: 'This redaction output does not exist',
-    body: 'The output may have been removed, or you may not have access to it.',
-    to: '/redact',
-  },
-  span_not_found: {
-    title: 'This redaction span does not exist',
-    body: 'The span may have been removed, or the run may have been replaced.',
-    to: '/redact',
-  },
-  verification_run_not_found: {
-    title: 'This verification run does not exist',
-    body: 'The run may have been removed, or you may not have access to it.',
-    to: '/verify',
-  },
+type NotFoundCopy = {
+  title: string
+  body: string
+  to: '/matters' | '/verify' | '/redact'
 }
+
+const NOT_FOUND_COPY = new Map<string, NotFoundCopy>([
+  [
+    'matter_not_found',
+    {
+      title: 'This matter does not exist',
+      body: 'The matter may have been removed, or you may not have access to it.',
+      to: '/matters',
+    },
+  ],
+  [
+    'matter_share_not_found',
+    {
+      title: 'This matter does not exist',
+      body: 'The matter may have been removed, or you may not have access to it.',
+      to: '/matters',
+    },
+  ],
+  [
+    'document_not_found',
+    {
+      title: 'This document does not exist',
+      body: 'The document may have been removed, or you may not have access to it.',
+      to: '/matters',
+    },
+  ],
+  [
+    'document_version_not_found',
+    {
+      title: 'This document version does not exist',
+      body: 'The version may have been removed, or you may not have access to it.',
+      to: '/matters',
+    },
+  ],
+  [
+    'redaction_run_not_found',
+    {
+      title: 'This redaction run does not exist',
+      body: 'The run may have been removed, or you may not have access to it.',
+      to: '/redact',
+    },
+  ],
+  [
+    'output_not_found',
+    {
+      title: 'This redaction output does not exist',
+      body: 'The output may have been removed, or you may not have access to it.',
+      to: '/redact',
+    },
+  ],
+  [
+    'span_not_found',
+    {
+      title: 'This redaction span does not exist',
+      body: 'The span may have been removed, or the run may have been replaced.',
+      to: '/redact',
+    },
+  ],
+  [
+    'verification_run_not_found',
+    {
+      title: 'This verification run does not exist',
+      body: 'The run may have been removed, or you may not have access to it.',
+      to: '/verify',
+    },
+  ],
+])
 
 export function ShellNotFound() {
   return (
@@ -211,7 +238,7 @@ export function ShellNotFound() {
 }
 
 function ShellEntityNotFound({ error }: { error: ApiError }) {
-  const copy = NOT_FOUND_COPY[error.code]
+  const copy = NOT_FOUND_COPY.get(error.code)
   if (!copy) return <ShellNotFound />
   const backLabel =
     copy.to === '/matters'
