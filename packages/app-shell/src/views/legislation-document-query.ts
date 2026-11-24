@@ -5,8 +5,6 @@ import type { LegislationStatus } from '../legislation-status'
 
 import type { LegislationProvisionSubsection } from '@obiter/contracts/legislation-reader'
 
-export type { LegislationProvisionSubsection }
-
 export interface LegislationAmendment {
   id: string
   effect: string

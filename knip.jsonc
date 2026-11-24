@@ -24,8 +24,6 @@
     "packages/app-shell": {
       "ignoreIssues": {
         "src/lib/desktop-bridge.ts": ["exports"],
-        "src/views/LegislationActView.tsx": ["types"],
-        "src/views/legislation-document-query.ts": ["types"],
       },
     },
     "packages/contracts": {
