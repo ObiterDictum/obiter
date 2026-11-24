@@ -360,7 +360,7 @@ export function FinalizedOutput({
                   open it in Word.
                 </p>
               ) : (
-                <div className="max-w-[68ch] text-body whitespace-pre-wrap text-ink [overflow-wrap:anywhere]">
+                <div className="max-w-[68ch] text-body whitespace-pre-wrap text-ink wrap-anywhere">
                   {output?.text}
                 </div>
               )}

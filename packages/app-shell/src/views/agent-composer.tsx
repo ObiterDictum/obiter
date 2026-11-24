@@ -133,7 +133,7 @@ export function AgentComposer({
           event.preventDefault()
           submit()
         }}
-        className="flex flex-col gap-2 rounded-xl border border-line bg-raised p-3 focus-within:ring-1 focus-within:ring-[var(--obiter-ring)]"
+        className="flex flex-col gap-2 rounded-xl border border-line bg-raised p-3 focus-within:ring-1 focus-within:ring-ring"
       >
         <label htmlFor={id} className="sr-only">
           Message

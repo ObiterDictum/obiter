@@ -205,4 +205,9 @@
   .app-no-drag {
     -webkit-app-region: no-drag;
   }
+
+  .popup-edge-state:is([data-starting-style], [data-ending-style]) {
+    opacity: 0;
+    scale: 0.98;
+  }
 }
