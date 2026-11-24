@@ -56,7 +56,7 @@ test('staff sees the insight screens and non-staff gets not found', async ({
     page.getByRole('heading', { name: 'Usage', exact: true }),
   ).toBeVisible()
   await expect(
-    page.getByText(/Obiter staff organisation is excluded/),
+    page.getByText(/including the Obiter staff organisation/),
   ).toBeVisible()
   await page.goto('/staff/feedback')
   await expect(

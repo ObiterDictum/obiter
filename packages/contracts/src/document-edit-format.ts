@@ -1,11 +1,7 @@
 import { z } from 'zod'
 
 import { isValidXmlText } from './xml-text'
-import {
-  DOCUMENT_EDIT_TEXT_MAX_LENGTH,
-  editIdSchema,
-  editTextSchema,
-} from './document-edit-shared'
+import { editIdSchema, editTextSchema } from './document-edit-shared'
 
 export const DOCUMENT_EDIT_RUN_MAX_COUNT = 4_096
 export const DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH = 64
@@ -143,4 +139,4 @@ export const paragraphFormatFields = {
   indentation: indentationSchema.nullable().optional(),
 }
 
-export { styleIdSchema, editTextSchema, DOCUMENT_EDIT_TEXT_MAX_LENGTH }
+export { styleIdSchema, editTextSchema }

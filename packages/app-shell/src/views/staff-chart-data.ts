@@ -25,8 +25,6 @@ const FEATURE_KEYS = [
   ['sourcesSaved', 'Sources'],
 ] as const
 
-export type FeatureKey = (typeof FEATURE_KEYS)[number][0]
-
 export function featureSeries(weeks: StaffUsageWeek[]): LineSeries[] {
   return FEATURE_KEYS.map(([key, label]) => ({
     key,

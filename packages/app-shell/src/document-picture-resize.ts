@@ -33,13 +33,6 @@ export function pxFromCentimetres(centimetres: number) {
   return centimetres * 10 * PX_PER_MM
 }
 
-export function pictureSizeInCentimetres(size: PictureSize) {
-  return {
-    width: centimetresFromPx(size.widthPx),
-    height: centimetresFromPx(size.heightPx),
-  }
-}
-
 export function pictureFrameOf(
   model: DocumentModelWire | undefined,
   target: PictureTarget,
@@ -150,15 +143,4 @@ export function resizedPictureXml(
   size: PictureSize,
 ): string | undefined {
   return setDrawingExtent(xml, size)
-}
-
-export function pictureChanged(
-  frame: PictureFrame | undefined,
-  draft: { widthPx: number; heightPx: number } | undefined,
-) {
-  if (!frame || !draft) return false
-  return (
-    Math.round(frame.widthPx) !== Math.round(draft.widthPx) ||
-    Math.round(frame.heightPx) !== Math.round(draft.heightPx)
-  )
 }
