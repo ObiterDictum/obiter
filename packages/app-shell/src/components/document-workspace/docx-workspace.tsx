@@ -1,5 +1,5 @@
 import { WorkspaceTableSurface } from './workspace-table-surface'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useCurrentUser } from '../../current-user'
 import type { FormatTarget } from '../../document-format-edits'
 import { documentStory } from '../../document-model-text'
@@ -52,6 +52,8 @@ import { checksLoad, DocxRightSlotTabs } from './document-right-slot'
 import { useSplitScale } from '../../matter-split-scale'
 import { usePublishDocumentTabStatus } from '../../document-tab-status'
 import { useOffline } from '../../shell-states'
+import { isForeignFormField } from '../../document-workspace-keys'
+import { isPrimaryModifier } from '../../keyboard-platform'
 import {
   DocumentLoadError,
   LoadingBlock,
@@ -320,6 +322,20 @@ export function DocxWorkspace({
   const openNoteEditing = (id: string) => openEditingStory('footnotes', id)
   const commentSelection = useLatestCallback(() => panels.tabs.open('comments'))
   const reviewPanel = useLatestCallback(() => togglePanel('review'))
+  const openPalette = useLatestCallback(() => request('palette'))
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return
+      if (!isPrimaryModifier(event) || !event.shiftKey) return
+      if (event.key.toLowerCase() !== 'p') return
+      if (isForeignFormField(event.target)) return
+      event.preventDefault()
+      openPalette()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [openPalette])
 
   const chrome = useLatestHandlers(
     docxWorkspaceChrome({

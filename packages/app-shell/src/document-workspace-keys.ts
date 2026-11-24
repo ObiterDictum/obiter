@@ -27,7 +27,7 @@ function pictureSizeControlFocused(target: EventTarget | null | undefined) {
   )
 }
 
-function isForeignFormField(target: EventTarget | null | undefined) {
+export function isForeignFormField(target: EventTarget | null | undefined) {
   if (
     !(target instanceof HTMLInputElement) &&
     !(target instanceof HTMLTextAreaElement)

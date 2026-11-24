@@ -4,7 +4,7 @@ import {
   checkDocumentName,
   DOCUMENT_NAME_MAX_LENGTH,
 } from '@obiter/contracts/document-name-rules'
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   documentDisplayName,
   documentRenameErrorMessage,
@@ -15,8 +15,10 @@ import { formatShortcut, shortcutAttribute } from '../../keyboard-platform'
 
 export function DocumentTitle({
   document,
+  renameSignal = 0,
 }: {
   document: MatterDocumentRecord
+  renameSignal?: number
 }) {
   const name = documentDisplayName(document)
   const rename = useRenameDocument()
@@ -25,9 +27,17 @@ export function DocumentTitle({
   const [error, setError] = useState<string | null>(null)
   const errorId = `document-title-error-${document.id}`
   const titleRef = useRef<HTMLButtonElement>(null)
+  const lastSignal = useRef(0)
 
   const stem = document.name ?? name
   const extension = document.currentVersion?.fileType
+
+  useEffect(() => {
+    if (!renameSignal || renameSignal === lastSignal.current) return
+    lastSignal.current = renameSignal
+    setDraft((current) => current ?? stem)
+    setError(null)
+  }, [renameSignal, stem])
 
   function startEditing() {
     setDraft(stem)
