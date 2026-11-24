@@ -25,7 +25,7 @@ export const RELATIONSHIPS_NAMESPACE =
 
 const EMU_PER_PX = 9525
 
-export function pxToEmu(px: number) {
+function pxToEmu(px: number) {
   return Math.round(px * EMU_PER_PX)
 }
 

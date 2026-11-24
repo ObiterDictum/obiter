@@ -45,7 +45,6 @@ export {
   missingFootnoteStyles,
   buildInlineDrawingXml,
   drawingSizeSupport,
-  pxToEmu,
   setDrawingExtent,
   type DrawingSizeSupport,
   FOOTNOTES_PART_NAME,
@@ -97,7 +96,6 @@ export {
 } from './model-property-edits'
 export { insertPropertyChild, stripPropertyChild } from './property-xml'
 export {
-  A4_PAGE_TWIPS,
   activeSectionXml,
   patchSectionPropertiesXml,
   splitSectionHistory,

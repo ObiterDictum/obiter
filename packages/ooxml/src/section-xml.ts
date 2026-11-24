@@ -16,7 +16,7 @@ export type SectionPropertiesPatch = {
   pageSize?: { width: number; height: number } | null
 }
 
-export const A4_PAGE_TWIPS = { width: 11_906, height: 16_838 }
+const A4_PAGE_TWIPS = { width: 11_906, height: 16_838 }
 
 const MARGIN_ATTRIBUTES = [
   'top',
