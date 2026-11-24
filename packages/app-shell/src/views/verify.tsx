@@ -12,10 +12,7 @@ import {
 } from '@obiter/ui'
 import { ShieldCheck } from '@obiter/ui/icons'
 import { useCurrentUser } from '../current-user'
-import { useQuery } from '@tanstack/react-query'
-import type { CitationTargetsResponse } from '@obiter/contracts'
-import { apiFetch } from '../api'
-import { documentsKeys } from '../documents'
+import { useCitationTargets } from '../documents'
 import { useMattersList } from '../matters'
 import { PageScaffold } from '../page-scaffold'
 import {
@@ -109,7 +106,7 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
         />
       ) : groups.length === 0 ? (
         <>
-          <VerifyDocuments matterId={matterId} enabled={hasOrganisation} />
+          <VerifyDocuments matterId={matterId} />
           <EmptyState
             icon={<ShieldCheck size={28} className="text-muted" />}
             title={
@@ -135,7 +132,7 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
         </>
       ) : (
         <>
-          <VerifyDocuments matterId={matterId} enabled={hasOrganisation} />
+          <VerifyDocuments matterId={matterId} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Tabs
               value={filter}
@@ -217,22 +214,8 @@ export function VerifyRouteView({ matterId }: { matterId?: string } = {}) {
   )
 }
 
-function VerifyDocuments({
-  matterId,
-  enabled,
-}: {
-  matterId?: string
-  enabled: boolean
-}) {
-  const targets = useQuery({
-    queryKey: documentsKeys.citationTargets(),
-    queryFn: () =>
-      apiFetch<CitationTargetsResponse>('/api/documents/citation-targets').then(
-        (response) => response.documents,
-      ),
-    staleTime: 30_000,
-    enabled,
-  })
+function VerifyDocuments({ matterId }: { matterId?: string }) {
+  const targets = useCitationTargets()
   const documents = (targets.data ?? [])
     .filter((document) => !matterId || document.matterId === matterId)
     .sort((a, b) => b.openedAt.localeCompare(a.openedAt))

@@ -47,7 +47,7 @@ function DocumentDetailRouteComponent() {
     void navigate({
       to: '/matters/$matterId/documents/$documentId',
       params: { matterId, documentId },
-      search: (previous) => ({ ...previous, verify: undefined }),
+      search: {},
       replace: true,
     })
   }, [verify, navigate, matterId, documentId])

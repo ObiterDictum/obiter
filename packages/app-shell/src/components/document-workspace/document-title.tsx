@@ -32,14 +32,11 @@ export function DocumentTitle({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'F2' || event.defaultPrevented) return
-      if (isTypingTarget(event.target)) return
-      if (
+      const inOverlay =
         event.target instanceof HTMLElement &&
         event.target.closest('[role=dialog],[role=menu],[role=listbox]')
-      ) {
-        return
-      }
+      if (event.key !== 'F2' || event.defaultPrevented || inOverlay) return
+      if (isTypingTarget(event.target)) return
       event.preventDefault()
       setDraft(stem)
       setError(null)
