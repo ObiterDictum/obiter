@@ -1,8 +1,7 @@
+import { SourcePageLinks } from './SourcePageLinks'
 import { LegislationActReader } from './LegislationActReader'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { Button, Skeleton, StatusDot, buttonClassName } from '@obiter/ui'
-import { ArrowUpRight } from '@obiter/ui/icons'
+import { Button, Skeleton, StatusDot } from '@obiter/ui'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { sourceNameForUrl } from '../components/search/provenance'
@@ -78,25 +77,7 @@ export function LegislationActView({
           <span>Point-in-time date not recorded</span>
         </span>
       }
-      actions={
-        <>
-          <a
-            className={buttonClassName({ variant: 'secondary', size: 'md' })}
-            href={act.officialUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            Open original
-            <ArrowUpRight aria-hidden size={14} />
-          </a>
-          <Link
-            className={buttonClassName({ variant: 'ghost', size: 'md' })}
-            to="/search"
-          >
-            Back to search
-          </Link>
-        </>
-      }
+      actions={<SourcePageLinks sourceUrl={act.officialUrl} />}
     >
       <div className="space-y-2 text-meta text-muted">
         <p>

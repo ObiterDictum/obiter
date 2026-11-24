@@ -1,3 +1,4 @@
+import { SourcePageLinks } from './SourcePageLinks'
 import { LegislationProvisionBody } from './LegislationProvisionBody'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -8,9 +9,7 @@ import {
   CardHead,
   Skeleton,
   StatusDot,
-  buttonClassName,
 } from '@obiter/ui'
-import { ArrowUpRight } from '@obiter/ui/icons'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { sourceNameForUrl } from '../components/search/provenance'
@@ -95,21 +94,7 @@ export function LegislationProvisionView({
               sourceUrl: provision.officialUrl,
             }}
           />
-          <a
-            className={buttonClassName({ variant: 'secondary', size: 'md' })}
-            href={provision.officialUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            Open original
-            <ArrowUpRight aria-hidden size={14} />
-          </a>
-          <Link
-            className={buttonClassName({ variant: 'ghost', size: 'md' })}
-            to="/search"
-          >
-            Back to search
-          </Link>
+          <SourcePageLinks sourceUrl={provision.officialUrl} />
         </>
       }
     >
