@@ -222,42 +222,30 @@ function ShellEntityNotFound({ error }: { error: ApiError }) {
 export function ShellQueryError({
   error,
   label,
-  onRetry,
   backAction,
 }: {
   error: unknown
   label: string
-  onRetry?: () => void
   backAction?: ReactNode
 }) {
   const failure = classifyShellFailure(error)
-  if (failure === 'error') {
-    return (
-      <EmptyState
-        title={`This ${label} could not be loaded`}
-        body={
-          error instanceof Error
-            ? error.message
-            : 'The request failed. Try again in a moment.'
-        }
-        action={
-          onRetry ? (
-            <Button variant="secondary" onClick={onRetry}>
-              Try again
-            </Button>
-          ) : undefined
-        }
-      />
-    )
-  }
+  const missing = failure === 'not-found' || failure === 'forbidden'
   return (
     <EmptyState
       title={
-        failure === 'forbidden'
-          ? `You do not have access to this ${label}`
-          : `This ${label} does not exist`
+        !missing
+          ? `This ${label} could not be loaded`
+          : failure === 'forbidden'
+            ? `You do not have access to this ${label}`
+            : `This ${label} does not exist`
       }
-      body={NOT_FOUND_BODY}
+      body={
+        missing
+          ? NOT_FOUND_BODY
+          : error instanceof Error
+            ? error.message
+            : 'The request failed. Try again in a moment.'
+      }
       action={backAction}
     />
   )

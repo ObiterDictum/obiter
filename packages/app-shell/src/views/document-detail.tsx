@@ -183,11 +183,7 @@ function DocumentDetailBody({
     return (
       <ContentFrame className="py-14">
         {rightSlotPanels}
-        <ShellQueryError
-          error={document.error}
-          label="document"
-          onRetry={() => void document.refetch()}
-        />
+        <ShellQueryError error={document.error} label="document" />
       </ContentFrame>
     )
   }

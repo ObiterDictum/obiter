@@ -62,7 +62,6 @@ export function MatterRouteView({
       <ShellQueryError
         error={matter.error}
         label="matter"
-        onRetry={() => void matter.refetch()}
         backAction={
           <Link
             to="/matters"
