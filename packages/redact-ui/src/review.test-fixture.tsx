@@ -72,9 +72,9 @@ const sourcePreviewKeys = Object.fromEntries(
 mock.module('./source-preview-hooks', () =>
   Object.assign({ ...sourcePreviewKeys }, sourcePreviewHooks),
 )
-const { isTypingTarget } = await import('@obiter/app-shell')
+const appShellModule = await import('@obiter/app-shell')
 mock.module('@obiter/app-shell', () => ({
-  isTypingTarget,
+  ...appShellModule,
   apiFetch: appShell.apiFetch,
   useCurrentUser: () => ({ data: { user: { id: appShell.currentUserId } } }),
   PageScaffold: ({

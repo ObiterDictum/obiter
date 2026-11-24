@@ -21,6 +21,7 @@ export type SplitPaneMetrics = {
 
 type SplitScale = {
   pageZoom: number
+  fit: number
   zoom: number
   onZoom: (next: number) => void
   reportPane: (paneId: string, metrics: SplitPaneMetrics | null) => void
@@ -38,13 +39,16 @@ export function splitPaneFit({
   return Math.min(1, contentWidth / paperWidth)
 }
 
+export function splitFit(panes: readonly SplitPaneMetrics[]) {
+  return panes.length === 0 ? 1 : Math.min(...panes.map(splitPaneFit))
+}
+
 export function splitPageZoom(
   panes: readonly SplitPaneMetrics[],
   zoom: number,
 ) {
   if (panes.length === 0) return zoom
-  const fit = Math.min(...panes.map(splitPaneFit))
-  return Math.floor(zoom * fit)
+  return Math.floor(zoom * splitFit(panes))
 }
 
 function sameMetrics(a: SplitPaneMetrics, b: SplitPaneMetrics) {
@@ -91,13 +95,31 @@ export function SplitScaleProvider({
   const reportRibbon = useCallback((height: number) => {
     setRibbonHeight((current) => (current === height ? current : height))
   }, [])
+  const fit = splitFit([...panes.values()])
   const pageZoom = splitPageZoom([...panes.values()], zoom)
   const scale = useMemo(
     () =>
       active
-        ? { pageZoom, zoom, onZoom, reportPane, ribbonHeight, reportRibbon }
+        ? {
+            pageZoom,
+            fit,
+            zoom,
+            onZoom,
+            reportPane,
+            ribbonHeight,
+            reportRibbon,
+          }
         : null,
-    [active, pageZoom, zoom, onZoom, reportPane, ribbonHeight, reportRibbon],
+    [
+      active,
+      pageZoom,
+      fit,
+      zoom,
+      onZoom,
+      reportPane,
+      ribbonHeight,
+      reportRibbon,
+    ],
   )
   return (
     <SplitScaleContext.Provider value={scale}>

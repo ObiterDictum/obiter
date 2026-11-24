@@ -1,4 +1,8 @@
-import { dismissWelcomeGuide } from './support'
+import {
+  decideEverySpan,
+  dismissWelcomeGuide,
+  showRedactionSpans,
+} from './support'
 import { randomUUID } from 'node:crypto'
 import {
   test,
@@ -90,6 +94,7 @@ test('a modified chord cannot record a redaction decision', async ({
     .last()
     .click()
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
+  await showRedactionSpans(page)
   const listbox = page.getByRole('listbox', { name: 'Detected spans' })
   await expect(listbox).toBeVisible({ timeout: 30_000 })
 
@@ -204,30 +209,7 @@ test('the finalised output and its controls fit a 390px viewport', async ({
     .last()
     .click()
   await expect(page).toHaveURL(/\/redact\/red_/, { timeout: 30_000 })
-  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
-  await expect(listbox).toBeVisible({ timeout: 30_000 })
-
-  const progress = page.getByText(/of \d+ detected spans decided/)
-  await expect(progress).toBeVisible({ timeout: 30_000 })
-  const decided = async () => {
-    const match = (await progress.innerText()).match(/(\d+) of (\d+)/)
-    return match
-      ? { done: Number(match[1]), total: Number(match[2]) }
-      : { done: 0, total: 0 }
-  }
-  await expect.poll(async () => (await decided()).total).toBeGreaterThan(0)
-  await listbox.focus()
-  for (let guard = 0; guard < 40; guard += 1) {
-    const before = await decided()
-    if (before.done >= before.total) break
-    await listbox.press('Enter')
-    await expect
-      .poll(async () => (await decided()).done)
-      .toBeGreaterThan(before.done)
-    await listbox.press('ArrowDown')
-  }
-  const complete = await decided()
-  expect(complete.done).toBe(complete.total)
+  await decideEverySpan(page)
 
   await page.getByRole('button', { name: 'Finalise', exact: true }).click()
   const dialog = page.getByRole('dialog')

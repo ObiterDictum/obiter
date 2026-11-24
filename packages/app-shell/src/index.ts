@@ -77,6 +77,15 @@ export {
 } from './matter-tabs'
 export { MatterTabStrip } from './matter-tab-strip'
 export { MatterTabsPane } from './matter-split'
+export {
+  SplitScaleProvider,
+  splitFit,
+  splitPageZoom,
+  splitPaneFit,
+  useSplitDeskMetrics,
+  useSplitScale,
+  type SplitPaneMetrics,
+} from './matter-split-scale'
 export { PageScaffold, type PageScaffoldProps } from './page-scaffold'
 export {
   classifyShellFailure,

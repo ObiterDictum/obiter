@@ -16,6 +16,35 @@ export async function waitForPaneIdle(page: Page) {
   )
 }
 
+export async function showRedactionSpans(page: Page) {
+  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
+  if (await listbox.isVisible()) return
+  await page
+    .getByRole('group', { name: 'Review view' })
+    .getByRole('button', { name: 'Spans' })
+    .click()
+  await expect(listbox).toBeVisible()
+}
+
+export async function decideEverySpan(page: Page) {
+  await showRedactionSpans(page)
+  const unreviewed = page.getByRole('tab', { name: /^Unreviewed/u })
+  await unreviewed.click()
+  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
+  for (let guard = 0; guard < 60; guard += 1) {
+    const remaining = Number(
+      (await unreviewed.textContent())?.replace(/\D+/gu, ''),
+    )
+    if (remaining === 0) return
+    await listbox.getByRole('option').first().click()
+    await page.keyboard.press('Enter')
+    await expect(unreviewed).toHaveText(`Unreviewed ${remaining - 1}`, {
+      timeout: 20_000,
+    })
+  }
+  await expect(unreviewed).toHaveText('Unreviewed 0', { timeout: 20_000 })
+}
+
 export async function openMatter(page: Page, matterName: string) {
   await page
     .getByRole('navigation', { name: 'Workspace' })

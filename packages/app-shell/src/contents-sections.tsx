@@ -83,6 +83,7 @@ function RowLink({
   meta,
   tone,
   preview,
+  wrap,
 }: {
   to: string
   params?: Record<string, string>
@@ -92,6 +93,7 @@ function RowLink({
   meta?: string
   tone?: 'danger' | 'warning' | 'info'
   preview?: MatterTab
+  wrap?: boolean
 }) {
   const previewRef = useMatterPreviewRef()
   return (
@@ -113,7 +115,15 @@ function RowLink({
       }}
     >
       {icon}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span
+        className={cn(
+          'min-w-0 flex-1',
+          wrap ? 'line-clamp-2 break-words' : 'truncate',
+        )}
+        title={wrap ? label : undefined}
+      >
+        {label}
+      </span>
       {meta ? (
         <span
           className={cn(
@@ -276,6 +286,7 @@ export function MatterContents({
               }
               label={`Redact · ${run.sourceFilename}`}
               meta={attentionRunLabel(run.status)}
+              wrap
             />
           ))}
         </Group>
@@ -401,6 +412,7 @@ export function RedactContents() {
                 params={{ runId: run.id }}
                 label={run.sourceFilename}
                 meta={run.matterName ?? undefined}
+                wrap
               />
             ))}
             {grouped.length > ROWS_PER_GROUP ? (

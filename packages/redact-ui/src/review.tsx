@@ -1,13 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import {
-  Badge,
-  Button,
-  EmptyState,
-  ProgressBar,
-  Skeleton,
-  StatusDot,
-} from '@obiter/ui'
+import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
 import { ArrowLeft, CircleNotch, ShieldCheck } from '@obiter/ui/icons'
 import type { SpanDecision } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
@@ -22,15 +15,15 @@ import {
   useSpanDecision,
 } from './hooks'
 import { useRedactionSource } from './source-preview-hooks'
-import { ReviewSourceDocument } from './review-source-document'
+import { ReviewDocumentPane } from './review-document-pane'
 import type { WordCoverage } from './word-review-marks'
 import { DetectionRetryWarning } from './detection-retry-warning'
 import { DetectionFailure, zeroSpanBody } from './detection-failure'
 import { FinalizeDialog } from './finalize-dialog'
 import { FinalizedOutput } from './finalized-output'
 import { DecisionBar } from './decision-bar'
-import { CategoryLegend } from './review-document-text'
 import { ReviewPanel, type SpanFilter } from './review-panel'
+import { ReviewSummaryRow } from './review-summary-row'
 import { decisionCounts, spanDecisionState } from './span-copy'
 import { hasRedactionDocumentText } from './types'
 
@@ -73,6 +66,7 @@ export function RedactionReviewView({
   const [renderedWord, setWordCoverage] = useState<WordCoverage>()
   const [wordFocus, setWordFocus] = useState<{ id: string } | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>()
+  const [pane, setPane] = useState<'page' | 'spans'>('page')
   const [filter, setFilter] = useState<SpanFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -95,7 +89,7 @@ export function RedactionReviewView({
     listRef.current
       ?.querySelector('[aria-selected="true"]')
       ?.scrollIntoView?.({ block: 'nearest' })
-  }, [selectedId])
+  }, [selectedId, pane])
 
   const failedWithoutText =
     (runQuery.data?.status === 'failed' || detecting) && !textQuery.data
@@ -292,12 +286,6 @@ export function RedactionReviewView({
     }
   }
 
-  const remaining = counts.pending
-  const decidedCount = run.summary.totalSpans - remaining
-  const progress =
-    run.summary.totalSpans === 0
-      ? 100
-      : (decidedCount / run.summary.totalSpans) * 100
   const categories = Array.from(new Set(run.spans.map((span) => span.category)))
 
   return (
@@ -346,43 +334,12 @@ export function RedactionReviewView({
         </div>
       </header>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-12 py-3 @max-pane:px-8">
-        <p className="text-meta text-muted">
-          <span className="text-ink">
-            {`${String(decidedCount)} of ${String(run.summary.totalSpans)} detected spans decided`}
-          </span>
-        </p>
-        <ProgressBar
-          value={progress}
-          className="max-w-[200px] min-w-[120px] flex-1"
-        />
-        <p className="text-caption text-subtle" role="status">
-          {remaining > 0
-            ? `${remaining} left`
-            : run.replacementRunId
-              ? null
-              : 'All spans decided. Choose Finalise to continue.'}
-        </p>
-        <CategoryLegend categories={categories} />
-        <div className="ml-auto flex items-center gap-4">
-          <span className="flex items-center gap-4 text-caption text-muted">
-            <StatusDot tone="success">
-              {`Redacted ${String(counts.accepted)}`}
-            </StatusDot>
-            <StatusDot tone="neutral">
-              {`Kept visible ${String(counts.rejected)}`}
-            </StatusDot>
-            <StatusDot tone="warning">
-              {`Needs review ${String(counts.pending)}`}
-            </StatusDot>
-          </span>
-          {pageCount === null ? null : (
-            <span className="text-caption text-subtle">
-              {pageCount} {pageCount === 1 ? 'page' : 'pages'}
-            </span>
-          )}
-        </div>
-      </div>
+      <ReviewSummaryRow
+        run={run}
+        counts={counts}
+        categories={categories}
+        pageCount={pageCount}
+      />
 
       {run.replacementRunId || run.detectionMode !== 'model+supplement' ? (
         <div className="shrink-0">
@@ -399,91 +356,118 @@ export function RedactionReviewView({
           />
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto bg-canvas">
-              <ReviewSourceDocument
-                run={run}
-                text={textQuery.data.text}
-                selectedId={selected?.id ?? null}
-                focusRequest={wordFocus}
-                onSelect={setSelectedId}
-                word={word}
-                onWordCoverage={setWordCoverage}
-                pdf={
-                  pdfPreviewEnabled && sourceFileQuery.data && layoutQuery.data
-                    ? { file: sourceFileQuery.data, layout: layoutQuery.data }
-                    : null
-                }
-              />
-            </div>
-            {run.spans.length === 0 ? (
-              <p className="border-t border-line px-5 py-3 text-meta text-muted">
-                {zeroSpanBody(run)}
-              </p>
-            ) : run.replacementRunId ? (
-              <p className="border-t border-line bg-surface px-12 py-3 text-meta text-muted @max-pane:px-8">
-                A newer model-detected run is available, so this run can no
-                longer take decisions or be finalised. Open the replacement run
-                above to continue.
-              </p>
-            ) : (
-              <DecisionBar
-                span={selected}
-                position={position}
-                total={run.spans.length}
-                decisions={run.decisions}
-                currentUserId={currentUserId}
-                page={selected ? pageFor(selected) : null}
-                pageCount={pageCount}
-                occurrences={occurrences}
-                pending={decision.isPending}
-                error={
-                  decision.error
-                    ? `The decision was not saved. ${decision.error.message}`
-                    : null
-                }
-                canPrevious={filtered.length > 1}
-                canNext={filtered.length > 1}
-                onPrevious={() => move(-1)}
-                onNext={() => move(1)}
-                onDecide={decide}
-                onApplyToAll={(value) => decide(value, true)}
-              />
-            )}
-          </div>
-          {run.spans.length > 0 ? (
-            <ReviewPanel
-              spans={filtered}
-              decisions={run.decisions}
-              counts={counts}
-              currentUserId={currentUserId}
-              bySource={run.summary.bySource}
-              filter={filter}
-              onFilterChange={(next) => changeFilter(() => setFilter(next))}
-              category={categoryFilter}
-              onCategoryChange={(next) =>
-                changeFilter(() => setCategoryFilter(next))
-              }
-              source={sourceFilter}
-              onSourceChange={(next) =>
-                changeFilter(() => setSourceFilter(next))
-              }
-              categories={categories}
-              selectedId={selected?.id ?? null}
-              onSelect={(id) => {
-                setSelectedId(id)
-                if (word) setWordFocus({ id })
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div
+            className="hidden shrink-0 items-center gap-1 border-b border-line bg-surface px-12 py-2 @max-pane:flex @max-pane:px-8"
+            role="group"
+            aria-label="Review view"
+          >
+            <Button
+              size="sm"
+              variant={pane === 'page' ? 'secondary' : 'ghost'}
+              aria-pressed={pane === 'page'}
+              onClick={() => {
+                setPane('page')
+                if (word && selected) setWordFocus({ id: selected.id })
               }}
-              missingFromWord={
-                wordCoverage ? (id) => !wordCoverage.bySpan.has(id) : undefined
+            >
+              Page
+            </Button>
+            <Button
+              size="sm"
+              variant={pane === 'spans' ? 'secondary' : 'ghost'}
+              aria-pressed={pane === 'spans'}
+              onClick={() => setPane('spans')}
+            >
+              Spans
+            </Button>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
+            <ReviewDocumentPane
+              run={run}
+              text={textQuery.data.text}
+              selectedId={selected?.id ?? null}
+              focusRequest={wordFocus}
+              onSelect={setSelectedId}
+              word={word}
+              onWordCoverage={setWordCoverage}
+              pdf={
+                pdfPreviewEnabled && sourceFileQuery.data && layoutQuery.data
+                  ? { file: sourceFileQuery.data, layout: layoutQuery.data }
+                  : null
               }
-              onKeyDown={onListKeys}
-              listRef={listRef}
-              pageFor={pageFor}
-              pageCount={pageCount}
+              className={pane === 'spans' ? '@max-pane:hidden' : undefined}
             />
-          ) : null}
+            {run.spans.length > 0 ? (
+              <ReviewPanel
+                className={pane === 'page' ? '@max-pane:hidden' : undefined}
+                spans={filtered}
+                decisions={run.decisions}
+                counts={counts}
+                currentUserId={currentUserId}
+                bySource={run.summary.bySource}
+                filter={filter}
+                onFilterChange={(next) => changeFilter(() => setFilter(next))}
+                category={categoryFilter}
+                onCategoryChange={(next) =>
+                  changeFilter(() => setCategoryFilter(next))
+                }
+                source={sourceFilter}
+                onSourceChange={(next) =>
+                  changeFilter(() => setSourceFilter(next))
+                }
+                categories={categories}
+                selectedId={selected?.id ?? null}
+                onSelect={(id) => {
+                  setSelectedId(id)
+                  if (word) setWordFocus({ id })
+                }}
+                missingFromWord={
+                  wordCoverage
+                    ? (id) => !wordCoverage.bySpan.has(id)
+                    : undefined
+                }
+                onKeyDown={onListKeys}
+                listRef={listRef}
+                pageFor={pageFor}
+                pageCount={pageCount}
+              />
+            ) : null}
+          </div>
+          {run.spans.length === 0 ? (
+            <p className="shrink-0 border-t border-line px-5 py-3 text-meta text-muted">
+              {zeroSpanBody(run)}
+            </p>
+          ) : run.replacementRunId ? (
+            <p className="shrink-0 border-t border-line bg-surface px-12 py-3 text-meta text-muted @max-pane:px-8">
+              A newer model-detected run is available, so this run can no longer
+              take decisions or be finalised. Open the replacement run above to
+              continue.
+            </p>
+          ) : (
+            <DecisionBar
+              span={selected}
+              position={position}
+              total={run.spans.length}
+              decisions={run.decisions}
+              currentUserId={currentUserId}
+              page={selected ? pageFor(selected) : null}
+              pageCount={pageCount}
+              occurrences={occurrences}
+              pending={decision.isPending}
+              error={
+                decision.error
+                  ? `The decision was not saved. ${decision.error.message}`
+                  : null
+              }
+              canPrevious={filtered.length > 1}
+              canNext={filtered.length > 1}
+              onPrevious={() => move(-1)}
+              onNext={() => move(1)}
+              onDecide={decide}
+              onApplyToAll={(value) => decide(value, true)}
+            />
+          )}
         </div>
       )}
     </div>

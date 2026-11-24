@@ -17,7 +17,12 @@ import {
   type Page,
 } from '@playwright/test'
 import { resolveJourneyTargets } from '../journey-target.mjs'
-import { fixturePath, openMatter, verifyEmailInDb } from './support'
+import {
+  decideEverySpan,
+  fixturePath,
+  openMatter,
+  verifyEmailInDb,
+} from './support'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -236,27 +241,7 @@ test('a document redaction run returns its finalized copy as a new version', asy
     page.getByRole('button', { name: 'Finalise', exact: true }),
   ).toBeVisible({ timeout: 60_000 })
 
-  const listbox = page.getByRole('listbox', { name: 'Detected spans' })
-  await listbox.focus()
-  const unreviewed = page.getByRole('tab', { name: /^Unreviewed/u })
-  const total = Number(
-    (await page.getByRole('tab', { name: /^All/u }).textContent())?.replace(
-      /\D+/gu,
-      '',
-    ),
-  )
-  for (let index = 0; index < total; index += 1) {
-    const before = Number(
-      (await unreviewed.textContent())?.replace(/\D+/gu, ''),
-    )
-    if (before === 0) break
-    await page.keyboard.press('Enter')
-    await expect(
-      page.getByRole('tab', { name: `Unreviewed ${before - 1}` }),
-    ).toBeVisible({ timeout: 20_000 })
-    await page.keyboard.press('ArrowDown')
-  }
-  await expect(unreviewed).toHaveText('Unreviewed 0', { timeout: 20_000 })
+  await decideEverySpan(page)
 
   await page.getByRole('button', { name: 'Finalise', exact: true }).click()
   await expect(

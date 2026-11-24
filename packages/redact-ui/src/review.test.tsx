@@ -232,3 +232,30 @@ it('keeps review shortcuts out of editable fields, dialogs and other controls', 
     dialog.remove()
   }
 })
+
+it('shows the page and the span list one at a time on a narrow pane', () => {
+  renderRun()
+  const switchGroup = screen.getByRole('group', { name: 'Review view' })
+  const page = within(switchGroup).getByRole('button', { name: 'Page' })
+  const spans = within(switchGroup).getByRole('button', { name: 'Spans' })
+  const documentPane = window.document.querySelector('[data-review-pane]')
+  const list = screen.getByRole('listbox', { name: 'Detected spans' })
+  const panel = list.closest('aside')
+  const decisionBar = screen.getByRole('region', {
+    name: 'Decide the selected span',
+  })
+
+  expect(page.getAttribute('aria-pressed')).toBe('true')
+  expect(documentPane?.className).not.toContain('@max-pane:hidden')
+  expect(panel?.className).toContain('@max-pane:hidden')
+
+  fireEvent.click(spans)
+  expect(spans.getAttribute('aria-pressed')).toBe('true')
+  expect(documentPane?.className).toContain('@max-pane:hidden')
+  expect(panel?.className).not.toContain('@max-pane:hidden')
+
+  fireEvent.click(page)
+  expect(documentPane?.className).not.toContain('@max-pane:hidden')
+  expect(panel?.className).toContain('@max-pane:hidden')
+  expect(decisionBar.isConnected).toBe(true)
+})

@@ -84,7 +84,9 @@ export function HighlightedText({
                       categoryClasses[span.category],
                       sourceClasses[span.source],
                       decisionMarkClass[state],
-                      selectedId === span.id ? 'ring-2 ring-ring' : '',
+                      selectedId === span.id
+                        ? 'inset-ring-2 inset-ring-ring'
+                        : '',
                     ].join(' ')}
                     aria-pressed={selectedId === span.id}
                   />

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy, PageViewport } from 'pdfjs-dist'
+import { useSplitDeskMetrics, useSplitScale } from '@obiter/app-shell'
 import { Button, cn } from '@obiter/ui'
 import {
   coverRectsForSpan,
@@ -12,8 +13,8 @@ import { spanDecisionState } from './span-copy'
 const decisionOverlayClass = {
   accepted: 'opacity-80',
   rejected: 'opacity-25',
-  pseudonymised: 'opacity-80 ring-1 ring-info',
-  pending: 'opacity-80 outline-2 outline-warning',
+  pseudonymised: 'opacity-80 inset-ring-1 inset-ring-info',
+  pending: 'opacity-80 inset-ring-2 inset-ring-warning',
 } satisfies Record<ReturnType<typeof spanDecisionState>, string>
 
 interface PdfReviewDocumentProps {
@@ -37,6 +38,12 @@ export function PdfReviewDocument({
 }: PdfReviewDocumentProps) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  const zoom = useSplitScale()?.pageZoom ?? 100
+  useSplitDeskMetrics(
+    hostRef,
+    Math.max(...layout.pages.map((page) => page.width)),
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -87,7 +94,8 @@ export function PdfReviewDocument({
 
   return (
     <div
-      className="flex flex-col items-center gap-4 overflow-x-auto p-4 sm:p-5"
+      ref={hostRef}
+      className="flex w-full flex-col gap-6 px-8 pt-8 pb-14"
       aria-label="PDF document"
     >
       {Array.from({ length: pdf.numPages }, (_, index) => (
@@ -100,6 +108,7 @@ export function PdfReviewDocument({
           spans={spans}
           decisions={decisions}
           selectedId={selectedId}
+          zoom={zoom}
           onSelect={onSelect}
           categoryClassName={categoryClassName}
         />
@@ -149,6 +158,7 @@ function PdfPage({
   spans,
   decisions,
   selectedId,
+  zoom,
   onSelect,
   categoryClassName,
 }: {
@@ -159,10 +169,10 @@ function PdfPage({
   spans: RedactionSpan[]
   decisions: Decisions
   selectedId: string | null
+  zoom: number
   onSelect: (id: string) => void
   categoryClassName: Record<string, string>
 }) {
-  const hostRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [viewport, setViewport] = useState<PageViewport | null>(null)
   const [failedFor, setFailedFor] = useState<PDFDocumentProxy | null>(null)
@@ -173,7 +183,6 @@ function PdfPage({
     let cancelled = false
     let renderTask: { cancel: () => void; promise: Promise<unknown> } | null =
       null
-    let resizeTimer: ReturnType<typeof setTimeout> | null = null
 
     async function paint() {
       try {
@@ -187,10 +196,7 @@ function PdfPage({
 
         const page = await pdf.getPage(pageNumber)
         if (cancelled) return
-        const base = page.getViewport({ scale: 1 })
-        const available = hostRef.current?.clientWidth || base.width
-        const scale = Math.min(1.6, Math.max(0.75, available / base.width))
-        const nextViewport = page.getViewport({ scale })
+        const nextViewport = page.getViewport({ scale: zoom / 100 })
         const canvas = canvasRef.current
         if (!canvas) return
         const context = canvas.getContext('2d')
@@ -220,24 +226,11 @@ function PdfPage({
 
     void paint()
 
-    const observer =
-      typeof ResizeObserver === 'undefined' || !hostRef.current
-        ? null
-        : new ResizeObserver(() => {
-            if (resizeTimer) clearTimeout(resizeTimer)
-            resizeTimer = setTimeout(() => {
-              void paint()
-            }, 100)
-          })
-    if (hostRef.current && observer) observer.observe(hostRef.current)
-
     return () => {
       cancelled = true
-      if (resizeTimer) clearTimeout(resizeTimer)
       renderTask?.cancel()
-      observer?.disconnect()
     }
-  }, [pdf, pageNumber, attempt])
+  }, [pdf, pageNumber, attempt, zoom])
 
   const pageSpans =
     viewport == null
@@ -258,7 +251,7 @@ function PdfPage({
         )
 
   return (
-    <div ref={hostRef} className="w-full max-w-[1080px]">
+    <div className="mx-auto">
       {failed ? (
         <div
           className="flex flex-col items-center gap-3 rounded-lg border border-line-strong bg-raised p-6"
@@ -297,12 +290,13 @@ function PdfPage({
                 aria-label={`${box.span.category.replaceAll('_', ' ')}: ${box.span.text}`}
                 aria-pressed={selectedId === box.span.id}
                 className={cn(
-                  'pointer-events-auto absolute rounded-sm border border-transparent transition-opacity hover:opacity-95',
+                  'pointer-events-auto absolute rounded-sm transition-opacity hover:opacity-95',
                   categoryClassName[box.span.category],
                   decisionOverlayClass[
                     spanDecisionState(decisions[box.span.id]?.decision)
                   ],
-                  selectedId === box.span.id && 'opacity-100 ring-2 ring-ring',
+                  selectedId === box.span.id &&
+                    'opacity-100 inset-ring-2 inset-ring-ring',
                 )}
                 style={{
                   left: box.left,

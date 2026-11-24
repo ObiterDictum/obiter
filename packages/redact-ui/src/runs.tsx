@@ -92,7 +92,12 @@ function RunRow({
   return (
     <li className="flex items-start justify-between gap-3 border-b border-line px-6 py-4 last:border-b-0">
       <div className="min-w-0">
-        <p className="text-item truncate text-ink">{run.sourceFilename}</p>
+        <p
+          className="text-item line-clamp-2 break-words text-ink"
+          title={run.sourceFilename}
+        >
+          {run.sourceFilename}
+        </p>
         <p className="mt-0.5 text-caption text-subtle">
           {run.matterName ?? 'Not filed in a matter'} ·{' '}
           {formatDate(run.createdAt)}
