@@ -92,6 +92,7 @@ function PaletteLink({
         <Link
           to="/matters/$matterId/documents/$documentId"
           params={{ matterId: target.matterId, documentId: target.documentId }}
+          search={target.verify ? { verify: target.verify } : undefined}
           {...shared}
         />
       )
@@ -105,18 +106,6 @@ function PaletteLink({
       )
     case 'verify':
       return <Link to="/verify" {...shared} />
-    case 'verify-run':
-      return (
-        <Link
-          to="/matters/$matterId/documents/$documentId"
-          params={{
-            matterId: target.matterId,
-            documentId: target.documentId,
-          }}
-          search={{ verify: 'run' }}
-          {...shared}
-        />
-      )
     case 'law':
       return <Link to="/search" search={{ q: target.query }} {...shared} />
     default:
@@ -318,9 +307,10 @@ export function CommandPaletteDialog({
                   label: 'Run Verify',
                   hint: 'Run Verify on the open document',
                   target: {
-                    kind: 'verify-run',
+                    kind: 'document',
                     matterId: currentMatterId,
                     documentId: currentDocumentId,
+                    verify: 'run',
                   },
                 } satisfies PaletteRow,
               ]

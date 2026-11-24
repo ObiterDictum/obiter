@@ -1,6 +1,6 @@
 import { reportError } from './error-reporting'
 import { Link } from '@tanstack/react-router'
-import { Button, ObiterMark, Skeleton, cn } from '@obiter/ui'
+import { Button, EmptyState, ObiterMark, Skeleton, cn } from '@obiter/ui'
 import {
   ArrowClockwise,
   House,
@@ -142,76 +142,41 @@ function StatePage({
   )
 }
 
-type NotFoundCopy = {
-  title: string
-  body: string
-  to: '/matters' | '/verify' | '/redact'
-}
+const NOT_FOUND_BODY =
+  'It may have been removed, or you may not have access to it.'
 
-const NOT_FOUND_COPY = new Map<string, NotFoundCopy>([
-  [
-    'matter_not_found',
-    {
-      title: 'This matter does not exist',
-      body: 'The matter may have been removed, or you may not have access to it.',
-      to: '/matters',
-    },
-  ],
+const NOT_FOUND_COPY = new Map<
+  string,
+  { title: string; to: '/matters' | '/verify' | '/redact' }
+>([
+  ['matter_not_found', { title: 'This matter does not exist', to: '/matters' }],
   [
     'matter_share_not_found',
-    {
-      title: 'This matter does not exist',
-      body: 'The matter may have been removed, or you may not have access to it.',
-      to: '/matters',
-    },
+    { title: 'This matter does not exist', to: '/matters' },
   ],
   [
     'document_not_found',
-    {
-      title: 'This document does not exist',
-      body: 'The document may have been removed, or you may not have access to it.',
-      to: '/matters',
-    },
+    { title: 'This document does not exist', to: '/matters' },
   ],
   [
     'document_version_not_found',
-    {
-      title: 'This document version does not exist',
-      body: 'The version may have been removed, or you may not have access to it.',
-      to: '/matters',
-    },
+    { title: 'This document version does not exist', to: '/matters' },
   ],
   [
     'redaction_run_not_found',
-    {
-      title: 'This redaction run does not exist',
-      body: 'The run may have been removed, or you may not have access to it.',
-      to: '/redact',
-    },
+    { title: 'This redaction run does not exist', to: '/redact' },
   ],
   [
     'output_not_found',
-    {
-      title: 'This redaction output does not exist',
-      body: 'The output may have been removed, or you may not have access to it.',
-      to: '/redact',
-    },
+    { title: 'This redaction output does not exist', to: '/redact' },
   ],
   [
     'span_not_found',
-    {
-      title: 'This redaction span does not exist',
-      body: 'The span may have been removed, or the run may have been replaced.',
-      to: '/redact',
-    },
+    { title: 'This redaction span does not exist', to: '/redact' },
   ],
   [
     'verification_run_not_found',
-    {
-      title: 'This verification run does not exist',
-      body: 'The run may have been removed, or you may not have access to it.',
-      to: '/verify',
-    },
+    { title: 'This verification run does not exist', to: '/verify' },
   ],
 ])
 
@@ -251,7 +216,7 @@ function ShellEntityNotFound({ error }: { error: ApiError }) {
       tone="neutral"
       icon={<MagnifyingGlass size={20} aria-hidden />}
       title={copy.title}
-      description={copy.body}
+      description={NOT_FOUND_BODY}
       actions={
         <>
           <Link to={copy.to} className={linkClass.primary}>
@@ -262,6 +227,54 @@ function ShellEntityNotFound({ error }: { error: ApiError }) {
           </Link>
         </>
       }
+    />
+  )
+}
+
+export function ShellQueryError({
+  error,
+  label,
+  onRetry,
+  backAction,
+}: {
+  error: unknown
+  label: string
+  onRetry?: () => void
+  backAction?: ReactNode
+}) {
+  const failure = classifyShellFailure(error)
+  if (failure === 'error') {
+    return (
+      <EmptyState
+        title={`This ${label} could not be loaded`}
+        body={
+          error instanceof Error
+            ? error.message
+            : 'The request failed. Try again in a moment.'
+        }
+        action={
+          onRetry ? (
+            <Button variant="secondary" onClick={onRetry}>
+              Try again
+            </Button>
+          ) : undefined
+        }
+      />
+    )
+  }
+  return (
+    <EmptyState
+      title={
+        failure === 'forbidden'
+          ? `You do not have access to this ${label}`
+          : `This ${label} does not exist`
+      }
+      body={
+        failure === 'forbidden'
+          ? 'It belongs to an area of the organisation you cannot open, or your session may have expired.'
+          : NOT_FOUND_BODY
+      }
+      action={backAction}
     />
   )
 }
