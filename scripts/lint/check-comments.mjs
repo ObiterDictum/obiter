@@ -14,11 +14,7 @@ const ALLOWED = [
   /^\/\*\s*[@#]__PURE__\s*\*\/$/u,
 ]
 
-const SKIPPED = [
-  /^scripts\/synthetic-v2\//u,
-  /\/routeTree\.gen\.ts$/u,
-  /\.d\.ts$/u,
-]
+const SKIPPED = [/\/routeTree\.gen\.ts$/u, /\.d\.ts$/u]
 
 const files = execFileSync(
   'git',

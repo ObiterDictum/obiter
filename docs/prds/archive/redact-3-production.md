@@ -518,7 +518,7 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 
 **Tool:**
 
-Script at `scripts/export-training-data.ts` (or similar) that:
+The training export script lives in a separate private repository and is designed to:
 
 1. Queries all finalized redaction runs marked as human-reviewed (not auto-finalized).
 2. For each run, loads the extracted text and all finalised decisions.
