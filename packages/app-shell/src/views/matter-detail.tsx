@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogDescription,
   DialogTitle,
-  EmptyState,
   Menu,
   MenuContent,
   MenuItem,

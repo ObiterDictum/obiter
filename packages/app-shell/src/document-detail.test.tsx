@@ -191,9 +191,7 @@ describe('DocumentDetailLayoutView — matter mismatch', () => {
     docs.useDocument.mockReturnValue(errorQuery())
     render(<RouterProvider router={buildRouter('mtr_1', 'doc_missing')} />)
     await waitFor(() => {
-      expect(
-        screen.getByText('This document does not exist'),
-      ).toBeTruthy()
+      expect(screen.getByText('This document does not exist')).toBeTruthy()
     })
   })
 
