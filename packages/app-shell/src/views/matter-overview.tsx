@@ -56,16 +56,31 @@ export function MatterOverview({
                   </li>
                 ))}
               </ul>
-              <Link
-                to="/verify"
-                className={buttonClassName({
-                  variant: 'secondary',
-                  size: 'sm',
-                  className: 'self-start',
-                })}
-              >
-                Review in Verify
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                {openWork.flaggedFindings + openWork.reviewFindings > 0 ? (
+                  <Link
+                    to="/matters/$matterId/verify"
+                    params={{ matterId: matter.id }}
+                    className={buttonClassName({
+                      variant: 'secondary',
+                      size: 'sm',
+                    })}
+                  >
+                    Review in Verify
+                  </Link>
+                ) : null}
+                {openWork.redactionDecisions + openWork.failed > 0 ? (
+                  <Link
+                    to="/redact"
+                    className={buttonClassName({
+                      variant: 'secondary',
+                      size: 'sm',
+                    })}
+                  >
+                    Review in Redact
+                  </Link>
+                ) : null}
+              </div>
             </div>
           )}
         </CardBody>
