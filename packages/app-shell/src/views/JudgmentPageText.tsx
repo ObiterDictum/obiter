@@ -31,6 +31,7 @@ export function JudgmentPageText({
   at,
   paragraph,
   sourceUrl,
+  heldLegislation,
 }: {
   paragraph?: JudgmentParagraph
   sourceUrl?: string
@@ -38,6 +39,7 @@ export function JudgmentPageText({
   query: string
   at: number
   pages?: PlacedPage[]
+  heldLegislation?: ReadonlySet<string>
 }) {
   const annotations = judgmentAnnotations(text, paragraph)
   const markers = pages.filter(
@@ -64,7 +66,8 @@ export function JudgmentPageText({
         const citation = annotations.citations.find(
           (c) => c.offset <= offset && c.offset + c.length > offset,
         )
-        const href = citation && judgmentCitationTarget(citation)
+        const href =
+          citation && judgmentCitationTarget(citation, heldLegislation)
         const source = (
           <span
             data-source-text

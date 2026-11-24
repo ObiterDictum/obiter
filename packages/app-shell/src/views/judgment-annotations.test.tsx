@@ -110,6 +110,14 @@ it('routes supported legislation internally and refuses unsafe citation links', 
     judgmentCitationTarget({
       offset: 0,
       length: 1,
+      type: 'legislation',
+      href: 'https://www.legislation.gov.uk/id/ukpga/1971/77/section/1',
+    }),
+  ).toBe('/ln/ukpga/1971/77/section/1')
+  expect(
+    judgmentCitationTarget({
+      offset: 0,
+      length: 1,
       type: 'case',
       canonical: 'A v B',
     }),
@@ -122,6 +130,32 @@ it('routes supported legislation internally and refuses unsafe citation links', 
       href: 'https://example.com/x',
     }),
   ).toBeUndefined()
+})
+
+it('links only held Acts internally once the directory resolves', () => {
+  const held = new Set(['ukpga/2010/15'])
+  const cite = (href: string) =>
+    judgmentCitationTarget(
+      { offset: 0, length: 1, type: 'legislation', href },
+      held,
+    )
+  expect(cite('https://www.legislation.gov.uk/ukpga/2010/15')).toBe(
+    '/ln/ukpga/2010/15',
+  )
+  expect(
+    cite('https://www.legislation.gov.uk/id/ukpga/2010/15/section/4'),
+  ).toBe('/ln/ukpga/2010/15/section/4')
+  expect(cite('https://www.legislation.gov.uk/ukpga/1971/77')).toBe(
+    'https://www.legislation.gov.uk/ukpga/1971/77',
+  )
+  expect(
+    judgmentCitationTarget({
+      offset: 0,
+      length: 1,
+      type: 'legislation',
+      href: 'https://www.legislation.gov.uk/ukpga/1971/77',
+    }),
+  ).toBe('/ln/ukpga/1971/77')
 })
 
 it('accepts optional annotation fields and distinguishes printed and physical pages', async () => {

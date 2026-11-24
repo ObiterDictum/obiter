@@ -17,6 +17,7 @@ export function judgmentImageUrl(sourceUrl: string | undefined, src: string) {
 
 export function judgmentCitationTarget(
   citation: NonNullable<JudgmentParagraph['citations']>[number],
+  heldLegislation?: ReadonlySet<string>,
 ) {
   if (!citation.href) return undefined
   const url = URL.parse(citation.href)
@@ -34,8 +35,14 @@ export function judgmentCitationTarget(
     citation.type === 'legislation' &&
     ['legislation.gov.uk', 'www.legislation.gov.uk'].includes(url.hostname)
   ) {
-    const path = url.pathname.replace(/^\/+|\/+$/g, '')
-    if (parseLegislationActPath(path) || parseLegislationProvisionPath(path))
+    const path = url.pathname.replace(/^\/+|\/+$/g, '').replace(/^id\//, '')
+    const parsed =
+      parseLegislationActPath(path) ?? parseLegislationProvisionPath(path)
+    if (
+      parsed &&
+      (heldLegislation === undefined ||
+        heldLegislation.has(parsed.documentIdentity))
+    )
       return `/ln/${path}${url.hash}`
   }
   return [
