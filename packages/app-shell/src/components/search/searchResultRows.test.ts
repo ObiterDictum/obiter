@@ -70,6 +70,15 @@ describe('searchResultRows', () => {
     )
   })
 
+  it('counts only visible rows first when a type filter is active', () => {
+    expect(formatResultSummary(response(), undefined, 'legislation')).toBe(
+      '1 provision shown · 1 judgment · 1 provision in all results from stored legal sources',
+    )
+    expect(formatResultSummary(response(), undefined, 'judgments')).toBe(
+      '1 judgment shown · 1 judgment · 1 provision in all results from stored legal sources',
+    )
+  })
+
   it('counts Act hits separately from provisions', () => {
     const act = { ...provision, labelPath: '' }
     expect(

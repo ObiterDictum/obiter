@@ -41,6 +41,7 @@ import {
   shouldRunLegalSearch,
   shouldRunLegalSearchRequest,
 } from './legal-search-state'
+import { mergeLegalSearchPage } from './legal-search-pagination'
 import {
   legalSearchUrl,
   legalSearchUrlFilters,
@@ -231,7 +232,12 @@ export function useLegalSearch() {
   async function runSearch(
     searchQuery = query,
     searchFilters: LegalSearchRequestFilters = filters,
-    options: { clearDebounce?: boolean; hydrationAttempt?: number } = {},
+    options: {
+      clearDebounce?: boolean
+      hydrationAttempt?: number
+      append?: boolean
+      page?: number
+    } = {},
   ) {
     if (options.clearDebounce ?? true) clearAutoSearchTimer()
 
@@ -257,18 +263,27 @@ export function useLegalSearch() {
     cancelInFlightSearch()
     const requestAbortController = new AbortController()
     abortController.current = requestAbortController
-    setState({ status: 'loading', query: trimmedQuery })
-    setSelectedResultIndex(-1)
-    setPreviewOpen(false)
+    if (options.append) {
+      setState((current) =>
+        current.status === 'results'
+          ? { ...current, loadingMore: true, loadMoreError: undefined }
+          : current,
+      )
+    } else {
+      setState({ status: 'loading', query: trimmedQuery })
+      setSelectedResultIndex(-1)
+      setPreviewOpen(false)
+    }
 
     try {
       const response = await fetch(apiUrl('/api/search/fetch'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: requestAbortController.signal,
-        body: JSON.stringify(
-          createLegalSearchFetchRequest(trimmedQuery, searchFilters),
-        ),
+        body: JSON.stringify({
+          ...createLegalSearchFetchRequest(trimmedQuery, searchFilters),
+          ...(options.page === undefined ? {} : { page: options.page }),
+        }),
       })
 
       if (searchRequestId.current !== requestId) return
@@ -276,11 +291,20 @@ export function useLegalSearch() {
       if (!response.ok) {
         if (abortController.current === requestAbortController)
           abortController.current = null
-        setState({
-          status: 'error',
-          query: trimmedQuery,
-          message: await readSearchErrorMessage(response),
-        })
+        const message = await readSearchErrorMessage(response)
+        if (options.append) {
+          setState((current) =>
+            current.status === 'results'
+              ? { ...current, loadingMore: false, loadMoreError: message }
+              : current,
+          )
+        } else {
+          setState({
+            status: 'error',
+            query: trimmedQuery,
+            message,
+          })
+        }
         keepSearchInputFocused()
         return
       }
@@ -290,6 +314,21 @@ export function useLegalSearch() {
       if (searchRequestId.current !== requestId) return
       if (abortController.current === requestAbortController)
         abortController.current = null
+      if (options.append) {
+        setState((current) =>
+          current.status === 'results'
+            ? {
+                ...current,
+                response: mergeLegalSearchPage(current.response, body),
+                browse,
+                loadingMore: false,
+                loadMoreError: undefined,
+              }
+            : current,
+        )
+        keepSearchInputFocused()
+        return
+      }
       const groupHitCount = (body.groups ?? []).reduce(
         (sum, group) => sum + group.hits.length,
         0,
@@ -368,13 +407,36 @@ export function useLegalSearch() {
       if (requestAbortController.signal.aborted) return
       if (abortController.current === requestAbortController)
         abortController.current = null
-      setState({
-        status: 'error',
-        query: trimmedQuery,
-        message: 'Search could not reach the API.',
-      })
+      if (options.append) {
+        setState((current) =>
+          current.status === 'results'
+            ? {
+                ...current,
+                loadingMore: false,
+                loadMoreError: 'More results could not be loaded.',
+              }
+            : current,
+        )
+      } else {
+        setState({
+          status: 'error',
+          query: trimmedQuery,
+          message: 'Search could not reach the API.',
+        })
+      }
       keepSearchInputFocused()
     }
+  }
+
+  function loadMoreResults() {
+    if (state.status !== 'results' || state.loadingMore) return
+    const pagination = state.response.pagination
+    if (!pagination?.hasMore) return
+    void runSearch(state.query, filters, {
+      clearDebounce: false,
+      append: true,
+      page: pagination.page + 1,
+    })
   }
 
   function scheduleAutoSearch(
@@ -542,6 +604,7 @@ export function useLegalSearch() {
     scheduleResubmitQuery,
     shouldShowIdleState,
     runSearch,
+    loadMoreResults,
     handleSubmit,
     handleQueryChange,
     clearQuery,
