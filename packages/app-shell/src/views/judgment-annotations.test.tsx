@@ -64,7 +64,7 @@ it('interleaves page labels, notes, images and citation spans without changing s
     '/cases/ewca-civ-2020-1292',
   )
   expect(container.querySelector('[data-page-marker]')?.textContent).toBe(
-    'Page 1p. 1',
+    'Page 1',
   )
 })
 
@@ -129,6 +129,53 @@ it('routes supported legislation internally and refuses unsafe citation links', 
       type: 'case',
       href: 'https://example.com/x',
     }),
+  ).toBeUndefined()
+})
+
+it('uses source canonical identifiers for legislation links when no usable href exists', () => {
+  expect(
+    judgmentCitationTarget(
+      {
+        offset: 0,
+        length: 1,
+        type: 'legislation',
+        canonical: '2018 asp 4',
+      },
+      new Set(),
+    ),
+  ).toBe('https://www.legislation.gov.uk/asp/2018/4')
+  expect(
+    judgmentCitationTarget(
+      {
+        offset: 0,
+        length: 1,
+        type: 'legislation',
+        canonical: '2004 c. 7 s. 9',
+      },
+      new Set(),
+    ),
+  ).toBe('https://www.legislation.gov.uk/ukpga/2004/7/section/9')
+  expect(
+    judgmentCitationTarget(
+      {
+        offset: 0,
+        length: 1,
+        type: 'legislation',
+        canonical: '2004 c. 7',
+      },
+      new Set(['ukpga/2004/7']),
+    ),
+  ).toBe('/ln/ukpga/2004/7')
+  expect(
+    judgmentCitationTarget(
+      {
+        offset: 0,
+        length: 1,
+        type: 'legislation',
+        canonical: 'not a legislation identifier',
+      },
+      new Set(),
+    ),
   ).toBeUndefined()
 })
 

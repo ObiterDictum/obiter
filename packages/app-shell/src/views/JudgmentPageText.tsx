@@ -89,10 +89,9 @@ export function JudgmentPageText({
                   data-page-marker
                   id={`page-${p.page}`}
                   tabIndex={-1}
-                  className="relative my-3 flex scroll-mt-6 justify-between border-t border-line pt-1 font-sans text-caption text-paper-muted"
+                  className="relative my-3 flex scroll-mt-6 justify-center border-t border-line pt-1 font-sans text-caption text-paper-muted"
                 >
                   <span>Page {p.page}</span>
-                  <span>p. {p.page}</span>
                 </span>
               ))}
             {annotations.footnotes
