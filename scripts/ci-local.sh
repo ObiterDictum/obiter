@@ -41,10 +41,17 @@ echo "== build:provenance" && bun apps/web/build-provenance.mjs verify --allow-d
 echo "== build:desktop"  && bun --bun run --filter @obiter/desktop build
 echo "== desktop:budget" && bun --bun run perf:desktop-budget
 # The redaction-renderer suite launches the Playwright Chromium it ships against.
-echo "== playwright:browsers" && bun --bun playwright install chromium webkit
-if ! bun --bun -e "import { webkit } from '@playwright/test'; await (await webkit.launch()).close()"; then
-  echo "Playwright WebKit could not launch. If Linux system libraries are missing, run:" >&2
-  echo "  sudo npx playwright install-deps webkit" >&2
+browsers=(chromium webkit)
+echo "== playwright:browsers" && bun --bun playwright install "${browsers[@]}"
+failed_browsers=()
+for browser in "${browsers[@]}"; do
+  if ! bun --bun -e 'import * as playwright from "@playwright/test"; await (await playwright[process.argv[1]].launch()).close()' "$browser"; then
+    failed_browsers+=("$browser")
+  fi
+done
+if [ "${#failed_browsers[@]}" -gt 0 ]; then
+  echo "Playwright could not launch: ${failed_browsers[*]}. If Linux system libraries are missing, run:" >&2
+  echo "  sudo npx playwright install-deps ${failed_browsers[*]}" >&2
   exit 1
 fi
 echo "== test:judgment-notices" && bun --bun playwright test --config apps/web/playwright.judgment-notices.config.ts
