@@ -15,6 +15,7 @@ export function StickyJudgmentNotices() {
       const height = Math.ceil(notice.getBoundingClientRect().height)
       const canPin = height <= scroller.getBoundingClientRect().height / 2
       notice.style.position = canPin ? '' : 'static'
+      scroller.toggleAttribute('data-judgment-notices-inline', !canPin)
       scroller.style.scrollPaddingTop = canPin
         ? `calc(${height}px + 0.25rem)`
         : previousPadding
@@ -29,6 +30,7 @@ export function StickyJudgmentNotices() {
     return () => {
       observer?.disconnect()
       notice.style.position = ''
+      scroller.removeAttribute('data-judgment-notices-inline')
       scroller.style.scrollPaddingTop = previousPadding
     }
   }, [])

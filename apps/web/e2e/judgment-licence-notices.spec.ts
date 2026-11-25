@@ -14,6 +14,10 @@ const paragraphs = Array.from({ length: 80 }, (_, index) => ({
   paragraphNumber: index + 1,
   text: 'The appeal concerns the interpretation of an example contract.',
 }))
+const coverageText =
+  'This material only partially represents court and tribunal activity. Find Case Law does not contain every judgment or decision.'
+const acknowledgementText =
+  'Crown copyright material reproduced by permission of The National Archives. The contents of the judgment can be used under the Open Justice - Licence.'
 
 async function clearance(target: Locator, notices: Locator) {
   const targetBox = await target.boundingBox()
@@ -23,9 +27,7 @@ async function clearance(target: Locator, notices: Locator) {
     : Number.NEGATIVE_INFINITY
 }
 
-test('a linked judgment paragraph and backward keyboard focus clear both sticky licence notices', async ({
-  page,
-}) => {
+test.beforeEach(async ({ page }) => {
   await mockSession(page)
   await page.route('**/api/search/legislation/acts', (route) =>
     route.fulfill({ json: { acts: [] } }),
@@ -58,7 +60,11 @@ test('a linked judgment paragraph and backward keyboard focus clear both sticky 
       },
     }),
   )
+})
 
+test('a linked judgment paragraph and backward keyboard focus clear both sticky licence notices', async ({
+  page,
+}) => {
   await page.goto('/search?q=contract')
   await page.getByRole('link', { name: 'Open paragraph' }).click()
   await expect(page).toHaveURL(/\/case\/example-judgment#para-55$/)
@@ -67,14 +73,10 @@ test('a linked judgment paragraph and backward keyboard focus clear both sticky 
   const notices = page.getByRole('complementary', {
     name: 'Find Case Law licence notices',
   })
-  const coverage = notices.getByText(
-    'This material only partially represents court and tribunal activity. Find Case Law does not contain every judgment or decision.',
-    { exact: true },
-  )
-  const acknowledgement = notices.getByText(
-    'Crown copyright material reproduced by permission of The National Archives. The contents of the judgment can be used under the Open Justice - Licence.',
-    { exact: true },
-  )
+  const coverage = notices.getByText(coverageText, { exact: true })
+  const acknowledgement = notices.getByText(acknowledgementText, {
+    exact: true,
+  })
 
   await expect(paragraph).toBeFocused()
   await expect(paragraph).toBeInViewport({ ratio: 1 })
@@ -102,4 +104,27 @@ test('a linked judgment paragraph and backward keyboard focus clear both sticky 
   )
   await expect(paragraph).toBeInViewport()
   await expect(notices).not.toBeInViewport()
+})
+
+test('in a short narrow pane the linked paragraph opens with both full notices inline', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 350 })
+  await page.goto('/search?q=contract')
+  await page.getByRole('link', { name: 'Open paragraph' }).click()
+  await expect(page).toHaveURL(/\/case\/example-judgment#para-55$/)
+
+  const paragraph = page.locator('#para-55')
+  const notices = page.locator('[data-judgment-arrival-notices]')
+  await expect(paragraph).toBeFocused()
+  await expect(notices.getByText(coverageText, { exact: true })).toBeInViewport(
+    { ratio: 1 },
+  )
+  await expect(
+    notices.getByText(acknowledgementText, { exact: true }),
+  ).toBeInViewport({ ratio: 1 })
+  await expect(paragraph).toBeInViewport()
+  await expect
+    .poll(() => clearance(paragraph, notices))
+    .toBeGreaterThanOrEqual(0)
 })
