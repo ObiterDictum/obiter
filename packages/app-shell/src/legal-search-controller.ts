@@ -7,6 +7,8 @@ import {
   type FormEvent,
 } from 'react'
 import { apiUrl } from './lib/api-url'
+import { getDesktopAuthToken } from './lib/auth-token'
+import { readDesktopBridge } from './lib/desktop-bridge'
 import { caseResultLocation } from './case-navigation'
 import { rememberFirstRunSearched } from './first-run-checklist'
 import { provisionResultLocation } from './legislation-navigation'
@@ -276,9 +278,14 @@ export function useLegalSearch() {
     }
 
     try {
+      const token = readDesktopBridge() ? await getDesktopAuthToken() : null
+      if (requestAbortController.signal.aborted) return
       const response = await fetch(apiUrl('/api/search/fetch'), {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         signal: requestAbortController.signal,
         body: JSON.stringify({
           ...createLegalSearchFetchRequest(trimmedQuery, searchFilters),

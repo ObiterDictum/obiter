@@ -3,6 +3,7 @@ import { StrictMode, act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
+import { clearDesktopAuthToken } from '../lib/auth-token'
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -430,6 +431,35 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(JSON.parse(String(request?.body))).toEqual({
       query: 'unfair dismissal time limit',
     })
+  })
+
+  it('sends the desktop bearer token with legal search', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createSearchResponse([], { cached: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(window, 'obiterDesktop', {
+      configurable: true,
+      value: {
+        apiOrigin: 'https://app.obiter.si',
+        getAuthToken: async () => 'desktop-test-token',
+        clearAuthToken: async () => {},
+      },
+    })
+    try {
+      container = mount()
+      await clickButton(container, 'unfair dismissal time limit')
+      await flushMicrotasks()
+
+      const [url, init] = fetchMock.mock.calls[0] ?? []
+      expect(url).toBe('https://app.obiter.si/api/search/fetch')
+      expect(new Headers(init?.headers).get('authorization')).toBe(
+        'Bearer desktop-test-token',
+      )
+    } finally {
+      await clearDesktopAuthToken()
+      delete (window as Window & { obiterDesktop?: unknown }).obiterDesktop
+    }
   })
 
   it('names the unheld Act instead of claiming a judgment was sought', async () => {

@@ -1,5 +1,20 @@
 export const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
 export const REVALIDATE_CACHE_CONTROL = 'public, max-age=0, must-revalidate'
+export const CASE_LAW_ROBOTS = 'noindex, nofollow, noarchive'
+
+export function caseLawRobotsHead() {
+  return { meta: [{ name: 'robots', content: CASE_LAW_ROBOTS }] }
+}
+
+export function isCaseLawPath(pathname) {
+  const path = pathname.replace(/%([a-f\d]{2})/giu, (encoded, hex) => {
+    const code = Number.parseInt(hex, 16)
+    if (code < 32 || code === 127) return ''
+    const character = String.fromCharCode(code)
+    return /^[\w.-]$/u.test(character) ? character : encoded
+  })
+  return /^\/+?(?:search|cases?)(?:\/|$)/iu.test(path)
+}
 
 export const COMPRESSIBLE_EXTENSIONS = new Set([
   '.js',

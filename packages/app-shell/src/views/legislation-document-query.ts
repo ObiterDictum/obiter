@@ -1,13 +1,12 @@
-import { notFound } from '@tanstack/react-router'
-import { apiFetch, isApiNotFound } from '../api'
-import { guardNotFound } from '../route-loaders'
 import {
   parseLegislationActPath,
   parseLegislationProvisionPath,
 } from '@obiter/contracts/legislation-paths'
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
-import { apiUrl } from '../lib/api-url'
+import { notFound } from '@tanstack/react-router'
+import { apiFetch, isApiNotFound } from '../api'
 import type { LegislationStatus } from '../legislation-status'
+import { guardNotFound } from '../route-loaders'
 
 import type { LegislationProvisionSubsection } from '@obiter/contracts/legislation-reader'
 
@@ -66,11 +65,10 @@ export function legislationProvisionQueryOptions(provisionPath: string) {
     staleTime: 0,
     retry: (count, error) => !isApiNotFound(error) && count < 1,
     refetchOnMount: 'always',
-    queryFn: async () => {
-      return apiFetch<LegislationProvisionResponse>(
+    queryFn: () =>
+      apiFetch<LegislationProvisionResponse>(
         `/api/search/legislation/${provisionPath}`,
-      )
-    },
+      ),
   })
 }
 
@@ -136,14 +134,8 @@ export function legislationActsQueryOptions() {
     queryKey: ['legislation-acts'],
     staleTime: 60_000,
     retry: 1,
-    queryFn: async () => {
-      const response = await fetch(apiUrl('/api/search/legislation/acts'))
-      if (!response.ok) {
-        throw new Error('Held legislation could not be loaded.')
-      }
-      // SAFETY: non-ok throws above; /api/search/legislation/acts returns LegislationActsResponse per the search API contract.
-      return (await response.json()) as LegislationActsResponse
-    },
+    queryFn: () =>
+      apiFetch<LegislationActsResponse>('/api/search/legislation/acts'),
   })
 }
 
@@ -153,7 +145,7 @@ export function legislationActQueryOptions(identity: string) {
     staleTime: 0,
     retry: (count, error) => !isApiNotFound(error) && count < 1,
     refetchOnMount: 'always',
-    queryFn: async () => {
+    queryFn: () => {
       const encodedIdentity = identity
         .split('/')
         .map((segment) => encodeURIComponent(segment))

@@ -28,6 +28,57 @@ function unauthorisedRequests(page: Page): string[] {
   return failures
 }
 
+test('signed-out search and judgment links redirect to sign-in before loading judgments', async ({
+  page,
+}) => {
+  for (const path of [
+    '/search?q=Potanina',
+    '/case/potanina-v-potanin-2024-uksc-3',
+    '/cases/uksc-2024-3',
+  ]) {
+    const response = await page.request.get(path, { maxRedirects: 0 })
+    expect(response.status()).toBe(307)
+    const destination = new URL(response.headers().location, webOrigin)
+    expect(destination.pathname).toBe('/sign-in')
+    expect(destination.searchParams.get('redirect')).toBe(path)
+  }
+})
+
+test('a signed-out judgment link returns to and focuses its paragraph after sign-in', async ({
+  page,
+  request,
+}) => {
+  const account = await createAccount(request, 'JudgmentAnchor')
+  const judgmentPath = '/case/potanina-v-potanin-2024-uksc-3'
+  await page.route('**/api/search/documents/uksc-2024-3', (route) =>
+    route.fulfill({
+      json: {
+        document: {
+          id: 'uksc-2024-3',
+          title: 'Potanina v Potanin',
+          neutralCitation: '[2024] UKSC 3',
+          court: 'uksc',
+          dateDecided: '2024-01-31',
+          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+          paragraphs: [
+            { id: 'p12', paragraphNumber: 12, text: 'A fixture paragraph.' },
+          ],
+        },
+        courtParagraphNumbers: true,
+      },
+    }),
+  )
+
+  await page.goto(`${judgmentPath}#para-12`)
+  await expect(page).toHaveURL((url) => url.pathname === '/sign-in')
+  await submitPassword(page, account.email, account.password)
+
+  await expect(page).toHaveURL(
+    (url) => url.pathname === judgmentPath && url.hash === '#para-12',
+  )
+  await expect(page.locator('#para-12')).toBeFocused()
+})
+
 test('a document link opens the document, and survives sign-in', async ({
   page,
   request,

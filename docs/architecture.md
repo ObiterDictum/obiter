@@ -878,15 +878,11 @@ column) minus cell padding. Typing in a cell emits the same `onWordEdit`
 operations as body text. A typed table model and row splits stay out of
 scope.
 
-### Public routes stay anonymous; the corpus API lives in backend (30 August 2026, cut over 1 November 2026)
+### Case-law routes require an admitted account; the corpus API lives in backend
 
-Decision: `GET /api/search`, `POST /api/search/fetch`,
-`GET /api/search/documents/:documentId`, `GET /api/changelog` and
-`GET /api/health` resolve a session when one exists but do not require one.
-That is a product policy for published legal authorities, the product
-changelog and API liveness, not an omitted gate. Adding an auth requirement is
-a product change and must fail a test that says so in the backend repository
-rather than landing silently.
+Decision: `/api/search/*` and the web search and judgment pages require a
+signed-in account admitted through Obiter's existing account approval.
+`GET /api/changelog` and `GET /api/health` remain public.
 
 Search and changelog must never return matter data, client documents,
 redaction source or output, session or organisation records, auth secrets, or

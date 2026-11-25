@@ -35,7 +35,6 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
     typeof search.token === 'string' && search.token.length > 0
       ? search.token
       : ''
-  const returnTo = safeReturnTo(search.redirect)
   const [mode, setMode] = useState<Mode>('password')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -56,6 +55,13 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
     setUnverified(false)
   }
 
+  function readReturnTo() {
+    return safeReturnTo(
+      search.redirect,
+      platform === 'web' ? window.location.hash : '',
+    )
+  }
+
   async function goToDestination() {
     if (inviteToken) {
       await navigate({
@@ -64,6 +70,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
       })
       return
     }
+    const returnTo = readReturnTo()
     if (returnTo) {
       await navigate({ href: returnTo })
       return
@@ -107,7 +114,8 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
     try {
       const result = await requestMagicLink(
         email,
-        inviteAcceptCallbackURL(inviteToken) ?? returnToCallbackURL(returnTo),
+        inviteAcceptCallbackURL(inviteToken) ??
+          returnToCallbackURL(readReturnTo()),
       )
       if (!result.ok) {
         setError(result.message ?? 'Could not send magic link.')

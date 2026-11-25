@@ -11,6 +11,7 @@ import {
   mockSession,
   sidebar,
   sidebarToggle,
+  signInShellAccount,
   workspaceNav,
 } from './shell-harness'
 
@@ -292,13 +293,17 @@ test('the command palette stays inside the viewport', async ({ page }) => {
 test('the account menu survives a long name and organisation', async ({
   page,
 }) => {
-  await mockSession(page, LONG_NAME, LONG_ORG)
+  await signInShellAccount(page, LONG_NAME, LONG_ORG)
   await page.goto('/search')
   await page.setViewportSize({ width: 320, height: 800 })
 
   await page.getByRole('button', { name: 'Account menu' }).click()
   const menu = page.getByRole('menu', { name: 'Account' })
   await expect(menu).toBeVisible()
+  await expect(menu.getByText(LONG_NAME, { exact: true })).toBeVisible()
+  await expect(
+    menu.getByText(`Owner · ${LONG_ORG}`, { exact: true }),
+  ).toBeVisible()
 
   const layout = await page.evaluate(() => {
     const doc = document.documentElement

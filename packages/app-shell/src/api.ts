@@ -74,7 +74,7 @@ async function serverCookieHeader(): Promise<Record<string, string>> {
     const req = getServerRequest()
     if (!req) return {}
     const cookie = req.headers.get('cookie')
-    if (cookie) return { Cookie: cookie }
+    return cookie ? { Cookie: cookie } : {}
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const isExpectedNotInRequest =
@@ -84,7 +84,6 @@ async function serverCookieHeader(): Promise<Record<string, string>> {
     if (isExpectedNotInRequest) return {}
     throw error
   }
-  return {}
 }
 
 async function authorisedFetch(

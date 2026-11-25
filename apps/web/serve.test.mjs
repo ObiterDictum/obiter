@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { brotliCompressSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -193,6 +193,10 @@ test('applyResponseHeaders — Set-Cookie handling (B6)', async (t) => {
 test('createRequestHandler over a real server', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'obiter-serve-'))
   await mkdir(join(dir, 'assets'), { recursive: true })
+  await copyFile(
+    new URL('./public/robots.txt', import.meta.url),
+    join(dir, 'robots.txt'),
+  )
   await writeFile(
     join(dir, 'assets', 'app-12345678.js'),
     'export const x = 1\n',
@@ -211,6 +215,54 @@ test('createRequestHandler over a real server', async (t) => {
   const origin = `http://127.0.0.1:${server.address().port}`
 
   try {
+    await t.test(
+      'serves crawler rules from the origin root as plain text',
+      async () => {
+        const res = await fetch(`${origin}/robots.txt`)
+        assert.equal(res.status, 200)
+        assert.match(res.headers.get('content-type'), /^text\/plain/)
+        const [aiRules, generalRules] = (await res.text())
+          .trimEnd()
+          .split('\n\n')
+        for (const directive of [
+          'User-agent: GPTBot',
+          'User-agent: ClaudeBot',
+          'User-agent: Google-Extended',
+          'Disallow: /search',
+          'Disallow: /case/',
+          'Disallow: /cases/',
+          'Disallow: /api/search',
+        ]) {
+          assert.ok(aiRules.split('\n').includes(directive), directive)
+        }
+        assert.equal(generalRules, 'User-agent: *\nDisallow:')
+      },
+    )
+
+    await t.test(
+      'marks search and both case URL forms as not indexable',
+      async () => {
+        for (const path of [
+          '/search?q=test',
+          '/%73earch',
+          '/%00Search',
+          '/case/example',
+          '/cases/legacy',
+        ]) {
+          const res = await fetch(`${origin}${path}`)
+          assert.equal(
+            res.headers.get('x-robots-tag'),
+            'noindex, nofollow, noarchive',
+            path,
+          )
+          await res.text()
+        }
+        const unrelated = await fetch(`${origin}/sign-in`)
+        assert.equal(unrelated.headers.has('x-robots-tag'), false)
+        await unrelated.text()
+      },
+    )
+
     await t.test(
       'recorded hashed assets are immutable and gzipped',
       async () => {

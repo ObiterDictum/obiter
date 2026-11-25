@@ -519,6 +519,45 @@ describe('SignInRouteView — password submit outcomes', () => {
     })
   })
 
+  it.each(['password', 'email link'])(
+    'keeps the judgment paragraph inherited by the sign-in URL with %s',
+    async (mode) => {
+      searchState.redirect = '/case/example'
+      const initial = window.location.href
+      window.history.replaceState(null, '', '#para-12')
+      try {
+        render(<SignInRouteView platform="web" />)
+        if (mode === 'password') {
+          authMocks.signInWithEmail.mockResolvedValueOnce({ ok: true })
+          fillPasswordForm('lex@obiter.dev', 'correct-password')
+          await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: /Sign in/i }))
+          })
+          expect(authMocks.navigate).toHaveBeenCalledWith({
+            href: '/case/example#para-12',
+          })
+        } else {
+          authMocks.requestMagicLink.mockResolvedValueOnce({ ok: true })
+          fireEvent.click(screen.getByRole('button', { name: /email link/i }))
+          fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+            target: { value: 'lex@obiter.dev' },
+          })
+          await act(async () => {
+            fireEvent.click(
+              screen.getByRole('button', { name: /send sign-in link/i }),
+            )
+          })
+          expect(authMocks.requestMagicLink).toHaveBeenCalledWith(
+            'lex@obiter.dev',
+            `${window.location.origin}/case/example#para-12`,
+          )
+        }
+      } finally {
+        window.history.replaceState(null, '', initial)
+      }
+    },
+  )
+
   it('ignores an off-site return target and goes Home', async () => {
     searchState.redirect = '//evil.example/matters'
     authMocks.signInWithEmail.mockResolvedValueOnce({ ok: true })
