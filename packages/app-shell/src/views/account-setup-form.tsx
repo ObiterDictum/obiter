@@ -3,6 +3,8 @@ import { useState, type FormEvent } from 'react'
 import {
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
+  ORGANISATION_NAME_MAX_LENGTH,
+  parseOrganisationName,
   USER_NAME_MAX_LENGTH,
 } from '@obiter/contracts'
 import { useAuth } from '../auth'
@@ -31,6 +33,8 @@ export function AccountSetupForm({
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [sentTo, setSentTo] = useState<string | null>(null)
+  const [choosingWorkspace, setChoosingWorkspace] = useState(false)
+  const [organisationName, setOrganisationName] = useState('')
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,6 +42,16 @@ export function AccountSetupForm({
     const problem = passwordProblem(password, confirm)
     setError(problem)
     if (problem) return
+    if (!register) {
+      setChoosingWorkspace(true)
+      return
+    }
+    await submit()
+  }
+
+  async function submit(pendingOrganisationName?: string) {
+    if (submitting) return
+    setError(null)
     setSubmitting(true)
     try {
       if (register) {
@@ -48,6 +62,7 @@ export function AccountSetupForm({
         name: name.trim(),
         email: email.trim(),
         password,
+        pendingOrganisationName,
         callbackURL: `${window.location.origin}/`,
       })
       if (!result.ok) {
@@ -75,6 +90,62 @@ export function AccountSetupForm({
           finish setting up your account.
         </p>
       </div>
+    )
+  }
+
+  if (choosingWorkspace) {
+    return (
+      <form
+        className="mt-3 flex w-full flex-col gap-5"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const parsed = parseOrganisationName(organisationName)
+          if (parsed.ok) void submit(parsed.name)
+          else setError(parsed.message)
+        }}
+      >
+        <div>
+          <h2 className="text-section text-ink">Create an organisation</h2>
+          <p className="text-body text-muted">
+            Name your organisation to set up a team workspace, or continue with
+            a personal workspace.
+          </p>
+        </div>
+        <Input
+          label="Organisation name"
+          autoComplete="organization"
+          maxLength={ORGANISATION_NAME_MAX_LENGTH}
+          value={organisationName}
+          onChange={(event) => setOrganisationName(event.target.value)}
+        />
+        {error ? (
+          <p role="alert" className="text-meta text-danger">
+            {error}
+          </p>
+        ) : null}
+        <Button type="submit" size="lg" disabled={submitting}>
+          Create organisation
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={submitting}
+          onClick={() => void submit()}
+        >
+          Continue as an individual
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={submitting}
+          onClick={() => {
+            setError(null)
+            setChoosingWorkspace(false)
+          }}
+        >
+          Back
+        </Button>
+      </form>
     )
   }
 
@@ -143,7 +214,7 @@ export function AccountSetupForm({
         loading={submitting}
         className="mt-1 w-full"
       >
-        {register ? 'Create account and join' : 'Create account'}
+        {register ? 'Create account and join' : 'Continue'}
       </Button>
     </form>
   )

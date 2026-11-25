@@ -14,7 +14,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'bun run dev',
-    url: `${webOrigin}/search`,
+    url: `${webOrigin}/sign-in`,
     env: {
       OBITER_API_ORIGIN: 'http://127.0.0.1:1',
       OBITER_WEB_PORT: String(webPort),

@@ -1,5 +1,5 @@
 import './LegislationActReader.css'
-import { apiUrl } from '../lib/api-url'
+import { apiFetch } from '../api'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { Link, createLink } from '@tanstack/react-router'
 import { Button } from '@obiter/ui'
@@ -21,14 +21,11 @@ async function fetchLegislationActTextPage(
   offset: number,
   signal: AbortSignal,
 ) {
-  const response = await fetch(
-    apiUrl(
-      `/api/search/legislation/${identity}/text?offset=${offset}&limit=${legislationActTextPageSize}`,
-    ),
+  const response = await apiFetch<unknown>(
+    `/api/search/legislation/${identity}/text?offset=${offset}&limit=${legislationActTextPageSize}`,
     { signal },
   )
-  if (!response.ok) throw new Error('Act wording could not be loaded.')
-  return legislationActTextPageSchema.parse(await response.json())
+  return legislationActTextPageSchema.parse(response)
 }
 
 const ContentsLink = createLink(function ContentsAnchor({

@@ -1,4 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test'
+import { createAccount } from './document-journey'
+import { resolveJourneyTargets } from '../journey-target.mjs'
 
 export const WIDTHS = [320, 390, 768, 1024, 1440]
 export const MODULES = [
@@ -12,11 +14,33 @@ export const MODULES = [
 export const LONG_NAME = 'Alexandra-Cassandra Montgomery-Fitzwilliam III'
 export const LONG_ORG = 'Montgomery, Fitzwilliam and Partners International LLP'
 
-export async function mockSession(
+export async function signInShellAccount(
   page: Page,
-  name = 'Shell Nominal',
-  org = 'Obiter',
+  name: string,
+  organisation?: string,
 ) {
+  const { webOrigin } = resolveJourneyTargets()
+  const account = await createAccount(page.request, 'Shell', name)
+  const signIn = await page.request.post(
+    `${webOrigin}/api/auth/sign-in/email`,
+    {
+      data: account,
+      headers: { Origin: webOrigin },
+    },
+  )
+  expect(signIn.ok()).toBe(true)
+  if (organisation) {
+    const response = await page.request.post(`${webOrigin}/api/organisations`, {
+      data: { name: organisation },
+      headers: { Origin: webOrigin },
+    })
+    expect(response.ok(), await response.text()).toBe(true)
+  }
+}
+
+export async function mockSession(page: Page) {
+  const name = 'Shell Nominal'
+  await signInShellAccount(page, name)
   await page.route('**/api/auth/get-session', (route) =>
     route.fulfill({
       json: {
@@ -39,7 +63,11 @@ export async function mockSession(
           email: 'shell-test@obiter.test',
           role: 'owner',
         },
-        organisation: { id: 'org_shell_test', name: org, plan: 'private_beta' },
+        organisation: {
+          id: 'org_shell_test',
+          name: 'Obiter',
+          plan: 'private_beta',
+        },
       },
     }),
   )

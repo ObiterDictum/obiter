@@ -1,4 +1,5 @@
 import '@obiter/test-dom'
+import { QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
 import { apiFetch } from './api'
@@ -6,6 +7,7 @@ import {
   clearServerRequestGetter,
   setServerRequestGetter,
 } from './lib/server-request'
+import { caseLawDocumentQueryOptions } from './views/case-law-document-query'
 
 function mockOkResponse(body: unknown = {}): Response {
   return {
@@ -70,6 +72,31 @@ describe('apiFetch SSR cookie forwarding', () => {
 
     await expect(apiFetch('/api/me')).rejects.toThrow('Unexpected DB failure')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the signed-in session for server-rendered judgment requests', async () => {
+    vi.stubGlobal('window', undefined)
+    const req = new Request('http://localhost:3000/case/uksc-2024-3', {
+      headers: {
+        cookie: 'better-auth.session_token=test-session',
+        'x-forwarded-for': '192.0.2.123',
+      },
+    })
+    setServerRequestGetter(() => req)
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(mockOkResponse({ document: { id: 'uksc-2024-3' } }))
+    const client = new QueryClient()
+    await client.fetchQuery(caseLawDocumentQueryOptions('uksc-2024-3'))
+
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(new URL(String(url)).pathname).toBe(
+      '/api/search/documents/uksc-2024-3',
+    )
+    expect(new Headers(init?.headers).get('cookie')).toBe(
+      'better-auth.session_token=test-session',
+    )
+    expect(new Headers(init?.headers).get('x-forwarded-for')).toBeNull()
   })
 
   it('silently handles expected No StartEvent case', async () => {

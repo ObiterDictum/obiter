@@ -3834,13 +3834,12 @@
                   <td class="id">POST /api/search/fetch</td>
                   <td class="id">legal-search/</td>
                   <td>
-                    Public search over the stored corpus. No session required,
-                    and corpus-only: it never contacts Find Case Law, queues no
-                    hydration and writes nothing. Must not expose matter or
-                    client data. Also serves a labelled legislation group (exact
-                    citations from Postgres, keyword hits from the
-                    legislation_provisions index) federated after the judgment
-                    hits.
+                    Signed-in search over the stored corpus, and corpus-only: it
+                    never contacts Find Case Law, queues no hydration and writes
+                    nothing. Must not expose matter or client data. Also serves
+                    a labelled legislation group (exact citations from Postgres,
+                    keyword hits from the legislation_provisions index)
+                    federated after the judgment hits.
                   </td>
                 </tr>
                 <tr>
@@ -3849,28 +3848,27 @@
                   </td>
                   <td class="id">legal-search/legislation-page-routes.ts</td>
                   <td>
-                    Public Act text pages in stored document order. The reader
-                    requests 24 entries per page and uses the contents metadata
-                    to start on the page containing a deep-linked heading. The
-                    text route reads Postgres and excludes wording under the
-                    provision reader's withholding and repeal rules.
+                    Signed-in Act text pages in stored document order. The
+                    reader requests 24 entries per page and uses the contents
+                    metadata to start on the page containing a deep-linked
+                    heading. The text route reads Postgres and excludes wording
+                    under the provision reader's withholding and repeal rules.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/search/readiness</td>
                   <td class="id">legal-search/</td>
                   <td>
-                    Public index state: whether each product index
+                    Signed-in index state: whether each product index
                     (legal_authorities, legislation_provisions) exists and its
-                    approximate document count. No session required.
+                    approximate document count.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/search/documents/:documentId</td>
                   <td class="id">legal-search/</td>
                   <td>
-                    Public judgment, stored or hydrated. No session required.
-                    Optional
+                    Signed-in judgment from the stored corpus. Optional
                     <code
                       >pages: { page, pdfPage?, paragraphNumber, offset,
                       paragraphId? }[]</code
@@ -4541,13 +4539,12 @@
             is owner-only on both paths, enforced by
             <code>requireOwnerRole</code>
             and an ownership check, not by hiding the control.
-            <code>POST /api/search/fetch</code>,
-            <code>GET /api/search/readiness</code>,
-            <code>GET /api/search/documents/:documentId</code>,
             <code>GET /api/changelog</code>, <code>GET /api/health</code>, and
             <code>GET /api/invites/preview</code>
-            are deliberately public: search and changelog serve published
-            authorities and release notes only; anonymous
+            are deliberately public. The legal search API and web search and
+            judgment routes require a signed-in account admitted through
+            existing account approval. Web visitors without a session are
+            redirected to sign-in. Both
             <code>POST /api/search/fetch</code> and
             <code>GET /api/search/documents/:documentId</code> are corpus-only:
             they read Obiter-owned records and the derived index, never contact
@@ -4556,9 +4553,13 @@
             <code>no_match</code> or <code>recognised_not_held</code>; document
             <code>404</code>), so a provider outage cannot become a storage
             failure. National Archives access belongs to an explicit indexing
-            run. Health is a minimal liveness probe; in development it also
-            exposes the API commit SHA, checkout root, resolved env file and the
-            database name read out of the configured
+            run. Search and case pages emit robots metadata, and their web and
+            API responses send <code>X-Robots-Tag</code>. The app's
+            <code>/robots.txt</code> disallows these paths for named AI crawlers
+            while allowing ordinary search crawlers to read the noindex
+            directives. Health is a minimal liveness probe; in development it
+            also exposes the API commit SHA, checkout root, resolved env file
+            and the database name read out of the configured
             <code>DATABASE_URL</code> for local provenance checks. Invite
             preview is gated by the secret invite token and returns the
             organisation and inviter display names, the invited email, account
@@ -5001,7 +5002,7 @@
               matter share references its matter with the organisation id. The
               database refuses a cross-organisation row rather than relying on
               query filtering. legal_source_documents sits outside the boundary
-              because the judgment corpus is public and shared.
+              because the judgment corpus is shared across organisations.
             </figcaption>
           </figure>
           <div class="scroll">
@@ -7411,8 +7412,9 @@
               <span
                 ><b>Judgment content must not be indexed or scraped.</b> Licence
                 restriction (a)(ix) requires preventing search engine indexing
-                and third-party crawling of judgment contents. Nothing
-                implements it, and it gates serving judgments publicly.</span
+                and third-party crawling of judgment contents. Search and
+                judgment routes require sign-in and send noindex directives. The
+                web app also excludes named AI crawlers in its robots.txt.</span
               >
             </li>
             <li>
@@ -7827,13 +7829,10 @@
                   <td class="id">redact-4-hardening.md</td>
                 </tr>
                 <tr>
+                  <td>Licence obligation unimplemented: withdrawal handling</td>
                   <td>
-                    Licence obligations unimplemented: indexing prevention,
-                    withdrawal handling
-                  </td>
-                  <td>
-                    Serving judgments publicly without them breaches the
-                    executed Find Case Law licence. The acknowledgement and
+                    Withdrawal handling is required even when judgment access
+                    requires sign-in. The acknowledgement and
                     partial-representation notice are implemented by
                     <code>FindCaseLawNotices</code>.
                   </td>

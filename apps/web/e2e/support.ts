@@ -80,7 +80,30 @@ export async function openMatter(page: Page, matterName: string) {
 
 export function verifyEmailInDb(databaseName: string, email: string) {
   const safe = email.replace(/'/g, "''")
-  const sql = `update users set "emailVerified"=true where email='${safe}'`
+  runTestDatabaseSql(
+    databaseName,
+    `update users set "emailVerified"=true where email='${safe}'`,
+  )
+}
+
+export function seedApprovedAccessInDb(databaseName: string, email: string) {
+  const safe = email.replace(/'/g, "''")
+  runTestDatabaseSql(
+    databaseName,
+    `insert into access_requests (
+      id, email, email_domain, name, category, country, organisation_name,
+      set_up_organisation, status, token_expires_at, confirmed_at, decided_at,
+      verified_at, expires_at, verification_method, verifier
+    ) values (
+      'ar_${crypto.randomUUID()}', '${safe}', split_part('${safe}', '@', 2),
+      'Synthetic E2E user', 'legal_professional', 'england_and_wales',
+      'Synthetic E2E organisation', false, 'verified', now(), now(), now(),
+      now(), now() + interval '1 day', 'manual_review', 'e2e-fixture'
+    )`,
+  )
+}
+
+function runTestDatabaseSql(databaseName: string, sql: string) {
   try {
     execFileSync(
       'psql',

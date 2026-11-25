@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { mockSession } from './shell-harness'
 
 const judgment = {
@@ -32,8 +32,18 @@ async function clearance(target: Locator, notices: Locator) {
     : Number.NEGATIVE_INFINITY
 }
 
+async function openSignedIn(page: Page, destination: string) {
+  await page.goto(`/sign-in?redirect=${encodeURIComponent(destination)}`)
+  await page.getByLabel('Email').fill('shell-test@obiter.test')
+  await page.getByLabel('Password').fill('test-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+}
+
 test.beforeEach(async ({ page }) => {
   await mockSession(page)
+  await page.route('**/api/auth/sign-in/email', (route) =>
+    route.fulfill({ json: {} }),
+  )
   await page.route('**/api/search/legislation/acts', (route) =>
     route.fulfill({ json: { acts: [] } }),
   )
@@ -71,7 +81,7 @@ test.beforeEach(async ({ page }) => {
 test('a linked judgment paragraph and backward keyboard focus clear both sticky licence notices', async ({
   page,
 }) => {
-  await page.goto('/search?q=contract')
+  await openSignedIn(page, '/search?q=contract')
   await page.getByRole('link', { name: 'Open paragraph' }).click()
   await expect(page).toHaveURL(/\/case\/example-judgment#para-55$/)
 
@@ -130,8 +140,7 @@ test('short-pane destinations clear the scrollable notices and excerpts omit the
     })
   })
   await page.setViewportSize({ width: 390, height: 500 })
-  await page.goto('/search?q=contract')
-  await page.getByRole('link', { name: 'Open paragraph' }).click()
+  await openSignedIn(page, '/case/example-judgment#para-55')
   await expect(page).toHaveURL(/\/case\/example-judgment#para-55$/)
 
   const paragraph = page.locator('#para-55')

@@ -136,7 +136,7 @@ So bulk retrieval and local storage are permitted, and so is computational analy
 
 These are contractual, not preferences.
 
-- **Prevent indexing and scraping.** Restriction (a)(ix) requires preventing search engine indexing and third-party crawling and scraping of judgment content. Nothing implements this: no `robots.txt`, no `noindex`, no `X-Robots-Tag`. **This blocks serving judgments publicly** and therefore gates the canonical case URLs this document specifies.
+- **Prevent indexing and scraping.** Restriction (a)(ix) requires preventing search engine indexing and third-party crawling and scraping of judgment content. Obiter requires a signed-in account admitted through existing account approval to access judgments and legal search. Search and judgment pages emit `noindex` metadata, the web and API responses send `X-Robots-Tag`, and `robots.txt` excludes named AI crawlers.
 - **Display the acknowledgement.** Exact wording, in a prominent location, in a form approved by the Licensor: _"Crown copyright material reproduced by permission of The National Archives. The contents of the judgment can be used under the Open Justice - Licence."_ `FindCaseLawNotices` reproduces this wording verbatim from the TNA licence in the judgment reader, search results and previews.
 - **State partial representation.** Restriction (b)(i) requires stating prominently that the material only partially represents the activities of the courts and tribunals. Implemented by `FindCaseLawNotices` in the same views. Karl approved the coverage wording on 2026-11-25 during review of [PR #576](https://github.com/ObiterDictum/obiter/pull/576).
 - **Stay current and honour withdrawals.** (a)(i) requires using the current version; (a)(iii) requires removing material no longer published or replaced by a revision. Freshness and withdrawal handling are therefore compliance requirements, not quality targets, and a held corpus carries a continuing sync obligation.
@@ -293,7 +293,7 @@ Reviewer mode exposes derived diagnostics over public legal sources only. It nev
 ## Rollout
 
 **Gate 1: Correctness.** Word-boundary matching, index tuning, Meilisearch score used rather than discarded, benchmark harness with the objective case set running in CI.
-_Also:_ indexing and scraping prevention remains unimplemented and still blocks serving judgments publicly. The acknowledgement and partial-representation statement are implemented by `FindCaseLawNotices`.
+_Also:_ keep the sign-in and indexing controls in place. The acknowledgement and partial-representation statement are implemented by `FindCaseLawNotices`.
 _Exit:_ precision on the short-word set is 1.0; exact citations and document ids rank first; benchmark runs record top-k and failure labels.
 
 **Gate 2: Provenance and boundaries.** Licence provenance on source records, acquisition and search-core separation, internal API contract in `packages/contracts`.

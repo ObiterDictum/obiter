@@ -11,6 +11,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
+import { clearDesktopAuthToken } from '../lib/auth-token'
 import { LegislationRouteView } from './LegislationRouteView'
 
 const identity = 'ukpga/2025/1'
@@ -174,6 +175,36 @@ describe('LegislationActReader', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+  })
+
+  it('sends the desktop bearer token when loading Act wording', async () => {
+    Object.defineProperty(window, 'obiterDesktop', {
+      configurable: true,
+      value: {
+        apiOrigin: 'https://app.obiter.si',
+        getAuthToken: async () => 'desktop-test-token',
+        clearAuthToken: async () => {},
+      },
+    })
+    try {
+      renderRoute()
+      await screen.findByText('Wording of s. 1')
+
+      const requests = vi
+        .mocked(fetch)
+        .mock.calls.filter(([url]) => String(url).includes('/text?'))
+      expect(requests).toHaveLength(1)
+      const [url, init] = requests[0] ?? []
+      expect(url).toBe(
+        `https://app.obiter.si/api/search/legislation/${identity}/text?offset=0&limit=50`,
+      )
+      expect(new Headers(init?.headers).get('authorization')).toBe(
+        'Bearer desktop-test-token',
+      )
+    } finally {
+      await clearDesktopAuthToken()
+      Reflect.deleteProperty(window, 'obiterDesktop')
+    }
   })
 
   it('loads the containing page, scrolls and sets the URL hash when a contents entry for unloaded text is clicked', async () => {
