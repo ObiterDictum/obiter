@@ -104,8 +104,9 @@ test('staff approves an unknown domain and the applicant sets up an account', as
   await signup
     .getByLabel('Confirm password', { exact: true })
     .fill('Synthetic-applicant-123!')
+  await signup.getByRole('button', { name: 'Continue', exact: true }).click()
   await signup
-    .getByRole('button', { name: 'Create account', exact: true })
+    .getByRole('button', { name: 'Continue as an individual' })
     .click()
   await expect(
     signup.getByRole('heading', { name: 'Check your inbox' }),
