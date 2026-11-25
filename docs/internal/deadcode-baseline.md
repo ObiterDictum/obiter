@@ -28,11 +28,9 @@ once the retained exports have been resolved. The reasons come from the
 [layer 3 dependency review](https://github.com/ObiterDictum/obiter/pull/565)
 left no dependency findings in the layer 4 report.
 
-| Finding                          | File                                                         | Reason                                             | Status                  |
-| -------------------------------- | ------------------------------------------------------------ | -------------------------------------------------- | ----------------------- |
-| `hasDarwinWindowControls`        | `packages/app-shell/src/lib/desktop-bridge.ts`               | Mac desktop support is planned.                    | Kept: planned           |
-| `LegislationProvisionSubsection` | `packages/app-shell/src/views/legislation-document-query.ts` | The underlying subsection type has active readers. | Awaiting human decision |
-| `LegislationActResponse`         | `packages/app-shell/src/views/LegislationActView.tsx`        | The type sits alongside ongoing Act reader work.   | Awaiting human decision |
+| Finding                   | File                                           | Reason                          | Status        |
+| ------------------------- | ---------------------------------------------- | ------------------------------- | ------------- |
+| `hasDarwinWindowControls` | `packages/app-shell/src/lib/desktop-bridge.ts` | Mac desktop support is planned. | Kept: planned |
 
 ## First report excerpt
 
@@ -48,8 +46,6 @@ pictureChanged                    function  packages/app-shell/src/document-pict
 hasDarwinWindowControls           function  packages/app-shell/src/lib/desktop-bridge.ts:33:17
 DOCUMENT_EDIT_TEXT_MAX_LENGTH               packages/contracts/src/document-edit-format.ts:146:41
 isPopulatedObjectExpression       function  tools/oxlint/anti-slop/shared/dictionary-types.ts:467:17
-Unused exported types (3)
-LegislationProvisionSubsection  type  packages/app-shell/src/views/legislation-document-query.ts:8:15
-LegislationActResponse          type  packages/app-shell/src/views/LegislationActView.tsx:14:15
+Unused exported types (1)
 FeatureKey                      type  packages/app-shell/src/views/staff-chart-data.ts:28:13
 ```

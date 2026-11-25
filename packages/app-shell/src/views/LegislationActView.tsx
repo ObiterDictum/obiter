@@ -10,7 +10,6 @@ import { legislationStatusDisplay } from '../legislation-status'
 import { legislationActQueryOptions } from './legislation-document-query'
 
 export { legislationActQueryOptions }
-export type { LegislationActResponse } from './legislation-document-query'
 
 export function LegislationActView({
   identity,
