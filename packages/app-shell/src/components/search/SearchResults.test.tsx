@@ -110,6 +110,23 @@ function response(
 }
 
 describe('SearchResultList provenance', () => {
+  it('shows one set of licence notices for a list of Find Case Law results', () => {
+    render(
+      <SearchResultList
+        rows={searchResultRows(
+          response({
+            hits: [judgment, { ...judgment, id: 'another-judgment' }],
+          }),
+        )}
+        selectedIndex={0}
+        onSelectIndex={() => {}}
+        onPreview={() => {}}
+      />,
+    )
+
+    expect(screen.getByLabelText('Find Case Law licence notices')).toBeTruthy()
+  })
+
   it('labels a stored snippet as a judgment extract with its pinpoint', () => {
     render(
       <SearchResultList
@@ -170,6 +187,7 @@ describe('SearchResultList provenance', () => {
       screen.getByText('Amended wording has not been incorporated.'),
     ).toBeTruthy()
     expect(screen.queryByText(/Stale amended wording/)).toBeNull()
+    expect(screen.queryByLabelText('Find Case Law licence notices')).toBeNull()
   })
 })
 
@@ -184,6 +202,7 @@ describe('SearchPreview provenance', () => {
       screen.queryByText('The National Archives (Find Case Law)'),
     ).toBeNull()
     expect(screen.getAllByText('Judgment extract').length).toBeGreaterThan(0)
+    expect(screen.getByLabelText('Find Case Law licence notices')).toBeTruthy()
   })
 
   it('shows the legislation source and the missing point-in-time warning', () => {
@@ -191,6 +210,7 @@ describe('SearchPreview provenance', () => {
 
     expect(screen.getByText('Legislation extract · s. 13')).toBeTruthy()
     expect(screen.getByText(/Point-in-time date not recorded/)).toBeTruthy()
+    expect(screen.queryByLabelText('Find Case Law licence notices')).toBeNull()
     expect(
       screen.getByRole('link', { name: 'legislation.gov.uk' }),
     ).toBeTruthy()

@@ -27,8 +27,10 @@ import { PageScaffold } from '../page-scaffold'
 import { formatDate } from '../format'
 import { selectJudgmentParagraphs } from '../legal-search-selection'
 import { getReadableCourtLabel } from '../components/search/searchTypes'
+import { FindCaseLawNotices } from '../components/search/FindCaseLawNotices'
 import {
   findCaseLawUrlForDocumentId,
+  isFindCaseLawSource,
   sourceNameForUrl,
 } from '../components/search/provenance'
 import { SourceActions } from '../components/sources/SourceActions'
@@ -175,6 +177,10 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
             View the official judgment page
           </a>
         </div>
+      ) : null}
+
+      {!withdrawn && isFindCaseLawSource(data.sourceUrl) ? (
+        <FindCaseLawNotices />
       ) : null}
 
       {summary ? (

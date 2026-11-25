@@ -9,6 +9,8 @@ import {
   LegislationExtractProvenance,
   SearchSnippet,
 } from './SearchSnippet'
+import { FindCaseLawNotices } from './FindCaseLawNotices'
+import { isFindCaseLawSource } from './provenance'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
 import { legislationStatusDisplay } from '../../legislation-status'
@@ -24,33 +26,40 @@ export function SearchResultList({
   onSelectIndex: (index: number) => void
   onPreview: (index: number) => void
 }) {
+  const includesFindCaseLaw = rows.some(
+    (row) => row.kind === 'judgment' && isFindCaseLawSource(row.hit.sourceUrl),
+  )
+
   return (
-    <ul
-      className="divide-y divide-line overflow-hidden rounded-lg bg-surface"
-      aria-label="Search results"
-    >
-      {rows.map((row, index) => (
-        <li key={`${row.kind}-${row.hit.id}`}>
-          {row.kind === 'judgment' ? (
-            <JudgmentResult
-              row={row}
-              index={index}
-              selected={selectedIndex === index}
-              onSelect={() => onSelectIndex(index)}
-              onPreview={() => onPreview(index)}
-            />
-          ) : (
-            <LegislationResult
-              row={row}
-              index={index}
-              selected={selectedIndex === index}
-              onSelect={() => onSelectIndex(index)}
-              onPreview={() => onPreview(index)}
-            />
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      {includesFindCaseLaw ? <FindCaseLawNotices /> : null}
+      <ul
+        className="divide-y divide-line overflow-hidden rounded-lg bg-surface"
+        aria-label="Search results"
+      >
+        {rows.map((row, index) => (
+          <li key={`${row.kind}-${row.hit.id}`}>
+            {row.kind === 'judgment' ? (
+              <JudgmentResult
+                row={row}
+                index={index}
+                selected={selectedIndex === index}
+                onSelect={() => onSelectIndex(index)}
+                onPreview={() => onPreview(index)}
+              />
+            ) : (
+              <LegislationResult
+                row={row}
+                index={index}
+                selected={selectedIndex === index}
+                onSelect={() => onSelectIndex(index)}
+                onPreview={() => onPreview(index)}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   )
 }
 

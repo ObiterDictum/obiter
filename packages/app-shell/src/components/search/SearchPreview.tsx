@@ -9,6 +9,8 @@ import {
   JudgmentExtractProvenance,
   LegislationExtractProvenance,
 } from './SearchSnippet'
+import { FindCaseLawNotices } from './FindCaseLawNotices'
+import { isFindCaseLawSource } from './provenance'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
 import { legislationStatusDisplay } from '../../legislation-status'
@@ -63,6 +65,7 @@ function JudgmentPreview({
           <span aria-hidden>·</span>
           <span className="tabular-nums">{formatDate(hit.dateDecided)}</span>
         </p>
+        {isFindCaseLawSource(hit.sourceUrl) ? <FindCaseLawNotices /> : null}
         {snippet ? (
           <div className="rounded-md bg-fill p-4">
             <p className="flex items-center gap-1 text-caption text-subtle">
