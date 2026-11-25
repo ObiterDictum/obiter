@@ -6,13 +6,17 @@ import { signIn } from './e13-support'
 
 const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 
-export async function createAccount(request: APIRequestContext, label: string) {
+export async function createAccount(
+  request: APIRequestContext,
+  label: string,
+  name = `${label} User`,
+) {
   const runId = crypto.randomUUID().replace(/-/g, '').slice(0, 10)
   const email = `${label.toLowerCase()}-${runId}@obiter.test`
   const password = `${label}-${runId}-Aa1!`
   seedApprovedAccessInDb(databaseName, email)
   const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
-    data: { name: `${label} User`, email, password },
+    data: { name, email, password },
     headers: { Origin: webOrigin },
   })
   expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
