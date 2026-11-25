@@ -40,6 +40,18 @@ test('primary+Shift+P opens the editor command palette from a paragraph', async 
 
   await expect(editorCommandPalette(page)).toBeVisible()
   await expect(appSearchDialog(page)).toHaveCount(0)
+  const search = page.getByRole('textbox', { name: 'Search commands' })
+  const verify = editorCommandPalette(page).getByRole('button', {
+    name: /Run Verify/,
+  })
+  await search.fill('Run Verify')
+  await expect(verify).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(editorCommandPalette(page)).toHaveCount(0)
+  await page.keyboard.press('ControlOrMeta+Shift+P')
+  await expect(search).toHaveValue('')
+  await search.fill('Verify citations')
+  await expect(verify).toBeVisible()
 })
 
 test('the All commands button advertises primary+Shift+P in its shortcut and tooltip', async ({
