@@ -4556,9 +4556,13 @@
             <code>no_match</code> or <code>recognised_not_held</code>; document
             <code>404</code>), so a provider outage cannot become a storage
             failure. National Archives access belongs to an explicit indexing
-            run. Health is a minimal liveness probe; in development it also
-            exposes the API commit SHA, checkout root, resolved env file and the
-            database name read out of the configured
+            run. Search and case pages emit robots metadata, and their web and
+            API responses send <code>X-Robots-Tag</code>. The app's
+            <code>/robots.txt</code> disallows these paths for named AI crawlers
+            while allowing ordinary search crawlers to read the noindex
+            directives. Health is a minimal liveness probe; in development it
+            also exposes the API commit SHA, checkout root, resolved env file
+            and the database name read out of the configured
             <code>DATABASE_URL</code> for local provenance checks. Invite
             preview is gated by the secret invite token and returns the
             organisation and inviter display names, the invited email, account

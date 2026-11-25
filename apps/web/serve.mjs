@@ -7,8 +7,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { basename, dirname, join } from 'node:path'
 import { verifyArtifactIntegrity } from './build-provenance.mjs'
 import {
+  CASE_LAW_ROBOTS,
   COMPRESSIBLE_EXTENSIONS,
   cacheControlFor,
+  isCaseLawPath,
   mergeVary,
   negotiateEncoding,
   strictestCacheControl,
@@ -149,6 +151,10 @@ export function createRequestHandler(
       return
     }
 
+    if (isCaseLawPath(url.pathname)) {
+      res.setHeader('X-Robots-Tag', CASE_LAW_ROBOTS)
+    }
+
     const accepted = negotiateEncoding(req.headers['accept-encoding'])
     if (!accepted.gzip && !accepted.identity) {
       res.writeHead(406, {
@@ -186,7 +192,10 @@ export function createRequestHandler(
         return
       }
 
-      if (url.pathname.startsWith('/assets/') && clientDir) {
+      if (
+        clientDir &&
+        (url.pathname.startsWith('/assets/') || url.pathname === '/robots.txt')
+      ) {
         const staticRes = await serveStatic(
           url.pathname,
           clientDir,
