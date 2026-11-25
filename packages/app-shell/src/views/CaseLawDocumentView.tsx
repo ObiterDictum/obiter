@@ -22,12 +22,12 @@ import { ArrowUpRight, MagnifyingGlass } from '@obiter/ui/icons'
 import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import { useState } from 'react'
 import { JudgmentReaderTools } from './JudgmentReaderTools'
+import { StickyJudgmentNotices } from './StickyJudgmentNotices'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { formatDate } from '../format'
 import { selectJudgmentParagraphs } from '../legal-search-selection'
 import { getReadableCourtLabel } from '../components/search/searchTypes'
-import { FindCaseLawNotices } from '../components/search/FindCaseLawNotices'
 import {
   findCaseLawUrlForDocumentId,
   isFindCaseLawSource,
@@ -180,7 +180,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
       ) : null}
 
       {!withdrawn && isFindCaseLawSource(data.sourceUrl) ? (
-        <FindCaseLawNotices />
+        <StickyJudgmentNotices />
       ) : null}
 
       {summary ? (

@@ -166,6 +166,51 @@ describe('CaseLawDocumentView', () => {
     expect(screen.queryByLabelText('Find Case Law licence notices')).toBeNull()
   })
 
+  it('sets the measured licence notice offset before scrolling to a linked paragraph', async () => {
+    mockFetch()
+    const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    measure.mockImplementation(() => new DOMRect(0, 0, 500, 84))
+    const scroll = mock(function (
+      this: HTMLElement,
+      _options: ScrollIntoViewOptions,
+    ) {
+      const readingArea = this.closest<HTMLElement>(
+        '[style*="--judgment-notice-height"]',
+      )
+      expect(
+        readingArea?.style.getPropertyValue('--judgment-notice-height'),
+      ).toBe('84px')
+    })
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'scrollIntoView',
+    )
+    try {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+        configurable: true,
+        value: scroll,
+      })
+      window.history.replaceState(null, '', '#para-11')
+      renderView()
+
+      await screen.findByRole('document')
+      await waitFor(() => expect(document.activeElement?.id).toBe('para-11'))
+      expect(scroll).toHaveBeenCalledWith({ block: 'start' })
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(
+          HTMLElement.prototype,
+          'scrollIntoView',
+          descriptor,
+        )
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+      }
+      measure.mockRestore()
+      window.history.replaceState(null, '', '/')
+    }
+  })
+
   it('renders the case header (citation, title, court, date) and the judgment document landmark', async () => {
     mockFetch()
     renderView()
