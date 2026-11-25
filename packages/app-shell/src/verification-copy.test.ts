@@ -132,7 +132,7 @@ describe('finding state wording', () => {
       total: 5,
     })
     expect(verificationCountsLabel(counts)).toBe(
-      '2 flagged · 1 needs review · 1 not checked · 1 matches the checked source · 1 dismissed',
+      'Checks · 2 flagged · 1 needs review · 1 not checked · 1 matches the checked source · 1 dismissed',
     )
   })
 
