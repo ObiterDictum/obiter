@@ -5,7 +5,7 @@ import type {
   JudgmentPage,
   JudgmentParagraph,
 } from '@obiter/contracts'
-import { apiUrl } from '../lib/api-url'
+import { apiFetch, isApiNotFound } from '../api'
 
 export type CaseLawParagraph = JudgmentParagraph
 
@@ -42,19 +42,11 @@ export function caseLawDocumentQueryOptions(caseId: string) {
   return queryOptions({
     queryKey: ['case-law-document', caseId],
     staleTime: 0,
-    retry: 1,
+    retry: (count, error) => !isApiNotFound(error) && count < 1,
     refetchOnMount: 'always',
-    queryFn: async () => {
-      const response = await fetch(
-        apiUrl(`/api/search/documents/${encodeURIComponent(caseId)}`),
-      )
-
-      if (!response.ok) {
-        throw new Error('Case law document was not found.')
-      }
-
-      // SAFETY: non-ok responses throw above; /api/search/documents/:id returns CaseLawDocumentResponse per the search API contract.
-      return (await response.json()) as CaseLawDocumentResponse
-    },
+    queryFn: () =>
+      apiFetch<CaseLawDocumentResponse>(
+        `/api/search/documents/${encodeURIComponent(caseId)}`,
+      ),
   })
 }

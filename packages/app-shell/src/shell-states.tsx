@@ -145,10 +145,9 @@ function StatePage({
 const NOT_FOUND_BODY =
   'It may have been removed, or you may not have access to it.'
 
-const NOT_FOUND_COPY = new Map<
-  string,
-  { noun: string; to: '/matters' | '/verify' | '/redact' }
->([
+type NotFoundCopy = { noun: string; to: '/matters' | '/verify' | '/redact' }
+
+const NOT_FOUND_COPY = new Map<string, NotFoundCopy>([
   ['matter_not_found', { noun: 'matter', to: '/matters' }],
   ['matter_share_not_found', { noun: 'matter', to: '/matters' }],
   ['document_not_found', { noun: 'document', to: '/matters' }],
@@ -156,7 +155,9 @@ const NOT_FOUND_COPY = new Map<
   ['verification_run_not_found', { noun: 'verification run', to: '/verify' }],
 ])
 
-export function ShellNotFound() {
+export function ShellNotFound({ data }: { data?: unknown }) {
+  const copy = typeof data === 'string' ? NOT_FOUND_COPY.get(data) : undefined
+  if (copy) return <ShellEntityNotFound copy={copy} />
   return (
     <StatePage
       tone="neutral"
@@ -178,9 +179,7 @@ export function ShellNotFound() {
   )
 }
 
-function ShellEntityNotFound({ error }: { error: ApiError }) {
-  const copy = NOT_FOUND_COPY.get(error.code)
-  if (!copy) return <ShellNotFound />
+function ShellEntityNotFound({ copy }: { copy: NotFoundCopy }) {
   const backLabel =
     copy.to === '/matters'
       ? 'Back to matters'
@@ -295,10 +294,10 @@ export function ShellError({
   reportError(error)
   const failure = classifyShellFailure(error)
   if (failure === 'not-found') {
-    return error instanceof ApiError ? (
-      <ShellEntityNotFound error={error} />
-    ) : (
-      <ShellNotFound />
+    return (
+      <ShellNotFound
+        data={error instanceof ApiError ? error.code : undefined}
+      />
     )
   }
   if (failure === 'forbidden') return <ShellPermissionDenied />

@@ -9,6 +9,7 @@ import type { FinalizeResponse, RedactionRun, RedetectResponse } from './types'
 
 const apiFetch = vi.hoisted(() => vi.fn())
 
+const { ApiError, isApiNotFound } = await import('@obiter/app-shell')
 const obiterAppShellModuleKeys = Object.fromEntries(
   Object.keys(await import('@obiter/app-shell')).map((key) => [key, undefined]),
 )
@@ -16,6 +17,8 @@ mock.module('@obiter/app-shell', () =>
   Object.assign(
     { ...obiterAppShellModuleKeys },
     (() => ({
+      ApiError,
+      isApiNotFound,
       apiFetch: (...args: unknown[]) => apiFetch(...args),
     }))(),
   ),

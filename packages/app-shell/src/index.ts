@@ -1,4 +1,4 @@
-export { apiFetch, apiFetchBlob, ApiError } from './api'
+export { apiFetch, apiFetchBlob, ApiError, isApiNotFound } from './api'
 export {
   setServerRequestGetter,
   getServerRequest,
@@ -20,6 +20,7 @@ export {
 } from './current-user'
 export {
   guardAuth,
+  guardNotFound,
   prefetchDocumentRouteData,
   prefetchHomeData,
   prefetchInviteAcceptData,
