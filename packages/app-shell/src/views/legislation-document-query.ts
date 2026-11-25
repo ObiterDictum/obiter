@@ -50,6 +50,7 @@ interface LegislationProvisionDocument {
   officialUrl: string
   sourceUrl: string
   acquiredAt?: string
+  effectsCheckedAt?: string
   notice?: string
   canonicalUrl: string
   amendments?: LegislationAmendmentHistory
@@ -110,6 +111,8 @@ export interface LegislationActDocument {
   officialUrl: string
   sourceUrl: string
   acquiredAt?: string
+  effectsCheckedAt?: string
+  effectsCheckedUntil?: string
   canonicalUrl: string
   status?: 'in_force' | 'repealed'
   repealedFrom?: string

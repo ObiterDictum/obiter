@@ -16,7 +16,10 @@ import { sourceNameForUrl } from '../components/search/provenance'
 import { SourceActions } from '../components/sources/SourceActions'
 import { formatDate } from '../format'
 import { provisionResultLocation } from '../legislation-navigation'
-import { legislationStatusDisplay } from '../legislation-status'
+import {
+  legislationCheckedLabel,
+  legislationStatusDisplay,
+} from '../legislation-status'
 import {
   legislationProvisionQueryOptions,
   type LegislationAmendment,
@@ -67,6 +70,7 @@ export function LegislationProvisionView({
     provision.repealedFrom,
   )
   const sourceName = sourceNameForUrl(provision.sourceUrl)
+  const checked = legislationCheckedLabel(provision)
 
   return (
     <PageScaffold
@@ -86,7 +90,7 @@ export function LegislationProvisionView({
           <span aria-hidden>·</span>
           <StatusDot tone={status.tone}>{status.label}</StatusDot>
           <span aria-hidden>·</span>
-          <span>Point-in-time date not recorded</span>
+          <span>{checked}</span>
         </span>
       }
       actions={
@@ -116,7 +120,7 @@ export function LegislationProvisionView({
           />
           <p className="text-caption text-subtle">
             {provision.title}, {provision.provisionLabel} · source: {sourceName}{' '}
-            · point-in-time date not recorded.
+            · {checked}.
           </p>
           {provision.amendments ? (
             <AmendmentHistory
@@ -172,9 +176,7 @@ export function LegislationProvisionView({
                 </dd>
               </dl>
               <div className="mt-4 rounded-md bg-warning-soft px-4 py-3">
-                <p className="text-caption text-warning">
-                  Point-in-time date not recorded
-                </p>
+                <p className="text-caption text-warning">{checked}</p>
                 <p className="mt-1 text-caption text-muted">
                   Check legislation.gov.uk before relying on the text. This page
                   shows the stored version, not a guarantee that later

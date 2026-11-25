@@ -24,3 +24,24 @@ export function legislationStatusDisplay(
     return { tone: 'warning', label: 'May not be up to date' }
   return { tone: 'success', label: 'No unapplied amendments' }
 }
+
+export function legislationCheckedLabel({
+  effectsCheckedAt,
+  effectsCheckedUntil,
+  acquiredAt,
+}: {
+  effectsCheckedAt?: string
+  effectsCheckedUntil?: string
+  acquiredAt?: string
+}): string {
+  if (effectsCheckedAt) {
+    const from = formatDate(effectsCheckedAt)
+    const until = effectsCheckedUntil ? formatDate(effectsCheckedUntil) : from
+    return until === from
+      ? `Checked against legislation.gov.uk on ${from}`
+      : `Checked against legislation.gov.uk between ${from} and ${until}`
+  }
+  return acquiredAt
+    ? `Retrieved from legislation.gov.uk on ${formatDate(acquiredAt)}; not yet checked for later changes`
+    : 'Not yet checked against legislation.gov.uk'
+}

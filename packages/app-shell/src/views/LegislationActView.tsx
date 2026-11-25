@@ -6,7 +6,10 @@ import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { sourceNameForUrl } from '../components/search/provenance'
 import { formatDate } from '../format'
-import { legislationStatusDisplay } from '../legislation-status'
+import {
+  legislationCheckedLabel,
+  legislationStatusDisplay,
+} from '../legislation-status'
 import { legislationActQueryOptions } from './legislation-document-query'
 
 export { legislationActQueryOptions }
@@ -73,7 +76,7 @@ export function LegislationActView({
             </span>
           )}
           <span aria-hidden>·</span>
-          <span>Point-in-time date not recorded</span>
+          <span>{legislationCheckedLabel(act)}</span>
         </span>
       }
       actions={<SourcePageLinks sourceUrl={act.officialUrl} />}

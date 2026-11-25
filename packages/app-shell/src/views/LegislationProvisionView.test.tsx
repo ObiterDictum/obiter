@@ -51,6 +51,7 @@ const CURRENT_PAYLOAD = {
     labelPath: 'section/13',
     extent: 'E+W+S',
     legislationStatus: 'current' as const,
+    effectsCheckedAt: '2026-09-10T15:24:41.000Z',
     text: 'Direct discrimination applies here.',
     officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
     sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
@@ -180,7 +181,8 @@ describe('LegislationProvisionView', () => {
       screen.getAllByText('No unapplied amendments').length,
     ).toBeGreaterThan(0)
     expect(
-      screen.getAllByText('Point-in-time date not recorded').length,
+      screen.getAllByText('Checked against legislation.gov.uk on 10 Sept 2026')
+        .length,
     ).toBeGreaterThan(0)
     expect(
       screen

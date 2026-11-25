@@ -40,5 +40,9 @@ an exact match against such wording; it asks for a check against the official
 version. Repealed provisions keep their place with the repeal notice and
 official link, and their stored wording is excluded from the response. These
 rules apply to the provision reader and the Act reader alike.
-The Act header shows the source, acquisition date when
-recorded, and that a point-in-time date was not recorded.
+Obiter stores the latest revised text, not point-in-time versions. Instead of
+a point-in-time date, the Act header, provision page and search preview say
+when the text was last checked against legislation.gov.uk for outstanding
+changes (`effectsCheckedAt`; for an Act, the earliest and latest check of its
+provisions, shown as one date or a range). Where changes were never checked,
+they show the retrieval date and say so.

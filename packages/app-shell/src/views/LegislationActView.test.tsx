@@ -144,6 +144,8 @@ const act = {
   sourceUrl: officialUrl,
   totalCount: 61,
   withheldCount: 1,
+  effectsCheckedAt: '2026-09-10T15:24:41.000Z',
+  effectsCheckedUntil: '2026-11-12T09:00:00.000Z',
   repealedCount: 1,
   contents: [
     {
@@ -289,7 +291,11 @@ describe('LegislationActView', () => {
         .getByRole('link', { name: 'Read the official record' })
         .getAttribute('href'),
     ).toBe(`${officialUrl}/section/3`)
-    expect(screen.getByText('Point-in-time date not recorded')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Checked against legislation.gov.uk between 10 Sept 2026 and 12 Nov 2026',
+      ),
+    ).toBeTruthy()
     expect(
       screen.getByText(/1 of 61 provisions may not be up to\s+date/),
     ).toBeTruthy()
