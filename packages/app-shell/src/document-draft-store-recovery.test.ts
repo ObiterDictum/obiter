@@ -37,6 +37,30 @@ describe('document draft persistence', () => {
     expect(restored.state.drafts).toEqual({ r1: 'closed tab work' })
   })
 
+  it('parks abandoned drafts for an earlier version before recovering current work', () => {
+    const storage = new MapStorage()
+    for (const tabId of ['old-a', 'old-b', 'current']) {
+      writeDocumentDraft(
+        storage,
+        { ...scope, tabId },
+        {
+          baseVersionId: tabId === 'current' ? 'ver_2' : 'ver_1',
+          state: stateWithText(tabId),
+          held: [],
+        },
+      )
+    }
+    const result = readDocumentDraft(storage, scope, 'ver_2')
+    expect(result).toMatchObject({
+      status: 'restored',
+      state: { drafts: { r1: 'current' } },
+    })
+    expect(listRecoverableDocumentDrafts(storage, scope)).toEqual([
+      expect.objectContaining({ writerId: 'old-a', status: 'parked' }),
+      expect.objectContaining({ writerId: 'old-b', status: 'parked' }),
+    ])
+  })
+
   it('recovers a closed tab draft carrying the full emphasis shape', () => {
     const storage = new MapStorage()
     const state = stateWithText('formatting')

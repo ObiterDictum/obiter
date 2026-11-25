@@ -2,7 +2,11 @@ import '@obiter/test-dom'
 import { createElement, useLayoutEffect, type PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from '../../../../../scripts/test/vitest-compat'
-import { listDocumentDrafts } from '../../document-draft-store'
+import {
+  listDocumentDrafts,
+  writeDocumentDraft,
+  touchDocumentDraftWriterClaim,
+} from '../../document-draft-store'
 import { useDocumentSave } from './use-document-save'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'bun:test'
@@ -382,4 +386,46 @@ it('retires saved text and track-changes intent before query refresh finishes', 
     network.mockRestore()
     client.clear()
   }
+})
+
+it('retires only abandoned drafts whose edits the save committed', () => {
+  window.localStorage.clear()
+  window.sessionStorage.clear()
+  const scope = scopeFor(model('Hello'), 'ver_1', 1)
+  const sent = { ...emptyDraftState(), drafts: { r1: 'Hello saved' } }
+  for (const [tabId, text] of [
+    ['duplicate', 'Hello saved'],
+    ['different', 'Hello elsewhere'],
+    ['live', 'Hello saved'],
+  ]) {
+    writeDocumentDraft(
+      window.localStorage,
+      { ...scope, tabId },
+      {
+        baseVersionId: 'ver_1',
+        state: { ...sent, drafts: { r1: text } },
+        held: [],
+      },
+    )
+  }
+  touchDocumentDraftWriterClaim(window.localStorage, 'live', 'live-instance')
+  const { result, unmount } = renderHook(() => useWorkspaceDrafts(scope))
+  act(() => {
+    result.current.setDrafts(() => sent.drafts)
+  })
+  act(() => {
+    result.current.acknowledgeSave(
+      [{ kind: 'run-text', key: 'run:r1', runId: 'r1' }],
+      sent,
+      { baseVersionId: 'ver_1' },
+    )
+  })
+  expect(
+    listDocumentDrafts(window.localStorage, scope)
+      .map((draft) => draft.writerId)
+      .sort(),
+  ).toEqual(['different', 'live'])
+  unmount()
+  window.localStorage.clear()
+  window.sessionStorage.clear()
 })
