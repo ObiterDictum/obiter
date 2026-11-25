@@ -26,10 +26,7 @@ test('saving a restored draft leaves only the next unsaved edit after reopening'
     .getByRole('dialog')
     .getByLabel('Name', { exact: true })
     .press('Enter')
-  await page
-    .getByRole('link', { name: 'Untitled document.docx', exact: true })
-    .first()
-    .click()
+
   await expect(page).toHaveURL(/\/documents\//)
   const url = page.url()
   const context = page.context()

@@ -35,10 +35,7 @@ async function createUntitledDocument(page: Page) {
   await expect(name).toHaveValue('Untitled document')
   await name.press('Enter')
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page
-    .getByRole('link', { name: 'Untitled document.docx', exact: true })
-    .first()
-    .click()
+  await expect(page).toHaveURL(/\/documents\//)
 }
 
 async function shape(page: Page, rows: number, columns: number) {
