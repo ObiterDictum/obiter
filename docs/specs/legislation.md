@@ -23,6 +23,12 @@ source. The reader requests 24 entries at a time and loads subsequent pages as t
 approach the viewport. Deep links start on the target page, with a control
 to load earlier wording.
 
+Alternative versions of a provision, such as an extent-specific version for
+Scotland, keep their statutory number. legislation.gov.uk's version suffixes
+(`3n1`) stay in label paths, URLs and anchors so each version is addressable,
+but never appear in a label or citation. Each version of a versioned provision
+carries a `versionNote` naming its extent, for example "Version for Scotland".
+
 The provision reader's withholding and repeal rules apply to the Act reader.
 Withheld and repealed provisions retain their place and show the relevant notice
 and official link. Their stored wording is excluded from the response.

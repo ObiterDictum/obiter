@@ -128,6 +128,11 @@ function SubsectionNode({
     : node.label
   const withheld = node.legislationStatus === 'amended_not_held'
   const repealed = node.legislationStatus === 'repealed'
+  const versionNote = node.versionNote ? (
+    <span className="mr-2 font-sans text-meta text-paper-muted">
+      {node.versionNote}.
+    </span>
+  ) : null
   return (
     <div className={depth > 0 ? 'ml-6 border-l border-line pl-4' : undefined}>
       <p className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 py-1 text-[16px] leading-[1.85]">
@@ -144,10 +149,12 @@ function SubsectionNode({
         </Link>
         {repealed ? (
           <span className="text-meta text-paper-muted">
+            {versionNote}
             {legislationStatusDisplay('repealed', node.repealedFrom).label}.
           </span>
         ) : withheld ? (
           <span className="text-meta text-paper-muted">
+            {versionNote}
             Wording withheld: amendments are recorded but not applied.{' '}
             <a
               className="text-paper-ink underline"
@@ -160,6 +167,7 @@ function SubsectionNode({
           </span>
         ) : (
           <span className="whitespace-pre-wrap">
+            {versionNote}
             {node.text ?? 'No stored wording for this level.'}
           </span>
         )}

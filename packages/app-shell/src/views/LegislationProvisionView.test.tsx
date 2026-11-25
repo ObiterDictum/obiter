@@ -284,6 +284,60 @@ describe('LegislationProvisionView', () => {
     expect(screen.getByText(/Retrieved 6 Sept 2026/)).toBeTruthy()
   })
 
+  it('numbers alternative versions statutorily and names each extent', async () => {
+    const version = (labelPath: string, versionNote: string, text: string) => ({
+      label: 's. 1(3)',
+      labelPath,
+      versionNote,
+      href: `/ln/ukpga/2010/15/${labelPath}`,
+      legislationStatus: 'current',
+      text,
+      children: [
+        {
+          label: 's. 1(3)(a)',
+          labelPath: `${labelPath === 'section/1/3' ? 'section/1/3/a' : 'section/1/3/an1'}`,
+          href: '/ln/ukpga/2010/15/section/1/3/a',
+          legislationStatus: 'current',
+          text: 'a public authority…',
+          children: [],
+        },
+      ],
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({
+          provision: {
+            ...CURRENT_PAYLOAD.provision,
+            provisionLabel: 's. 1',
+            labelPath: 'section/1',
+            text: '',
+            subsections: [
+              version(
+                'section/1/3',
+                'Version for England and Wales',
+                'The authorities are—',
+              ),
+              version(
+                'section/1/3n1',
+                'Version for Scotland',
+                'The Scottish authorities are—',
+              ),
+            ],
+          },
+        }),
+      ),
+    )
+
+    renderView('ukpga/2010/15/section/1')
+
+    expect(await screen.findByText('Version for Scotland.')).toBeTruthy()
+    expect(screen.getByText('Version for England and Wales.')).toBeTruthy()
+    expect(screen.getAllByText('(3)')).toHaveLength(2)
+    expect(screen.getAllByText('(a)')).toHaveLength(2)
+    expect(screen.queryByText(/n1/)).toBeNull()
+  })
+
   it('shows a source failure with a retry instead of empty provision text', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockRejectedValue(new Error('network down'))

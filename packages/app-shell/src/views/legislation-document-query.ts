@@ -40,6 +40,7 @@ interface LegislationProvisionDocument {
   year: number
   provisionLabel: string
   labelPath: string
+  versionNote?: string
   heading?: string
   extent: string
   legislationStatus: LegislationStatus
@@ -87,6 +88,7 @@ export interface LegislationActContentsNode {
   label: string
   docOrder?: number
   labelPath: string
+  versionNote?: string
   href: string
   extent: string
   withheld: boolean
