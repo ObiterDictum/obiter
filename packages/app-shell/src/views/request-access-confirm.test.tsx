@@ -9,13 +9,7 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn(), signUpWithEmail: vi.fn() }))
 
@@ -64,7 +58,7 @@ function renderConfirm(entry: string) {
   )
 }
 
-async function fillAccountSetup(input: {
+function continueAccountSetup(input: {
   name: string
   email: string
   password: string
@@ -82,8 +76,7 @@ async function fillAccountSetup(input: {
   fireEvent.change(screen.getByLabelText('Confirm password'), {
     target: { value: input.confirm },
   })
-  fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
-  await waitFor(() => undefined)
+  fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
 }
 
 beforeEach(() => {
@@ -130,21 +123,69 @@ describe('access request confirmation', () => {
     renderConfirm('/request-access/confirm?token=abc123')
 
     await screen.findByRole('heading', { name: "You're verified" })
-    await fillAccountSetup({
+    continueAccountSetup({
       name: 'Tess Tester',
       email: 'tess@ox.ac.uk',
       password: 'correct-horse-battery',
       confirm: 'correct-horse-battery',
     })
 
+    expect(api.signUpWithEmail).not.toHaveBeenCalled()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue as an individual' }),
+    )
     await screen.findByRole('heading', { name: 'Check your inbox' })
     expect(api.signUpWithEmail).toHaveBeenCalledWith({
       name: 'Tess Tester',
       email: 'tess@ox.ac.uk',
       password: 'correct-horse-battery',
+      pendingOrganisationName: undefined,
       callbackURL: `${window.location.origin}/`,
     })
     expect(screen.getByText(/tess@ox\.ac\.uk/)).toBeTruthy()
+  })
+
+  it('requires an organisation name before signing up with a named workspace', async () => {
+    api.apiFetch.mockResolvedValueOnce({
+      status: 'verified',
+      next: 'account_setup',
+    })
+    api.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+    renderConfirm('/request-access/confirm?token=abc123')
+
+    await screen.findByRole('heading', { name: "You're verified" })
+    continueAccountSetup({
+      name: 'Tess Tester',
+      email: 'tess@ox.ac.uk',
+      password: 'correct-horse-battery',
+      confirm: 'correct-horse-battery',
+    })
+
+    const createOrganisation = screen.getByRole('button', {
+      name: 'Create organisation',
+    })
+    fireEvent.click(createOrganisation)
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Organisation name is required.',
+    )
+    expect(api.signUpWithEmail).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Organisation name'), {
+      target: { value: '  Example Legal  ' },
+    })
+    fireEvent.click(createOrganisation)
+
+    await screen.findByRole('heading', { name: 'Check your inbox' })
+    expect(api.signUpWithEmail).toHaveBeenCalledWith({
+      name: 'Tess Tester',
+      email: 'tess@ox.ac.uk',
+      password: 'correct-horse-battery',
+      pendingOrganisationName: 'Example Legal',
+      callbackURL: `${window.location.origin}/`,
+    })
   })
 
   it('creates no account when the two passwords differ', async () => {
@@ -155,7 +196,7 @@ describe('access request confirmation', () => {
     renderConfirm('/request-access/confirm?token=abc123')
 
     await screen.findByRole('heading', { name: "You're verified" })
-    await fillAccountSetup({
+    continueAccountSetup({
       name: 'Tess Tester',
       email: 'tess@ox.ac.uk',
       password: 'correct-horse-battery',
@@ -163,6 +204,9 @@ describe('access request confirmation', () => {
     })
 
     expect(await screen.findByText('Passwords do not match.')).toBeTruthy()
+    expect(
+      screen.queryByRole('heading', { name: 'Create an organisation' }),
+    ).toBeNull()
     expect(api.signUpWithEmail).not.toHaveBeenCalled()
   })
 
@@ -178,13 +222,16 @@ describe('access request confirmation', () => {
     renderConfirm('/request-access/confirm?token=abc123')
 
     await screen.findByRole('heading', { name: "You're verified" })
-    await fillAccountSetup({
+    continueAccountSetup({
       name: 'Tess Tester',
       email: 'someone@else.ac.uk',
       password: 'correct-horse-battery',
       confirm: 'correct-horse-battery',
     })
 
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue as an individual' }),
+    )
     expect(
       await screen.findByText('Use the address you confirmed.'),
     ).toBeTruthy()
