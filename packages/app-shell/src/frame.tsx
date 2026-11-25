@@ -402,9 +402,7 @@ function ShellPane({
             </MatterTabsPaneLazy>
           </Suspense>
         ) : (
-          <div data-shell-scroll className="min-h-0 flex-1 overflow-y-auto">
-            {children}
-          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         )}
       </main>
     </>

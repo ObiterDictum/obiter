@@ -1,26 +1,36 @@
-import type { Ref } from 'react'
+import { Info } from '@obiter/ui/icons'
 
-export function FindCaseLawNotices({
-  readerRef,
-}: {
-  readerRef?: Ref<HTMLElement>
-}) {
+export function FindCaseLawNotices() {
   return (
-    <aside
-      ref={readerRef}
+    <details
+      open
       aria-label="Find Case Law licence notices"
-      tabIndex={readerRef ? 0 : undefined}
-      className={`space-y-2 rounded-md border border-line bg-fill px-4 py-3 text-meta leading-relaxed text-ink ${readerRef ? 'sticky top-0 z-10 overflow-y-auto @max-pane:space-y-1 @max-pane:px-3 @max-pane:py-2 @max-pane:leading-snug' : ''}`}
+      className="group rounded-md border border-line bg-fill text-meta text-ink"
     >
-      <p className="font-medium">
-        This material only partially represents court and tribunal activity.
-        Find Case Law does not contain every judgment or decision.
-      </p>
-      <p>
-        Crown copyright material reproduced by permission of The National
-        Archives. The contents of the judgment can be used under the Open
-        Justice - Licence.
-      </p>
-    </aside>
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md px-3 font-medium focus-visible:outline focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden">
+        <Info aria-hidden size={16} className="shrink-0 text-muted" />
+        <span>Find Case Law · Licence &amp; coverage</span>
+        <span className="ml-auto text-muted group-open:hidden" aria-hidden>
+          +
+        </span>
+        <span
+          className="ml-auto hidden text-muted group-open:inline"
+          aria-hidden
+        >
+          −
+        </span>
+      </summary>
+      <div className="space-y-1 border-t border-line px-3 py-2 leading-snug">
+        <p className="font-medium">
+          This material only partially represents court and tribunal activity.
+          Find Case Law does not contain every judgment or decision.
+        </p>
+        <p>
+          Crown copyright material reproduced by permission of The National
+          Archives. The contents of the judgment can be used under the Open
+          Justice - Licence.
+        </p>
+      </div>
+    </details>
   )
 }

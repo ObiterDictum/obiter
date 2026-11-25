@@ -60,7 +60,7 @@ export function JudgmentParagraphActions({
         >
           <span>{number}</span>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Paragraph actions</TooltipContent>
+        <TooltipContent>Paragraph actions</TooltipContent>
       </Tooltip>
       <MenuContent align="start">
         <MenuItem onClick={() => void copy('quote')}>

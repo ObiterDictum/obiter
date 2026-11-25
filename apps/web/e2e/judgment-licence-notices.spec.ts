@@ -24,12 +24,12 @@ const coverageText =
 const acknowledgementText =
   'Crown copyright material reproduced by permission of The National Archives. The contents of the judgment can be used under the Open Justice - Licence.'
 
-async function clearance(target: Locator, notices: Locator) {
-  const targetBox = await target.boundingBox()
-  const noticesBox = await notices.boundingBox()
-  return targetBox && noticesBox
-    ? targetBox.y - (noticesBox.y + noticesBox.height)
-    : Number.NEGATIVE_INFINITY
+async function expectExpandedNotices(notices: Locator) {
+  await expect(notices).toHaveAttribute('open', '')
+  await expect(notices.getByText(coverageText, { exact: true })).toBeVisible()
+  await expect(
+    notices.getByText(acknowledgementText, { exact: true }),
+  ).toBeVisible()
 }
 
 async function openSignedIn(page: Page, destination: string) {
@@ -98,7 +98,25 @@ test.beforeEach(async ({ page }) => {
   )
 })
 
-test('a linked judgment paragraph and backward keyboard focus clear both sticky licence notices', async ({
+test('search results and previews end with expanded licence notices', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1000, height: 900 })
+  await openSignedIn(page, '/search?q=contract')
+  const result = page
+    .getByRole('list', { name: 'Search results' })
+    .getByRole('article')
+  await expectExpandedNotices(
+    result.getByLabel('Find Case Law licence notices'),
+  )
+  await result.getByRole('button', { name: 'Preview' }).click()
+  const preview = page.getByRole('region', { name: 'Result preview' })
+  await expectExpandedNotices(
+    preview.getByLabel('Find Case Law licence notices'),
+  )
+})
+
+test('a paragraph link is unobscured and the expanded end-of-judgment notices can be toggled by keyboard', async ({
   page,
 }) => {
   await openSignedIn(page, '/search?q=contract')
@@ -106,49 +124,34 @@ test('a linked judgment paragraph and backward keyboard focus clear both sticky 
   await expect(page).toHaveURL(/\/case\/example-judgment#para-55$/)
 
   const paragraph = page.locator('#para-55')
-  const notices = page.getByRole('complementary', {
-    name: 'Find Case Law licence notices',
-  })
-  const coverage = notices.getByText(coverageText, { exact: true })
-  const acknowledgement = notices.getByText(acknowledgementText, {
-    exact: true,
-  })
-
+  const article = page.getByRole('document', { name: judgment.title })
+  const notices = page.getByLabel('Find Case Law licence notices')
   await expect(paragraph).toBeFocused()
   await expect(paragraph).toBeInViewport({ ratio: 1 })
-  await expect(coverage).toBeInViewport({ ratio: 1 })
-  await expect(acknowledgement).toBeInViewport({ ratio: 1 })
-  await expect
-    .poll(() => clearance(paragraph, notices))
-    .toBeGreaterThanOrEqual(0)
-
-  await page.keyboard.press('Shift+Tab')
-  const previousAction = page.getByRole('button', {
-    name: 'Paragraph 54 actions',
-  })
-  await expect(previousAction).toBeFocused()
-  await expect(previousAction).toBeInViewport({ ratio: 1 })
-  await expect(coverage).toBeInViewport({ ratio: 1 })
-  await expect(acknowledgement).toBeInViewport({ ratio: 1 })
-  await expect
-    .poll(() => clearance(previousAction, notices))
-    .toBeGreaterThanOrEqual(0)
-
-  await page.setViewportSize({ width: 320, height: 230 })
-  await expect
-    .poll(async () => (await notices.boundingBox())?.height)
-    .toBeLessThan(80)
-  await paragraph.evaluate((element) =>
-    element.scrollIntoView({ block: 'start' }),
+  await expect(notices).not.toBeInViewport()
+  await expect(article.getByLabel('Find Case Law licence notices')).toHaveCount(
+    0,
   )
-  await expect(paragraph).toBeInViewport()
+  await expectExpandedNotices(notices)
+
+  const summary = notices.locator('summary')
+  await notices.scrollIntoViewIfNeeded()
+  await expect(article.locator('#para-80')).toBeInViewport()
   await expect(notices).toBeInViewport({ ratio: 1 })
-  await expect
-    .poll(() => clearance(paragraph, notices))
-    .toBeGreaterThanOrEqual(0)
+  await article.getByRole('button', { name: 'Paragraph 80 actions' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(summary).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(notices.getByText(coverageText, { exact: true })).toBeHidden()
+  await expect(
+    notices.getByText(acknowledgementText, { exact: true }),
+  ).toBeHidden()
+  await expect(summary).toBeFocused()
+  await page.keyboard.press('Space')
+  await expectExpandedNotices(notices)
 })
 
-test('short-pane destinations clear the scrollable notices and excerpts omit them', async ({
+test('short-pane deep links and page markers are unobscured and copied excerpts omit notices', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -164,26 +167,10 @@ test('short-pane destinations clear the scrollable notices and excerpts omit the
   await expect(page).toHaveURL(/\/case\/example-judgment#para-55$/)
 
   const paragraph = page.locator('#para-55')
-  const notices = page.getByRole('complementary', {
-    name: 'Find Case Law licence notices',
-  })
-  const coverage = notices.getByText(coverageText, { exact: true })
-  const acknowledgement = notices.getByText(acknowledgementText, {
-    exact: true,
-  })
+  const notices = page.getByLabel('Find Case Law licence notices')
   await expect(paragraph).toBeFocused()
-  await expect(notices).toBeInViewport({ ratio: 1 })
-  await expect(coverage).toBeInViewport({ ratio: 1 })
-  await expect(acknowledgement).toBeInViewport({ ratio: 1 })
-  await expect
-    .poll(() =>
-      notices.evaluate((notice) => notice.scrollHeight - notice.clientHeight),
-    )
-    .toBeLessThanOrEqual(0)
   await expect(paragraph).toBeInViewport({ ratio: 1 })
-  await expect
-    .poll(() => clearance(paragraph, notices))
-    .toBeGreaterThanOrEqual(0)
+  await expect(notices).not.toBeInViewport()
 
   const selected = await page.evaluate(() => {
     const first = document.querySelector('#para-54 [data-source-text]')
@@ -217,33 +204,7 @@ test('short-pane destinations clear the scrollable notices and excerpts omit the
   const pageMarker = page.locator('#page-12')
   await expect(pageMarker).toBeFocused()
   await expect(pageMarker).toBeInViewport({ ratio: 1 })
-  await expect
-    .poll(() => clearance(pageMarker, notices))
-    .toBeGreaterThanOrEqual(0)
-
-  await page.setViewportSize({ width: 390, height: 350 })
-  await expect
-    .poll(async () => (await notices.boundingBox())?.height)
-    .toBeLessThan(120)
-  await expect
-    .poll(() =>
-      notices.evaluate((notice) => notice.scrollHeight > notice.clientHeight),
-    )
-    .toBe(true)
-  await expect(notices).toHaveAttribute('tabindex', '0')
-  await page.getByRole('searchbox', { name: 'Search within case' }).focus()
-  await page.keyboard.press('Shift+Tab')
-  await expect(notices).toBeFocused()
-
-  const reader = page.locator('[data-shell-scroll]')
-  const noticeScrollTop = await notices.evaluate((notice) => notice.scrollTop)
-  const readerScrollTop = await reader.evaluate((element) => element.scrollTop)
-  await page.keyboard.press('End')
-  await expect
-    .poll(() => notices.evaluate((notice) => notice.scrollTop))
-    .toBeGreaterThan(noticeScrollTop)
-  await expect(acknowledgement).toBeInViewport({ ratio: 1 })
-  expect(await reader.evaluate((element) => element.scrollTop)).toBe(
-    readerScrollTop,
-  )
+  await notices.scrollIntoViewIfNeeded()
+  await expect(notices).toBeInViewport({ ratio: 1 })
+  await expectExpandedNotices(notices)
 })

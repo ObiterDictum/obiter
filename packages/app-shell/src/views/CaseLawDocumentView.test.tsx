@@ -101,9 +101,7 @@ function renderView(caseId = 'uksc-2024-3') {
     <ToastProvider>
       <QueryClientProvider client={queryClient}>
         <Suspense fallback={<div>Loading case…</div>}>
-          <div data-shell-scroll>
-            <CaseLawDocumentView caseId={caseId} />
-          </div>
+          <CaseLawDocumentView caseId={caseId} />
         </Suspense>
       </QueryClientProvider>
     </ToastProvider>,
@@ -120,7 +118,7 @@ afterEach(() => {
 })
 
 describe('CaseLawDocumentView', () => {
-  it('shows both required Find Case Law notices before the judgment text', async () => {
+  it('shows both required Find Case Law notices expanded after the judgment text', async () => {
     mockFetch({
       ...DOCUMENT_PAYLOAD,
       document: {
@@ -134,9 +132,8 @@ describe('CaseLawDocumentView', () => {
     renderView()
 
     const document = await screen.findByRole('document')
-    const notices = screen.getByRole('complementary', {
-      name: 'Find Case Law licence notices',
-    })
+    const notices = screen.getByLabelText('Find Case Law licence notices')
+    expect(notices.hasAttribute('open')).toBe(true)
     expect(
       within(notices).getByText(
         'Crown copyright material reproduced by permission of The National Archives. The contents of the judgment can be used under the Open Justice - Licence.',
@@ -148,9 +145,10 @@ describe('CaseLawDocumentView', () => {
       ),
     ).toBeTruthy()
     expect(
-      notices.compareDocumentPosition(document) &
+      document.compareDocumentPosition(notices) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+    expect(document.contains(notices)).toBe(false)
     expect(within(document).queryByText('Open Justice Licence')).toBeNull()
   })
 
@@ -166,59 +164,6 @@ describe('CaseLawDocumentView', () => {
 
     await screen.findByRole('document')
     expect(screen.queryByLabelText('Find Case Law licence notices')).toBeNull()
-  })
-
-  it('reserves scroll space for the notice before jumping and clears it on unmount', async () => {
-    mockFetch()
-    const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-    measure.mockImplementation(function (this: HTMLElement) {
-      return new DOMRect(
-        0,
-        0,
-        500,
-        this.hasAttribute('data-shell-scroll') ? 400 : 84,
-      )
-    })
-    const scroll = mock(function (
-      this: HTMLElement,
-      _options: ScrollIntoViewOptions,
-    ) {
-      const scroller = this.closest<HTMLElement>('[data-shell-scroll]')
-      expect(scroller?.style.scrollPaddingTop).toBe('calc(84px + 0.25rem)')
-    })
-    const descriptor = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      'scrollIntoView',
-    )
-    try {
-      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-        configurable: true,
-        value: scroll,
-      })
-      window.history.replaceState(null, '', '#para-11')
-      const { container, unmount } = renderView()
-
-      await screen.findByRole('document')
-      await waitFor(() => expect(document.activeElement?.id).toBe('para-11'))
-      expect(scroll).toHaveBeenCalledWith({ block: 'start' })
-      const scroller = container.querySelector<HTMLElement>(
-        '[data-shell-scroll]',
-      )
-      unmount()
-      expect(scroller?.style.scrollPaddingTop).toBe('')
-    } finally {
-      if (descriptor) {
-        Object.defineProperty(
-          HTMLElement.prototype,
-          'scrollIntoView',
-          descriptor,
-        )
-      } else {
-        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
-      }
-      measure.mockRestore()
-      window.history.replaceState(null, '', '/')
-    }
   })
 
   it('renders the case header (citation, title, court, date) and the judgment document landmark', async () => {

@@ -22,7 +22,7 @@ import { ArrowUpRight, MagnifyingGlass } from '@obiter/ui/icons'
 import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import { useState } from 'react'
 import { JudgmentReaderTools } from './JudgmentReaderTools'
-import { StickyJudgmentNotices } from './StickyJudgmentNotices'
+import { FindCaseLawNotices } from '../components/search/FindCaseLawNotices'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { formatDate } from '../format'
@@ -179,10 +179,6 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
         </div>
       ) : null}
 
-      {!withdrawn && isFindCaseLawSource(data.sourceUrl) ? (
-        <StickyJudgmentNotices />
-      ) : null}
-
       {summary ? (
         <PublishedSummaryCard summary={summary} courtLabel={courtLabel} />
       ) : null}
@@ -271,6 +267,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
               />
             )}
           </JudgmentReaderTools>
+          {!withdrawn && isFindCaseLawSource(data.sourceUrl) ? (
+            <FindCaseLawNotices key={`notices-${data.id}`} />
+          ) : null}
         </section>
 
         <aside aria-label="Judgment details" className="flex flex-col gap-6">

@@ -68,7 +68,6 @@ function JudgmentPreview({
           <span aria-hidden>·</span>
           <span className="tabular-nums">{formatDate(hit.dateDecided)}</span>
         </p>
-        {isFindCaseLawSource(hit.sourceUrl) ? <FindCaseLawNotices /> : null}
         {snippet ? (
           <div className="rounded-md bg-fill p-4">
             <p className="flex items-center gap-1 text-caption text-subtle">
@@ -105,6 +104,11 @@ function JudgmentPreview({
           Open original
         </a>
       </CardFoot>
+      {isFindCaseLawSource(hit.sourceUrl) ? (
+        <div className="px-6 pt-2 pb-6">
+          <FindCaseLawNotices key={hit.id} />
+        </div>
+      ) : null}
     </Card>
   )
 }

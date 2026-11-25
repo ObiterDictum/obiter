@@ -35,7 +35,7 @@ export function JudgmentReaderTools({
       return
     }
     setError('')
-    paragraph.scrollIntoView({ block: 'start' })
+    paragraph.scrollIntoView({ block: 'center' })
     paragraph.focus({ preventScroll: true })
     paragraph.animate?.(
       [

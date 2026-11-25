@@ -1,7 +1,7 @@
 import '@obiter/test-dom'
 import { describe, expect, it, mock } from 'bun:test'
 import type { ReactNode } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 
 const routerKeys = Object.fromEntries(
   Object.keys(await import('@tanstack/react-router')).map((key) => [
@@ -110,12 +110,20 @@ function response(
 }
 
 describe('SearchResultList provenance', () => {
-  it('shows one set of licence notices for a list of Find Case Law results', () => {
+  it('ends each Find Case Law result with expanded notices, but not other results', () => {
     render(
       <SearchResultList
         rows={searchResultRows(
           response({
-            hits: [judgment, { ...judgment, id: 'another-judgment' }],
+            hits: [
+              judgment,
+              { ...judgment, id: 'another-judgment' },
+              {
+                ...judgment,
+                id: 'other-source',
+                sourceUrl: 'https://www.supremecourt.uk/cases/example',
+              },
+            ],
           }),
         )}
         selectedIndex={0}
@@ -124,7 +132,22 @@ describe('SearchResultList provenance', () => {
       />,
     )
 
-    expect(screen.getByLabelText('Find Case Law licence notices')).toBeTruthy()
+    const articles = within(
+      screen.getByRole('list', { name: 'Search results' }),
+    ).getAllByRole('article')
+    expect(articles).toHaveLength(4)
+    for (const article of articles.slice(0, 2)) {
+      const notices = within(article).getByLabelText(
+        'Find Case Law licence notices',
+      )
+      expect(notices.hasAttribute('open')).toBe(true)
+      expect(article.lastElementChild?.contains(notices)).toBe(true)
+    }
+    for (const article of articles.slice(2)) {
+      expect(
+        within(article).queryByLabelText('Find Case Law licence notices'),
+      ).toBeNull()
+    }
   })
 
   it('labels a stored snippet as a judgment extract with its pinpoint', () => {
@@ -202,7 +225,36 @@ describe('SearchPreview provenance', () => {
       screen.queryByText('The National Archives (Find Case Law)'),
     ).toBeNull()
     expect(screen.getAllByText('Judgment extract').length).toBeGreaterThan(0)
-    expect(screen.getByLabelText('Find Case Law licence notices')).toBeTruthy()
+    const preview = screen.getByRole('region', { name: 'Result preview' })
+    const notices = within(preview).getByLabelText(
+      'Find Case Law licence notices',
+    )
+    expect(notices.hasAttribute('open')).toBe(true)
+    expect(preview.lastElementChild?.contains(notices)).toBe(true)
+  })
+
+  it('starts expanded again when a different Find Case Law result is previewed', () => {
+    const [first, next] = searchResultRows(
+      response({ hits: [judgment, { ...judgment, id: 'another-judgment' }] }),
+    )
+    const { rerender } = render(<SearchPreview row={first} />)
+    screen
+      .getByLabelText('Find Case Law licence notices')
+      .removeAttribute('open')
+
+    rerender(<SearchPreview row={first} />)
+    expect(
+      screen
+        .getByLabelText('Find Case Law licence notices')
+        .hasAttribute('open'),
+    ).toBe(false)
+
+    rerender(<SearchPreview row={next} />)
+    expect(
+      screen
+        .getByLabelText('Find Case Law licence notices')
+        .hasAttribute('open'),
+    ).toBe(true)
   })
 
   it('shows the legislation source and when it was checked', () => {

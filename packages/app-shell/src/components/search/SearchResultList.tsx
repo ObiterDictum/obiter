@@ -26,40 +26,33 @@ export function SearchResultList({
   onSelectIndex: (index: number) => void
   onPreview: (index: number) => void
 }) {
-  const includesFindCaseLaw = rows.some(
-    (row) => row.kind === 'judgment' && isFindCaseLawSource(row.hit.sourceUrl),
-  )
-
   return (
-    <>
-      {includesFindCaseLaw ? <FindCaseLawNotices /> : null}
-      <ul
-        className="divide-y divide-line overflow-hidden rounded-lg bg-surface"
-        aria-label="Search results"
-      >
-        {rows.map((row, index) => (
-          <li key={`${row.kind}-${row.hit.id}`}>
-            {row.kind === 'judgment' ? (
-              <JudgmentResult
-                row={row}
-                index={index}
-                selected={selectedIndex === index}
-                onSelect={() => onSelectIndex(index)}
-                onPreview={() => onPreview(index)}
-              />
-            ) : (
-              <LegislationResult
-                row={row}
-                index={index}
-                selected={selectedIndex === index}
-                onSelect={() => onSelectIndex(index)}
-                onPreview={() => onPreview(index)}
-              />
-            )}
-          </li>
-        ))}
-      </ul>
-    </>
+    <ul
+      className="divide-y divide-line overflow-hidden rounded-lg bg-surface"
+      aria-label="Search results"
+    >
+      {rows.map((row, index) => (
+        <li key={`${row.kind}-${row.hit.id}`}>
+          {row.kind === 'judgment' ? (
+            <JudgmentResult
+              row={row}
+              index={index}
+              selected={selectedIndex === index}
+              onSelect={() => onSelectIndex(index)}
+              onPreview={() => onPreview(index)}
+            />
+          ) : (
+            <LegislationResult
+              row={row}
+              index={index}
+              selected={selectedIndex === index}
+              onSelect={() => onSelectIndex(index)}
+              onPreview={() => onPreview(index)}
+            />
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -131,6 +124,11 @@ function JudgmentResult({
           Open judgment
         </Link>
       </div>
+      {isFindCaseLawSource(hit.sourceUrl) ? (
+        <div className="mt-3">
+          <FindCaseLawNotices />
+        </div>
+      ) : null}
     </article>
   )
 }
