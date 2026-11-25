@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type {
   SpanCategory,
   SpanConfidence,
@@ -142,6 +143,47 @@ export const decisionMarkClass = {
   pseudonymised: 'inset-ring-1 inset-ring-info',
   pending: 'inset-ring-2 inset-ring-warning',
 } satisfies Record<SpanDecisionState, string>
+
+const pdfFillPercent = {
+  accepted: 24,
+  rejected: 12,
+  pseudonymised: 24,
+  pending: 24,
+} satisfies Record<SpanDecisionState, number>
+
+function pdfOverlayInk(token: string) {
+  return `light-dark(var(${token}), color-mix(in srgb, var(${token}) 52%, var(--obiter-paper-ink)))`
+}
+
+export function pdfSpanOverlayStyle({
+  category,
+  decision,
+  selected,
+}: {
+  category: RedactionSpan['category']
+  decision: SpanDecision | undefined
+  selected: boolean
+}): CSSProperties {
+  const token = category.replaceAll('_', '-')
+  const state = spanDecisionState(decision)
+  const stateToken =
+    state === 'pending'
+      ? '--obiter-status-warning'
+      : state === 'pseudonymised'
+        ? '--obiter-status-info'
+        : null
+  return {
+    backgroundColor: `color-mix(in srgb, var(--obiter-span-${token}-bg) ${pdfFillPercent[state]}%, transparent)`,
+    border: `1px solid ${pdfOverlayInk(`--obiter-span-${token}-fg`)}`,
+    boxShadow: stateToken
+      ? `inset 0 0 0 2px ${pdfOverlayInk(stateToken)}`
+      : undefined,
+    outline: selected
+      ? `2px solid ${pdfOverlayInk('--obiter-ring')}`
+      : undefined,
+    outlineOffset: selected ? '1px' : undefined,
+  }
+}
 
 const dateFormat = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
