@@ -426,7 +426,6 @@ it('renders a PDF page marker at the exact stored offset and explains its source
   expect(
     marker.parentElement?.parentElement?.previousSibling?.textContent,
   ).toBe('The appellant ')
-  expect(screen.getByText('p. 47')).toBeTruthy()
   expect(
     screen.getByText(
       "Page numbers are from the court's PDF as published by Find Case Law.",

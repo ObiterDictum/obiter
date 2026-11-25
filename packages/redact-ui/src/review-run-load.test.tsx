@@ -8,7 +8,7 @@ import type { RedactionRun } from './types'
 const apiFetch = vi.hoisted(() => vi.fn())
 
 const appShell = await import('@obiter/app-shell')
-const { isTypingTarget } = appShell
+const { ApiError, isApiNotFound, isTypingTarget } = appShell
 const appShellKeys = Object.fromEntries(
   Object.keys(appShell).map((key) => [key, undefined]),
 )
@@ -19,6 +19,8 @@ mock.module('@obiter/app-shell', () =>
   Object.assign(
     { ...appShellKeys, ...splitScale },
     {
+      ApiError,
+      isApiNotFound,
       isTypingTarget,
       apiFetch: (...args: unknown[]) => apiFetch(...args),
       useCurrentUser: () => ({ data: { user: { id: 'usr_reviewer' } } }),
@@ -94,7 +96,7 @@ const text = 'A synthetic note with no personal data.'
 
 function emptyCacheView() {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retryDelay: 0 } },
   })
   render(
     <QueryClientProvider client={client}>
@@ -115,27 +117,20 @@ beforeEach(() => {
 })
 
 describe('a run that fails to load from an empty cache', () => {
-  it('shows the load error and recovers through Try again when the run is gone', async () => {
+  it('shows a missing run without retrying the lookup', async () => {
     apiFetch.mockRejectedValue(
-      new Error('This redaction run could not be found.'),
+      new ApiError(
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+        'req_missing',
+      ),
     )
     emptyCacheView()
 
-    expect(
-      await screen.findByText('This redaction run could not be loaded'),
-    ).toBeTruthy()
-    expect(
-      screen.getByText('This redaction run could not be found.'),
-    ).toBeTruthy()
-
-    serveRun()
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-
-    expect(
-      await screen.findByText(
-        'No sensitive data was detected in this document',
-      ),
-    ).toBeTruthy()
+    expect(await screen.findByText('Redaction run not found')).toBeTruthy()
+    expect(apiFetch).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
   it('shows the load error and recovers through Try again after a network failure', async () => {

@@ -16,6 +16,7 @@ import {
   getCourtLabel,
 } from '../components/search'
 import { formatResultSummary } from '../components/search/searchResultRows'
+import { SearchPagination } from '../components/search/SearchPagination'
 import { useLegalSearch } from '../legal-search-controller'
 import {
   countActiveLegalSearchFilters,
@@ -70,6 +71,7 @@ export function LegalSearchView() {
     scheduleResubmitQuery,
     shouldShowIdleState,
     runSearch,
+    loadMoreResults,
     handleSubmit,
     handleQueryChange,
     clearQuery,
@@ -128,7 +130,11 @@ export function LegalSearchView() {
             court={court}
             dateFrom={dateFrom}
             dateTo={dateTo}
-            summary={formatResultSummary(state.response, state.browse)}
+            summary={formatResultSummary(
+              state.response,
+              state.browse,
+              typeFilter,
+            )}
             type={typeFilter}
             onClear={clearFilters}
             onRemoveCourt={() => removeFilter('court')}
@@ -193,6 +199,14 @@ export function LegalSearchView() {
                   }}
                 />
               )}
+              {typeFilter !== 'legislation' ? (
+                <SearchPagination
+                  response={state.response}
+                  loading={state.loadingMore}
+                  error={state.loadMoreError}
+                  onLoadMore={loadMoreResults}
+                />
+              ) : null}
             </div>
             <aside className="hidden @pane-full:block">
               <SearchPreview row={selectedRow} />

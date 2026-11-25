@@ -155,8 +155,10 @@ device. That is a deliberate, bounded exception, and the bounds are:
   rather than applied;
 - the stored version the draft was built against is recorded, and a mismatch is
   reported as stale and never applied to a newer version;
-- cleanup on successful save (only the slots that request covered), explicit
-  discard, and sign-out, which clears every stored draft;
+- cleanup on successful save covers the committed slots and any abandoned draft
+  for the same base version whose changes the save fully covers. Drafts with
+  other edits remain available for review. Explicit discard also clears drafts,
+  and sign-out clears every stored draft;
 - draft contents are never logged, and a storage write that fails (quota,
   private mode) degrades to in-memory only and is reported in the UI.
 

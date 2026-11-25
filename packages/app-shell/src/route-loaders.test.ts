@@ -240,14 +240,19 @@ describe('prefetchVerifyData', () => {
 
 describe('prefetchDocumentRouteData', () => {
   const detail = (fileType: string, documentStatus = 'ready') => ({
-    document: { currentVersion: { fileType, documentStatus } },
+    document: {
+      matterId: 'mtr_1',
+      currentVersion: { fileType, documentStatus },
+    },
   })
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-  it('resolves without waiting for the document or matter requests', async () => {
+  it('maps a missing document to a router not-found error', async () => {
     const queryClient = new QueryClient()
     vi.spyOn(queryClient, 'ensureQueryData').mockResolvedValue(ORG_ME)
-    vi.spyOn(queryClient, 'fetchQuery').mockReturnValue(new Promise(() => {}))
+    vi.spyOn(queryClient, 'fetchQuery').mockRejectedValue(
+      new ApiError('document_not_found', 'Document not found.', 404, 'req_4'),
+    )
     vi.spyOn(queryClient, 'prefetchQuery').mockReturnValue(
       new Promise(() => {}),
     )
@@ -259,7 +264,7 @@ describe('prefetchDocumentRouteData', () => {
         'mtr_1',
         'doc_1',
       ),
-    ).resolves.toBeUndefined()
+    ).rejects.toMatchObject({ isNotFound: true })
   })
 
   it('starts the model request for a ready Word document', async () => {

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   TRACKED_DECISION_MAX_IDS,
+  type DocumentEditRequest,
   type DocumentModelWire,
   type DocumentPresence,
   type DocumentVersionLineage,
@@ -114,10 +115,11 @@ export function useDocumentSave({
     covered: readonly DraftSlot[]
     sent: DraftState
   } | null>(null)
-  function acknowledgeCommit(input: { trackChanges?: boolean }) {
+  function acknowledgeCommit(
+    input: Pick<DocumentEditRequest, 'baseVersionId' | 'trackChanges'>,
+  ) {
     const batch = pendingBatch.current
-    if (batch)
-      drafts.acknowledgeSave(batch.covered, batch.sent, input.trackChanges)
+    if (batch) drafts.acknowledgeSave(batch.covered, batch.sent, input)
   }
   const editDocument = useEditDocument(documentId, matterId, acknowledgeCommit)
   const mergeDocument = useCollaborationMerge(

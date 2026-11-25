@@ -8,7 +8,11 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
 import { vi } from '../../../scripts/test/vitest-compat'
-import type { RedactionSpan } from '@obiter/redaction-policy'
+import type {
+  DecisionRecord,
+  Decisions,
+  RedactionSpan,
+} from '@obiter/redaction-policy'
 import type { DocumentTextLayout } from './types'
 
 const pdfjs = vi.hoisted(() => ({
@@ -82,19 +86,29 @@ const spans = [
   span({ id: 'span_page_2', start: 12, end: 15, text: 'Bob' }),
 ]
 
+function decision(decision: DecisionRecord['decision']): DecisionRecord {
+  return {
+    decision,
+    decidedBy: 'usr_1',
+    decidedAt: '2026-11-25T10:00:00.000Z',
+  }
+}
+
 const firstFile = new Blob(['%PDF-one'], { type: 'application/pdf' })
 const secondFile = new Blob(['%PDF-two'], { type: 'application/pdf' })
 
-function review(file: Blob) {
+function review(
+  file: Blob,
+  options: { decisions?: Decisions; selectedId?: string | null } = {},
+) {
   return (
     <PdfReviewDocument
       file={file}
       layout={layout}
       spans={spans}
-      decisions={{}}
-      selectedId={null}
+      decisions={options.decisions ?? {}}
+      selectedId={options.selectedId ?? null}
       onSelect={vi.fn()}
-      categoryClassName={{}}
     />
   )
 }
@@ -119,6 +133,60 @@ afterEach(() => {
 })
 
 describe('PdfReviewDocument', () => {
+  it('uses transparent fills and visible rings for every decision state', async () => {
+    const view = render(review(firstFile))
+    const mark = await screen.findByRole('button', {
+      name: 'person name: Alice',
+    })
+
+    const states = [
+      {
+        decision: undefined,
+        fill: '24%',
+        ring: '--obiter-status-warning',
+      },
+      {
+        decision: decision('accept'),
+        fill: '24%',
+        ring: null,
+      },
+      {
+        decision: decision('reject'),
+        fill: '12%',
+        ring: null,
+      },
+      {
+        decision: decision('pseudonymise'),
+        fill: '24%',
+        ring: '--obiter-status-info',
+      },
+    ] as const
+
+    for (const state of states) {
+      view.rerender(
+        review(firstFile, {
+          decisions: state.decision ? { span_page_1: state.decision } : {},
+        }),
+      )
+      await waitFor(() => {
+        expect(mark.style.backgroundColor).toContain(
+          `var(--obiter-span-person-name-bg) ${state.fill}`,
+        )
+      })
+      expect(mark.style.border).toContain('--obiter-span-person-name-fg')
+      if (state.ring) expect(mark.style.boxShadow).toContain(state.ring)
+      else expect(mark.style.boxShadow).not.toContain('--obiter-status-')
+    }
+
+    view.rerender(review(firstFile, { selectedId: 'span_page_1' }))
+    await waitFor(() => {
+      expect(mark.style.outline).toContain('--obiter-ring')
+    })
+    expect(mark.style.backgroundColor).toContain(
+      'var(--obiter-span-person-name-bg) 24%',
+    )
+  })
+
   it('shows a retry on the page that failed and keeps the other pages rendered', async () => {
     pdfjs.failingPages.add(2)
     render(review(firstFile))

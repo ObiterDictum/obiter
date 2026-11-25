@@ -13,7 +13,10 @@ import { FindCaseLawNotices } from './FindCaseLawNotices'
 import { isFindCaseLawSource } from './provenance'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
-import { legislationStatusDisplay } from '../../legislation-status'
+import {
+  legislationCheckedLabel,
+  legislationStatusDisplay,
+} from '../../legislation-status'
 
 export function SearchPreview({
   row,
@@ -129,7 +132,7 @@ function LegislationPreview({
       </Card>
     )
   }
-  const withheld = hit.legislationStatus !== 'current'
+  const outdated = hit.legislationStatus === 'amended_not_held'
   const status = legislationStatusDisplay(
     hit.legislationStatus,
     hit.repealedFrom,
@@ -150,21 +153,32 @@ function LegislationPreview({
           <span aria-hidden>·</span>
           <StatusDot tone={status.tone}>{status.label}</StatusDot>
         </div>
-        {withheld ? (
+        {hit.legislationStatus === 'repealed' || (outdated && !extract) ? (
           <div
             className={
-              hit.legislationStatus === 'repealed'
-                ? 'rounded-md bg-fill p-4 text-meta text-ink'
-                : 'rounded-md bg-warning-soft p-4 text-meta text-ink'
+              outdated
+                ? 'rounded-md bg-warning-soft p-4 text-meta text-ink'
+                : 'rounded-md bg-fill p-4 text-meta text-ink'
             }
           >
             {hit.notice}
           </div>
         ) : extract ? (
-          <div className="rounded-md bg-fill p-4">
+          <div
+            className={
+              outdated
+                ? 'rounded-md bg-warning-soft p-4'
+                : 'rounded-md bg-fill p-4'
+            }
+          >
             <p className="flex items-center gap-1 text-caption text-subtle">
               <Scales aria-hidden size={12} /> Legislation extract
             </p>
+            {outdated ? (
+              <p className="mt-1 text-meta text-warning">
+                May not be up to date: changes not yet applied.
+              </p>
+            ) : null}
             <p className="mt-1 text-meta leading-relaxed text-ink">{extract}</p>
             <LegislationExtractProvenance hit={hit} />
           </div>
@@ -174,7 +188,7 @@ function LegislationPreview({
           </p>
         )}
         <p className="text-caption text-subtle">
-          Point-in-time date not recorded. Check legislation.gov.uk before
+          {legislationCheckedLabel(hit)}. Check legislation.gov.uk before
           relying on the text.
         </p>
       </CardBody>

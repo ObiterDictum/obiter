@@ -29,6 +29,12 @@ export class ApiError extends Error {
   }
 }
 
+export function isApiNotFound(
+  error: unknown,
+): error is ApiError & { status: 404 } {
+  return error instanceof ApiError && error.status === 404
+}
+
 const UNKNOWN_REQUEST_ID = 'req_unknown'
 
 async function readJsonOrNull(response: Response) {

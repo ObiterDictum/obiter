@@ -36,6 +36,8 @@ export type LegalSearchFetchRequest = {
   topic?: string
   asAtDate?: string
   legislationVersion?: string
+  page?: number
+  limit?: number
 }
 
 export function createLegalSearchFetchRequest(

@@ -1,6 +1,7 @@
 import {
   currentUserQueryOptions,
   guardAuth,
+  guardNotFound,
   matterDocumentsQueryOptions,
   matterQueryOptions,
 } from '@obiter/app-shell'
@@ -12,7 +13,11 @@ export const Route = createFileRoute('/matters/$matterId')({
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     )
     await guardAuth(location, () =>
-      context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
+      guardNotFound(() =>
+        context.queryClient.ensureQueryData(
+          matterQueryOptions(params.matterId),
+        ),
+      ),
     )
     await context.queryClient.prefetchQuery(
       matterDocumentsQueryOptions(params.matterId),

@@ -24,26 +24,35 @@ describe('Act reading contracts', () => {
     }
   })
 
-  it('excludes wording from withheld and repealed entries at the response boundary', () => {
-    for (const legislationStatus of ['amended_not_held', 'repealed']) {
-      const result = legislationActTextPageSchema.parse({
-        entries: [
-          {
-            labelPath: 'section/1',
-            provision: {
-              legislationStatus,
-              officialUrl:
-                'https://www.legislation.gov.uk/ukpga/2025/1/section/1',
-              canonicalUrl: '/ln/ukpga/2025/1/section/1',
-              notice: 'Read the official record.',
-              text: 'Stale wording',
-            },
+  const entry = (legislationStatus: string) =>
+    legislationActTextPageSchema.parse({
+      entries: [
+        {
+          labelPath: 'section/1',
+          provision: {
+            legislationStatus,
+            officialUrl:
+              'https://www.legislation.gov.uk/ukpga/2025/1/section/1',
+            canonicalUrl: '/ln/ukpga/2025/1/section/1',
+            effectsCheckedAt: '2026-11-12T09:00:00.000Z',
+            notice: 'Read the official record.',
+            text: 'Stored wording',
           },
-        ],
-        nextOffset: null,
-      })
-      expect(result.entries[0]?.provision).not.toHaveProperty('text')
-    }
+        },
+      ],
+      nextOffset: null,
+    }).entries[0]?.provision
+
+  it('excludes wording from repealed entries at the response boundary', () => {
+    expect(entry('repealed')).not.toHaveProperty('text')
+  })
+
+  it('keeps stored wording and its check date for entries with unapplied changes', () => {
+    expect(entry('amended_not_held')).toMatchObject({
+      text: 'Stored wording',
+      effectsCheckedAt: '2026-11-12T09:00:00.000Z',
+      notice: 'Read the official record.',
+    })
   })
 
   it('accepts a legacy Act hit and a new result with reader metadata', () => {

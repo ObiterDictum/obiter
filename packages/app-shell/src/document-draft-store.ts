@@ -97,13 +97,19 @@ export function readDocumentDraft(
 ): DraftRestore {
   try {
     storage.getItem(documentDraftKey(scope))
-    const records = scanPayloads(storage, scope).filter((record) => {
+    const records: Scanned[] = []
+    for (const record of scanPayloads(storage, scope)) {
       if (expired(record.snapshot.updatedAt)) {
         removeKey(storage, record.key)
-        return false
+        continue
       }
-      return true
-    })
+      const stale =
+        record.status === 'active' &&
+        record.snapshot.baseVersionId !== currentVersionId &&
+        (record.writerId === scope.tabId ||
+          !writerIsLive(storage, record.writerId))
+      records.push(stale ? parkRecord(storage, record) : record)
+    }
     writeRegistry(
       storage,
       scope.organisationId,
@@ -115,13 +121,6 @@ export function readDocumentDraft(
     const own = records.filter((record) => record.writerId === scope.tabId)
     const ownActive = own.find((record) => record.status === 'active')
     if (ownActive) {
-      if (ownActive.snapshot.baseVersionId !== currentVersionId) {
-        parkRecord(storage, ownActive)
-        return {
-          status: 'stale',
-          baseVersionId: ownActive.snapshot.baseVersionId,
-        }
-      }
       return {
         status: 'restored',
         state: ownActive.snapshot.state,
@@ -268,6 +267,27 @@ export function clearDocumentDraft(storage: DraftStorage, scope: DraftScope) {
   listDocumentDrafts(storage, scope)
 }
 
+export function clearCommittedDocumentDrafts(
+  storage: DraftStorage,
+  scope: DraftScope,
+  baseVersionId: string,
+  isCommitted: (snapshot: DocumentDraftSnapshot) => boolean,
+): string[] {
+  const removed: string[] = []
+  for (const record of scanPayloads(storage, scope)) {
+    if (
+      record.writerId !== scope.tabId &&
+      !writerIsLive(storage, record.writerId) &&
+      record.snapshot.baseVersionId === baseVersionId &&
+      isCommitted(record.snapshot)
+    ) {
+      removeKey(storage, record.key)
+      removed.push(record.draftId)
+    }
+  }
+  return removed
+}
+
 export function discardDocumentDrafts(
   storage: DraftStorage,
   scope: DraftScope,
@@ -370,6 +390,7 @@ function parkRecord(storage: DraftStorage, record: Scanned) {
   try {
     storage.setItem(record.key, JSON.stringify(parked))
   } catch {}
+  return { ...record, status: 'parked' as const, snapshot: parked }
 }
 
 function adoptRecord(

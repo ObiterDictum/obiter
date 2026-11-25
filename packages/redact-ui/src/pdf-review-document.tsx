@@ -1,21 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy, PageViewport } from 'pdfjs-dist'
 import { useSplitDeskMetrics, useSplitScale } from '@obiter/app-shell'
-import { Button, cn } from '@obiter/ui'
+import { Button } from '@obiter/ui'
 import {
   coverRectsForSpan,
   snapDeviceCoverOutward,
 } from '@obiter/redaction-policy'
 import type { DocumentTextLayout } from './types'
 import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
-import { spanDecisionState } from './span-copy'
-
-const decisionOverlayClass = {
-  accepted: 'opacity-80',
-  rejected: 'opacity-25',
-  pseudonymised: 'opacity-80 inset-ring-1 inset-ring-info',
-  pending: 'opacity-80 inset-ring-2 inset-ring-warning',
-} satisfies Record<ReturnType<typeof spanDecisionState>, string>
+import { pdfSpanOverlayStyle } from './span-copy'
 
 interface PdfReviewDocumentProps {
   file: Blob
@@ -24,7 +17,6 @@ interface PdfReviewDocumentProps {
   decisions: Decisions
   selectedId: string | null
   onSelect: (id: string) => void
-  categoryClassName: Record<string, string>
 }
 
 export function PdfReviewDocument({
@@ -34,7 +26,6 @@ export function PdfReviewDocument({
   decisions,
   selectedId,
   onSelect,
-  categoryClassName,
 }: PdfReviewDocumentProps) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -110,7 +101,6 @@ export function PdfReviewDocument({
           selectedId={selectedId}
           zoom={zoom}
           onSelect={onSelect}
-          categoryClassName={categoryClassName}
         />
       ))}
     </div>
@@ -160,7 +150,6 @@ function PdfPage({
   selectedId,
   zoom,
   onSelect,
-  categoryClassName,
 }: {
   pdf: PDFDocumentProxy
   pageNumber: number
@@ -171,7 +160,6 @@ function PdfPage({
   selectedId: string | null
   zoom: number
   onSelect: (id: string) => void
-  categoryClassName: Record<string, string>
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [viewport, setViewport] = useState<PageViewport | null>(null)
@@ -289,20 +277,17 @@ function PdfPage({
                 data-span-id={box.span.id}
                 aria-label={`${box.span.category.replaceAll('_', ' ')}: ${box.span.text}`}
                 aria-pressed={selectedId === box.span.id}
-                className={cn(
-                  'pointer-events-auto absolute rounded-sm transition-opacity hover:opacity-95',
-                  categoryClassName[box.span.category],
-                  decisionOverlayClass[
-                    spanDecisionState(decisions[box.span.id]?.decision)
-                  ],
-                  selectedId === box.span.id &&
-                    'opacity-100 inset-ring-2 inset-ring-ring',
-                )}
+                className="pointer-events-auto absolute cursor-pointer rounded-sm transition-opacity hover:opacity-95 focus-visible:outline-2 focus-visible:outline-ring"
                 style={{
                   left: box.left,
                   top: box.top,
                   width: box.width,
                   height: box.height,
+                  ...pdfSpanOverlayStyle({
+                    category: box.span.category,
+                    decision: decisions[box.span.id]?.decision,
+                    selected: selectedId === box.span.id,
+                  }),
                 }}
                 onClick={() => onSelect(box.span.id)}
               />

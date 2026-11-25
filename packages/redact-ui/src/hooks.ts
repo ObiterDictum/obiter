@@ -13,6 +13,7 @@ import {
   apiFetchBlob,
   declaredFileType,
   documentsKeys,
+  isApiNotFound,
 } from '@obiter/app-shell'
 import type {
   FinalizeInput,
@@ -105,6 +106,7 @@ export function useCreateDocumentRedactionRun() {
 export function redactionRunQueryOptions(runId: string) {
   return queryOptions({
     queryKey: runKey(runId),
+    retry: (count, error) => !isApiNotFound(error) && count < 3,
     queryFn: async () =>
       (await apiFetch<{ run: RedactionRun }>(`/api/redaction-runs/${runId}`))
         .run,

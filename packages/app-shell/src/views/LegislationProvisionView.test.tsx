@@ -51,6 +51,7 @@ const CURRENT_PAYLOAD = {
     labelPath: 'section/13',
     extent: 'E+W+S',
     legislationStatus: 'current' as const,
+    effectsCheckedAt: '2026-09-10T15:24:41.000Z',
     text: 'Direct discrimination applies here.',
     officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
     sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
@@ -65,7 +66,8 @@ const WITHHELD_PAYLOAD = {
     provisionLabel: 's. 80',
     labelPath: 'section/80',
     legislationStatus: 'amended_not_held' as const,
-    text: undefined,
+    text: 'Stored wording before the recorded changes.',
+    effectsCheckedAt: '2026-11-12T09:00:00.000Z',
     officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/80',
     notice:
       'This provision is affected by amendments that have been recorded but not yet applied.',
@@ -179,7 +181,8 @@ describe('LegislationProvisionView', () => {
       screen.getAllByText('No unapplied amendments').length,
     ).toBeGreaterThan(0)
     expect(
-      screen.getAllByText('Point-in-time date not recorded').length,
+      screen.getAllByText('Checked against legislation.gov.uk on 10 Sept 2026')
+        .length,
     ).toBeGreaterThan(0)
     expect(
       screen
@@ -188,15 +191,25 @@ describe('LegislationProvisionView', () => {
     ).toBe('https://www.legislation.gov.uk/ukpga/2010/15/section/13')
   })
 
-  it('withholds text and states why', async () => {
+  it('shows stored wording under a warning when changes are not yet applied', async () => {
     renderView('ukpga/2010/15/section/80')
-    await waitFor(() => {
-      expect(
-        screen.getAllByText('Amended wording withheld').length,
-      ).toBeGreaterThan(0)
-    })
+    expect(
+      await screen.findByText('May not be up to date: changes not yet applied'),
+    ).toBeTruthy()
     expect(screen.getByText(/amendments that have been recorded/)).toBeTruthy()
-    expect(screen.queryByText('Direct discrimination applies here.')).toBeNull()
+    expect(
+      screen.getByText(
+        /last checked against legislation.gov.uk on 12 Nov 2026/,
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByText('Stored wording before the recorded changes.'),
+    ).toBeTruthy()
+    expect(
+      screen
+        .getByRole('link', { name: 'Read the official revised version' })
+        .getAttribute('href'),
+    ).toBe('https://www.legislation.gov.uk/ukpga/2010/15/section/80')
   })
 
   it('marks a repealed provision and lists what changed it', async () => {
@@ -206,7 +219,7 @@ describe('LegislationProvisionView', () => {
         screen.getAllByText('Repealed from 1 Oct 2013').length,
       ).toBeGreaterThan(0)
     })
-    expect(screen.queryByText('Amended wording withheld')).toBeNull()
+    expect(screen.queryByText(/May not be up to date/)).toBeNull()
     expect(screen.getByText('2 changes recorded')).toBeTruthy()
     const held = screen.getByRole('link', {
       name: 'Enterprise and Regulatory Reform Act 2013 s. 65',
@@ -260,6 +273,7 @@ describe('LegislationProvisionView', () => {
                 labelPath: 'section/13/7',
                 href: '/ln/ukpga/2010/15/section/13/7',
                 legislationStatus: 'amended_not_held',
+                text: 'The protected characteristic of marriage…',
                 children: [],
               },
             ],
@@ -280,8 +294,65 @@ describe('LegislationProvisionView', () => {
     expect(
       screen.getByText('A person (A) discriminates against another (B).'),
     ).toBeTruthy()
-    expect(screen.getByText(/Wording withheld/)).toBeTruthy()
+    expect(screen.getByText('May not be up to date.')).toBeTruthy()
+    expect(
+      screen.getByText(/The protected characteristic of marriage/),
+    ).toBeTruthy()
     expect(screen.getByText(/Retrieved 6 Sept 2026/)).toBeTruthy()
+  })
+
+  it('numbers alternative versions statutorily and names each extent', async () => {
+    const version = (labelPath: string, versionNote: string, text: string) => ({
+      label: 's. 1(3)',
+      labelPath,
+      versionNote,
+      href: `/ln/ukpga/2010/15/${labelPath}`,
+      legislationStatus: 'current',
+      text,
+      children: [
+        {
+          label: 's. 1(3)(a)',
+          labelPath: `${labelPath === 'section/1/3' ? 'section/1/3/a' : 'section/1/3/an1'}`,
+          href: '/ln/ukpga/2010/15/section/1/3/a',
+          legislationStatus: 'current',
+          text: 'a public authority…',
+          children: [],
+        },
+      ],
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({
+          provision: {
+            ...CURRENT_PAYLOAD.provision,
+            provisionLabel: 's. 1',
+            labelPath: 'section/1',
+            text: '',
+            subsections: [
+              version(
+                'section/1/3',
+                'Version for England and Wales',
+                'The authorities are—',
+              ),
+              version(
+                'section/1/3n1',
+                'Version for Scotland',
+                'The Scottish authorities are—',
+              ),
+            ],
+          },
+        }),
+      ),
+    )
+
+    renderView('ukpga/2010/15/section/1')
+
+    expect(await screen.findByText('Version for Scotland.')).toBeTruthy()
+    expect(screen.getByText('Version for England and Wales.')).toBeTruthy()
+    expect(screen.getAllByText('(3)')).toHaveLength(2)
+    expect(screen.getAllByText('(a)')).toHaveLength(2)
+    expect(screen.queryByText(/n1/)).toBeNull()
   })
 
   it('shows a source failure with a retry instead of empty provision text', async () => {
