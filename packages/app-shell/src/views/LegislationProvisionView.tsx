@@ -77,6 +77,12 @@ export function LegislationProvisionView({
           <span>
             {provision.extent ? provision.extent : 'Extent not recorded'}
           </span>
+          {provision.versionNote ? (
+            <>
+              <span aria-hidden>·</span>
+              <span>{provision.versionNote}</span>
+            </>
+          ) : null}
           <span aria-hidden>·</span>
           <StatusDot tone={status.tone}>{status.label}</StatusDot>
           <span aria-hidden>·</span>

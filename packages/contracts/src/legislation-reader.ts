@@ -11,6 +11,7 @@ export const legislationActTextPageSize = 50
 export const legislationSubsectionSchema = z.object({
   label: z.string(),
   labelPath: z.string(),
+  versionNote: z.string().optional(),
   href: z.string(),
   legislationStatus: legislationStatusSchema,
   repealedFrom: z.string().optional(),
