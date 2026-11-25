@@ -50,6 +50,8 @@ living in `backend`.
 
 ## How the repositories connect
 
+The corpus-repository references in this plan describe the split at the time, not where to obtain current snapshots.
+
 `backend` includes this repository as a git submodule at `obiter/`, pinned to a
 commit, and lists `obiter/packages/{contracts,config,ooxml,redaction-policy,rampart-inference}`
 as Bun workspaces. Nothing is published to a registry. `sources` already uses
