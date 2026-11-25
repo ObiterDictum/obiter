@@ -1,7 +1,7 @@
-import { redirect } from '@tanstack/react-router'
+import { notFound, redirect } from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
-import { ApiError } from './api'
+import { ApiError, isApiNotFound } from './api'
 import { currentUserQueryOptions } from './current-user'
 import { workspaceKind } from './document-kind'
 import { documentModelQueryOptions } from './document-workspace-queries'
@@ -32,6 +32,15 @@ export async function guardAuth<T>(
   }
 }
 
+export async function guardNotFound<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (isApiNotFound(error)) throw notFound({ data: error.code })
+    throw error
+  }
+}
+
 export async function prefetchHomeData(
   queryClient: QueryClient,
 ): Promise<void> {
@@ -56,24 +65,25 @@ export async function prefetchDocumentRouteData(
     ...matterQueryOptions(matterId),
     staleTime: DOCUMENT_PREFETCH_STALE_MS,
   })
-  void queryClient
-    .fetchQuery({
+  const detail = await guardNotFound(() =>
+    queryClient.fetchQuery({
       ...documentQueryOptions(documentId),
       staleTime: DOCUMENT_PREFETCH_STALE_MS,
+    }),
+  )
+  if (detail.document.matterId !== matterId) {
+    throw notFound({ data: 'document_not_found' })
+  }
+  const current = detail.document.currentVersion
+  if (
+    current?.documentStatus === 'ready' &&
+    workspaceKind(current.fileType) === 'docx'
+  ) {
+    void queryClient.prefetchQuery({
+      ...documentModelQueryOptions(documentId),
+      staleTime: DOCUMENT_PREFETCH_STALE_MS,
     })
-    .then(async (detail) => {
-      const current = detail.document.currentVersion
-      if (
-        current?.documentStatus !== 'ready' ||
-        workspaceKind(current.fileType) !== 'docx'
-      )
-        return
-      await queryClient.prefetchQuery({
-        ...documentModelQueryOptions(documentId),
-        staleTime: DOCUMENT_PREFETCH_STALE_MS,
-      })
-    })
-    .catch(() => undefined)
+  }
 }
 
 export async function prefetchVerifyData(

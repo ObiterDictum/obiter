@@ -5,7 +5,7 @@ import type {
   JudgmentPage,
   JudgmentParagraph,
 } from '@obiter/contracts'
-import { apiFetch } from '../api'
+import { apiFetch, isApiNotFound } from '../api'
 
 export type CaseLawParagraph = JudgmentParagraph
 
@@ -42,7 +42,7 @@ export function caseLawDocumentQueryOptions(caseId: string) {
   return queryOptions({
     queryKey: ['case-law-document', caseId],
     staleTime: 0,
-    retry: 1,
+    retry: (count, error) => !isApiNotFound(error) && count < 1,
     refetchOnMount: 'always',
     queryFn: () =>
       apiFetch<CaseLawDocumentResponse>(

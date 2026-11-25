@@ -1,5 +1,9 @@
+import {
+  currentUserQueryOptions,
+  guardAuth,
+  guardNotFound,
+} from '@obiter/app-shell'
 import { CaseLawDocumentView } from '@obiter/app-shell/views/case-law-document'
-import { currentUserQueryOptions, guardAuth } from '@obiter/app-shell'
 import { caseLawDocumentQueryOptions } from '@obiter/app-shell/views/case-law-document-query'
 import { resolveCaseDocumentIdFromSlug } from '@obiter/contracts/case-paths'
 import { createFileRoute } from '@tanstack/react-router'
@@ -11,11 +15,11 @@ export const Route = createFileRoute('/case/$caseSlug')({
     guardAuth(location, () =>
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     ),
-  loader: ({ context, params }) => {
+  loader: async ({ context, params }) => {
     const caseId = resolveCaseDocumentIdFromSlug(params.caseSlug)
 
-    return context.queryClient.prefetchQuery(
-      caseLawDocumentQueryOptions(caseId),
+    await guardNotFound(() =>
+      context.queryClient.ensureQueryData(caseLawDocumentQueryOptions(caseId)),
     )
   },
   component: CaseRouteComponent,

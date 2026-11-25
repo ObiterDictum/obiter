@@ -5,7 +5,7 @@ import { ArrowLeft, CircleNotch, ShieldCheck } from '@obiter/ui/icons'
 import type { SpanDecision } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { sameTextOccurrences } from '@obiter/redaction-policy'
-import { PageScaffold, useCurrentUser } from '@obiter/app-shell'
+import { isApiNotFound, PageScaffold, useCurrentUser } from '@obiter/app-shell'
 import {
   useCreateUploadedRedactionRun,
   useRedactionDocumentText,
@@ -104,6 +104,16 @@ export function RedactionReviewView({
           <Skeleton className="h-96 w-full rounded-lg" />
         </div>
       </div>
+    )
+  }
+  if (runQuery.error && isApiNotFound(runQuery.error)) {
+    return (
+      <PageScaffold title="Redaction review">
+        <EmptyState
+          title="Redaction run not found"
+          body="Check the link or your access to this run."
+        />
+      </PageScaffold>
     )
   }
   if (!runQuery.data) {

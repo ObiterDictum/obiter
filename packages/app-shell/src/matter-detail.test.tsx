@@ -156,9 +156,10 @@ function noDocuments() {
 
 function uploadMutationSpy() {
   const mutate = vi.fn()
-  const mutateAsync = vi
-    .fn()
-    .mockResolvedValue({ version: { filename: 'Untitled.docx' } })
+  const mutateAsync = vi.fn().mockResolvedValue({
+    document: { id: 'doc_1' },
+    version: { filename: 'Untitled.docx' },
+  })
   return { mutate, mutateAsync, isPending: false, error: null }
 }
 
@@ -259,9 +260,11 @@ describe('matter page header', () => {
     ).toBeNull()
   })
 
-  it('names a new document before creating it through the upload path', async () => {
+  it('opens a named document after the upload succeeds', async () => {
     const upload = uploadMutationSpy()
     mocks.useUploadMatterDocument.mockReturnValue(upload)
+    const navigate = vi.fn()
+    mocks.useNavigate.mockReturnValue(navigate)
     render(<RouterProvider router={buildRouter('mtr_1')} />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'New document' }))
@@ -270,6 +273,10 @@ describe('matter page header', () => {
     fireEvent.change(name, { target: { value: '  Witness statement ' } })
     fireEvent.submit(name.closest('form') as HTMLFormElement)
     await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/matters/$matterId/documents/$documentId',
+        params: { matterId: 'mtr_1', documentId: 'doc_1' },
+      })
       expect(mocks.blankDocumentFile).toHaveBeenCalledWith('Witness statement')
       expect(upload.mutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'Witness statement.docx' }),

@@ -27,10 +27,9 @@ test('a new document takes the name chosen in the dialog, and Escape cancels', a
   await page.keyboard.type('Witness statement')
   await page.keyboard.press('Enter')
   await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/documents\//)
   await expect(
-    page
-      .getByRole('table')
-      .getByRole('link', { name: 'Witness statement.docx', exact: true }),
+    page.getByRole('heading', { level: 1, name: 'Witness statement.docx' }),
   ).toBeVisible()
 })
 
@@ -43,6 +42,8 @@ test('a document is renamed from the matter list and from the workspace title', 
   await page.getByRole('button', { name: 'New document', exact: true }).click()
   await page.keyboard.type('First draft')
   await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/documents\//)
+  await page.goBack()
   const table = page.getByRole('table')
   await expect(
     table.getByRole('link', { name: 'First draft.docx', exact: true }),

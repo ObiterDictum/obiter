@@ -1,7 +1,12 @@
-import { parseLegislationActPath } from '@obiter/contracts/legislation-paths'
+import {
+  parseLegislationActPath,
+  parseLegislationProvisionPath,
+} from '@obiter/contracts/legislation-paths'
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
-import { apiFetch } from '../api'
+import { notFound } from '@tanstack/react-router'
+import { apiFetch, isApiNotFound } from '../api'
 import type { LegislationStatus } from '../legislation-status'
+import { guardNotFound } from '../route-loaders'
 
 import type { LegislationProvisionSubsection } from '@obiter/contracts/legislation-reader'
 
@@ -56,7 +61,7 @@ export function legislationProvisionQueryOptions(provisionPath: string) {
   return queryOptions({
     queryKey: ['legislation-provision', provisionPath],
     staleTime: 0,
-    retry: 1,
+    retry: (count, error) => !isApiNotFound(error) && count < 1,
     refetchOnMount: 'always',
     queryFn: () =>
       apiFetch<LegislationProvisionResponse>(
@@ -133,7 +138,7 @@ export function legislationActQueryOptions(identity: string) {
   return queryOptions({
     queryKey: ['legislation-act', identity],
     staleTime: 0,
-    retry: 1,
+    retry: (count, error) => !isApiNotFound(error) && count < 1,
     refetchOnMount: 'always',
     queryFn: () => {
       const encodedIdentity = identity
@@ -148,7 +153,13 @@ export function legislationActQueryOptions(identity: string) {
 }
 export function prefetchLegislationPage(client: QueryClient, path: string) {
   const act = parseLegislationActPath(path)
-  return act
-    ? client.prefetchQuery(legislationActQueryOptions(act.documentIdentity))
-    : client.prefetchQuery(legislationProvisionQueryOptions(path))
+  if (act) {
+    return guardNotFound(() =>
+      client.ensureQueryData(legislationActQueryOptions(act.documentIdentity)),
+    )
+  }
+  if (!parseLegislationProvisionPath(path)) throw notFound()
+  return guardNotFound(() =>
+    client.ensureQueryData(legislationProvisionQueryOptions(path)),
+  )
 }

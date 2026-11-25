@@ -16,7 +16,12 @@ import {
   useIsMacPlatform,
 } from '../../keyboard-platform'
 
-type Hit = { menu: EditorMenu; group: string; command: EditorCommand }
+type Hit = {
+  menu: EditorMenu
+  group: string
+  command: EditorCommand
+  label: string
+}
 
 type EditorCommandPaletteProps = {
   open: boolean
@@ -37,6 +42,8 @@ function EditorCommandPaletteInner({
         ? editorCommandList(menus).map((hit) => ({
             ...hit,
             group: hit.group.label,
+            label:
+              hit.command.id === 'verify' ? 'Run Verify' : hit.command.label,
           }))
         : [],
     [open, menus],
@@ -45,7 +52,7 @@ function EditorCommandPaletteInner({
   const hits = needle
     ? all.filter(
         (hit) =>
-          `${hit.menu.label} ${hit.command.label}`
+          `${hit.menu.label} ${hit.command.label} ${hit.label}`
             .toLowerCase()
             .includes(needle) ||
           hit.group.toLowerCase().includes(needle) ||
@@ -54,8 +61,14 @@ function EditorCommandPaletteInner({
     : all
   const current = Math.min(highlighted, Math.max(0, hits.length - 1))
 
-  function run(hit: Hit) {
+  function close() {
+    setQuery('')
+    setHighlighted(0)
     onOpenChange(false)
+  }
+
+  function run(hit: Hit) {
+    close()
     if (hit.command.disabled || hit.command.soon) return
     hit.command.run?.()
   }
@@ -63,13 +76,7 @@ function EditorCommandPaletteInner({
   return (
     <Dialog
       open={open}
-      onOpenChange={(next) => {
-        if (next) {
-          setQuery('')
-          setHighlighted(0)
-        }
-        onOpenChange(next)
-      }}
+      onOpenChange={(next) => (next ? onOpenChange(true) : close())}
     >
       <DialogContent size="md" className="p-0">
         <div className="flex flex-col">
@@ -133,9 +140,7 @@ function EditorCommandPaletteInner({
                     onMouseEnter={() => setHighlighted(index)}
                     onClick={() => run(hit)}
                   >
-                    <span className="min-w-0 flex-1 truncate">
-                      {hit.command.label}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate">{hit.label}</span>
                     <span className="shrink-0 text-caption text-subtle">
                       {hit.menu.label} · {hit.group}
                     </span>

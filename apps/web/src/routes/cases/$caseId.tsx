@@ -1,4 +1,8 @@
-import { currentUserQueryOptions, guardAuth } from '@obiter/app-shell'
+import {
+  currentUserQueryOptions,
+  guardAuth,
+  guardNotFound,
+} from '@obiter/app-shell'
 import { caseLawDocumentQueryOptions } from '@obiter/app-shell/views/case-law-document-query'
 import { createCanonicalCasePath } from '@obiter/contracts/case-paths'
 import { createFileRoute, redirect } from '@tanstack/react-router'
@@ -11,8 +15,10 @@ export const Route = createFileRoute('/cases/$caseId')({
       context.queryClient.ensureQueryData(currentUserQueryOptions()),
     ),
   loader: async ({ context, params, location }) => {
-    const response = await context.queryClient.ensureQueryData(
-      caseLawDocumentQueryOptions(params.caseId),
+    const response = await guardNotFound(() =>
+      context.queryClient.ensureQueryData(
+        caseLawDocumentQueryOptions(params.caseId),
+      ),
     )
     const canonicalPath = createCanonicalCasePath(response.document)
 
