@@ -156,6 +156,29 @@ test('short-pane destinations clear the scrollable notices and excerpts omit the
     .poll(() => clearance(paragraph, notices))
     .toBeGreaterThanOrEqual(0)
 
+  const selected = await page.evaluate(() => {
+    const first = document.querySelector('#para-54 [data-source-text]')!
+    const last = document.querySelector('#para-55 [data-source-text]')!
+    const range = document.createRange()
+    range.setStartBefore(first)
+    range.setEndAfter(last)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return selection.toString()
+  })
+  expect(selected).not.toMatch(/partially represents|Crown copyright/)
+  await page.getByRole('button', { name: 'Copy quote with citation' }).click()
+  const copied = page.locator('html')
+  await expect(copied).toHaveAttribute(
+    'data-copied-quote',
+    /example contract\.[\s\S]*The appeal concerns/,
+  )
+  await expect(copied).not.toHaveAttribute(
+    'data-copied-quote',
+    /partially represents|Crown copyright/,
+  )
+
   const goTo = page.getByRole('textbox', { name: 'Go to paragraph' })
   await goTo.fill('p. 12')
   await goTo.press('Enter')
@@ -180,27 +203,4 @@ test('short-pane destinations clear the scrollable notices and excerpts omit the
     notice.scrollTop = notice.scrollHeight
   })
   await expect(acknowledgement).toBeInViewport({ ratio: 1 })
-
-  const selected = await page.evaluate(() => {
-    const first = document.querySelector('#para-54 [data-source-text]')!
-    const last = document.querySelector('#para-55 [data-source-text]')!
-    const range = document.createRange()
-    range.setStartBefore(first)
-    range.setEndAfter(last)
-    const selection = window.getSelection()!
-    selection.removeAllRanges()
-    selection.addRange(range)
-    return selection.toString()
-  })
-  expect(selected).not.toMatch(/partially represents|Crown copyright/)
-  await page.getByRole('button', { name: 'Copy quote with citation' }).click()
-  const copied = page.locator('html')
-  await expect(copied).toHaveAttribute(
-    'data-copied-quote',
-    /example contract\.[\s\S]*The appeal concerns/,
-  )
-  await expect(copied).not.toHaveAttribute(
-    'data-copied-quote',
-    /partially represents|Crown copyright/,
-  )
 })
