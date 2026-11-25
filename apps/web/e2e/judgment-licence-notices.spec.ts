@@ -1,5 +1,4 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { mockSession } from './shell-harness'
 
 const judgment = {
   id: 'example-judgment',
@@ -34,13 +33,32 @@ async function clearance(target: Locator, notices: Locator) {
 
 async function openSignedIn(page: Page, destination: string) {
   await page.goto(`/sign-in?redirect=${encodeURIComponent(destination)}`)
+  await page.waitForLoadState('networkidle')
   await page.getByLabel('Email').fill('shell-test@obiter.test')
   await page.getByLabel('Password').fill('test-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
 }
 
 test.beforeEach(async ({ page }) => {
-  await mockSession(page)
+  const user = {
+    id: 'licence-test-user',
+    name: 'Example User',
+    email: 'shell-test@obiter.test',
+    emailVerified: true,
+  }
+  await page.route('**/api/auth/get-session', (route) =>
+    route.fulfill({
+      json: { session: { id: 'licence-test-sign-in', userId: user.id }, user },
+    }),
+  )
+  await page.route('**/api/me', (route) =>
+    route.fulfill({
+      json: {
+        user: { ...user, role: 'owner' },
+        organisation: { id: 'licence-test-org', name: 'Example Organisation' },
+      },
+    }),
+  )
   await page.route('**/api/auth/sign-in/email', (route) =>
     route.fulfill({ json: {} }),
   )
