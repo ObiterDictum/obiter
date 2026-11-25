@@ -188,6 +188,9 @@ function LegislationResult({
           {extract ? (
             <>
               <p className="mt-3 max-w-[68ch] text-meta leading-relaxed text-muted">
+                {hit.legislationStatus === 'amended_not_held' ? (
+                  <span className="text-warning">May not be up to date: </span>
+                ) : null}
                 {extract}
               </p>
               <LegislationExtractProvenance hit={hit} />

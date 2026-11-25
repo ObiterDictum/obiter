@@ -21,6 +21,6 @@ export function legislationStatusDisplay(
         : 'Repealed',
     }
   if (status === 'amended_not_held')
-    return { tone: 'warning', label: 'Amended wording withheld' }
+    return { tone: 'warning', label: 'May not be up to date' }
   return { tone: 'success', label: 'No unapplied amendments' }
 }

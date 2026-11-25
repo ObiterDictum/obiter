@@ -177,6 +177,7 @@ const entries = [
         ...links,
         legislationStatus: 'amended_not_held',
         notice: 'Recorded amendments have yet to be applied.',
+        text: 'Stored wording of s. 2',
       },
     }
   }
@@ -256,7 +257,7 @@ describe('LegislationActView', () => {
     vi.unstubAllGlobals()
   })
 
-  it('reads the hierarchy and wording in order, including withholding and repeal', async () => {
+  it('reads the hierarchy and wording in order, including outdated wording and repeal', async () => {
     renderView()
     const text = within(await screen.findByRole('region', { name: 'Act text' }))
     await text.findByText('Wording of s. 1')
@@ -272,13 +273,13 @@ describe('LegislationActView', () => {
         .getByRole('link', { name: 'Open provision s. 1' })
         .getAttribute('href'),
     ).toBe(`${canonicalUrl}/section/1`)
-    expect(text.queryByText('Wording of s. 2')).toBeNull()
+    expect(text.getByText('Stored wording of s. 2')).toBeTruthy()
     expect(
-      text.getByText('Recorded amendments have yet to be applied.'),
+      text.getByText(/Recorded amendments have yet to be applied\./),
     ).toBeTruthy()
     expect(
       text
-        .getByRole('link', { name: 'Read the official revised provision' })
+        .getByRole('link', { name: 'Read the official revised version' })
         .getAttribute('href'),
     ).toBe(`${officialUrl}/section/2`)
     expect(text.queryByText('Wording of s. 3')).toBeNull()
@@ -290,7 +291,7 @@ describe('LegislationActView', () => {
     ).toBe(`${officialUrl}/section/3`)
     expect(screen.getByText('Point-in-time date not recorded')).toBeTruthy()
     expect(
-      screen.getByText(/1 of 61 provisions have wording withheld/),
+      screen.getByText(/1 of 61 provisions may not be up to\s+date/),
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Contents' }))
     expect(

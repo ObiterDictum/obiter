@@ -10,10 +10,13 @@ describe('legislationStatusDisplay', () => {
     expect(legislationStatusDisplay('repealed').label).toBe('Repealed')
   })
 
-  it('keeps the existing labels for current and withheld text', () => {
+  it('labels current text and text with unapplied changes', () => {
     expect(legislationStatusDisplay('current').label).toBe(
       'No unapplied amendments',
     )
-    expect(legislationStatusDisplay('amended_not_held').tone).toBe('warning')
+    expect(legislationStatusDisplay('amended_not_held')).toEqual({
+      tone: 'warning',
+      label: 'May not be up to date',
+    })
   })
 })

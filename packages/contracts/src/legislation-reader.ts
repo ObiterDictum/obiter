@@ -27,6 +27,7 @@ export type LegislationProvisionSubsection = z.infer<
 const provisionLinks = z.object({
   officialUrl: z.string(),
   canonicalUrl: z.string(),
+  effectsCheckedAt: z.string().optional(),
 })
 
 export const legislationProvisionWordingSchema = z.discriminatedUnion(
@@ -40,6 +41,8 @@ export const legislationProvisionWordingSchema = z.discriminatedUnion(
     provisionLinks.extend({
       legislationStatus: z.literal('amended_not_held'),
       notice: z.string(),
+      text: z.string().optional(),
+      subsections: z.array(legislationSubsectionSchema).optional(),
     }),
     provisionLinks.extend({
       legislationStatus: z.literal('repealed'),
