@@ -1,4 +1,10 @@
-import { parseLegislationActPath } from '@obiter/contracts/legislation-paths'
+import { notFound } from '@tanstack/react-router'
+import { apiFetch, isApiNotFound } from '../api'
+import { guardNotFound } from '../route-loaders'
+import {
+  parseLegislationActPath,
+  parseLegislationProvisionPath,
+} from '@obiter/contracts/legislation-paths'
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { apiUrl } from '../lib/api-url'
 import type { LegislationStatus } from '../legislation-status'
@@ -56,20 +62,12 @@ export function legislationProvisionQueryOptions(provisionPath: string) {
   return queryOptions({
     queryKey: ['legislation-provision', provisionPath],
     staleTime: 0,
-    retry: 1,
+    retry: (count, error) => !isApiNotFound(error) && count < 1,
     refetchOnMount: 'always',
     queryFn: async () => {
-      const response = await fetch(
-        apiUrl(`/api/search/legislation/${provisionPath}`),
+      return apiFetch<LegislationProvisionResponse>(
+        `/api/search/legislation/${provisionPath}`,
       )
-      if (response.status === 404) {
-        throw new Error('Legislation provision was not found.')
-      }
-      if (!response.ok) {
-        throw new Error('Legislation provision could not be loaded.')
-      }
-      // SAFETY: 404 and other non-ok statuses throw above; /api/search/legislation/:path returns LegislationProvisionResponse per the search API contract.
-      return (await response.json()) as LegislationProvisionResponse
     },
   })
 }
@@ -148,30 +146,28 @@ export function legislationActQueryOptions(identity: string) {
   return queryOptions({
     queryKey: ['legislation-act', identity],
     staleTime: 0,
-    retry: 1,
+    retry: (count, error) => !isApiNotFound(error) && count < 1,
     refetchOnMount: 'always',
     queryFn: async () => {
       const encodedIdentity = identity
         .split('/')
         .map((segment) => encodeURIComponent(segment))
         .join('/')
-      const response = await fetch(
-        apiUrl(`/api/search/legislation/${encodedIdentity}`),
+      return apiFetch<LegislationActResponse>(
+        `/api/search/legislation/${encodedIdentity}`,
       )
-      if (response.status === 404) {
-        throw new Error('Legislation Act was not found.')
-      }
-      if (!response.ok) {
-        throw new Error('Legislation Act could not be loaded.')
-      }
-      // SAFETY: 404 and other non-ok statuses throw above; /api/search/legislation/:identity returns LegislationActResponse per the search API contract.
-      return (await response.json()) as LegislationActResponse
     },
   })
 }
 export function prefetchLegislationPage(client: QueryClient, path: string) {
   const act = parseLegislationActPath(path)
-  return act
-    ? client.prefetchQuery(legislationActQueryOptions(act.documentIdentity))
-    : client.prefetchQuery(legislationProvisionQueryOptions(path))
+  if (act) {
+    return guardNotFound(() =>
+      client.ensureQueryData(legislationActQueryOptions(act.documentIdentity)),
+    )
+  }
+  if (!parseLegislationProvisionPath(path)) throw notFound()
+  return guardNotFound(() =>
+    client.ensureQueryData(legislationProvisionQueryOptions(path)),
+  )
 }

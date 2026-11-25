@@ -1,10 +1,14 @@
 import { prefetchLegislationPage } from '@obiter/app-shell'
 import { LegislationRouteView } from '@obiter/app-shell/views/legislation-route'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, notFound } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/ln/$')({
-  loader: ({ context, params }) =>
-    prefetchLegislationPage(context.queryClient, requireSplat(params._splat)),
+  loader: async ({ context, params }) => {
+    await prefetchLegislationPage(
+      context.queryClient,
+      requireSplat(params._splat),
+    )
+  },
   component: LegislationRouteComponent,
 })
 
@@ -13,6 +17,6 @@ function LegislationRouteComponent() {
 }
 
 function requireSplat(path: string | undefined) {
-  if (!path) throw new Error('Legislation path is missing.')
+  if (!path) throw notFound()
   return path
 }
