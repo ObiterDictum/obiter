@@ -11,18 +11,24 @@ export function StickyJudgmentNotices() {
 
     const previousPadding = scroller.style.scrollPaddingTop
 
-    const publishHeight = () => {
+    const updatePin = () => {
       const height = Math.ceil(notice.getBoundingClientRect().height)
-      scroller.style.scrollPaddingTop = `calc(${height}px + 0.25rem)`
+      const canPin = height <= scroller.getBoundingClientRect().height / 2
+      notice.style.position = canPin ? '' : 'static'
+      scroller.style.scrollPaddingTop = canPin
+        ? `calc(${height}px + 0.25rem)`
+        : previousPadding
     }
-    publishHeight()
+    updatePin()
     const observer =
       typeof ResizeObserver === 'undefined'
         ? undefined
-        : new ResizeObserver(publishHeight)
+        : new ResizeObserver(updatePin)
     observer?.observe(notice)
+    observer?.observe(scroller)
     return () => {
       observer?.disconnect()
+      notice.style.position = ''
       scroller.style.scrollPaddingTop = previousPadding
     }
   }, [])

@@ -171,7 +171,14 @@ describe('CaseLawDocumentView', () => {
   it('reserves scroll space for the notice before jumping and clears it on unmount', async () => {
     mockFetch()
     const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
-    measure.mockImplementation(() => new DOMRect(0, 0, 500, 84))
+    measure.mockImplementation(function (this: HTMLElement) {
+      return new DOMRect(
+        0,
+        0,
+        500,
+        this.hasAttribute('data-shell-scroll') ? 400 : 84,
+      )
+    })
     const scroll = mock(function (
       this: HTMLElement,
       _options: ScrollIntoViewOptions,

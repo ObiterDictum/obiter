@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the same public gates as .github/workflows/ci.yml, in the same order.
-# The API, the search benchmark, the database migrations and the end-to-end
-# suite run from the private backend repository, whose own mirror covers them.
+# The API, the search benchmark, the database migrations and the full
+# end-to-end suite run from the private backend repository.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -43,7 +43,8 @@ echo "== desktop:budget" && bun --bun run perf:desktop-budget
 # The redaction-renderer suite launches the Playwright Chromium it ships
 # against; `playwright install` is a fast no-op when the pinned revision is
 # already in ~/.cache/ms-playwright and downloads it otherwise.
-echo "== playwright:chromium" && bun --bun playwright install chromium
+echo "== playwright:browsers" && bun --bun playwright install chromium webkit
+echo "== test:judgment-notices" && bun --bun playwright test --config apps/web/playwright.judgment-notices.config.ts
 echo "== test"         && bun run test
 
 echo

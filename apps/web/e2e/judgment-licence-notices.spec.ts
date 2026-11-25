@@ -95,4 +95,11 @@ test('a linked judgment paragraph and backward keyboard focus clear both sticky 
   await expect
     .poll(() => clearance(previousAction, notices))
     .toBeGreaterThanOrEqual(0)
+
+  await page.setViewportSize({ width: 320, height: 230 })
+  await paragraph.evaluate((element) =>
+    element.scrollIntoView({ block: 'start' }),
+  )
+  await expect(paragraph).toBeInViewport()
+  await expect(notices).not.toBeInViewport()
 })
