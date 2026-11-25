@@ -74,6 +74,12 @@ export interface LegalSearchFetchResponse {
   indexedCount: number
   skippedCount: number
   estimatedTotalHits?: number
+  pagination?: {
+    page: number
+    limit: number
+    estimatedTotalHits: number
+    hasMore: boolean
+  }
   hydrationQueued?: boolean
   outcome?: LegalSearchOutcome
   citation?: LegalSearchCitation
@@ -138,6 +144,8 @@ export type LegalSearchState =
       query: string
       response: LegalSearchFetchResponse
       browse?: LegalSearchBrowseContext
+      loadingMore?: boolean
+      loadMoreError?: string
     }
   | {
       status: 'empty'

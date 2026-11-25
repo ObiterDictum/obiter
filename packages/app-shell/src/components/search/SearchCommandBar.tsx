@@ -35,7 +35,7 @@ export function SearchCommandBar({
         <input
           ref={inputRef}
           id="legal-sources-search"
-          className="min-h-7 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-subtle [&::-webkit-search-cancel-button]:hidden"
+          className="min-h-7 min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-subtle [&::-webkit-search-cancel-button]:hidden"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Act, citation, party, or point of law"
