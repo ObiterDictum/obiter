@@ -9,7 +9,7 @@ export function FindCaseLawNotices() {
     >
       <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md px-3 font-medium focus-visible:outline focus-visible:outline-offset-2 [&::-webkit-details-marker]:hidden">
         <Info aria-hidden size={16} className="shrink-0 text-muted" />
-        <span>Find Case Law · Licence &amp; coverage</span>
+        <span>Find Case Law notices</span>
         <span className="ml-auto text-muted group-open:hidden" aria-hidden>
           +
         </span>
