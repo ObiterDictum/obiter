@@ -1,6 +1,6 @@
 import { parseLegislationActPath } from '@obiter/contracts/legislation-paths'
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
-import { apiUrl } from '../lib/api-url'
+import { apiFetch } from '../api'
 import type { LegislationStatus } from '../legislation-status'
 
 import type { LegislationProvisionSubsection } from '@obiter/contracts/legislation-reader'
@@ -58,19 +58,10 @@ export function legislationProvisionQueryOptions(provisionPath: string) {
     staleTime: 0,
     retry: 1,
     refetchOnMount: 'always',
-    queryFn: async () => {
-      const response = await fetch(
-        apiUrl(`/api/search/legislation/${provisionPath}`),
-      )
-      if (response.status === 404) {
-        throw new Error('Legislation provision was not found.')
-      }
-      if (!response.ok) {
-        throw new Error('Legislation provision could not be loaded.')
-      }
-      // SAFETY: 404 and other non-ok statuses throw above; /api/search/legislation/:path returns LegislationProvisionResponse per the search API contract.
-      return (await response.json()) as LegislationProvisionResponse
-    },
+    queryFn: () =>
+      apiFetch<LegislationProvisionResponse>(
+        `/api/search/legislation/${provisionPath}`,
+      ),
   })
 }
 
@@ -133,14 +124,8 @@ export function legislationActsQueryOptions() {
     queryKey: ['legislation-acts'],
     staleTime: 60_000,
     retry: 1,
-    queryFn: async () => {
-      const response = await fetch(apiUrl('/api/search/legislation/acts'))
-      if (!response.ok) {
-        throw new Error('Held legislation could not be loaded.')
-      }
-      // SAFETY: non-ok throws above; /api/search/legislation/acts returns LegislationActsResponse per the search API contract.
-      return (await response.json()) as LegislationActsResponse
-    },
+    queryFn: () =>
+      apiFetch<LegislationActsResponse>('/api/search/legislation/acts'),
   })
 }
 
@@ -150,22 +135,14 @@ export function legislationActQueryOptions(identity: string) {
     staleTime: 0,
     retry: 1,
     refetchOnMount: 'always',
-    queryFn: async () => {
+    queryFn: () => {
       const encodedIdentity = identity
         .split('/')
         .map((segment) => encodeURIComponent(segment))
         .join('/')
-      const response = await fetch(
-        apiUrl(`/api/search/legislation/${encodedIdentity}`),
+      return apiFetch<LegislationActResponse>(
+        `/api/search/legislation/${encodedIdentity}`,
       )
-      if (response.status === 404) {
-        throw new Error('Legislation Act was not found.')
-      }
-      if (!response.ok) {
-        throw new Error('Legislation Act could not be loaded.')
-      }
-      // SAFETY: 404 and other non-ok statuses throw above; /api/search/legislation/:identity returns LegislationActResponse per the search API contract.
-      return (await response.json()) as LegislationActResponse
     },
   })
 }
