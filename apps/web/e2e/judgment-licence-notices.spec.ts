@@ -145,6 +145,12 @@ test('short-pane destinations clear the scrollable notices and excerpts omit the
   await expect(paragraph).toBeFocused()
   await expect(notices).toBeInViewport({ ratio: 1 })
   await expect(coverage).toBeInViewport({ ratio: 1 })
+  await expect(acknowledgement).toBeInViewport({ ratio: 1 })
+  await expect
+    .poll(() =>
+      notices.evaluate((notice) => notice.scrollHeight - notice.clientHeight),
+    )
+    .toBeLessThanOrEqual(0)
   await expect(paragraph).toBeInViewport({ ratio: 1 })
   await expect
     .poll(() => clearance(paragraph, notices))

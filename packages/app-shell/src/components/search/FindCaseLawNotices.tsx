@@ -10,7 +10,7 @@ export function FindCaseLawNotices({
       ref={readerRef}
       aria-label="Find Case Law licence notices"
       tabIndex={readerRef ? 0 : undefined}
-      className={`space-y-2 rounded-md border border-line bg-fill px-4 py-3 text-meta leading-relaxed text-ink ${readerRef ? 'sticky top-0 z-10 overflow-y-auto' : ''}`}
+      className={`space-y-2 rounded-md border border-line bg-fill px-4 py-3 text-meta leading-relaxed text-ink ${readerRef ? 'sticky top-0 z-10 overflow-y-auto @max-pane:space-y-1 @max-pane:px-3 @max-pane:py-2 @max-pane:leading-snug' : ''}`}
     >
       <p className="font-medium">
         This material only partially represents court and tribunal activity.
