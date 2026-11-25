@@ -157,12 +157,15 @@ test('short-pane destinations clear the scrollable notices and excerpts omit the
     .toBeGreaterThanOrEqual(0)
 
   const selected = await page.evaluate(() => {
-    const first = document.querySelector('#para-54 [data-source-text]')!
-    const last = document.querySelector('#para-55 [data-source-text]')!
+    const first = document.querySelector('#para-54 [data-source-text]')
+    if (!first) throw new Error('Missing source text for paragraph 54')
+    const last = document.querySelector('#para-55 [data-source-text]')
+    if (!last) throw new Error('Missing source text for paragraph 55')
+    const selection = window.getSelection()
+    if (!selection) throw new Error('Browser selection is unavailable')
     const range = document.createRange()
     range.setStartBefore(first)
     range.setEndAfter(last)
-    const selection = window.getSelection()!
     selection.removeAllRanges()
     selection.addRange(range)
     return selection.toString()
