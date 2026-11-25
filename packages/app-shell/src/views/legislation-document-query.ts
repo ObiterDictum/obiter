@@ -39,6 +39,7 @@ interface LegislationProvisionDocument {
   year: number
   provisionLabel: string
   labelPath: string
+  versionNote?: string
   heading?: string
   extent: string
   legislationStatus: LegislationStatus
@@ -48,6 +49,7 @@ interface LegislationProvisionDocument {
   officialUrl: string
   sourceUrl: string
   acquiredAt?: string
+  effectsCheckedAt?: string
   notice?: string
   canonicalUrl: string
   amendments?: LegislationAmendmentHistory
@@ -85,6 +87,7 @@ export interface LegislationActContentsNode {
   label: string
   docOrder?: number
   labelPath: string
+  versionNote?: string
   href: string
   extent: string
   withheld: boolean
@@ -106,6 +109,8 @@ export interface LegislationActDocument {
   officialUrl: string
   sourceUrl: string
   acquiredAt?: string
+  effectsCheckedAt?: string
+  effectsCheckedUntil?: string
   canonicalUrl: string
   status?: 'in_force' | 'repealed'
   repealedFrom?: string

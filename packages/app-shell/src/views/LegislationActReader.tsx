@@ -55,7 +55,10 @@ function flattenContents(
 
 function entryLabel({ node }: ContentsEntry) {
   const title = node.heading || node.text
-  return title && title !== node.label ? `${node.label} · ${title}` : node.label
+  const label = node.versionNote
+    ? `${node.label} (${node.versionNote})`
+    : node.label
+  return title && title !== node.label ? `${label} · ${title}` : label
 }
 
 function focusHeading(heading: HTMLElement) {

@@ -1,6 +1,5 @@
 import { Component, lazy, Suspense, type ReactNode } from 'react'
 import { HighlightedText, Paper } from './review-document-text'
-import { categoryClasses } from './span-copy'
 import { PdfReviewDocument } from './pdf-review-document'
 import type { DocumentTextLayout, RedactionRun } from './types'
 import type { WordCoverage } from './word-review-marks'
@@ -56,7 +55,6 @@ export function ReviewSourceDocument({
         decisions={run.decisions}
         selectedId={selectedId}
         onSelect={onSelect}
-        categoryClassName={categoryClasses}
       />
     )
 

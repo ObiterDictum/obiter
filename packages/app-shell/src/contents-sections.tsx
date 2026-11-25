@@ -433,18 +433,16 @@ export function SearchContents() {
   if (recent.length === 0) return <Note>No recent searches.</Note>
   return (
     <div className="flex flex-col">
-      <Group title="Recent searches">
-        {recent.map((search) => (
-          <Link
-            key={search}
-            to="/search"
-            search={{ q: search }}
-            className={rowClass(false)}
-          >
-            <span className="min-w-0 flex-1 truncate">{search}</span>
-          </Link>
-        ))}
-      </Group>
+      {recent.map((search) => (
+        <Link
+          key={search}
+          to="/search"
+          search={{ q: search }}
+          className={rowClass(false)}
+        >
+          <span className="min-w-0 flex-1 truncate">{search}</span>
+        </Link>
+      ))}
     </div>
   )
 }

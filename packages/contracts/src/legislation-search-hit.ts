@@ -29,6 +29,7 @@ export const legislationSearchHitSchema = z.object({
   snippets: z.array(z.object({ text: z.string() })).optional(),
   officialUrl: z.string(),
   sourceUrl: z.string(),
+  effectsCheckedAt: z.string().optional(),
   notice: z.string().optional(),
   citationMatch: legalSearchCitationMatchSchema.optional(),
   retrievalPath: z

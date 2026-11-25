@@ -2,7 +2,8 @@
 
 An exact Act citation, including the title and year, opens the Act at
 `/ln/<identity>`. The search result and preview show the chapter, extent,
-enactment date, Act status, provision and withheld counts, and the first
+enactment date, Act status, provision counts, the number that may not be up
+to date, and the first
 four top-level Parts when held, with “Read the Act” as the primary action.
 Exact provision citations still open the
 individual provision and its amendment history.
@@ -23,8 +24,25 @@ source. The reader requests 24 entries at a time and loads subsequent pages as t
 approach the viewport. Deep links start on the target page, with a control
 to load earlier wording.
 
-The provision reader's withholding and repeal rules apply to the Act reader.
-Withheld and repealed provisions retain their place and show the relevant notice
-and official link. Their stored wording is excluded from the response.
-The Act header shows the source, acquisition date when
-recorded, and that a point-in-time date was not recorded.
+Alternative versions of a provision, such as an extent-specific version for
+Scotland, keep their statutory number. legislation.gov.uk's version suffixes
+(`3n1`) stay in label paths, URLs and anchors so each version is addressable,
+but never appear in a label or citation. Each version of a versioned provision
+carries a `versionNote` naming its extent, for example "Version for Scotland".
+
+A provision with changes recorded on legislation.gov.uk but not yet applied
+(`amended_not_held`) shows its latest stored wording under a prominent
+"May not be up to date: changes not yet applied" warning, with the date its
+changes were last checked (`effectsCheckedAt`) and a link to the official
+revised version, as legislation.gov.uk and commercial services do. Search
+results and previews carry the same marker. Verify never reports a quotation as
+an exact match against such wording; it asks for a check against the official
+version. Repealed provisions keep their place with the repeal notice and
+official link, and their stored wording is excluded from the response. These
+rules apply to the provision reader and the Act reader alike.
+Obiter stores the latest revised text, not point-in-time versions. Instead of
+a point-in-time date, the Act header, provision page and search preview say
+when the text was last checked against legislation.gov.uk for outstanding
+changes (`effectsCheckedAt`; for an Act, the earliest and latest check of its
+provisions, shown as one date or a range). Where changes were never checked,
+they show the retrieval date and say so.

@@ -27,7 +27,7 @@ export function ActSearchDetails({ hit }: { hit: LegislationSearchResultHit }) {
             <li>
               {act.totalCount}{' '}
               {act.totalCount === 1 ? 'provision' : 'provisions'} ·{' '}
-              {act.withheldCount} withheld
+              {act.withheldCount} may not be up to date
             </li>
           </>
         ) : null}

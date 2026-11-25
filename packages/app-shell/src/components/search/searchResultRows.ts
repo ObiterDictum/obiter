@@ -45,6 +45,7 @@ export function filterSearchResultRows(
 export function formatResultSummary(
   response: LegalSearchFetchResponse,
   browse?: LegalSearchBrowseContext,
+  type: SearchResultType = 'all',
 ): string {
   const legislation = legislationHits(response)
   const resultCount = response.hits.length + legislation.length
@@ -54,6 +55,19 @@ export function formatResultSummary(
   }
 
   const source = formatResultSource(response)
+  const allRows = searchResultRows(response)
+  const parts = countSummaryParts(allRows)
+  if (type !== 'all') {
+    const visibleParts = countSummaryParts(
+      filterSearchResultRows(allRows, type),
+    )
+    if (parts.length === 0) return `No results ${source}`
+    const allResults = `${parts.join(' · ')} in all results`
+    if (visibleParts.length === 0) {
+      return `No ${type === 'judgments' ? 'judgments' : 'legislation results'} shown · ${allResults} ${source}`
+    }
+    return `${visibleParts.join(' · ')} shown · ${allResults} ${source}`
+  }
   if (
     response.citation?.status === 'not_held' &&
     response.hits.length > 0 &&
@@ -65,20 +79,26 @@ export function formatResultSummary(
     return `Citation not held · ${response.hits.length} ${response.hits.length === 1 ? 'result' : 'results'} ${source}`
   }
 
-  const judgments = response.hits.length
-  const acts = legislation.filter((hit) => !hit.labelPath).length
-  const provisions = legislation.length - acts
-  const parts = [
-    countResults(judgments, 'judgment'),
-    countResults(acts, 'Act'),
-    countResults(provisions, 'provision'),
-  ].filter(Boolean)
   if (parts.length === 0) return `No results ${source}`
   return `${parts.join(' · ')} ${source}${
     response.estimatedTotalHits && response.estimatedTotalHits > resultCount
       ? ` · ${response.estimatedTotalHits} matching in the index`
       : ''
   }`
+}
+
+function countSummaryParts(rows: SearchResultRow[]) {
+  const judgments = rows.filter((row) => row.kind === 'judgment').length
+  const legislationRows = rows.flatMap((row) =>
+    row.kind === 'legislation' ? [row.hit] : [],
+  )
+  const acts = legislationRows.filter((hit) => !hit.labelPath).length
+  const provisions = legislationRows.length - acts
+  return [
+    countResults(judgments, 'judgment'),
+    countResults(acts, 'Act'),
+    countResults(provisions, 'provision'),
+  ].filter(Boolean)
 }
 
 function countResults(count: number, noun: string) {

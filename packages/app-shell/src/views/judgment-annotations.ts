@@ -19,6 +19,19 @@ export function judgmentCitationTarget(
   citation: NonNullable<JudgmentParagraph['citations']>[number],
   heldLegislation?: ReadonlySet<string>,
 ) {
+  const hrefTarget = citationHrefTarget(citation, heldLegislation)
+  if (hrefTarget) return hrefTarget
+  if (citation.type !== 'legislation' || !citation.canonical) return undefined
+  const canonicalPath = legislationCanonicalPath(citation.canonical)
+  if (!canonicalPath) return undefined
+  const internal = heldLegislationTarget(canonicalPath, '', heldLegislation)
+  return internal ?? `https://www.legislation.gov.uk/${canonicalPath}`
+}
+
+function citationHrefTarget(
+  citation: NonNullable<JudgmentParagraph['citations']>[number],
+  heldLegislation?: ReadonlySet<string>,
+) {
   if (!citation.href) return undefined
   const url = URL.parse(citation.href)
   if (!url || url.protocol !== 'https:') return undefined
@@ -36,14 +49,8 @@ export function judgmentCitationTarget(
     ['legislation.gov.uk', 'www.legislation.gov.uk'].includes(url.hostname)
   ) {
     const path = url.pathname.replace(/^\/+|\/+$/g, '').replace(/^id\//, '')
-    const parsed =
-      parseLegislationActPath(path) ?? parseLegislationProvisionPath(path)
-    if (
-      parsed &&
-      (heldLegislation === undefined ||
-        heldLegislation.has(parsed.documentIdentity))
-    )
-      return `/ln/${path}${url.hash}`
+    const internal = heldLegislationTarget(path, url.hash, heldLegislation)
+    if (internal) return internal
   }
   return [
     'legislation.gov.uk',
@@ -52,6 +59,34 @@ export function judgmentCitationTarget(
   ].includes(url.hostname)
     ? url.href
     : undefined
+}
+
+function heldLegislationTarget(
+  path: string,
+  hash: string,
+  heldLegislation?: ReadonlySet<string>,
+) {
+  const parsed =
+    parseLegislationActPath(path) ?? parseLegislationProvisionPath(path)
+  if (
+    parsed &&
+    (heldLegislation === undefined ||
+      heldLegislation.has(parsed.documentIdentity))
+  )
+    return `/ln/${path}${hash}`
+  return undefined
+}
+
+function legislationCanonicalPath(canonical: string) {
+  const match = canonical
+    .trim()
+    .match(
+      /^(\d{4})\s+(?:c\.\s*(\d+)|asp\s*(\d+))(?:\s+s\.\s*(\d+[A-Za-z]?)(?:\([^)]*\))?)?\s*$/,
+    )
+  if (!match) return undefined
+  const type = match[2] ? 'ukpga' : 'asp'
+  const number = match[2] ?? match[3]
+  return `${type}/${match[1]}/${number}${match[4] ? `/section/${match[4]}` : ''}`
 }
 
 export function judgmentAnnotations(

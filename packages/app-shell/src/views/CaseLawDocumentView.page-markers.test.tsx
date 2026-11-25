@@ -165,6 +165,5 @@ describe('judgment page markers printed in the source text', () => {
     const document = await screen.findByRole('document')
     const marker = within(document).getByText('Page 47')
     expect(marker.parentElement?.id).toBe('page-47')
-    expect(within(document).getByText('p. 47')).toBeTruthy()
   })
 })

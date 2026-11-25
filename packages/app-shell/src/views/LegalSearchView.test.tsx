@@ -354,6 +354,68 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Potanina v Potanin')
   })
 
+  it('loads the next judgment page without discarding earlier results', async () => {
+    const [firstHit, secondHit] = createTwoResultHits()
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          hits: [firstHit],
+          cached: true,
+          estimatedTotalHits: 2,
+          pagination: {
+            page: 1,
+            limit: 1,
+            estimatedTotalHits: 2,
+            hasMore: true,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          hits: [secondHit],
+          cached: true,
+          estimatedTotalHits: 2,
+          pagination: {
+            page: 2,
+            limit: 1,
+            estimatedTotalHits: 2,
+            hasMore: false,
+          },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    container = mount()
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('Potanina v Potanin')
+    expect(container.textContent).not.toContain('Example v Respondent')
+    expect(container.textContent).toContain('Showing 1 of about 2 judgments')
+
+    await clickButton(container, 'Load more')
+    await flushMicrotasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const firstRequest = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    const secondRequest = fetchMock.mock.calls[1]?.[1] as
+      RequestInit | undefined
+    expect(JSON.parse(String(firstRequest?.body))).toEqual({
+      query: 'Potanina',
+    })
+    expect(JSON.parse(String(secondRequest?.body))).toEqual({
+      query: 'Potanina',
+      page: 2,
+    })
+    expect(container.textContent).toContain('Potanina v Potanin')
+    expect(container.textContent).toContain('Example v Respondent')
+    expect(container.textContent).not.toContain('Load more')
+  })
+
   it('runs the query an example search names', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

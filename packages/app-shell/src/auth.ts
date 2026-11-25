@@ -65,6 +65,7 @@ export interface SignUpEmailInput {
   email: string
   password: string
   callbackURL: string
+  pendingOrganisationName?: string
 }
 
 export interface SignInResult {

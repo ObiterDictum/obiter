@@ -6,7 +6,10 @@ import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { sourceNameForUrl } from '../components/search/provenance'
 import { formatDate } from '../format'
-import { legislationStatusDisplay } from '../legislation-status'
+import {
+  legislationCheckedLabel,
+  legislationStatusDisplay,
+} from '../legislation-status'
 import { legislationActQueryOptions } from './legislation-document-query'
 
 export { legislationActQueryOptions }
@@ -73,7 +76,7 @@ export function LegislationActView({
             </span>
           )}
           <span aria-hidden>·</span>
-          <span>Point-in-time date not recorded</span>
+          <span>{legislationCheckedLabel(act)}</span>
         </span>
       }
       actions={<SourcePageLinks sourceUrl={act.officialUrl} />}
@@ -100,9 +103,10 @@ export function LegislationActView({
         <p>Check legislation.gov.uk before relying on the stored version.</p>
         {act.withheldCount > 0 ? (
           <p className="rounded-md bg-warning-soft px-4 py-3 text-ink">
-            {act.withheldCount} of {act.totalCount} provisions have wording
-            withheld. They appear in document order with a link to the official
-            revised text.
+            {act.withheldCount} of {act.totalCount} provisions may not be up to
+            date: changes are recorded on legislation.gov.uk but not yet
+            applied. Their stored wording is marked, with a link to the official
+            revised version.
           </p>
         ) : null}
       </div>
