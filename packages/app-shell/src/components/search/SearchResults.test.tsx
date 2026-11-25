@@ -91,8 +91,8 @@ const withheld: LegislationSearchResultHit = {
   labelPath: 'section/80',
   provisionLabel: 's. 80',
   legislationStatus: 'amended_not_held',
-  text: undefined,
-  notice: 'Amended wording has not been incorporated.',
+  text: 'A person must not, in the provision of a service, discriminate.',
+  notice: 'Changes are recorded but not yet applied.',
   officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/80',
 }
 
@@ -148,7 +148,7 @@ describe('SearchResultList provenance', () => {
     expect(screen.queryByText(/Obiter summary/)).toBeNull()
   })
 
-  it('distinguishes current legislation text from withheld amended wording', () => {
+  it('marks stored legislation wording that may not be up to date', () => {
     render(
       <SearchResultList
         rows={searchResultRows(
@@ -165,11 +165,11 @@ describe('SearchResultList provenance', () => {
       />,
     )
 
-    expect(screen.getByText('Amended wording withheld')).toBeTruthy()
+    expect(screen.getByText('May not be up to date')).toBeTruthy()
+    expect(screen.getByText(/May not be up to date:/)).toBeTruthy()
     expect(
-      screen.getByText('Amended wording has not been incorporated.'),
+      screen.getByText(/in the provision of a service, discriminate/),
     ).toBeTruthy()
-    expect(screen.queryByText(/Stale amended wording/)).toBeNull()
   })
 })
 
@@ -230,7 +230,9 @@ it('presents an Act result and preview with a primary reader link', () => {
       <SearchPreview row={rows[0]} />
     </>,
   )
-  expect(screen.getAllByText('561 provisions · 116 withheld')).toHaveLength(2)
+  expect(
+    screen.getAllByText('561 provisions · 116 may not be up to date'),
+  ).toHaveLength(2)
   expect(
     screen.getAllByText('Part 1 · Socio-economic inequalities'),
   ).toHaveLength(2)
