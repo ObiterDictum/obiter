@@ -126,6 +126,26 @@ export interface LegislationActResponse {
   act: LegislationActDocument
 }
 
+interface LegislationActsResponse {
+  acts: Array<{ identity: string }>
+}
+
+export function legislationActsQueryOptions() {
+  return queryOptions({
+    queryKey: ['legislation-acts'],
+    staleTime: 60_000,
+    retry: 1,
+    queryFn: async () => {
+      const response = await fetch(apiUrl('/api/search/legislation/acts'))
+      if (!response.ok) {
+        throw new Error('Held legislation could not be loaded.')
+      }
+      // SAFETY: non-ok throws above; /api/search/legislation/acts returns LegislationActsResponse per the search API contract.
+      return (await response.json()) as LegislationActsResponse
+    },
+  })
+}
+
 export function legislationActQueryOptions(identity: string) {
   return queryOptions({
     queryKey: ['legislation-act', identity],

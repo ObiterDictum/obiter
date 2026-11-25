@@ -165,8 +165,10 @@ export function JudgmentEntry({
   name,
   citation,
   sourceUrl,
+  heldLegislation,
 }: {
   sourceUrl?: string
+  heldLegislation?: ReadonlySet<string>
   paragraph: JudgmentParagraph
   previous: JudgmentParagraph | undefined
   at: number
@@ -259,6 +261,7 @@ export function JudgmentEntry({
               query={query}
               at={at}
               pages={pages}
+              heldLegislation={heldLegislation}
             />
           </span>
         )}

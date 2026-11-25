@@ -81,6 +81,9 @@ function mockFetch(): ReturnType<typeof vi.fn> {
     ) {
       return jsonResponse(DOCUMENT_PAYLOAD)
     }
+    if (url.includes('/api/search/legislation/acts')) {
+      return jsonResponse({ acts: [] })
+    }
     if (url.includes('/api/documents/citation-targets')) {
       return jsonResponse({ documents: [] })
     }

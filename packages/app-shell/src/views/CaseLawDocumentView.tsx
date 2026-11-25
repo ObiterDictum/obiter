@@ -37,6 +37,7 @@ import {
   type CaseLawDocument,
   type CaseLawParagraph,
 } from './case-law-document-query'
+import { legislationActsQueryOptions } from './legislation-document-query'
 
 export { caseLawDocumentQueryOptions }
 export type { CaseLawDocumentResponse } from './case-law-document-query'
@@ -44,6 +45,7 @@ export type { CaseLawDocumentResponse } from './case-law-document-query'
 export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   const [caseQuery, setCaseQuery] = useState('')
   const query = useQuery(caseLawDocumentQueryOptions(caseId))
+  const acts = useQuery(legislationActsQueryOptions())
 
   if (query.isPending) {
     return (
@@ -105,6 +107,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
       )
     : entries
   const pages = placePages(response.pages, paragraphs)
+  const heldLegislation = acts.data?.acts
+    ? new Set(acts.data.acts.map((act) => act.identity))
+    : undefined
   const owners = anchorOwners(paragraphs)
   const opinions = opinionsOf(paragraphs)
   const opinionIds = new Map(
@@ -236,6 +241,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                       query={trimmedCaseQuery}
                       name={data.title}
                       citation={data.neutralCitation}
+                      heldLegislation={heldLegislation}
                     />
                   ))}
                 </div>
