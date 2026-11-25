@@ -11,7 +11,10 @@ import {
 } from './SearchSnippet'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
-import { legislationStatusDisplay } from '../../legislation-status'
+import {
+  legislationCheckedLabel,
+  legislationStatusDisplay,
+} from '../../legislation-status'
 
 export function SearchPreview({
   row,
@@ -182,7 +185,7 @@ function LegislationPreview({
           </p>
         )}
         <p className="text-caption text-subtle">
-          Point-in-time date not recorded. Check legislation.gov.uk before
+          {legislationCheckedLabel(hit)}. Check legislation.gov.uk before
           relying on the text.
         </p>
       </CardBody>

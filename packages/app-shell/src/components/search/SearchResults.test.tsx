@@ -186,11 +186,31 @@ describe('SearchPreview provenance', () => {
     expect(screen.getAllByText('Judgment extract').length).toBeGreaterThan(0)
   })
 
-  it('shows the legislation source and the missing point-in-time warning', () => {
-    render(<SearchPreview row={searchResultRows(response())[1]} />)
+  it('shows the legislation source and when it was checked', () => {
+    render(
+      <SearchPreview
+        row={
+          searchResultRows(
+            response({
+              groups: [
+                {
+                  key: 'legislation',
+                  label: 'Legislation',
+                  hits: [
+                    { ...provision, effectsCheckedAt: '2026-11-12T09:00:00Z' },
+                  ],
+                },
+              ],
+            }),
+          )[1]
+        }
+      />,
+    )
 
     expect(screen.getByText('Legislation extract · s. 13')).toBeTruthy()
-    expect(screen.getByText(/Point-in-time date not recorded/)).toBeTruthy()
+    expect(
+      screen.getByText(/Checked against legislation.gov.uk on 12 Nov 2026/),
+    ).toBeTruthy()
     expect(
       screen.getByRole('link', { name: 'legislation.gov.uk' }),
     ).toBeTruthy()
