@@ -231,8 +231,19 @@ test('short-pane destinations clear the scrollable notices and excerpts omit the
     )
     .toBe(true)
   await expect(notices).toHaveAttribute('tabindex', '0')
-  await notices.evaluate((notice) => {
-    notice.scrollTop = notice.scrollHeight
-  })
+  await page.getByRole('searchbox', { name: 'Search within case' }).focus()
+  await page.keyboard.press('Shift+Tab')
+  await expect(notices).toBeFocused()
+
+  const reader = page.locator('[data-shell-scroll]')
+  const noticeScrollTop = await notices.evaluate((notice) => notice.scrollTop)
+  const readerScrollTop = await reader.evaluate((element) => element.scrollTop)
+  await page.keyboard.press('End')
+  await expect
+    .poll(() => notices.evaluate((notice) => notice.scrollTop))
+    .toBeGreaterThan(noticeScrollTop)
   await expect(acknowledgement).toBeInViewport({ ratio: 1 })
+  expect(await reader.evaluate((element) => element.scrollTop)).toBe(
+    readerScrollTop,
+  )
 })
