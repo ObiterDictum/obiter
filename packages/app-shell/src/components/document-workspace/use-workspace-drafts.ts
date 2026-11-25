@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DocumentModelWire } from '@obiter/contracts'
+import type { DocumentEditRequest, DocumentModelWire } from '@obiter/contracts'
 import type { BreakDraft, LocalInsert } from '../../document-edits'
 import type { StructuralDraft } from '../../document-structural-drafts'
 import {
   adoptDocumentDraft,
   clearDocumentDraft,
+  clearCommittedDocumentDrafts,
   discardDocumentDrafts,
   discardRecoverableDraft,
   listRecoverableDocumentDrafts,
@@ -86,7 +87,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   const [restored, setRestored] = useState(false)
   const [blockedReason, setBlockedReason] =
     useState<BaselineBlockReason | null>(null)
-  const [staleDraft, setStaleDraft] = useState<string | null>(null)
   const [recoverable, setRecoverable] = useState<RecoverableDraft[]>([])
   const [hydrated, setHydrated] = useState(false)
   const instanceId = useRef(
@@ -147,12 +147,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       result.status === 'restored' ? result.draftId : undefined,
     )
     if (result.status === 'unavailable') setPersistence('unavailable')
-    else if (result.status === 'choice') {
-      setRecoverable(result.drafts)
-    } else if (result.status === 'stale') {
-      setStaleDraft(result.baseVersionId)
-      setRecoverable(extras)
-    } else if (result.status === 'restored') {
+    else if (result.status === 'restored') {
       applyBundle(() => ({
         state: result.state,
         held: result.held,
@@ -162,16 +157,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       }))
       setRestored(true)
       setRecoverable(extras)
-      if (extras.some((item) => item.status === 'parked')) {
-        setStaleDraft(
-          extras.find((item) => item.status === 'parked')?.baseVersionId ??
-            null,
-        )
-      }
     } else {
       setRecoverable(extras)
-      const parked = extras.find((item) => item.status === 'parked')
-      if (parked) setStaleDraft(parked.baseVersionId)
     }
     setHydrated(true)
   }, [scope.baseVersionId, storage, hydrated])
@@ -219,10 +206,35 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   function acknowledgeSave(
     covered: readonly DraftSlot[],
     sent: DraftState,
-    trackChanges?: boolean,
+    {
+      baseVersionId,
+      trackChanges,
+    }: Pick<DocumentEditRequest, 'baseVersionId' | 'trackChanges'>,
   ) {
     if (trackChanges !== undefined) committedToggle.current = trackChanges
     acknowledgedSlots.current = { covered, sent }
+    if (storage) {
+      const removed = clearCommittedDocumentDrafts(
+        storage,
+        storedScope(),
+        baseVersionId,
+        (snapshot) =>
+          snapshot.held.length === 0 &&
+          (snapshot.trackChangesFlip === undefined ||
+            snapshot.trackChangesFlip === trackChanges) &&
+          !hasDraftState(
+            removeDraftSlots(
+              snapshot.state,
+              clearableSlots(covered, sent, snapshot.state),
+            ),
+          ),
+      )
+      if (removed.length > 0) {
+        setRecoverable((current) =>
+          current.filter((draft) => !removed.includes(draft.draftId)),
+        )
+      }
+    }
     persistBundle(bundleRef.current)
   }
   useDraftWriterClaim({
@@ -269,7 +281,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     history.clear()
     baseline.clear()
     setRestored(false)
-    setStaleDraft(null)
     setRecoverable([])
     setBlockedReason(null)
   }
@@ -332,7 +343,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   }
 
   function discardStaleDraft() {
-    setStaleDraft(null)
     setRecoverable((current) =>
       current.filter((item) => item.status !== 'parked'),
     )
@@ -459,7 +469,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     paragraphRemap: baseline.paragraphRemap,
     boundaryPending: baseline.pendingVersion !== null,
     markDecisionCommitted: baseline.markDecisionCommitted,
-    staleDraft,
+    staleDraft:
+      recoverable.find((item) => item.status === 'parked')?.baseVersionId ??
+      null,
     discardStaleDraft,
     recoverable,
     restoreRecoverable,
