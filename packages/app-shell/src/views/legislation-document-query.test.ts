@@ -12,7 +12,9 @@ it('authenticates desktop requests for Acts, provisions, and the held Acts list'
   const client = new QueryClient()
   const fetchMock = vi
     .spyOn(globalThis, 'fetch')
-    .mockImplementation(async () => Response.json({}))
+    .mockResolvedValueOnce(Response.json({ act: {} }))
+    .mockResolvedValueOnce(Response.json({ provision: {} }))
+    .mockResolvedValueOnce(Response.json({ acts: [] }))
   Object.defineProperty(window, 'obiterDesktop', {
     configurable: true,
     value: {
