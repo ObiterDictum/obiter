@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { meResponseSchema } from '@obiter/contracts'
 
 const judgment = {
   id: 'example-judgment',
@@ -46,19 +47,20 @@ test.beforeEach(async ({ page }) => {
     email: 'shell-test@obiter.test',
     emailVerified: true,
   }
+  const me = meResponseSchema.parse({
+    user: { ...user, role: 'owner' },
+    organisation: {
+      id: 'licence-test-org',
+      name: 'Example Organisation',
+      plan: 'private_beta',
+    },
+  })
   await page.route('**/api/auth/get-session', (route) =>
     route.fulfill({
       json: { session: { id: 'licence-test-sign-in', userId: user.id }, user },
     }),
   )
-  await page.route('**/api/me', (route) =>
-    route.fulfill({
-      json: {
-        user: { ...user, role: 'owner' },
-        organisation: { id: 'licence-test-org', name: 'Example Organisation' },
-      },
-    }),
-  )
+  await page.route('**/api/me', (route) => route.fulfill({ json: me }))
   await page.route('**/api/auth/sign-in/email', (route) =>
     route.fulfill({ json: {} }),
   )
