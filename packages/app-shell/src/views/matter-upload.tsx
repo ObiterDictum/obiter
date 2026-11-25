@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { buttonClassName, cn, useToast, type ButtonSize } from '@obiter/ui'
 import { FileArrowUp, Plus, Upload } from '@obiter/ui/icons'
 import { useState, type DragEvent, type ReactNode } from 'react'
@@ -145,6 +146,7 @@ export function NewDocumentButton({
   variant?: 'primary' | 'secondary'
   size?: ButtonSize
 }) {
+  const navigate = useNavigate()
   const upload = useUploadMatterDocument(matterId)
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
@@ -162,8 +164,14 @@ export function NewDocumentButton({
         open={open}
         onOpenChange={setOpen}
         onCreate={async (name) => {
-          await upload.mutateAsync(await blankDocumentFile(name))
+          const { document } = await upload.mutateAsync(
+            await blankDocumentFile(name),
+          )
           toast({ title: 'Document created', description: name })
+          void navigate({
+            to: '/matters/$matterId/documents/$documentId',
+            params: { matterId, documentId: document.id },
+          })
         }}
       />
     </>
