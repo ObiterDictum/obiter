@@ -2,6 +2,11 @@ import type { JudgmentPage } from '@obiter/contracts'
 
 export type PlacedPage = JudgmentPage & { at: number }
 
+export function isPdfPageMarker(text: string) {
+  const value = text.trim()
+  return /^\d{1,3}$/.test(value) || /^\[?page\s+\d{1,3}\]?$/i.test(value)
+}
+
 export function judgmentTarget(value: string) {
   const match = /^(p\.\s*)?([1-9]\d*)$/.exec(value.trim())
   return match ? `${match[1] ? 'page' : 'para'}-${match[2]}` : null

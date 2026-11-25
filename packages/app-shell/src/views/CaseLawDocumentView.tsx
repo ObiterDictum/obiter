@@ -1,5 +1,5 @@
 import { SourcePageLinks } from './SourcePageLinks'
-import { placePages } from './judgment-pages'
+import { placePages, isPdfPageMarker } from './judgment-pages'
 import {
   anchorOwners,
   courtParagraphText,
@@ -94,9 +94,13 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   const showParagraphNumbers = response.courtParagraphNumbers === true
   const stored = selectJudgmentParagraphs(data)
   const structured = isStructured(stored)
-  const paragraphs = structured
-    ? stored
-    : stored.filter((paragraph) => isDisplayJudgmentParagraph(paragraph, data))
+  const paragraphs = (
+    structured
+      ? stored
+      : stored.filter((paragraph) =>
+          isDisplayJudgmentParagraph(paragraph, data),
+        )
+  ).filter((paragraph) => !isPdfPageMarker(paragraph.text))
   const trimmedCaseQuery = caseQuery.trim()
   const entries = paragraphs.map((paragraph, at) => ({ paragraph, at }))
   const visibleParagraphs = trimmedCaseQuery
