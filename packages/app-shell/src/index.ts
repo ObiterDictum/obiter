@@ -148,6 +148,14 @@ export {
   shouldRunLegalSearchRequest,
 } from './views/LegalSearchView'
 export {
+  legalSearchUrl,
+  legalSearchUrlFilters,
+  legalSearchUrlKey,
+  legalSearchUrlType,
+  validateLegalSearchSearch,
+  type LegalSearchUrl,
+} from './legal-search-url'
+export {
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
 } from './legal-search-selection'
