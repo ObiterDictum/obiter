@@ -4543,8 +4543,8 @@
             <code>GET /api/invites/preview</code>
             are deliberately public. The legal search API and web search and
             judgment routes require a signed-in account admitted through
-            existing account approval; there is no case-law-specific quota. Web
-            visitors without a session are redirected to sign-in. Both
+            existing account approval. Web visitors without a session are
+            redirected to sign-in. Both
             <code>POST /api/search/fetch</code> and
             <code>GET /api/search/documents/:documentId</code> are corpus-only:
             they read Obiter-owned records and the derived index, never contact
@@ -5002,7 +5002,7 @@
               matter share references its matter with the organisation id. The
               database refuses a cross-organisation row rather than relying on
               query filtering. legal_source_documents sits outside the boundary
-              because the judgment corpus is public and shared.
+              because the judgment corpus is shared across organisations.
             </figcaption>
           </figure>
           <div class="scroll">
@@ -7410,8 +7410,9 @@
               <span
                 ><b>Judgment content must not be indexed or scraped.</b> Licence
                 restriction (a)(ix) requires preventing search engine indexing
-                and third-party crawling of judgment contents. Nothing
-                implements it, and it gates serving judgments publicly.</span
+                and third-party crawling of judgment contents. Search and
+                judgment routes require sign-in and send noindex directives. The
+                web app also excludes named AI crawlers in its robots.txt.</span
               >
             </li>
             <li>
@@ -7827,13 +7828,12 @@
                 </tr>
                 <tr>
                   <td>
-                    Licence obligations unimplemented: indexing prevention,
-                    acknowledgement, partial-representation statement,
-                    withdrawal handling
+                    Licence obligations unimplemented: acknowledgement,
+                    partial-representation statement, withdrawal handling
                   </td>
                   <td>
-                    Serving judgments publicly without them breaches the
-                    executed Find Case Law licence
+                    These requirements apply even when judgment access requires
+                    sign-in
                   </td>
                   <td class="id">search.md</td>
                 </tr>

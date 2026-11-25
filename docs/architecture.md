@@ -882,8 +882,7 @@ scope.
 
 Decision: `/api/search/*` and the web search and judgment pages require a
 signed-in account admitted through Obiter's existing account approval.
-There is no case-law-specific quota. `GET /api/changelog` and `GET /api/health`
-remain public.
+`GET /api/changelog` and `GET /api/health` remain public.
 
 Search and changelog must never return matter data, client documents,
 redaction source or output, session or organisation records, auth secrets, or
