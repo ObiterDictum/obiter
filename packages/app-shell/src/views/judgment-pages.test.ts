@@ -1,5 +1,10 @@
 import { expect, it } from 'bun:test'
-import { pageAtPosition, judgmentTarget, placePages } from './judgment-pages'
+import {
+  isPdfPageMarker,
+  judgmentTarget,
+  pageAtPosition,
+  placePages,
+} from './judgment-pages'
 const entries = [1, 2, 3].map((n) => ({ id: `p${n}`, paragraphNumber: n }))
 it('only cites a page whose start is known and does not bridge an omitted page', () => {
   const pages = placePages(
@@ -36,4 +41,13 @@ it('accepts page and paragraph destinations without interpolating arbitrary sele
   expect(judgmentTarget('p. 47')).toBe('page-47')
   expect(judgmentTarget('137')).toBe('para-137')
   expect(judgmentTarget('bad')).toBeNull()
+})
+it('recognises page markers printed on the court PDF and not years or paragraph labels', () => {
+  expect(isPdfPageMarker('8')).toBe(true)
+  expect(isPdfPageMarker(' 12 ')).toBe(true)
+  expect(isPdfPageMarker('[Page 12]')).toBe(true)
+  expect(isPdfPageMarker('page 4')).toBe(true)
+  expect(isPdfPageMarker('1999')).toBe(false)
+  expect(isPdfPageMarker('12 The grounds of challenge')).toBe(false)
+  expect(isPdfPageMarker('p. 12')).toBe(false)
 })
