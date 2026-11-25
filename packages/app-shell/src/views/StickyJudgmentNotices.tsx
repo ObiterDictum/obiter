@@ -6,14 +6,14 @@ export function StickyJudgmentNotices() {
 
   useLayoutEffect(() => {
     const notice = ref.current
-    const readingArea = notice?.parentElement
-    if (!notice || !readingArea) return
+    const scroller = notice?.closest<HTMLElement>('[data-shell-scroll]')
+    if (!notice || !scroller) return
+
+    const previousPadding = scroller.style.scrollPaddingTop
 
     const publishHeight = () => {
-      readingArea.style.setProperty(
-        '--judgment-notice-height',
-        `${notice.getBoundingClientRect().height}px`,
-      )
+      const height = Math.ceil(notice.getBoundingClientRect().height)
+      scroller.style.scrollPaddingTop = `calc(${height}px + 0.25rem)`
     }
     publishHeight()
     const observer =
@@ -23,7 +23,7 @@ export function StickyJudgmentNotices() {
     observer?.observe(notice)
     return () => {
       observer?.disconnect()
-      readingArea.style.removeProperty('--judgment-notice-height')
+      scroller.style.scrollPaddingTop = previousPadding
     }
   }, [])
 

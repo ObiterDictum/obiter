@@ -87,7 +87,7 @@ export function JudgmentReaderTools({
   return (
     <div
       ref={root}
-      className="flex min-w-0 flex-col gap-4 [&_:is([id^=para-],[id^=page-],[id^=opinion-])]:scroll-mt-[calc(var(--judgment-notice-height,0px)+1.5rem)]"
+      className="flex min-w-0 flex-col gap-4"
       onCopy={(event) => {
         const clipboard = event.clipboardData
         const selection = window.getSelection()

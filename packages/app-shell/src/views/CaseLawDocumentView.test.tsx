@@ -101,7 +101,9 @@ function renderView(caseId = 'uksc-2024-3') {
     <ToastProvider>
       <QueryClientProvider client={queryClient}>
         <Suspense fallback={<div>Loading case…</div>}>
-          <CaseLawDocumentView caseId={caseId} />
+          <div data-shell-scroll>
+            <CaseLawDocumentView caseId={caseId} />
+          </div>
         </Suspense>
       </QueryClientProvider>
     </ToastProvider>,
@@ -166,7 +168,7 @@ describe('CaseLawDocumentView', () => {
     expect(screen.queryByLabelText('Find Case Law licence notices')).toBeNull()
   })
 
-  it('sets the measured licence notice offset before scrolling to a linked paragraph', async () => {
+  it('reserves scroll space for the notice before jumping and clears it on unmount', async () => {
     mockFetch()
     const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
     measure.mockImplementation(() => new DOMRect(0, 0, 500, 84))
@@ -174,12 +176,8 @@ describe('CaseLawDocumentView', () => {
       this: HTMLElement,
       _options: ScrollIntoViewOptions,
     ) {
-      const readingArea = this.closest<HTMLElement>(
-        '[style*="--judgment-notice-height"]',
-      )
-      expect(
-        readingArea?.style.getPropertyValue('--judgment-notice-height'),
-      ).toBe('84px')
+      const scroller = this.closest<HTMLElement>('[data-shell-scroll]')
+      expect(scroller?.style.scrollPaddingTop).toBe('calc(84px + 0.25rem)')
     })
     const descriptor = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
@@ -191,11 +189,16 @@ describe('CaseLawDocumentView', () => {
         value: scroll,
       })
       window.history.replaceState(null, '', '#para-11')
-      renderView()
+      const { container, unmount } = renderView()
 
       await screen.findByRole('document')
       await waitFor(() => expect(document.activeElement?.id).toBe('para-11'))
       expect(scroll).toHaveBeenCalledWith({ block: 'start' })
+      const scroller = container.querySelector<HTMLElement>(
+        '[data-shell-scroll]',
+      )
+      unmount()
+      expect(scroller?.style.scrollPaddingTop).toBe('')
     } finally {
       if (descriptor) {
         Object.defineProperty(
