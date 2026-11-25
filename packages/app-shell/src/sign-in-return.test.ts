@@ -51,6 +51,21 @@ describe('safeReturnTo', () => {
   it.each(REJECTED.map((value) => [value]))('rejects %p', (value) => {
     expect(safeReturnTo(value)).toBeNull()
   })
+
+  it('uses an inherited judgment anchor only for a safe case-law return target without a fragment', () => {
+    expect(safeReturnTo('/case/example?q=trust', '#para-12')).toBe(
+      '/case/example?q=trust#para-12',
+    )
+    expect(safeReturnTo('/cases/uksc-2024-3', '#page-47')).toBe(
+      '/cases/uksc-2024-3#page-47',
+    )
+    expect(safeReturnTo('/case/example#para-11', '#para-12')).toBe(
+      '/case/example#para-11',
+    )
+    expect(safeReturnTo('/case/example', '#unexpected')).toBe('/case/example')
+    expect(safeReturnTo('/matters/mtr_1', '#para-12')).toBe('/matters/mtr_1')
+    expect(safeReturnTo('//evil.example/case/example', '#para-12')).toBeNull()
+  })
 })
 
 describe('returnToCallbackURL', () => {

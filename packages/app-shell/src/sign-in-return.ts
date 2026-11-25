@@ -20,7 +20,10 @@ function hasControlCharacter(value: string): boolean {
   return false
 }
 
-export function safeReturnTo(value: unknown): string | null {
+export function safeReturnTo(
+  value: unknown,
+  inheritedHash = '',
+): string | null {
   if (typeof value !== 'string') return null
   if (!value.startsWith('/') || value.startsWith('//')) return null
   if (value.includes('\\') || hasControlCharacter(value)) return null
@@ -39,7 +42,12 @@ export function safeReturnTo(value: unknown): string | null {
   }
   const pathname = decoded.toLowerCase().replace(/\/+$/, '') || '/'
   if (pathname === '/' || isAuthPath(pathname)) return null
-  return `${url.pathname}${url.search}${url.hash}`
+  const caseLawHash =
+    /^\/cases?\/[^/]+$/.test(pathname) &&
+    /^#(?:para|page)-\d+$/.test(inheritedHash)
+      ? inheritedHash
+      : ''
+  return `${url.pathname}${url.search}${url.hash || caseLawHash}`
 }
 
 export function returnToCallbackURL(
