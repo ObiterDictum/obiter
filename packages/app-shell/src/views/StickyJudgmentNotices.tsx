@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import { FindCaseLawNotices } from '../components/search/FindCaseLawNotices'
 
 export function StickyJudgmentNotices() {
-  const ref = useRef<HTMLDivElement>(null)
+  const ref = useRef<HTMLElement>(null)
 
   useLayoutEffect(() => {
     const notice = ref.current
@@ -12,32 +12,28 @@ export function StickyJudgmentNotices() {
     const previousPadding = scroller.style.scrollPaddingTop
 
     const updatePin = () => {
+      notice.style.maxHeight = `${scroller.getBoundingClientRect().height * 0.4}px`
       const height = Math.ceil(notice.getBoundingClientRect().height)
-      const canPin = height <= scroller.getBoundingClientRect().height / 2
-      notice.style.position = canPin ? '' : 'static'
-      scroller.toggleAttribute('data-judgment-notices-inline', !canPin)
-      scroller.style.scrollPaddingTop = canPin
-        ? `calc(${height}px + 0.25rem)`
-        : previousPadding
+      scroller.style.scrollPaddingTop = `calc(${height}px + 0.25rem)`
     }
     updatePin()
+    let frame = 0
     const observer =
       typeof ResizeObserver === 'undefined'
         ? undefined
-        : new ResizeObserver(updatePin)
+        : new ResizeObserver(() => {
+            cancelAnimationFrame(frame)
+            frame = requestAnimationFrame(updatePin)
+          })
     observer?.observe(notice)
     observer?.observe(scroller)
     return () => {
       observer?.disconnect()
-      notice.style.position = ''
-      scroller.removeAttribute('data-judgment-notices-inline')
+      cancelAnimationFrame(frame)
+      notice.style.maxHeight = ''
       scroller.style.scrollPaddingTop = previousPadding
     }
   }, [])
 
-  return (
-    <div ref={ref} className="sticky top-0 z-10">
-      <FindCaseLawNotices />
-    </div>
-  )
+  return <FindCaseLawNotices readerRef={ref} />
 }

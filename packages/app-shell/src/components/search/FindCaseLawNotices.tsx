@@ -1,8 +1,16 @@
-export function FindCaseLawNotices() {
+import type { Ref } from 'react'
+
+export function FindCaseLawNotices({
+  readerRef,
+}: {
+  readerRef?: Ref<HTMLElement>
+}) {
   return (
     <aside
+      ref={readerRef}
       aria-label="Find Case Law licence notices"
-      className="space-y-2 rounded-md border border-line bg-fill px-4 py-3 text-meta leading-relaxed text-ink"
+      tabIndex={readerRef ? 0 : undefined}
+      className={`space-y-2 rounded-md border border-line bg-fill px-4 py-3 text-meta leading-relaxed text-ink ${readerRef ? 'sticky top-0 z-10 overflow-y-auto' : ''}`}
     >
       <p className="font-medium">
         This material only partially represents court and tribunal activity.

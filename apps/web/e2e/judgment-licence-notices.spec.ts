@@ -13,6 +13,11 @@ const paragraphs = Array.from({ length: 80 }, (_, index) => ({
   id: `p${index + 1}`,
   paragraphNumber: index + 1,
   text: 'The appeal concerns the interpretation of an example contract.',
+  ...(index === 54
+    ? {
+        headings: [{ kind: 'section', text: 'Interpretation of the contract' }],
+      }
+    : {}),
 }))
 const coverageText =
   'This material only partially represents court and tribunal activity. Find Case Law does not contain every judgment or decision.'
@@ -57,6 +62,7 @@ test.beforeEach(async ({ page }) => {
       json: {
         document: { ...judgment, paragraphs },
         courtParagraphNumbers: true,
+        pages: [{ page: 12, paragraphNumber: 55, offset: 20 }],
       },
     }),
   )
@@ -99,32 +105,96 @@ test('a linked judgment paragraph and backward keyboard focus clear both sticky 
     .toBeGreaterThanOrEqual(0)
 
   await page.setViewportSize({ width: 320, height: 230 })
+  await expect
+    .poll(async () => (await notices.boundingBox())?.height)
+    .toBeLessThan(80)
   await paragraph.evaluate((element) =>
     element.scrollIntoView({ block: 'start' }),
   )
   await expect(paragraph).toBeInViewport()
-  await expect(notices).not.toBeInViewport()
+  await expect(notices).toBeInViewport({ ratio: 1 })
+  await expect
+    .poll(() => clearance(paragraph, notices))
+    .toBeGreaterThanOrEqual(0)
 })
 
-test('in a short narrow pane the linked paragraph opens with both full notices inline', async ({
+test('short-pane destinations clear the scrollable notices and excerpts omit them', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 320, height: 350 })
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.clipboard, 'write', {
+      value: async ([item]: ClipboardItem[]) => {
+        const text = await (await item.getType('text/plain')).text()
+        document.documentElement.setAttribute('data-copied-quote', text)
+      },
+    })
+  })
+  await page.setViewportSize({ width: 390, height: 500 })
   await page.goto('/search?q=contract')
   await page.getByRole('link', { name: 'Open paragraph' }).click()
   await expect(page).toHaveURL(/\/case\/example-judgment#para-55$/)
 
   const paragraph = page.locator('#para-55')
-  const notices = page.locator('[data-judgment-arrival-notices]')
+  const notices = page.getByRole('complementary', {
+    name: 'Find Case Law licence notices',
+  })
+  const coverage = notices.getByText(coverageText, { exact: true })
+  const acknowledgement = notices.getByText(acknowledgementText, {
+    exact: true,
+  })
   await expect(paragraph).toBeFocused()
-  await expect(notices.getByText(coverageText, { exact: true })).toBeInViewport(
-    { ratio: 1 },
-  )
-  await expect(
-    notices.getByText(acknowledgementText, { exact: true }),
-  ).toBeInViewport({ ratio: 1 })
-  await expect(paragraph).toBeInViewport()
+  await expect(notices).toBeInViewport({ ratio: 1 })
+  await expect(coverage).toBeInViewport({ ratio: 1 })
+  await expect(paragraph).toBeInViewport({ ratio: 1 })
   await expect
     .poll(() => clearance(paragraph, notices))
     .toBeGreaterThanOrEqual(0)
+
+  const goTo = page.getByRole('textbox', { name: 'Go to paragraph' })
+  await goTo.fill('p. 12')
+  await goTo.press('Enter')
+  const pageMarker = page.locator('#page-12')
+  await expect(pageMarker).toBeFocused()
+  await expect(pageMarker).toBeInViewport({ ratio: 1 })
+  await expect
+    .poll(() => clearance(pageMarker, notices))
+    .toBeGreaterThanOrEqual(0)
+
+  await page.setViewportSize({ width: 390, height: 350 })
+  await expect
+    .poll(async () => (await notices.boundingBox())?.height)
+    .toBeLessThan(120)
+  await expect
+    .poll(() =>
+      notices.evaluate((notice) => notice.scrollHeight > notice.clientHeight),
+    )
+    .toBe(true)
+  await expect(notices).toHaveAttribute('tabindex', '0')
+  await notices.evaluate((notice) => {
+    notice.scrollTop = notice.scrollHeight
+  })
+  await expect(acknowledgement).toBeInViewport({ ratio: 1 })
+
+  const selected = await page.evaluate(() => {
+    const first = document.querySelector('#para-54 [data-source-text]')!
+    const last = document.querySelector('#para-55 [data-source-text]')!
+    const range = document.createRange()
+    range.setStartBefore(first)
+    range.setEndAfter(last)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return selection.toString()
+  })
+  expect(selected).not.toMatch(/partially represents|Crown copyright/)
+  await page.getByRole('button', { name: 'Copy quote with citation' }).click()
+  const copied = page.locator('html')
+  await expect(copied).toHaveAttribute(
+    'data-copied-quote',
+    /example contract\.[\s\S]*The appeal concerns/,
+  )
+  await expect(copied).not.toHaveAttribute(
+    'data-copied-quote',
+    /partially represents|Crown copyright/,
+  )
 })

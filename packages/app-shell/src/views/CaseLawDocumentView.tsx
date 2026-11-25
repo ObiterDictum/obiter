@@ -20,13 +20,12 @@ import {
 } from '@obiter/ui'
 import { ArrowUpRight, MagnifyingGlass } from '@obiter/ui/icons'
 import type { CaseLawSummaryResponse } from '@obiter/contracts'
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import { JudgmentReaderTools } from './JudgmentReaderTools'
 import { StickyJudgmentNotices } from './StickyJudgmentNotices'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { formatDate } from '../format'
-import { FindCaseLawNotices } from '../components/search/FindCaseLawNotices'
 import { selectJudgmentParagraphs } from '../legal-search-selection'
 import { getReadableCourtLabel } from '../components/search/searchTypes'
 import {
@@ -47,10 +46,6 @@ export type { CaseLawDocumentResponse } from './case-law-document-query'
 
 export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   const [caseQuery, setCaseQuery] = useState('')
-  const [inlineArrival, setInlineArrival] = useState<{
-    caseId: string
-    target: string
-  } | null>(null)
   const query = useQuery(caseLawDocumentQueryOptions(caseId))
   const acts = useQuery(legislationActsQueryOptions())
 
@@ -118,14 +113,6 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
       )
     : entries
   const pages = placePages(response.pages, paragraphs)
-  const hasLicenceNotices = !withdrawn && isFindCaseLawSource(data.sourceUrl)
-  const inlineTarget =
-    hasLicenceNotices && inlineArrival?.caseId === caseId
-      ? inlineArrival.target
-      : null
-  const inlinePageAt = pages?.find(
-    ({ page }) => `page-${page}` === inlineTarget,
-  )?.at
   const heldLegislation = acts.data?.acts
     ? new Set(acts.data.acts.map((act) => act.identity))
     : undefined
@@ -192,7 +179,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
         </div>
       ) : null}
 
-      {hasLicenceNotices ? <StickyJudgmentNotices /> : null}
+      {!withdrawn && isFindCaseLawSource(data.sourceUrl) ? (
+        <StickyJudgmentNotices />
+      ) : null}
 
       {summary ? (
         <PublishedSummaryCard summary={summary} courtLabel={courtLabel} />
@@ -205,12 +194,6 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
             name={data.title}
             citation={data.neutralCitation}
             clearSearch={() => setCaseQuery('')}
-            onInlineArrival={
-              hasLicenceNotices
-                ? (target) =>
-                    setInlineArrival(target ? { caseId, target } : null)
-                : undefined
-            }
             searchControl={
               <>
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -250,42 +233,27 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                   <JudgmentCover cover={data.cover} />
                 ) : null}
                 <div className="flex flex-col gap-2">
-                  {visibleParagraphs.map(({ paragraph, at }) => {
-                    const owner =
-                      owners.get(paragraph.paragraphNumber) === paragraph.id
-                    const showInlineNotices =
-                      inlinePageAt === at ||
-                      (owner &&
-                        inlineTarget === `para-${paragraph.paragraphNumber}`)
-                    return (
-                      <Fragment key={paragraph.id}>
-                        {showInlineNotices ? (
-                          <div
-                            data-judgment-arrival-notices
-                            className="-mx-12 hidden font-sans [[data-judgment-notices-inline]_&]:block md:mx-0"
-                          >
-                            <FindCaseLawNotices />
-                          </div>
-                        ) : null}
-                        <JudgmentEntry
-                          paragraph={paragraph}
-                          sourceUrl={data.sourceUrl}
-                          previous={paragraphs[at - 1]}
-                          at={at}
-                          owner={owner}
-                          showNumbers={showParagraphNumbers}
-                          showHeadings={!trimmedCaseQuery}
-                          opinionId={opinionIds.get(at)}
-                          courtText={courtParagraphText(paragraphs, at)}
-                          pages={pages}
-                          query={trimmedCaseQuery}
-                          name={data.title}
-                          citation={data.neutralCitation}
-                          heldLegislation={heldLegislation}
-                        />
-                      </Fragment>
-                    )
-                  })}
+                  {visibleParagraphs.map(({ paragraph, at }) => (
+                    <JudgmentEntry
+                      key={paragraph.id}
+                      paragraph={paragraph}
+                      sourceUrl={data.sourceUrl}
+                      previous={paragraphs[at - 1]}
+                      at={at}
+                      owner={
+                        owners.get(paragraph.paragraphNumber) === paragraph.id
+                      }
+                      showNumbers={showParagraphNumbers}
+                      showHeadings={!trimmedCaseQuery}
+                      opinionId={opinionIds.get(at)}
+                      courtText={courtParagraphText(paragraphs, at)}
+                      pages={pages}
+                      query={trimmedCaseQuery}
+                      name={data.title}
+                      citation={data.neutralCitation}
+                      heldLegislation={heldLegislation}
+                    />
+                  ))}
                 </div>
               </article>
             ) : (
