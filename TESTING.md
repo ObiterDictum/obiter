@@ -176,8 +176,15 @@ against a separately started API without starting one from this repository.
 Fixture: `data/evals/redact/demo-fixture.docx` (synthetic, fictional names —
 no new binary added).
 
-Not wired into this repository's `scripts/ci-local.sh` or CI — intentionally.
-It runs in `backend` CI, where the API it needs exists.
+The full suite runs in `backend` CI, where the API it needs exists, rather
+than in this repository's `scripts/ci-local.sh` or CI. This repository's CI
+also runs the judgment licence-notice spec in WebKit through a focused config
+that starts only the web app and mocks the API. To run that spec locally:
+
+```sh
+bun --bun playwright install --with-deps webkit
+bun --bun playwright test --config apps/web/playwright.judgment-notices.config.ts
+```
 
 ## Host prerequisites (found the hard way):
 
