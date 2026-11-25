@@ -27,6 +27,7 @@ import {
   validateStaffFeedbackSearch,
   validateStaffUsageSearch,
   validateStaffErrorsSearch,
+  validateLegalSearchSearch,
 } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -332,11 +333,7 @@ function DesktopMatterRedactionReviewRoute() {
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'search',
-  validateSearch: (search: Record<string, unknown>) => {
-    const query = search.q
-    if (typeof query !== 'string' || !query.trim()) return {}
-    return { q: query }
-  },
+  validateSearch: validateLegalSearchSearch,
   component: DesktopSearchRoute,
 })
 

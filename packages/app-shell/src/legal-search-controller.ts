@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
   useEffect,
   useEffectEvent,
@@ -41,19 +41,33 @@ import {
   shouldRunLegalSearch,
   shouldRunLegalSearchRequest,
 } from './legal-search-state'
+import {
+  legalSearchUrl,
+  legalSearchUrlFilters,
+  legalSearchUrlKey,
+  legalSearchUrlType,
+  validateLegalSearchSearch,
+} from './legal-search-url'
 
-export function useLegalSearch(initialQuery = '') {
+export function useLegalSearch() {
   const navigate = useNavigate()
-  const [query, setQuery] = useState(initialQuery)
-  const [court, setCourt] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  // SAFETY: useSearch with strict:false returns an untyped record, and validateLegalSearchSearch narrows each parameter.
+  const urlParams = validateLegalSearchSearch(
+    useSearch({ strict: false }) as Record<string, unknown>,
+  )
+  const urlKey = legalSearchUrlKey(urlParams)
+  const [query, setQuery] = useState(urlParams.q ?? '')
+  const [court, setCourt] = useState(urlParams.court ?? '')
+  const [dateFrom, setDateFrom] = useState(urlParams.from ?? '')
+  const [dateTo, setDateTo] = useState(urlParams.to ?? '')
   const [recentSearches, setRecentSearches] = useState(() =>
     typeof window === 'undefined'
       ? []
       : getRecentLegalSearches(window.sessionStorage),
   )
-  const [typeFilter, setTypeFilter] = useState<SearchResultType>('all')
+  const [typeFilter, setTypeFilter] = useState<SearchResultType>(
+    legalSearchUrlType(urlParams),
+  )
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [selectedResultIndex, setSelectedResultIndex] = useState(-1)
@@ -62,6 +76,7 @@ export function useLegalSearch(initialQuery = '') {
   const searchRequestId = useRef(0)
   const autoSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortController = useRef<AbortController | null>(null)
+  const appliedUrlKey = useRef<string | null>(null)
 
   function clearAutoSearchTimer() {
     if (autoSearchTimer.current) {
@@ -169,25 +184,35 @@ export function useLegalSearch(initialQuery = '') {
     }
   }, [navigate, rows, selectedResultIndex, shortcutsOpen, state.status])
 
-  const initialQueryStarted = useRef('')
-  const runInitialSearch = useEffectEvent((value: string) => {
-    void runSearch(value)
+  const applyUrlParams = useEffectEvent((key: string) => {
+    if (appliedUrlKey.current === key) return
+    appliedUrlKey.current = key
+    const params = urlParams
+    const nextFilters = legalSearchUrlFilters(params)
+    setQuery(params.q ?? '')
+    setCourt(nextFilters.court)
+    setDateFrom(nextFilters.dateFrom)
+    setDateTo(nextFilters.dateTo)
+    setTypeFilter(legalSearchUrlType(params))
+    setSelectedResultIndex(-1)
+    setPreviewOpen(false)
+    if (shouldRunLegalSearchRequest(params.q ?? '', nextFilters)) {
+      void runSearch(params.q ?? '', nextFilters)
+      return
+    }
+    resetSearchToIdle()
   })
 
   useEffect(() => {
-    const trimmed = initialQuery.trim()
-    if (!trimmed || initialQueryStarted.current === trimmed) return
-    initialQueryStarted.current = trimmed
-    setQuery(initialQuery)
-    runInitialSearch(initialQuery)
-  }, [initialQuery])
+    applyUrlParams(urlKey)
+  }, [urlKey])
 
   useEffect(() => {
     return () => {
       clearAutoSearchTimer()
       cancelInFlightSearch()
       searchRequestId.current += 1
-      initialQueryStarted.current = ''
+      appliedUrlKey.current = null
     }
   }, [])
   async function runSearch(
@@ -264,7 +289,6 @@ export function useLegalSearch(initialQuery = '') {
           browse,
         })
         setSelectedResultIndex(0)
-        setTypeFilter('all')
         keepSearchInputFocused()
         return
       }
@@ -357,17 +381,32 @@ export function useLegalSearch(initialQuery = '') {
     }, LEGAL_SEARCH_DEBOUNCE_MS)
   }
 
+  function writeSearchUrl(
+    nextQuery: string,
+    nextFilters: LegalSearchRequestFilters,
+    nextType: SearchResultType,
+  ) {
+    const params = legalSearchUrl(nextQuery, nextFilters, nextType)
+    appliedUrlKey.current = legalSearchUrlKey(params)
+    void navigate({ to: '/search', search: params, replace: true })
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    writeSearchUrl(query, filters, typeFilter)
     await runSearch()
   }
 
-  function applyFilters(nextFilters: LegalSearchRequestFilters) {
+  function applyFilters(
+    nextFilters: LegalSearchRequestFilters,
+    nextType: SearchResultType = typeFilter,
+  ) {
     setCourt(nextFilters.court)
     setDateFrom(nextFilters.dateFrom)
     setDateTo(nextFilters.dateTo)
     setSelectedResultIndex(-1)
     setPreviewOpen(false)
+    writeSearchUrl(query, nextFilters, nextType)
     scheduleAutoSearch(query, nextFilters)
   }
 
@@ -381,12 +420,19 @@ export function useLegalSearch(initialQuery = '') {
 
   function clearFilters() {
     setTypeFilter('all')
-    applyFilters({ court: '', dateFrom: '', dateTo: '' })
+    applyFilters({ court: '', dateFrom: '', dateTo: '' }, 'all')
+  }
+
+  function setResultType(nextType: SearchResultType) {
+    setTypeFilter(nextType)
+    setSelectedResultIndex(0)
+    writeSearchUrl(query, filters, nextType)
   }
 
   function clearTypeFilter() {
     setTypeFilter('all')
     setSelectedResultIndex(0)
+    writeSearchUrl(query, filters, 'all')
   }
 
   function handleQueryChange(nextQuery: string) {
@@ -394,17 +440,20 @@ export function useLegalSearch(initialQuery = '') {
     setState(getLegalSearchStateAfterInputChange())
     setSelectedResultIndex(-1)
     setPreviewOpen(false)
+    writeSearchUrl(nextQuery, filters, typeFilter)
     scheduleAutoSearch(nextQuery)
   }
 
   function clearQuery() {
     setQuery('')
     resetSearchToIdle()
+    writeSearchUrl('', filters, typeFilter)
     keepSearchInputFocused()
   }
 
   function handleRecentSearch(searchQuery: string) {
     setQuery(searchQuery)
+    writeSearchUrl(searchQuery, filters, typeFilter)
     void runSearch(searchQuery)
   }
 
@@ -417,6 +466,7 @@ export function useLegalSearch(initialQuery = '') {
 
   function resubmitQuery(nextQuery: string) {
     setQuery(nextQuery)
+    writeSearchUrl(nextQuery, filters, typeFilter)
     void runSearch(nextQuery)
   }
 
@@ -466,6 +516,6 @@ export function useLegalSearch(initialQuery = '') {
     setSelectedResultIndex,
     setPreviewOpen,
     setShortcutsOpen,
-    setTypeFilter,
+    setResultType,
   }
 }

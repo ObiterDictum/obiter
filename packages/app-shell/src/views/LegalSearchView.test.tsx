@@ -6,7 +6,7 @@ import { vi } from '../../../../scripts/test/vitest-compat'
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
-  search: {} as { q?: string },
+  search: {} as Record<string, unknown>,
 }))
 
 const tanstackReactRouterModuleKeys = Object.fromEntries(
@@ -913,6 +913,7 @@ describe('LegalSearchView debounce lifecycle', () => {
       vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
     })
     await flushMicrotasks()
+    const navigationsAfterSearch = routerMocks.navigate.mock.calls.length
     for (const key of ['j', 'k', 'ArrowDown', 'ArrowUp', 'Enter']) {
       await pressKey(key, input)
       const resultRows = [
@@ -920,7 +921,9 @@ describe('LegalSearchView debounce lifecycle', () => {
       ]
       expect(resultRows[0]?.getAttribute('aria-current')).toBe('true')
       expect(resultRows[1]?.getAttribute('aria-current')).toBeNull()
-      expect(routerMocks.navigate).not.toHaveBeenCalled()
+      expect(routerMocks.navigate.mock.calls.length).toBe(
+        navigationsAfterSearch,
+      )
     }
   })
 
@@ -1332,6 +1335,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
       button.focus()
     })
     const requestsBeforeEnter = fetchMock.mock.calls.length
+    const navigationsBeforeEnter = routerMocks.navigate.mock.calls.length
 
     const enter = new KeyboardEvent('keydown', {
       key: 'Enter',
@@ -1343,7 +1347,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
     })
 
     expect(enter.defaultPrevented).toBe(false)
-    expect(routerMocks.navigate).not.toHaveBeenCalled()
+    expect(routerMocks.navigate.mock.calls.length).toBe(navigationsBeforeEnter)
     expect(fetchMock.mock.calls.length).toBe(requestsBeforeEnter)
 
     await act(async () => {
@@ -1363,6 +1367,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
       button.focus()
     })
     const requestsBeforeSpace = fetchMock.mock.calls.length
+    const navigationsBeforeSpace = routerMocks.navigate.mock.calls.length
 
     const space = new KeyboardEvent('keydown', {
       key: ' ',
@@ -1374,7 +1379,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
     })
 
     expect(space.defaultPrevented).toBe(false)
-    expect(routerMocks.navigate).not.toHaveBeenCalled()
+    expect(routerMocks.navigate.mock.calls.length).toBe(navigationsBeforeSpace)
     expect(fetchMock.mock.calls.length).toBe(requestsBeforeSpace)
 
     await act(async () => {
@@ -1398,6 +1403,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
     const resultLink =
       host.querySelector<HTMLAnchorElement>('a[href^="/case/"]')
     expect(resultLink).toBeTruthy()
+    const navigationsBeforeEnter = routerMocks.navigate.mock.calls.length
 
     const enter = new KeyboardEvent('keydown', {
       key: 'Enter',
@@ -1409,7 +1415,7 @@ describe('LegalSearchView interactive targets and query resync', () => {
     })
 
     expect(enter.defaultPrevented).toBe(false)
-    expect(routerMocks.navigate).not.toHaveBeenCalled()
+    expect(routerMocks.navigate.mock.calls.length).toBe(navigationsBeforeEnter)
   })
 
   it('syncs the visible query when the results corrective resubmits', async () => {
@@ -1556,5 +1562,170 @@ describe('LegalSearchView search parameter', () => {
 
     expect(getSearchInput(rendered.container).value).toBe('')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('LegalSearchView URL state', () => {
+  let root: Root | null
+  let container: HTMLElement | null
+
+  function mount() {
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    return rendered.container
+  }
+
+  function responseWithBothTypes() {
+    return jsonResponse({
+      hits: createTwoResultHits(),
+      groups: [
+        {
+          key: 'legislation',
+          label: 'Legislation',
+          hits: [
+            {
+              id: 'ukpga/2010/15/section/13',
+              resultGroup: 'legislation',
+              legislationStatus: 'current',
+              title: 'Equality Act 2010',
+              year: 2010,
+              provisionLabel: 's. 13',
+              labelPath: 'section/13',
+              documentIdentity: 'ukpga/2010/15',
+              extent: 'E+W+S',
+              canonicalUrl: '/ln/ukpga/2010/15/section/13',
+              officialUrl:
+                'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              text: 'Direct discrimination applies here.',
+            },
+          ],
+        },
+      ],
+      cached: true,
+    })
+  }
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    vi.useFakeTimers()
+    routerMocks.navigate.mockReset()
+    routerMocks.search = {}
+    window.sessionStorage.clear()
+    root = null
+    container = null
+  })
+
+  afterEach(() => {
+    if (root) {
+      act(() => root?.unmount())
+    }
+    container?.remove()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('initialises the query, filters and tab from the URL and searches with them', async () => {
+    routerMocks.search = {
+      q: 'discrimination',
+      court: 'ewhc/ch',
+      from: '2020-01-02',
+      to: '2020-12-31',
+      type: 'legislation',
+    }
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(responseWithBothTypes())
+    vi.stubGlobal('fetch', fetchMock)
+    container = mount()
+    await flushMicrotasks()
+
+    expect(getSearchInput(container).value).toBe('discrimination')
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      query: 'discrimination',
+      court: 'ewhc/ch',
+      dateFrom: '2020-01-02',
+      dateTo: '2020-12-31',
+    })
+    const rows = [
+      ...container.querySelectorAll<HTMLElement>('[data-result-index]'),
+    ]
+    expect(rows).toHaveLength(1)
+    expect(container.textContent).toContain('s. 13 · Equality Act 2010')
+  })
+
+  it('writes the query to the URL as it is typed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          createSearchResponse(createTwoResultHits(), { cached: true }),
+        ),
+    )
+    container = mount()
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+
+    expect(routerMocks.navigate).toHaveBeenCalledWith({
+      to: '/search',
+      search: { q: 'Potanina' },
+      replace: true,
+    })
+  })
+
+  it('writes the tab and filters to the URL', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(responseWithBothTypes()),
+    )
+    container = mount()
+    await changeSearchInput(getSearchInput(container), 'discrimination')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    const legislation = container.querySelector<HTMLInputElement>(
+      'input[name="search-type"][value="legislation"]',
+    )
+    if (!legislation) throw new Error('Type facet was not rendered')
+    await act(async () => {
+      legislation.click()
+    })
+
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith({
+      to: '/search',
+      search: { q: 'discrimination', type: 'legislation' },
+      replace: true,
+    })
+  })
+
+  it('applies URL parameters changed by back or forward', async () => {
+    routerMocks.search = { q: 'first appeal' }
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        createSearchResponse(createTwoResultHits(), { cached: true }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    container = mount()
+    await flushMicrotasks()
+    expect(getSearchInput(container).value).toBe('first appeal')
+
+    routerMocks.search = { q: 'second appeal', court: 'uksc' }
+    await act(async () => {
+      root?.render(<LegalSearchView />)
+    })
+    await flushMicrotasks()
+
+    expect(getSearchInput(container).value).toBe('second appeal')
+    const lastRequest = fetchMock.mock.calls.at(-1)?.[1] as
+      RequestInit | undefined
+    expect(JSON.parse(String(lastRequest?.body))).toMatchObject({
+      query: 'second appeal',
+      court: 'uksc',
+    })
   })
 })

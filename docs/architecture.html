@@ -2500,9 +2500,12 @@
             to one matter, and <code>/matters/:matterId/redact/:runId</code>, a
             redaction run reviewed inside the matter pane. Web and desktop
             routers are kept at parity and <code>routeTree.gen.ts</code> carries
-            both. Both routers validate a <code>q</code> search parameter on
-            <code>/search</code>, so a palette row and a stored recent search
-            can open the view with the search already running.
+            both. Both routers validate the <code>/search</code> parameters
+            <code>q</code>, <code>court</code>, <code>from</code>,
+            <code>to</code> and <code>type</code>, and the view writes them back
+            as the search changes, so a palette row, a stored recent search, a
+            shared link and browser back/forward all restore the query, filters
+            and result tab.
           </p>
         </section>
 

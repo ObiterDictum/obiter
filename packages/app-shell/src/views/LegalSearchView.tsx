@@ -1,6 +1,5 @@
 import { Button, SidePanel, cn } from '@obiter/ui'
 import { useId, useState } from 'react'
-import { useSearch } from '@tanstack/react-router'
 import { ContentFrame } from '../content-frame'
 import { PagePanelToggle } from '../page-panel'
 import {
@@ -52,9 +51,6 @@ const courtShortcuts = [
 ]
 
 export function LegalSearchView() {
-  // SAFETY: useSearch with strict:false is untyped; q is typeof-narrowed into a string before use.
-  const search = useSearch({ strict: false }) as { q?: string }
-  const initialQuery = typeof search.q === 'string' ? search.q : ''
   const {
     query,
     state,
@@ -88,8 +84,8 @@ export function LegalSearchView() {
     setSelectedResultIndex,
     setPreviewOpen,
     setShortcutsOpen,
-    setTypeFilter,
-  } = useLegalSearch(initialQuery)
+    setResultType,
+  } = useLegalSearch()
   const activeFilterCount = countActiveLegalSearchFilters(filters)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const filtersId = useId()
@@ -165,8 +161,7 @@ export function LegalSearchView() {
                 filters={filters}
                 type={typeFilter}
                 onTypeChange={(nextType) => {
-                  setTypeFilter(nextType)
-                  setSelectedResultIndex(0)
+                  setResultType(nextType)
                 }}
                 onFiltersChange={applyFilters}
                 onClear={clearFilters}

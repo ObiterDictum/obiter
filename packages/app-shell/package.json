@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./document-render": "./src/document-render.tsx",
     "./views/legal-search": "./src/views/LegalSearchView.tsx",
+    "./legal-search-url": "./src/legal-search-url.ts",
     "./views/case-law-document": "./src/views/CaseLawDocumentView.tsx",
     "./views/case-law-document-query": "./src/views/case-law-document-query.ts",
     "./views/document-detail": "./src/views/document-detail.tsx",
