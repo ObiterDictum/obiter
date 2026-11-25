@@ -3834,13 +3834,12 @@
                   <td class="id">POST /api/search/fetch</td>
                   <td class="id">legal-search/</td>
                   <td>
-                    Public search over the stored corpus. No session required,
-                    and corpus-only: it never contacts Find Case Law, queues no
-                    hydration and writes nothing. Must not expose matter or
-                    client data. Also serves a labelled legislation group (exact
-                    citations from Postgres, keyword hits from the
-                    legislation_provisions index) federated after the judgment
-                    hits.
+                    Signed-in search over the stored corpus, and corpus-only: it
+                    never contacts Find Case Law, queues no hydration and writes
+                    nothing. Must not expose matter or client data. Also serves
+                    a labelled legislation group (exact citations from Postgres,
+                    keyword hits from the legislation_provisions index)
+                    federated after the judgment hits.
                   </td>
                 </tr>
                 <tr>
@@ -3849,28 +3848,27 @@
                   </td>
                   <td class="id">legal-search/legislation-page-routes.ts</td>
                   <td>
-                    Public Act text pages in stored document order. The reader
-                    requests 24 entries per page and uses the contents metadata
-                    to start on the page containing a deep-linked heading. The
-                    text route reads Postgres and excludes wording under the
-                    provision reader's withholding and repeal rules.
+                    Signed-in Act text pages in stored document order. The
+                    reader requests 24 entries per page and uses the contents
+                    metadata to start on the page containing a deep-linked
+                    heading. The text route reads Postgres and excludes wording
+                    under the provision reader's withholding and repeal rules.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/search/readiness</td>
                   <td class="id">legal-search/</td>
                   <td>
-                    Public index state: whether each product index
+                    Signed-in index state: whether each product index
                     (legal_authorities, legislation_provisions) exists and its
-                    approximate document count. No session required.
+                    approximate document count.
                   </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/search/documents/:documentId</td>
                   <td class="id">legal-search/</td>
                   <td>
-                    Public judgment, stored or hydrated. No session required.
-                    Optional
+                    Signed-in judgment from the stored corpus. Optional
                     <code
                       >pages: { page, pdfPage?, paragraphNumber, offset,
                       paragraphId? }[]</code
@@ -4541,13 +4539,12 @@
             is owner-only on both paths, enforced by
             <code>requireOwnerRole</code>
             and an ownership check, not by hiding the control.
-            <code>POST /api/search/fetch</code>,
-            <code>GET /api/search/readiness</code>,
-            <code>GET /api/search/documents/:documentId</code>,
             <code>GET /api/changelog</code>, <code>GET /api/health</code>, and
             <code>GET /api/invites/preview</code>
-            are deliberately public: search and changelog serve published
-            authorities and release notes only; anonymous
+            are deliberately public. The legal search API and web search and
+            judgment routes require a signed-in account admitted through
+            existing account approval; there is no case-law-specific quota. Web
+            visitors without a session are redirected to sign-in. Both
             <code>POST /api/search/fetch</code> and
             <code>GET /api/search/documents/:documentId</code> are corpus-only:
             they read Obiter-owned records and the derived index, never contact
@@ -5523,14 +5520,6 @@
                   <td>
                     API origin used by the web Vite proxy, its SSR handler and
                     the e2e lane
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">OBITER_JUDGMENT_API_ORIGIN</td>
-                  <td>
-                    Optional private API origin for judgment SSR; the web server
-                    forwards the edge visitor IP to this origin for anonymous
-                    rate limiting
                   </td>
                 </tr>
                 <tr>

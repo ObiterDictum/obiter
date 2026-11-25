@@ -77,7 +77,10 @@ describe('apiFetch SSR cookie forwarding', () => {
   it('uses the signed-in session for server-rendered judgment requests', async () => {
     vi.stubGlobal('window', undefined)
     const req = new Request('http://localhost:3000/case/uksc-2024-3', {
-      headers: { cookie: 'better-auth.session_token=test-session' },
+      headers: {
+        cookie: 'better-auth.session_token=test-session',
+        'x-forwarded-for': '192.0.2.123',
+      },
     })
     setServerRequestGetter(() => req)
     const fetchMock = vi
@@ -93,48 +96,7 @@ describe('apiFetch SSR cookie forwarding', () => {
     expect(new Headers(init?.headers).get('cookie')).toBe(
       'better-auth.session_token=test-session',
     )
-  })
-
-  it('forwards the edge visitor IP only to the private judgment API', async () => {
-    vi.stubGlobal('window', undefined)
-    const key = 'OBITER_JUDGMENT_API_ORIGIN'
-    const previousOrigin = process.env[key]
-    process.env[key] = 'http://obiter-api:8787'
-    try {
-      setServerRequestGetter(
-        () =>
-          new Request('https://app.obiter.si/cases/uksc-2024-3', {
-            headers: {
-              'cf-connecting-ip': '192.0.2.123',
-              'x-forwarded-for': '198.51.100.1',
-            },
-          }),
-      )
-      const fetchMock = vi
-        .spyOn(globalThis, 'fetch')
-        .mockResolvedValue(mockOkResponse({ document: { id: 'uksc-2024-3' } }))
-
-      await new QueryClient().fetchQuery(
-        caseLawDocumentQueryOptions('uksc-2024-3'),
-      )
-      await apiFetch('/api/me')
-
-      const [url, init] = fetchMock.mock.calls[0] ?? []
-      expect(url).toBe(
-        'http://obiter-api:8787/api/search/documents/uksc-2024-3',
-      )
-      expect(new Headers(init?.headers).get('x-forwarded-for')).toBe(
-        '192.0.2.123',
-      )
-      expect(
-        new Headers(fetchMock.mock.calls[1]?.[1]?.headers).has(
-          'x-forwarded-for',
-        ),
-      ).toBe(false)
-    } finally {
-      if (previousOrigin === undefined) delete process.env[key]
-      else process.env[key] = previousOrigin
-    }
+    expect(new Headers(init?.headers).get('x-forwarded-for')).toBeNull()
   })
 
   it('silently handles expected No StartEvent case', async () => {

@@ -1,4 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test'
+import { createAccount } from './document-journey'
+import { resolveJourneyTargets } from '../journey-target.mjs'
 
 export const WIDTHS = [320, 390, 768, 1024, 1440]
 export const MODULES = [
@@ -17,6 +19,16 @@ export async function mockSession(
   name = 'Shell Nominal',
   org = 'Obiter',
 ) {
+  const { webOrigin } = resolveJourneyTargets()
+  const account = await createAccount(page.request, 'Shell')
+  const signIn = await page.request.post(
+    `${webOrigin}/api/auth/sign-in/email`,
+    {
+      data: account,
+      headers: { Origin: webOrigin },
+    },
+  )
+  expect(signIn.ok()).toBe(true)
   await page.route('**/api/auth/get-session', (route) =>
     route.fulfill({
       json: {
