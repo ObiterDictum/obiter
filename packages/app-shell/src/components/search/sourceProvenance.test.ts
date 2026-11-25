@@ -1,11 +1,32 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  isFindCaseLawSource,
   judgmentExtractLabel,
   sourceNameForUrl,
   snippetParagraphHash,
 } from './provenance'
 
 describe('source provenance', () => {
+  it('identifies only the Find Case Law host without URL.canParse', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(URL, 'canParse')
+    Reflect.deleteProperty(URL, 'canParse')
+    try {
+      expect(
+        isFindCaseLawSource(
+          'https://caselaw.nationalarchives.gov.uk/uksc/2018/24',
+        ),
+      ).toBe(true)
+      expect(
+        isFindCaseLawSource(
+          'https://caselaw.nationalarchives.gov.uk.example.org/uksc/2018/24',
+        ),
+      ).toBe(false)
+      expect(isFindCaseLawSource('caselaw.nationalarchives.gov.uk')).toBe(false)
+    } finally {
+      if (descriptor) Object.defineProperty(URL, 'canParse', descriptor)
+    }
+  })
+
   it('names the two stored sources from their URLs', () => {
     expect(
       sourceNameForUrl('https://caselaw.nationalarchives.gov.uk/uksc/2018/24'),
