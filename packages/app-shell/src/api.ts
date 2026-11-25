@@ -61,14 +61,22 @@ async function throwApiError(response: Response): Promise<never> {
   )
 }
 
-async function serverCookieHeader(): Promise<Record<string, string>> {
+async function serverRequestHeaders(
+  forwardVisitorIp: boolean,
+): Promise<Record<string, string>> {
   if (typeof window !== 'undefined') return {}
   // @ts-ignore, double cast) in tests. See
   try {
     const req = getServerRequest()
     if (!req) return {}
     const cookie = req.headers.get('cookie')
-    if (cookie) return { Cookie: cookie }
+    const visitorIp = forwardVisitorIp
+      ? req.headers.get('cf-connecting-ip')
+      : null
+    return {
+      ...(cookie ? { Cookie: cookie } : {}),
+      ...(visitorIp ? { 'X-Forwarded-For': visitorIp } : {}),
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const isExpectedNotInRequest =
@@ -78,7 +86,6 @@ async function serverCookieHeader(): Promise<Record<string, string>> {
     if (isExpectedNotInRequest) return {}
     throw error
   }
-  return {}
 }
 
 async function authorisedFetch(
@@ -87,13 +94,20 @@ async function authorisedFetch(
   headers: Record<string, string>,
 ): Promise<Response> {
   const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
-  const serverCookie = await serverCookieHeader()
-  const response = await fetch(apiUrl(input), {
+  const judgmentOrigin =
+    typeof window === 'undefined' && input.startsWith('/api/search/documents/')
+      ? process.env.OBITER_JUDGMENT_API_ORIGIN
+      : undefined
+  const serverHeaders = await serverRequestHeaders(Boolean(judgmentOrigin))
+  const url = judgmentOrigin
+    ? new URL(input, judgmentOrigin).toString()
+    : apiUrl(input)
+  const response = await fetch(url, {
     credentials: 'include',
     ...init,
     headers: {
       ...headers,
-      ...serverCookie,
+      ...serverHeaders,
       ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
       ...init?.headers,
     },
