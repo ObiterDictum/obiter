@@ -2503,9 +2503,11 @@
             both. Both routers validate the <code>/search</code> parameters
             <code>q</code>, <code>court</code>, <code>from</code>,
             <code>to</code> and <code>type</code>, and the view writes them back
-            as the search changes, so a palette row, a stored recent search, a
-            shared link and browser back/forward all restore the query, filters
-            and result tab.
+            as the search changes. Typing replaces the current history entry; a
+            submitted or debounced search, a filter change and a tab change push
+            one entry unless the committed state is unchanged, so a palette row,
+            a stored recent search, a shared link and browser back/forward all
+            restore the query, filters and result tab.
           </p>
         </section>
 

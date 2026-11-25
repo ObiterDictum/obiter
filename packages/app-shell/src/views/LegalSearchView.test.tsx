@@ -1655,6 +1655,12 @@ describe('LegalSearchView URL state', () => {
     expect(container.textContent).toContain('s. 13 · Equality Act 2010')
   })
 
+  function searchWriteModes() {
+    return routerMocks.navigate.mock.calls.map(
+      (call) => (call[0] as { replace?: boolean }).replace,
+    )
+  }
+
   it('writes the query to the URL as it is typed', async () => {
     vi.stubGlobal(
       'fetch',
@@ -1675,7 +1681,94 @@ describe('LegalSearchView URL state', () => {
     })
   })
 
-  it('writes the tab and filters to the URL', async () => {
+  it('replaces while typing and pushes once when the settled query searches', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          createSearchResponse(createTwoResultHits(), { cached: true }),
+        ),
+    )
+    container = mount()
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Pot')
+    await changeSearchInput(input, 'Potanina')
+    expect(searchWriteModes()).toEqual([true, true])
+
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith({
+      to: '/search',
+      search: { q: 'Potanina' },
+      replace: false,
+    })
+    expect(searchWriteModes()).toEqual([true, true, true, false])
+    expect(routerMocks.navigate).toHaveBeenNthCalledWith(3, {
+      to: '/search',
+      search: {},
+      replace: true,
+    })
+  })
+
+  it('restores the previous committed entry before pushing the next settled query', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          createSearchResponse(createTwoResultHits(), { cached: true }),
+        ),
+    )
+    container = mount()
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await changeSearchInput(input, 'without prejudice')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+
+    const callCount = routerMocks.navigate.mock.calls.length
+    expect(routerMocks.navigate).toHaveBeenNthCalledWith(callCount - 1, {
+      to: '/search',
+      search: { q: 'Potanina' },
+      replace: true,
+    })
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith({
+      to: '/search',
+      search: { q: 'without prejudice' },
+      replace: false,
+    })
+  })
+
+  it('pushes a submitted search once and not again when its state is unchanged', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          createSearchResponse(createTwoResultHits(), { cached: true }),
+        ),
+    )
+    container = mount()
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await submitSearchForm(container)
+    expect(searchWriteModes()).toEqual([true, true, false])
+
+    await submitSearchForm(container)
+
+    expect(searchWriteModes()).toEqual([true, true, false])
+  })
+
+  it('pushes the tab and filters to the URL', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>().mockResolvedValue(responseWithBothTypes()),
@@ -1698,7 +1791,21 @@ describe('LegalSearchView URL state', () => {
     expect(routerMocks.navigate).toHaveBeenLastCalledWith({
       to: '/search',
       search: { q: 'discrimination', type: 'legislation' },
-      replace: true,
+      replace: false,
+    })
+
+    const uksc = container.querySelector<HTMLInputElement>(
+      'input[name="search-court"][value="uksc"]',
+    )
+    if (!uksc) throw new Error('Court facet was not rendered')
+    await act(async () => {
+      uksc.click()
+    })
+
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith({
+      to: '/search',
+      search: { q: 'discrimination', court: 'uksc', type: 'legislation' },
+      replace: false,
     })
   })
 
