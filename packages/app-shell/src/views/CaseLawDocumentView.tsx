@@ -22,6 +22,7 @@ import { ArrowUpRight, MagnifyingGlass } from '@obiter/ui/icons'
 import type { CaseLawSummaryResponse } from '@obiter/contracts'
 import { useState } from 'react'
 import { JudgmentReaderTools } from './JudgmentReaderTools'
+import { FindCaseLawNotices } from '../components/search/FindCaseLawNotices'
 import { ContentFrame } from '../content-frame'
 import { PageScaffold } from '../page-scaffold'
 import { formatDate } from '../format'
@@ -29,6 +30,7 @@ import { selectJudgmentParagraphs } from '../legal-search-selection'
 import { getReadableCourtLabel } from '../components/search/searchTypes'
 import {
   findCaseLawUrlForDocumentId,
+  isFindCaseLawSource,
   sourceNameForUrl,
 } from '../components/search/provenance'
 import { SourceActions } from '../components/sources/SourceActions'
@@ -265,6 +267,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
               />
             )}
           </JudgmentReaderTools>
+          {!withdrawn && isFindCaseLawSource(data.sourceUrl) ? (
+            <FindCaseLawNotices key={`notices-${data.id}`} />
+          ) : null}
         </section>
 
         <aside aria-label="Judgment details" className="flex flex-col gap-6">

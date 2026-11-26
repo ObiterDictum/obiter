@@ -130,7 +130,8 @@ without, and how to re-verify the expectations when the document count moves.
 `scripts/ci-local.sh` runs the same public gates as
 `.github/workflows/ci.yml` in the same order (`install` → `typecheck` →
 `format:check` → `lint` → `build:web` → `bundle:budget` → `build:provenance` →
-`build:desktop` → `desktop:budget` → `playwright:chromium` → `test`). The API,
+`build:desktop` → `desktop:budget` → `playwright:browsers` →
+`test:judgment-notices` → `test`). The API,
 the migrations, the search benchmark, the runtime integration and the web
 end-to-end suite are not part of it: they need the private
 [`backend`](https://github.com/ObiterDictum/backend) repository, whose own
@@ -176,8 +177,16 @@ against a separately started API without starting one from this repository.
 Fixture: `data/evals/redact/demo-fixture.docx` (synthetic, fictional names —
 no new binary added).
 
-Not wired into this repository's `scripts/ci-local.sh` or CI — intentionally.
-It runs in `backend` CI, where the API it needs exists.
+The full suite runs in `backend` CI, where the API it needs exists, rather
+than in this repository's `scripts/ci-local.sh` or CI. This repository's CI
+and local mirror run the judgment licence-notice spec in WebKit through a
+focused config that starts only the web app and mocks the API. To run only
+that spec locally:
+
+```sh
+bun --bun playwright install --with-deps webkit
+bun --bun playwright test --config apps/web/playwright.judgment-notices.config.ts
+```
 
 ## Host prerequisites (found the hard way):
 

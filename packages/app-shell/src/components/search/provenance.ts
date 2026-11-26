@@ -1,13 +1,23 @@
 import type { CaseLawSnippet, LegislationSearchResultHit } from './searchTypes'
 
-export function sourceNameForUrl(url: string): string {
-  let host: string
+const findCaseLawHost = 'caselaw.nationalarchives.gov.uk'
+
+function sourceHost(url: string): string | null {
   try {
-    host = new URL(url).host
+    return new URL(url).host
   } catch {
-    return url
+    return null
   }
-  if (host === 'caselaw.nationalarchives.gov.uk') {
+}
+
+export function isFindCaseLawSource(url: string): boolean {
+  return sourceHost(url) === findCaseLawHost
+}
+
+export function sourceNameForUrl(url: string): string {
+  const host = sourceHost(url)
+  if (host === null) return url
+  if (host === findCaseLawHost) {
     return 'The National Archives (Find Case Law)'
   }
   if (host === 'www.legislation.gov.uk' || host === 'legislation.gov.uk') {
@@ -18,7 +28,7 @@ export function sourceNameForUrl(url: string): string {
 
 export function findCaseLawUrlForDocumentId(documentId: string): string | null {
   return /^[a-z][a-z0-9-]*(?:\/[a-z0-9-]+)*\/\d{4}\/\d+$/u.test(documentId)
-    ? `https://caselaw.nationalarchives.gov.uk/${documentId}`
+    ? `https://${findCaseLawHost}/${documentId}`
     : null
 }
 

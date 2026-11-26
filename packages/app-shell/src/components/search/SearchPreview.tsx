@@ -9,6 +9,8 @@ import {
   JudgmentExtractProvenance,
   LegislationExtractProvenance,
 } from './SearchSnippet'
+import { FindCaseLawNotices } from './FindCaseLawNotices'
+import { isFindCaseLawSource } from './provenance'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
 import {
@@ -102,6 +104,11 @@ function JudgmentPreview({
           Open original
         </a>
       </CardFoot>
+      {isFindCaseLawSource(hit.sourceUrl) ? (
+        <div className="px-6 pt-2 pb-6">
+          <FindCaseLawNotices key={hit.id} />
+        </div>
+      ) : null}
     </Card>
   )
 }

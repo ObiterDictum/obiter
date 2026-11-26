@@ -9,6 +9,8 @@ import {
   LegislationExtractProvenance,
   SearchSnippet,
 } from './SearchSnippet'
+import { FindCaseLawNotices } from './FindCaseLawNotices'
+import { isFindCaseLawSource } from './provenance'
 import type { SearchResultRow } from './searchResultRows'
 import { getReadableCourtLabel } from './searchTypes'
 import { legislationStatusDisplay } from '../../legislation-status'
@@ -122,6 +124,11 @@ function JudgmentResult({
           Open judgment
         </Link>
       </div>
+      {isFindCaseLawSource(hit.sourceUrl) ? (
+        <div className="mt-3">
+          <FindCaseLawNotices />
+        </div>
+      ) : null}
     </article>
   )
 }

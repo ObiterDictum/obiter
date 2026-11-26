@@ -74,12 +74,12 @@ function jsonResponse(body: unknown): Response {
   } as Response
 }
 
-function mockFetch(): ReturnType<typeof vi.fn> {
+function mockFetch(payload = DOCUMENT_PAYLOAD): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (url: string) => {
     if (
       url.includes(`/api/search/documents/${encodeURIComponent('uksc-2024-3')}`)
     ) {
-      return jsonResponse(DOCUMENT_PAYLOAD)
+      return jsonResponse(payload)
     }
     if (url.includes('/api/search/legislation/acts')) {
       return jsonResponse({ acts: [] })
@@ -118,6 +118,54 @@ afterEach(() => {
 })
 
 describe('CaseLawDocumentView', () => {
+  it('shows both required Find Case Law notices expanded after the judgment text', async () => {
+    mockFetch({
+      ...DOCUMENT_PAYLOAD,
+      document: {
+        ...DOCUMENT_PAYLOAD.document,
+        paragraphs: [
+          ...DOCUMENT_PAYLOAD.document.paragraphs,
+          { id: 'footer', paragraphNumber: 12, text: 'Open Justice Licence' },
+        ],
+      },
+    })
+    renderView()
+
+    const document = await screen.findByRole('document')
+    const notices = screen.getByLabelText('Find Case Law licence notices')
+    expect(notices.hasAttribute('open')).toBe(true)
+    expect(
+      within(notices).getByText(
+        'Crown copyright material reproduced by permission of The National Archives. The contents of the judgment can be used under the Open Justice - Licence.',
+      ),
+    ).toBeTruthy()
+    expect(
+      within(notices).getByText(
+        'This material only partially represents court and tribunal activity. Find Case Law does not contain every judgment or decision.',
+      ),
+    ).toBeTruthy()
+    expect(
+      document.compareDocumentPosition(notices) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(document.contains(notices)).toBe(false)
+    expect(within(document).queryByText('Open Justice Licence')).toBeNull()
+  })
+
+  it('does not show Find Case Law notices for a judgment from another source', async () => {
+    mockFetch({
+      ...DOCUMENT_PAYLOAD,
+      document: {
+        ...DOCUMENT_PAYLOAD.document,
+        sourceUrl: 'https://www.supremecourt.uk/cases/example',
+      },
+    })
+    renderView()
+
+    await screen.findByRole('document')
+    expect(screen.queryByLabelText('Find Case Law licence notices')).toBeNull()
+  })
+
   it('renders the case header (citation, title, court, date) and the judgment document landmark', async () => {
     mockFetch()
     renderView()

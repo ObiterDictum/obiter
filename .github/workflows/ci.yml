@@ -146,8 +146,11 @@ jobs:
       # The redaction-renderer suite launches the Playwright Chromium it ships
       # against. Playwright fetches browsers on demand, not during install, so
       # without this step the worker's real-render tests have no browser.
-      - name: Install Playwright Chromium
-        run: bun --bun playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: bun --bun playwright install --with-deps chromium webkit
+
+      - name: Test judgment licence notices in WebKit
+        run: bun --bun playwright test --config apps/web/playwright.judgment-notices.config.ts
 
       - name: Test
         run: bun run test
