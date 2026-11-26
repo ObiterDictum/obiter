@@ -6,6 +6,8 @@ Status: stage 1 inventory for [backend-repo-split.md](backend-repo-split.md). As
 
 Facts were read from `origin/dev` with these commands. Historical facts use remote refs only, so local agent checkpoint refs (`refs/t3`, `refs/orca`) are excluded.
 
+The corpus repository command below records the original inspection; it is not a checkout instruction for the current corpus.
+
 ```sh
 git fetch origin
 git rev-parse origin/dev
