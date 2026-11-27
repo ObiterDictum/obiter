@@ -149,7 +149,7 @@ jobs:
       - name: Install Playwright browsers
         run: bun --bun playwright install --with-deps chromium webkit
 
-      - name: Test judgment licence notices in WebKit
+      - name: Test judgment licence notices and anchored sign-in
         run: bun --bun playwright test --config apps/web/playwright.judgment-notices.config.ts
 
       - name: Test
