@@ -520,12 +520,18 @@ function DesktopCaseSlugRoute() {
 const legislationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'ln/$',
-  loader: ({ context, params }) => {
+  beforeLoad: ({ context, location }) =>
+    guardAuth(location, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    ),
+  loader: ({ context, location, params }) => {
     const provisionPath = params._splat
     if (!provisionPath) {
       throw new Error('Legislation provision path is missing.')
     }
-    return prefetchLegislationPage(context.queryClient, provisionPath)
+    return guardAuth(location, async () => {
+      await prefetchLegislationPage(context.queryClient, provisionPath)
+    })
   },
   component: DesktopLegislationRoute,
 })

@@ -28,13 +28,14 @@ function unauthorisedRequests(page: Page): string[] {
   return failures
 }
 
-test('signed-out search and judgment links redirect to sign-in before loading judgments', async ({
+test('signed-out search, judgment and legislation links redirect to sign-in', async ({
   page,
 }) => {
   for (const path of [
     '/search?q=Potanina',
     '/case/potanina-v-potanin-2024-uksc-3',
     '/cases/uksc-2024-3',
+    '/ln/ukpga/2010/15',
   ]) {
     const response = await page.request.get(path, { maxRedirects: 0 })
     expect(response.status()).toBe(307)

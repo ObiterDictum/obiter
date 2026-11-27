@@ -3,8 +3,9 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { QueryClient } from '@tanstack/react-query'
-import { LegalSearchView, VerifyRouteView } from '@obiter/app-shell'
-import { describe, expect, it } from 'bun:test'
+import { ApiError, LegalSearchView, VerifyRouteView } from '@obiter/app-shell'
+import { createMemoryHistory } from '@tanstack/react-router'
+import { describe, expect, it, spyOn } from 'bun:test'
 import { createAppRouter, DESKTOP_SHARED_VIEW_PATHS } from './router'
 import { DesktopSearchPage } from '../../pages/search'
 import { DesktopVerifyRoute } from '../../pages/verify'
@@ -71,6 +72,32 @@ describe('desktop router parity with web shared views', () => {
   it('registers /ln/$ so provision search links do not fall through', () => {
     const router = createAppRouter(new QueryClient())
     expect(router.routesByPath['/ln/$']).toBeDefined()
+  })
+
+  it('redirects signed-out legislation links to sign-in with the original destination', async () => {
+    const queryClient = new QueryClient()
+    const ensureQueryData = spyOn(
+      queryClient,
+      'ensureQueryData',
+    ).mockRejectedValue(
+      new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_1'),
+    )
+    const path = '/ln/ukpga/2010/15#section-1'
+    const router = createAppRouter(queryClient)
+    router.update({
+      context: { queryClient },
+      history: createMemoryHistory({ initialEntries: [path] }),
+      isServer: true,
+    })
+
+    await router.load()
+
+    expect(router.state.redirect?.options.to).toBe('/sign-in')
+    expect(router.state.redirect?.options.search).toEqual({ redirect: path })
+    expect(ensureQueryData).toHaveBeenCalledTimes(1)
+    expect(ensureQueryData.mock.calls[0]?.[0].queryKey).toEqual([
+      'current-user',
+    ])
   })
 
   it('registers /redact/$runId as a top-level sibling of /redact (not a nested child without Outlet)', () => {

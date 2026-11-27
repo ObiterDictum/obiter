@@ -22,7 +22,10 @@ export async function guardAuth<T>(
   try {
     await run()
   } catch (error) {
-    if (error instanceof ApiError && error.code === 'unauthenticated') {
+    if (
+      error instanceof ApiError &&
+      (error.status === 401 || error.code === 'unauthenticated')
+    ) {
       throw redirect({
         to: '/sign-in',
         search: location.href === '/' ? {} : { redirect: location.href },
