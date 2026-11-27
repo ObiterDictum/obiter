@@ -179,12 +179,13 @@ no new binary added).
 
 The full suite runs in `backend` CI, where the API it needs exists, rather
 than in this repository's `scripts/ci-local.sh` or CI. This repository's CI
-and local mirror run the judgment licence-notice spec in WebKit through a
-focused config that starts only the web app and mocks the API. To run only
-that spec locally:
+and local mirror run the judgment licence-notice spec in WebKit and the
+anchored sign-in cases in Chromium. The focused config starts the web app
+with a synthetic API, so it does not need the full end-to-end stack. To run
+both projects locally:
 
 ```sh
-bun --bun playwright install --with-deps webkit
+bun --bun playwright install --with-deps chromium webkit
 bun --bun playwright test --config apps/web/playwright.judgment-notices.config.ts
 ```
 
