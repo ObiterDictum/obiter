@@ -80,6 +80,77 @@ test('a signed-out judgment link returns to and focuses its paragraph after sign
   await expect(page.locator('#para-12')).toBeFocused()
 })
 
+test('a signed-out Act link returns to and focuses its section after sign-in', async ({
+  page,
+  request,
+}) => {
+  const account = await createAccount(request, 'ActAnchor')
+  const identity = 'ukpga/2010/15'
+  const actPath = `/ln/${identity}`
+  const officialUrl = `https://www.legislation.gov.uk/${identity}`
+  const labelPath = 'section/12'
+  const section = {
+    kind: 'P1',
+    label: 's. 12',
+    heading: 'Fixture section',
+    labelPath,
+    href: `${actPath}/${labelPath}`,
+    extent: 'E+W',
+    withheld: false,
+    children: [],
+  }
+  await page.route(`**/api/search/legislation/${identity}`, (route) =>
+    route.fulfill({
+      json: {
+        act: {
+          identity,
+          title: 'Fixture Act',
+          year: 2010,
+          number: 15,
+          chapter: '2010 c. 15',
+          extent: 'E+W',
+          canonicalUrl: actPath,
+          officialUrl,
+          sourceUrl: officialUrl,
+          totalCount: 1,
+          withheldCount: 0,
+          repealedCount: 0,
+          contents: [section],
+        },
+      },
+    }),
+  )
+  await page.route(`**/api/search/legislation/${identity}/text?*`, (route) =>
+    route.fulfill({
+      json: {
+        entries: [
+          {
+            labelPath,
+            provision: {
+              officialUrl: `${officialUrl}/${labelPath}`,
+              canonicalUrl: section.href,
+              legislationStatus: 'current',
+              text: 'Fixture wording.',
+            },
+          },
+        ],
+        nextOffset: null,
+      },
+    }),
+  )
+
+  await page.goto(`${actPath}#section-12`)
+  await expect(page).toHaveURL((url) => url.pathname === '/sign-in')
+  await submitPassword(page, account.email, account.password)
+
+  await expect(page).toHaveURL(
+    (url) => url.pathname === actPath && url.hash === '#section-12',
+  )
+  await expect(
+    page.getByRole('heading', { name: 's. 12 · Fixture section' }),
+  ).toBeFocused()
+})
+
 test('a document link opens the document, and survives sign-in', async ({
   page,
   request,
