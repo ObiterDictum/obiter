@@ -1,14 +1,25 @@
-import { prefetchLegislationPage } from '@obiter/app-shell'
+import {
+  currentUserQueryOptions,
+  guardAuth,
+  prefetchLegislationPage,
+} from '@obiter/app-shell'
 import { LegislationRouteView } from '@obiter/app-shell/views/legislation-route'
 import { createFileRoute, notFound } from '@tanstack/react-router'
+import { caseLawRobotsHead } from '../../../http-policy.mjs'
 
 export const Route = createFileRoute('/ln/$')({
-  loader: async ({ context, params }) => {
-    await prefetchLegislationPage(
-      context.queryClient,
-      requireSplat(params._splat),
-    )
-  },
+  head: caseLawRobotsHead,
+  beforeLoad: ({ context, location }) =>
+    guardAuth(location, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    ),
+  loader: ({ context, location, params }) =>
+    guardAuth(location, async () => {
+      await prefetchLegislationPage(
+        context.queryClient,
+        requireSplat(params._splat),
+      )
+    }),
   component: LegislationRouteComponent,
 })
 

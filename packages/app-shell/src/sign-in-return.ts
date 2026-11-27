@@ -42,12 +42,14 @@ export function safeReturnTo(
   }
   const pathname = decoded.toLowerCase().replace(/\/+$/, '') || '/'
   if (pathname === '/' || isAuthPath(pathname)) return null
-  const caseLawHash =
+  const isJudgmentAnchor =
     /^\/cases?\/[^/]+$/.test(pathname) &&
     /^#(?:para|page)-\d+$/.test(inheritedHash)
-      ? inheritedHash
-      : ''
-  return `${url.pathname}${url.search}${url.hash || caseLawHash}`
+  const isLegislationAnchor =
+    pathname.startsWith('/ln/') &&
+    /^#[a-z\d]+(?:-[a-z\d]+)*$/i.test(inheritedHash)
+  const hash = isJudgmentAnchor || isLegislationAnchor ? inheritedHash : ''
+  return `${url.pathname}${url.search}${url.hash || hash}`
 }
 
 export function returnToCallbackURL(

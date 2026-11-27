@@ -4541,10 +4541,10 @@
             and an ownership check, not by hiding the control.
             <code>GET /api/changelog</code>, <code>GET /api/health</code>, and
             <code>GET /api/invites/preview</code>
-            are deliberately public. The legal search API and web search and
-            judgment routes require a signed-in account admitted through
-            existing account approval. Web visitors without a session are
-            redirected to sign-in. Both
+            are deliberately public. Legal content from the search API and the
+            web search, judgment and legislation routes requires a signed-in
+            account admitted through existing account approval. Web visitors
+            without a session are redirected to sign-in. Both
             <code>POST /api/search/fetch</code> and
             <code>GET /api/search/documents/:documentId</code> are corpus-only:
             they read Obiter-owned records and the derived index, never contact
@@ -4553,13 +4553,14 @@
             <code>no_match</code> or <code>recognised_not_held</code>; document
             <code>404</code>), so a provider outage cannot become a storage
             failure. National Archives access belongs to an explicit indexing
-            run. Search and case pages emit robots metadata, and their web and
-            API responses send <code>X-Robots-Tag</code>. The app's
-            <code>/robots.txt</code> disallows these paths for named AI crawlers
-            while allowing ordinary search crawlers to read the noindex
-            directives. Health is a minimal liveness probe; in development it
-            also exposes the API commit SHA, checkout root, resolved env file
-            and the database name read out of the configured
+            run. Search, case and legislation pages emit robots metadata. Search
+            and case web responses and legal search API responses send
+            <code>X-Robots-Tag</code>. The app's
+            <code>/robots.txt</code> disallows search and case paths for named
+            AI crawlers while allowing ordinary search crawlers to read the
+            noindex directives. Health is a minimal liveness probe; in
+            development it also exposes the API commit SHA, checkout root,
+            resolved env file and the database name read out of the configured
             <code>DATABASE_URL</code> for local provenance checks. Invite
             preview is gated by the secret invite token and returns the
             organisation and inviter display names, the invited email, account

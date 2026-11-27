@@ -66,6 +66,18 @@ describe('safeReturnTo', () => {
     expect(safeReturnTo('/matters/mtr_1', '#para-12')).toBe('/matters/mtr_1')
     expect(safeReturnTo('//evil.example/case/example', '#para-12')).toBeNull()
   })
+
+  it('uses an inherited legislation anchor only for a safe legislation return target without a fragment', () => {
+    const act = '/ln/ukpga/2010/15'
+    expect(safeReturnTo(act, '#schedule-1-paragraph-3')).toBe(
+      `${act}#schedule-1-paragraph-3`,
+    )
+    expect(safeReturnTo(`${act}#section-1`, '#section-2')).toBe(
+      `${act}#section-1`,
+    )
+    expect(safeReturnTo(act, '#/sign-in')).toBe(act)
+    expect(safeReturnTo('/settings', '#section-2')).toBe('/settings')
+  })
 })
 
 describe('returnToCallbackURL', () => {

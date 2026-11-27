@@ -1,16 +1,30 @@
-import { expect, test, type Page } from '@playwright/test'
-import { createAccount } from './document-journey'
 import {
-  confirmTwoFactorEnrolment,
-  openMatterDocument,
-  signIn,
-  signOut,
-  startTwoFactorEnrolment,
-} from './e13-support'
+  expect,
+  test,
+  type APIRequestContext,
+  type Page,
+  type TestInfo,
+} from '@playwright/test'
+import { fixtureAccount } from './sign-in-api.fixture'
 import { generateTotpCode } from './totp'
-import { resolveJourneyTargets } from '../journey-target.mjs'
 
-const { webOrigin } = resolveJourneyTargets()
+async function anchorAccount(
+  request: APIRequestContext,
+  testInfo: TestInfo,
+  name: string,
+) {
+  if (testInfo.project.metadata.syntheticSignIn === true) return fixtureAccount
+  const { createAccount } = await import('./document-journey')
+  return createAccount(request, name)
+}
+
+async function openSignedOutAnchor(page: Page, path: string, hash: string) {
+  const response = await page.goto(`${path}${hash}`)
+  const redirect = await response?.request().redirectedFrom()?.response()
+  expect(redirect?.status()).toBe(307)
+  await expect(page).toHaveURL((url) => url.pathname === '/sign-in')
+  expect(new URL(page.url()).searchParams.get('redirect')).toBe(path)
+}
 
 async function submitPassword(page: Page, email: string, password: string) {
   await page.waitForLoadState('networkidle')
@@ -28,61 +42,135 @@ function unauthorisedRequests(page: Page): string[] {
   return failures
 }
 
-test('signed-out search and judgment links redirect to sign-in before loading judgments', async ({
+test('signed-out search, judgment and legislation links redirect to sign-in', async ({
   page,
 }) => {
   for (const path of [
     '/search?q=Potanina',
     '/case/potanina-v-potanin-2024-uksc-3',
     '/cases/uksc-2024-3',
+    '/ln/ukpga/2010/15',
   ]) {
     const response = await page.request.get(path, { maxRedirects: 0 })
     expect(response.status()).toBe(307)
-    const destination = new URL(response.headers().location, webOrigin)
+    const destination = new URL(response.headers().location, response.url())
     expect(destination.pathname).toBe('/sign-in')
     expect(destination.searchParams.get('redirect')).toBe(path)
   }
 })
 
-test('a signed-out judgment link returns to and focuses its paragraph after sign-in', async ({
-  page,
-  request,
-}) => {
-  const account = await createAccount(request, 'JudgmentAnchor')
-  const judgmentPath = '/case/potanina-v-potanin-2024-uksc-3'
-  await page.route('**/api/search/documents/uksc-2024-3', (route) =>
-    route.fulfill({
-      json: {
-        document: {
-          id: 'uksc-2024-3',
-          title: 'Potanina v Potanin',
-          neutralCitation: '[2024] UKSC 3',
-          court: 'uksc',
-          dateDecided: '2024-01-31',
-          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
-          paragraphs: [
-            { id: 'p12', paragraphNumber: 12, text: 'A fixture paragraph.' },
-          ],
+test(
+  'a signed-out judgment link returns to and focuses its paragraph after sign-in',
+  { tag: '@anchored-sign-in' },
+  async ({ page, request }, testInfo) => {
+    const account = await anchorAccount(request, testInfo, 'JudgmentAnchor')
+    const judgmentPath = '/case/potanina-v-potanin-2024-uksc-3'
+    await page.route('**/api/search/documents/uksc-2024-3', (route) =>
+      route.fulfill({
+        json: {
+          document: {
+            id: 'uksc-2024-3',
+            title: 'Potanina v Potanin',
+            neutralCitation: '[2024] UKSC 3',
+            court: 'uksc',
+            dateDecided: '2024-01-31',
+            sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+            paragraphs: [
+              { id: 'p12', paragraphNumber: 12, text: 'A fixture paragraph.' },
+            ],
+          },
+          courtParagraphNumbers: true,
         },
-        courtParagraphNumbers: true,
-      },
-    }),
-  )
+      }),
+    )
 
-  await page.goto(`${judgmentPath}#para-12`)
-  await expect(page).toHaveURL((url) => url.pathname === '/sign-in')
-  await submitPassword(page, account.email, account.password)
+    await openSignedOutAnchor(page, judgmentPath, '#para-12')
+    await submitPassword(page, account.email, account.password)
 
-  await expect(page).toHaveURL(
-    (url) => url.pathname === judgmentPath && url.hash === '#para-12',
-  )
-  await expect(page.locator('#para-12')).toBeFocused()
-})
+    await expect(page).toHaveURL(
+      (url) => url.pathname === judgmentPath && url.hash === '#para-12',
+    )
+    await expect(page.locator('#para-12')).toBeFocused()
+  },
+)
+
+test(
+  'a signed-out Act link returns to and focuses its section after sign-in',
+  { tag: '@anchored-sign-in' },
+  async ({ page, request }, testInfo) => {
+    const account = await anchorAccount(request, testInfo, 'ActAnchor')
+    const identity = 'ukpga/2010/15'
+    const actPath = `/ln/${identity}`
+    const officialUrl = `https://www.legislation.gov.uk/${identity}`
+    const labelPath = 'section/12'
+    const section = {
+      kind: 'P1',
+      label: 's. 12',
+      heading: 'Fixture section',
+      labelPath,
+      href: `${actPath}/${labelPath}`,
+      extent: 'E+W',
+      withheld: false,
+      children: [],
+    }
+    await page.route(`**/api/search/legislation/${identity}`, (route) =>
+      route.fulfill({
+        json: {
+          act: {
+            identity,
+            title: 'Fixture Act',
+            year: 2010,
+            number: 15,
+            chapter: '2010 c. 15',
+            extent: 'E+W',
+            canonicalUrl: actPath,
+            officialUrl,
+            sourceUrl: officialUrl,
+            totalCount: 1,
+            withheldCount: 0,
+            repealedCount: 0,
+            contents: [section],
+          },
+        },
+      }),
+    )
+    await page.route(`**/api/search/legislation/${identity}/text?*`, (route) =>
+      route.fulfill({
+        json: {
+          entries: [
+            {
+              labelPath,
+              provision: {
+                officialUrl: `${officialUrl}/${labelPath}`,
+                canonicalUrl: section.href,
+                legislationStatus: 'current',
+                text: 'Fixture wording.',
+              },
+            },
+          ],
+          nextOffset: null,
+        },
+      }),
+    )
+
+    await openSignedOutAnchor(page, actPath, '#section-12')
+    await submitPassword(page, account.email, account.password)
+
+    await expect(page).toHaveURL(
+      (url) => url.pathname === actPath && url.hash === '#section-12',
+    )
+    await expect(
+      page.getByRole('heading', { name: 's. 12 · Fixture section' }),
+    ).toBeFocused()
+  },
+)
 
 test('a document link opens the document, and survives sign-in', async ({
   page,
   request,
 }) => {
+  const { createAccount } = await import('./document-journey')
+  const { openMatterDocument, signIn, signOut } = await import('./e13-support')
   const account = await createAccount(request, 'DeepLink')
   await signIn(page, account.email, account.password)
   await openMatterDocument(page, 'Deep link matter')
@@ -119,6 +207,13 @@ test('the requested page survives a two-factor sign-in', async ({
   page,
   request,
 }) => {
+  const { createAccount } = await import('./document-journey')
+  const {
+    confirmTwoFactorEnrolment,
+    signIn,
+    signOut,
+    startTwoFactorEnrolment,
+  } = await import('./e13-support')
   const account = await createAccount(request, 'DeepLinkTwoFactor')
   await signIn(page, account.email, account.password)
   const totpSecret = await startTwoFactorEnrolment(page, account.password)
@@ -144,18 +239,21 @@ test('the requested page survives a two-factor sign-in', async ({
 })
 
 test('an off-site return target is ignored', async ({ page, request }) => {
+  const { createAccount } = await import('./document-journey')
   const account = await createAccount(request, 'DeepLinkOffsite')
   await page.goto('/sign-in?redirect=%2F%2Fevil.example%2Fmatters')
+  const origin = new URL(page.url()).origin
   await submitPassword(page, account.email, account.password)
 
   await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
     timeout: 15_000,
   })
-  expect(new URL(page.url()).origin).toBe(new URL(webOrigin).origin)
+  expect(new URL(page.url()).origin).toBe(origin)
   expect(new URL(page.url()).pathname).toBe('/')
 })
 
 test('sign-in errors stay on their own tab', async ({ page, request }) => {
+  const { createAccount } = await import('./document-journey')
   const account = await createAccount(request, 'SignInTabs')
   await page.goto('/sign-in', { waitUntil: 'networkidle' })
   await submitPassword(page, account.email, 'not-the-password')
